@@ -4805,7 +4805,8 @@ from. Ranked by what decides whether a club switches, and stays.
    Simple mode, which hides the tuning but changes nothing the app does;
    Advanced is turned on per PC from Backup & Restore
    (website/docs/getting-started/simple-and-advanced-mode.md). To be
-   re-judged after the first beta nights.
+   re-judged after the first beta nights. **Removed 18 Nov 2026:** every
+   setting now always shows; the docs page is gone.
 8. **The fixed-pixel layout.** Most recent small UI bugs - clipped buttons,
    stray scrollbars - come from fixed coordinates and `DpiUnaware`. Check it
    on a small screen and a high-DPI one in a rehearsal; start the change

@@ -335,11 +335,6 @@ public sealed partial class WebServerControl : UserControl
 
         var page = new PageStack();
 
-        // Simple mode (1 Nov 2026) keeps the server's start, stop and PINs and
-        // the addresses; the port, the race-day manager (result editing with
-        // it) and the column choosers are Advanced. See SimpleMode.
-        SimpleMode.HideRow(serverGrid, _numPort);
-
         // --- The tiles: the page at a glance ---
 
         for (var i = 0; i < _tiles.Length; i++)
@@ -355,9 +350,9 @@ public sealed partial class WebServerControl : UserControl
         var bigScreen = new Section("Big Screen");
 
         bigScreen.Add(Hint("The crowd screen for a TV in the pits, and the columns it and the OBS overlay show."));
-        bigScreen.Add(new ButtonBar().With(SimpleMode.Hide(btnWebColumns), SimpleMode.Hide(btnBigScreenColumns), btnOpenBigScreen), gapBelow: UiLayout.RowGap);
+        bigScreen.Add(new ButtonBar().With(btnWebColumns, btnBigScreenColumns, btnOpenBigScreen), gapBelow: UiLayout.RowGap);
         bigScreen.Add(lblLooksNote, gapBelow: UiLayout.HintGap);
-        bigScreen.Add(SimpleMode.Hide(lblColumnsHint), gapBelow: 0);
+        bigScreen.Add(lblColumnsHint, gapBelow: 0);
 
         var online = new Section("Off this Wi-Fi");
 
@@ -373,11 +368,10 @@ public sealed partial class WebServerControl : UserControl
         page.Add(lblIntro);
         page.Add(new TileStrip(_tiles), gapBelow: UiLayout.SectionGap);
         page.Add(server);
-        page.Add(SimpleMode.Hide(manager));
+        page.Add(manager);
         page.Add(urls);
         page.Add(_streamCard!);
         page.Add(lower, gapBelow: 0);
-        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
         Controls.Add(page);
 

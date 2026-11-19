@@ -495,15 +495,9 @@ internal static class LayoutAudit
         // Close (10 Oct).
         "Check How Names Are Read",
 
-        // The warning before Advanced mode, with its tick box (AdvancedModeForm, 1 Nov 2026).
-        "Turn on Advanced mode?",
-
         // Restore default settings and the copies it saves (RestoreDefaultsForm, PutBackSettingsForm, 1 Nov 2026).
         "Restore default settings?",
         "Put back earlier settings",
-
-        // The manager PIN before Advanced mode, when a club asks for it (ManagerPinForm, round 5).
-        "Manager PIN",
 
         // The Stream overlays editor, rebuilt as the Studio (17 Nov 2026): the
         // graphics, the live picture and the picked graphic's settings (OverlayEditorForm).

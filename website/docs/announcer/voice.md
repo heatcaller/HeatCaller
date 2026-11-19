@@ -17,9 +17,6 @@ Everything to do with the announcer speaking is on the **Voice** page (called **
 
 This page also covers the [Announcer screen](#announcer-screen), a window for whoever is on the microphone, opened from **Race Control**. How the whole race night sounds, the announcer's words included, can be set in one go with a [soundscape](sounds-and-music.md#soundscapes).
 
-!!! note
-    In Simple mode the **Race Calls** tab is hidden, and so are the ElevenLabs **Model:**, the **Voice parameters** and **Saved voice lines** cards, the voice relay rows and the consent rows on **Voice → Voice**, and the **Recap host**, **Technical Lead**, **Team Principal** and **Achievements reader** cards on **Cast**. Hidden settings keep working. Turn on Advanced mode to see them; see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
-
 ## Before you start
 
 - For the HeatCaller voice, your club set up on the **Club Website** page — address, club id and publish token — and internet at the track. It speaks through the same relay, with the same token, so there's nothing extra to enter. See [Setting up the Club Website page](../online/setup.md). Your club also has to be switched on for the voice on the relay; the page tells you if it isn't.
@@ -60,7 +57,7 @@ Kokoro is the bottom of the ladder, and nothing stands in for it. On a PC that h
 
 ### Race calls on or off
 
-Under the three choices on the **Speak with** card, **Race calls:** has two tick boxes, **In races** and **In practice**. Untick one and every call on the **Race Calls** tab goes quiet there at once, while each call keeps its own **Race** and **Practice** ticks for when you tick the box again. Sound effects and the AI commentary aren't race calls, so they carry on. Both are ticked to begin with, and applying a soundscape leaves them as they are. This is the switch to use in Simple mode, where the **Race Calls** tab is hidden.
+Under the three choices on the **Speak with** card, **Race calls:** has two tick boxes, **In races** and **In practice**. Untick one and every call on the **Race Calls** tab goes quiet there at once, while each call keeps its own **Race** and **Practice** ticks for when you tick the box again. Sound effects and the AI commentary aren't race calls, so they carry on. Both are ticked to begin with, and applying a soundscape leaves them as they are.
 
 ### Pick a HeatCaller voice
 
@@ -131,7 +128,7 @@ When Kokoro stands in, each of the cast keeps a voice of their own, so an interv
 
 Until you pick one, each speaker stands in with the Kokoro voice already picked for them, or else a default of their own, none of them the announcer's: **George (British, male)** for the recap host, **Adam (American, male)** for the co-host, **Eric (American, male)** for the Technical Lead, **Lewis (British, male)** for the Team Principal and **Bella (American, female)** for the achievements reader.
 
-A list is grayed out while it would never be heard: with the Kokoro voice chosen under **Speak with**, while the speaker has "(the announcer's own voice)" (they then stand in with the announcer's Kokoro voice), and while they already speak in a "Kokoro:" voice. The lists are shown in Advanced mode; in Simple mode each speaker still stands in with their own voice. A voice saved on another PC that this one hasn't got stays in the list, marked "(not on this PC - Michael (American, male) speaks instead)".
+A list is grayed out while it would never be heard: with the Kokoro voice chosen under **Speak with**, while the speaker has "(the announcer's own voice)" (they then stand in with the announcer's Kokoro voice), and while they already speak in a "Kokoro:" voice. A voice saved on another PC that this one hasn't got stays in the list, marked "(not on this PC - Michael (American, male) speaks instead)".
 
 ### What the Kokoro voice uses
 
@@ -268,7 +265,7 @@ On a PC that hasn't got Kokoro's voice file there's nothing to stand in, and tho
 
 The stock HeatCaller voices are nobody's own. If your relay offers a voice recorded from a real person, such as your own announcer, HeatCaller won't speak in it until this PC holds a record that they agreed: until then the free Kokoro voice reads every line.
 
-The record is on the **Speak with** card, in the **Who agreed:** row (shown in Advanced mode):
+The record is on the **Speak with** card, in the **Who agreed:** row:
 
 1. Pick that voice in **HeatCaller voice:** on **Voice → Cast**. A consent is for one voice.
 2. Type the name of the person who agreed in **Who agreed:**.
@@ -302,7 +299,7 @@ The key and the model are on the **ElevenLabs connection** card on **Voice → V
 1. Get an API key from your ElevenLabs account. <!-- TODO: confirm the exact steps/menu names on the ElevenLabs website for creating an API key, and which key permissions HeatCaller needs (it lists voices and synthesizes speech). -->
 2. In HeatCaller, open **Voice → Voice**.
 3. On the **ElevenLabs connection** card, paste the key into **API Key:**. Tick **Show** if you want to check what you pasted. With the Kokoro voice chosen, the **ElevenLabs voice:** row appears on **Cast** once a key is typed.
-4. Pick a model from **Model:** (see [Choosing a model](#choosing-a-model)). It's shown in Advanced mode; in Simple mode the model is `eleven_v4_turbo`.
+4. Pick a model from **Model:** (see [Choosing a model](#choosing-a-model)).
 5. Open **Voice → Cast** and press **Load Voices** on the **Voices** card at the top. HeatCaller asks ElevenLabs for the voices on your account and fills every voice list on the tab, **ElevenLabs voice:** on the **Announcer** card included. The line under it says, for example, "Loaded 24 voices."
 6. Pick a voice from **ElevenLabs voice:**.
 7. Press **Test Voice** beside it. You should hear "This is HeatCaller testing your announcer voice." It uses the **Voice parameters** on **Voice → Voice** as they are on screen, so you can change one there and test again. **Test Voice** always tests ElevenLabs, whichever voice is chosen under **Speak with**.

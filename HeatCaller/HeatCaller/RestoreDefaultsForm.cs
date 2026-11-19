@@ -1,16 +1,16 @@
 namespace HeatCaller;
 
 /// <summary>
-/// "Restore default settings?" (1 Nov 2026, Simple and Advanced mode, round
-/// 4): what goes back and what is kept, in plain words, the one option to
-/// reset what Simple mode shows as well, and that a copy is saved first.
+/// "Restore default settings?" (1 Nov 2026): what goes back and what is
+/// kept, in plain words, the one option to reset the everyday settings as
+/// well, and that a copy is saved first.
 /// The words are SettingsRestore's.
 ///
 /// Cancel is the default button, so Enter never restores. While a race or
 /// practice is running, Restore Defaults is greyed and a line says why: the
 /// restore ends in a restart.
 ///
-/// On the layout pieces (DialogFit), like AdvancedModeForm.
+/// On the layout pieces (DialogFit).
 /// </summary>
 public sealed class RestoreDefaultsForm : Form
 {
@@ -23,7 +23,7 @@ public sealed class RestoreDefaultsForm : Form
 
     private readonly CheckBox _chkAlsoShown = new ThemedCheckBox();
 
-    /// <summary>Whether what Simple mode shows is to go back too. Only meaningful after DialogResult.OK.</summary>
+    /// <summary>Whether the everyday settings are to go back too. Only meaningful after DialogResult.OK.</summary>
     public bool AlsoShown => _chkAlsoShown.Checked;
 
     public RestoreDefaultsForm(bool raceRunning)
@@ -50,7 +50,7 @@ public sealed class RestoreDefaultsForm : Form
 
         goesBack.Add(new Label
         {
-            Text = "Every setting Simple mode hides goes back to how HeatCaller ships:",
+            Text = "The tuning settings go back to how HeatCaller ships:",
             AutoSize = true,
             Font = AppTheme.BodyFont,
         }, gapBelow: UiLayout.HintGap);

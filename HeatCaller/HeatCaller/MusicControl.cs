@@ -557,10 +557,8 @@ public sealed class MusicControl : UserControl
         page.Add(playsCard);
         page.Add(playerCard);
         page.AddFill(library, library.LeastHeight);
-        // The Behavior card is Advanced (1 Nov 2026, Simple mode).
-        page.Add(SimpleMode.Hide(behaviour), gapBelow: UiLayout.RowGap);
+        page.Add(behaviour, gapBelow: UiLayout.RowGap);
         page.Add(_lblStatus, gapBelow: 0);
-        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
         Controls.Add(page);
 

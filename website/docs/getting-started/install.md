@@ -87,7 +87,7 @@ The first time HeatCaller starts, the **Welcome to HeatCaller** wizard walks you
 | **Track** | A track layout name, such as "Garage Oval". Then **Where do you race?**: **At a club**, or **At home, with family or friends**. | The **Track Layouts** page. It's also selected as the current layout. Where you race is the setting on the **Achievements** page. See [At a club or at home](../race-control/results-and-championships.md#at-a-club-or-at-home). |
 | **Classes** | One class per line, or press the quick-add buttons (Stock, Modified, Open, Novice, Spec). Then **Race length:** in minutes (5 on a new install) and **When time's up:**: **Time's up, then finish the lap** (the leader takes the flag and everyone else finishes the lap they're on) or **Stop when time's up**. One answer for every class typed here. | The **Classes** page, each class with that race length and finish. Change one class later with **Format** in it. |
 | **Drivers** | Up to six drivers, each with a name and transponder number, and the class they race in. | The **Driver Hub** page. |
-| **All set** | A summary of what was set up, including the sound, what to do on race night, a line saying HeatCaller starts in Simple mode (see [Simple and Advanced mode](simple-and-advanced-mode.md)), and a box to start the app tour. | |
+| **All set** | A summary of what was set up, including the sound, what to do on race night, and a box to start the app tour. | |
 
 Press **Finish** on the last step.
 
@@ -119,7 +119,7 @@ The tour is a short look around the app. A small card in the bottom-right corner
 
 **A request for your backup password.** If you restored a backup onto a different PC, HeatCaller may ask for the backup's password so it can unlock your saved keys (ElevenLabs, relay token and PINs). See [Backups](../admin/backups.md).
 
-**A tip in the console.** The Developer console on the **Connection** page (in Advanced mode) shows "F11 toggles Race Mode - full screen, no sidebar, just the race." See [Keyboard shortcuts](../reference/keyboard-shortcuts.md).
+**A tip in the console.** The Developer console on the **Connection** page shows "F11 toggles Race Mode - full screen, no sidebar, just the race." See [Keyboard shortcuts](../reference/keyboard-shortcuts.md).
 
 ## Where your data lives
 

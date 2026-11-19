@@ -1845,11 +1845,6 @@ public partial class MainForm : Form
         // - see MainForm.Usage.
         WireUsage();
 
-        // Simple or Advanced mode, decided once for an install from before
-        // the modes - before the pages are built, which round 2 shows by it.
-        // See MainForm.SettingsMode.
-        WireSettingsMode();
-
         // Which relay a HeatCaller line was rendered on is part of its saved
         // key. Voice Settings sets this too as it is built, but only when it
         // is first opened - set it here as well so a race called before that
@@ -2370,11 +2365,6 @@ public partial class MainForm : Form
         // Gate auto-start of practice is held until this has run - see
         // _recoveryDecided. Set in finally, so it is set when there was
         // nothing to offer too, and even if the offer failed.
-        // The one-time note for an install that has just updated into Simple
-        // and Advanced mode - after the wizard, which a new install has
-        // instead (SettingsModes.UpdateNote is null for one).
-        startupSteps.Add(ShowSettingsModeNote);
-
         startupSteps.Add(() =>
         {
             try

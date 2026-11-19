@@ -715,17 +715,13 @@ public sealed partial class VoiceSettingsControl : UserControl
         page.Add(pair);
         page.Add(connection);
 
-        // Simple mode (1 Nov 2026): the voice parameters and the saved lines
-        // are Advanced, as are the voice relay on Speak with and the consent
-        // (BuildEngineCard). See SimpleMode.
         if (_consentCard is { } consentCard)
         {
-            page.Add(SimpleMode.Hide(consentCard));
+            page.Add(consentCard);
         }
 
-        page.Add(SimpleMode.Hide(parameters));
-        page.Add(SimpleMode.Hide(library), gapBelow: 0);
-        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
+        page.Add(parameters);
+        page.Add(library, gapBelow: 0);
 
         // The save line lives in its own docked strip rather than at the
         // bottom of the cards, so it is on screen however far down the page
@@ -1584,7 +1580,7 @@ public sealed partial class VoiceSettingsControl : UserControl
         card.Add(_rdoHeatCaller, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(_lblHeatCallerStatus);
         card.Add(_usageHeatCaller);
-        Indented(card.Add(SimpleMode.Hide(relay), gapBelow: UiLayout.SectionGap));
+        Indented(card.Add(relay, gapBelow: UiLayout.SectionGap));
 
         card.Add(_rdoElevenLabs, stretch: false, gapBelow: UiLayout.HintGap);
         Indented(card.Add(_usageElevenLabs));
@@ -1620,8 +1616,8 @@ public sealed partial class VoiceSettingsControl : UserControl
             () => AppTheme.SmallFont), gapBelow: 0);
 
         // RACE CALLS ON OR OFF (1 Nov 2026, asked for by Asher: "race calls
-        // should have an on off switch"), here rather than on Race Calls,
-        // which Simple mode hides: every race call at once, for races and
+        // should have an on off switch"), here on the Voice tab: every race
+        // call at once, for races and
         // for practice. A gate over the rows - see VoiceProfile.RaceCallsInRaces.
         // Saved with the rest of the page (WireAutoSave, BuildProfileFromControls).
         _chkRaceCallsRaces.Text = "In races";
@@ -1649,10 +1645,8 @@ public sealed partial class VoiceSettingsControl : UserControl
         _chkRaceCallsPractice.CheckedChanged += (_, _) => { ShowVoiceTiles(); ShowRaceCallTiles(); };
 
         // THE CONSENT BEHIND THE CLUB'S OWN VOICE. It was on Speak with,
-        // beside the voice it is about; a card of its own since 17 Nov 2026,
-        // Advanced only as its rows were - a club that never clones a voice
-        // should not have a section about likeness staring at them. The
-        // hint says so when there is nothing to consent to.
+        // beside the voice it is about; a card of its own since 17 Nov 2026.
+        // Its hint says when there is nothing to consent to.
         var consentCard = new Section("Voice consent");
         _consentCard = consentCard;
 
@@ -1706,8 +1700,8 @@ public sealed partial class VoiceSettingsControl : UserControl
             "Only needed for a voice recorded from a real person, such as your own announcer; HeatCaller keeps just "
             + "the name and the date. Until a consent is recorded, the free voice reads every line.");
 
-        card.Add(SimpleMode.Hide(consent));
-        card.Add(SimpleMode.Hide(_lblConsent), gapBelow: 0);
+        card.Add(consent);
+        card.Add(_lblConsent, gapBelow: 0);
 
         ShowConsent();
 
@@ -3551,10 +3545,6 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         card.Add(lblUsedWhen);
         card.Add(fields, gapBelow: 0);
-
-        // Simple mode (1 Nov 2026) keeps the API key; the model is Advanced.
-        SimpleMode.HideRow(fields, _cmbModel);
-        SimpleMode.HideRow(fields, _cmbRaceCallModel);
 
         return (card, fields);
     }

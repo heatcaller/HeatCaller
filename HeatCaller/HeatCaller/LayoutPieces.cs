@@ -1134,7 +1134,7 @@ internal sealed class FieldGrid : TableLayoutPanel
 
     /// <summary>
     /// Everything that makes up the row <paramref name="field"/> is on, for
-    /// hiding the row whole (SimpleMode.HideRow): its caption, the field -
+    /// hiding the row whole: its caption, the field -
     /// or the inline row it is in, a control of this grid's own - and the
     /// hints under it. Empty when the field is not in this grid.
     /// </summary>

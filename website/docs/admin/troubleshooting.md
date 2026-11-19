@@ -201,7 +201,7 @@ Full setup is in [Emailing racer PINs](../online/email.md).
 | `HeatCaller couldn't read its settings file this time, so it won't change it. Restart HeatCaller first.` | **Restore Default Settings** was pressed while the settings file couldn't be read. | Restart HeatCaller, then try again. |
 | `HeatCaller couldn't save a copy of the settings, so nothing was changed.` | **Restore Default Settings** couldn't save the copy of your settings it makes first. The reason is under the message. | Deal with the reason (for example a full disk), then try again. |
 | `HeatCaller couldn't restore the default settings, so nothing was changed.` / `HeatCaller couldn't put those settings back.` | The reset, or the copy you picked, couldn't be read or applied. Nothing changed. | Try again, or pick another copy. |
-| `HeatCaller couldn't put back every setting, so some may be reset and some not.` (or `... put back and some not.`) | A settings file couldn't be written part-way through. HeatCaller restarts. | Your settings were saved first: after the restart, use **Put Back Earlier Settings** and pick the newest copy. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md#restore-default-settings). |
+| `HeatCaller couldn't put back every setting, so some may be reset and some not.` (or `... put back and some not.`) | A settings file couldn't be written part-way through. HeatCaller restarts. | Your settings were saved first: after the restart, use **Put Back Earlier Settings** and pick the newest copy. See [Default settings](backups.md#default-settings). |
 
 More detail in [Backups](backups.md).
 

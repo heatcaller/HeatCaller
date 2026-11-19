@@ -4,8 +4,8 @@ namespace HeatCaller.Tests;
 
 /// <summary>
 /// Bug hunt 17 (13 Nov 2026): the club's night templates, its own checklist
-/// lines and the next night it has announced were filed as tuning Simple mode
-/// hides, so Restore Default Settings emptied them and Put Back Earlier
+/// lines and the next night it has announced were filed as tuning,
+/// so Restore Default Settings emptied them and Put Back Earlier
 /// Settings swapped them for an older copy's. They are the club's own, kept.
 /// </summary>
 public sealed class BugHunt17_SettingsTableTests

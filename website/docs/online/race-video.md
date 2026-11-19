@@ -4,7 +4,7 @@ HeatCaller can put each race's moment in your club's YouTube stream on the drive
 
 The video stays on your club's own YouTube channel. The online relay never stores or sends any video: it only knows where each race starts in your stream.
 
-You set this up in the **Race video (YouTube)** card on the **Club Website** page. It's an Advanced mode card.
+You set this up in the **Race video (YouTube)** card on the **Club Website** page.
 
 ## Before you start
 

@@ -168,7 +168,7 @@ The line under the picker shows what the selected day already holds, for example
 | **Each extra class:** | What a driver pays for each class after their first tonight (often less). | The last race day's, or 0 |
 | **Only include drivers who have checked in** | When ticked, building the program only uses drivers checked in on **Who's Racing**. When unticked, it uses every driver in the class. | From the last day of the same kind; on a club's first day of each kind, on for a race day and off for a club night |
 | **Start the next race automatically** | When a race finishes without a round picked on **Race Control**, it's recorded against the next round that hasn't run yet, so you can work through the program without picking each round by hand. See [Which round a race counts for](program-and-mains.md#which-round-a-race-counts-for). | On |
-| **Next race is:** | Which round that is: **the class that was racing**, **any class, in program order**, or **only "*class*"**. Grayed out while **Start the next race automatically** is unticked. Only shown in Advanced mode (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)); in Simple mode the day keeps whatever it's set to. | the class that was racing |
+| **Next race is:** | Which round that is: **the class that was racing**, **any class, in program order**, or **only "*class*"**. Grayed out while **Start the next race automatically** is unticked. | the class that was racing |
 | **Class running order:** | Which class goes first in each round. **Order...** lists tonight's classes with **Move Up** and **Move Down**, and **Turn the order round each round** makes Q2 start with the second class, Q3 with the third, and so on. It decides who marshals for whom and when each class finishes, so juniors first has them done early. Used the next time the heats are built. See [Build the qualifying program](program-and-mains.md#build-the-qualifying-program). | From the last day of the same kind, or as on the **Classes** page |
 | **Between-race talk:** | How much the announcer says between races on this day: **The club's Between races settings**, or one of the presets (**Club night**, **Race day**, **Big event**, **Just the call-ups**) over them for this day only. See [Between races](../announcer/commentary.md#between-races). | From the last day of the same kind, or the club's Between races settings |
 
@@ -452,7 +452,7 @@ For example, with an entry fee of $15 and $10 for each extra class, Juniors at $
 
 ## Scrutineering
 
-Scrutineering records which cars have been checked and cleared to race. Each class's checklist is set with **Tech Checklist** in the class editor on the **Classes** page, in Advanced mode — see [Tech checklist](drivers-and-classes.md#tech-checklist). In Simple mode the button is hidden, but a checklist already set keeps working.
+Scrutineering records which cars have been checked and cleared to race. Each class's checklist is set with **Tech Checklist** in the class editor on the **Classes** page — see [Tech checklist](drivers-and-classes.md#tech-checklist).
 
 The gate is the **Tech** column on **Who's Racing**. You record inspections from there, and the **Scrutineering log** window holds the full record.
 

@@ -5,11 +5,9 @@ A look is the set of colors HeatCaller paints with. You choose one look for the 
 You can open the page in two ways:
 
 - Click **Themes** in the sidebar.
-- Click **Open Themes** on the **Look** card of the **Club Website** page (Advanced mode).
+- Click **Open Themes** on the **Look** card of the **Club Website** page.
 
 Typing `look`, `theme`, `colour`, `color`, `dark mode`, `light mode`, `synthwave`, `logo`, `appearance`, `24-hour` or `military time` in the **Search pages...** box also opens it.
-
-In Simple mode, **New Look**, **Edit** and **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** are hidden, double-clicking one of your own looks doesn't open the editor, and a **More settings in Advanced mode** line sits at the foot of the page. Everything else on the page works the same in both modes. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
 How the app sounds, rather than how it looks, is on **Sounds → Soundscapes**, which was the **Announcer Style** tab on this page before 0.56. See [Soundscapes](../announcer/sounds-and-music.md#soundscapes).
 
@@ -93,8 +91,6 @@ The change can be undone with **Undo** in the sidebar.
     For a TV or projector in a bright room, try a light look such as **Daylight** or **Checkered**. For the dark Big Screen of earlier versions, choose **Race Wall**.
 
 ## Make your own look
-
-**New Look** and **Edit** are only shown in Advanced mode.
 
 1. Select the look you want to start from. Any look will do, built in or your own.
 2. Click **New Look**. The **New Look** window opens with a copy of it, named, for example, "Race Wall (copy)".
@@ -236,7 +232,7 @@ Everything HeatCaller makes for people to see ends with a small sun and the HEAT
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** | Animates the sidebar header. Only for looks with Synthwave effects, and not while the club logo is shown there. Turn it off for a still image if you'd rather avoid the motion. Advanced mode only. | On |
+| **Animate the Synthwave sidebar header (scrolling grid, twinkling stars)** | Animates the sidebar header. Only for looks with Synthwave effects, and not while the club logo is shown there. Turn it off for a still image if you'd rather avoid the motion. | On |
 | **Use 24-hour (military) time** | Shows times as 24-hour instead of AM/PM everywhere a time is written: the app's screens, status lines and logs, the Wi-Fi pages, and your club's online pages on phones (after the relay picks up the change). Lists and pickers already open update as they refresh; a Wi-Fi or phone page shows the change the next time it is opened. Before 12 November 2026 the phone pages used each phone's own setting. | Off |
 | **Let drivers change the look of the club's pages on their own phones** | Puts a **Look** button at the foot of every club page, so each driver can pick a look for the pages on their own phone. Off, the button goes and every phone shows the club's look. Family links always show the club's look. Since 15 November 2026; needs the relay updated. See [A driver's own look](../online/index.md#a-drivers-own-look). | On |
 
@@ -260,7 +256,6 @@ Everything HeatCaller makes for people to see ends with a small sun and the HEAT
 | **Choose Logo** says "That picture is *W* x *H* pixels, too big to use as a logo. ..." | The picture is over 20000 pixels across or down, or over 64 million pixels in all. | Save a smaller copy of it and choose that. A logo ends up 384 pixels across, so it needs nothing like that many. |
 | **Choose Logo** says "That file isn't a picture HeatCaller can use as a logo. Choose a PNG, JPEG, GIF or BMP picture." | The file is another kind of picture (such as TIFF or an icon) or not a picture at all. | Save it as a PNG, JPEG, GIF or BMP, and choose that. |
 | **Edit** and **Delete** are grayed out | A built-in look is selected. | Click **New Look** to make a copy you can change. |
-| There's no **New Look** or **Edit** button | HeatCaller is in Simple mode. | Turn on Advanced mode. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md). |
 | **Use for the App** didn't restart the app | A race or practice is running. | The app switches to the look the next time it starts. |
 
 ## Related pages

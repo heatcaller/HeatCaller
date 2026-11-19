@@ -82,7 +82,6 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 | **Pre-race check** | A check before the green that every car in the round is being heard by the decoder. **Pre-race check** on **Race Control**, or <kbd>R</kbd>. |
 | **Call-up** | The announcer calling the next race's drivers and marshals to get ready, between races. **Call Up** on the flag row (or <kbd>F12</kbd>) does it now. |
 | **Race Mode** | Full-screen Race Control with no sidebar. Toggle it with <kbd>F11</kbd>. |
-| **Simple mode / Advanced mode** | Simple mode, where a new install starts, shows what a race night needs and hides the tuning. Advanced mode shows every setting. Hidden settings keep their values and keep working. Switched on the **Settings mode** card on **Backup & Restore**. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md). |
 
 ## Results and championships
 

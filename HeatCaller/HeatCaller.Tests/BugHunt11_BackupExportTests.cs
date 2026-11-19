@@ -6,9 +6,7 @@ namespace HeatCaller.Tests;
 /// Backup &amp; Restore and Support Info (5 Nov 2026, bug hunt 11):
 ///
 /// 1. Put Back Earlier Settings wrote a copy's settings.json back word for
-///    word, so a copy made in Advanced mode, put back from Simple, restarted
-///    HeatCaller in Advanced with no manager PIN asked - and brought back an
-///    old manager PIN, an unticked PIN lock and old tokens. What a restore
+///    word, so it brought back an old manager PIN and old tokens. What a restore
 ///    keeps (KeptOnRestore) now stays as it is live; the tuning comes back.
 ///
 /// 2. Support Info's "ElevenLabs key" line read AppSettings.ApiKey - the
@@ -38,42 +36,34 @@ public sealed class BugHunt11_BackupExportTests : IDisposable
 
     private AppSettings ReadSettings() => JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath))!;
 
-    // --- 1. Put Back keeps the mode, the PIN, its lock and the keys --------------------
+    // --- 1. Put Back keeps the PIN and the keys ---------------------------------------
 
     [Fact]
-    public void Putting_back_an_Advanced_copy_from_Simple_keeps_Simple_the_new_PIN_and_its_lock()
+    public void Putting_back_a_copy_keeps_the_new_PIN_and_token()
     {
         var shipped = new AppSettings();
 
-        // The copy: made in Advanced, before the lock was ticked and the PIN changed.
+        // The copy: made before the PIN and token changed.
         File.WriteAllText(SettingsPath, Json(new AppSettings
         {
-            SettingsMode = SettingsMode.Advanced,
-            SettingsModeDecided = true,
             ManagerPin = "1111",
-            AdvancedNeedsManagerPin = false,
             RelayToken = "old-token",
             RaceMinLapTimeMs = shipped.RaceMinLapTimeMs + 700,
         }));
 
         var zip = SettingsRestore.SaveCopy(_folder, new DateTime(2026, 11, 1, 20, 0, 0));
 
-        // Now: Simple, locked, a new PIN and token, the tuning back to shipped.
+        // Now: a new PIN and token, the tuning back to shipped.
         File.WriteAllText(SettingsPath, Json(new AppSettings
         {
-            SettingsMode = SettingsMode.Simple,
-            SettingsModeDecided = true,
             ManagerPin = "2222",
-            AdvancedNeedsManagerPin = true,
             RelayToken = "new-token",
         }));
 
         SettingsRestore.PutBack(_folder, zip);
         var back = ReadSettings();
 
-        Assert.Equal(SettingsMode.Simple, back.SettingsMode);
         Assert.Equal("2222", back.ManagerPin);
-        Assert.True(back.AdvancedNeedsManagerPin);
         Assert.Equal("new-token", back.RelayToken);
 
         // What Put Back is for still comes back.
@@ -81,15 +71,17 @@ public sealed class BugHunt11_BackupExportTests : IDisposable
     }
 
     [Fact]
-    public void Putting_back_a_copy_with_no_live_settings_file_comes_back_in_Simple()
+    public void Putting_back_a_copy_with_no_live_settings_file_brings_the_copy_back()
     {
-        File.WriteAllText(SettingsPath, Json(new AppSettings { SettingsMode = SettingsMode.Advanced, SettingsModeDecided = true }));
+        var shipped = new AppSettings();
+
+        File.WriteAllText(SettingsPath, Json(new AppSettings { RaceMinLapTimeMs = shipped.RaceMinLapTimeMs + 700 }));
         var zip = SettingsRestore.SaveCopy(_folder, new DateTime(2026, 11, 1, 20, 0, 0));
 
         File.Delete(SettingsPath);
         SettingsRestore.PutBack(_folder, zip);
 
-        Assert.Equal(SettingsMode.Simple, ReadSettings().SettingsMode);
+        Assert.Equal(shipped.RaceMinLapTimeMs + 700, ReadSettings().RaceMinLapTimeMs);
     }
 
     // --- 2. Support Info's ElevenLabs key line -----------------------------------------

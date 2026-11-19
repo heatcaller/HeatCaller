@@ -228,8 +228,49 @@ To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of
 ## The other cards on the page
 
 - **Standby PC** lets a second laptop on the track's network keep a copy of this one's race data and take over by hand if this one dies. See [Standby PC](standby-pc.md).
-- **Settings mode** switches between Simple and Advanced mode, and has **Restore Default Settings** and **Put Back Earlier Settings**, which reset the settings Simple mode hides without touching your drivers, results or keys. Each saves a copy of your settings first, in the `Settings Backups` folder in the data folder, so it travels in your backups. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md#restore-default-settings).
+- **Default settings** has **Restore Default Settings...** and **Put Back Earlier Settings...**, which reset the tuning settings without touching your drivers, results or keys. See [Default settings](#default-settings) below.
 - **Getting help** has **Save Support Info** (below), **About HeatCaller** (the version, and the licenses of the components HeatCaller ships) and **License and Privacy** (the license agreement and privacy notice you accepted).
+
+## Default settings
+
+Use the **Default settings** card if a change to a setting has broken something, or to start again from how HeatCaller ships. It resets settings only: your drivers, results and keys are never touched.
+
+### Restore default settings
+
+1. Open **Backup & Restore**.
+2. On the **Default settings** card, click **Restore Default Settings...**.
+3. Read what goes back and what's kept. The tuning settings go back to how HeatCaller ships: sounds, voice, AI commentary, race format tuning, the cast beyond the announcer and co-host, and the like. To reset the everyday settings too, tick **Also reset the everyday settings (track, lap count, voice, volumes, look)**.
+4. Click **Restore Defaults**.
+
+HeatCaller saves a copy of your settings, puts the settings back, and restarts.
+
+A restore never touches:
+
+- your drivers, classes, tracks, race days, results, sponsors, venues or garage
+- your keys, the club website's club, token and address, PINs or email sign-in
+- the decoder's connection and port
+- your backup settings
+- the crowd your soundscape set
+
+It's not offered while a race or practice is running, because it restarts the app.
+
+### Putting earlier settings back
+
+Each restore first saves your settings to a dated copy in the `Settings Backups` folder in HeatCaller's data folder, so it travels in your backups. The last 10 copies are kept.
+
+1. On the **Default settings** card, click **Put Back Earlier Settings...**.
+2. Pick a copy by its date.
+3. Click **Put Back**.
+
+Your current settings are saved as a copy first, so this can be undone the same way. HeatCaller restarts to use them. Putting a copy back changes the same settings a restore does, the everyday ones included. Everything in the list above stays as it is now.
+
+If a settings file can't be written part-way through a restore or a put-back, HeatCaller says some settings may have changed and some not, and restarts. Your settings were saved as a copy first, so **Put Back Earlier Settings** puts them back.
+
+!!! note
+    A restore can't be undone with **Undo** at the bottom of the sidebar, because it restarts the app. **Put Back Earlier Settings** is the way back.
+
+!!! tip
+    To keep a helper away from the settings on race night, use **Desk View...** on **Race Day → Who's Racing**. It locks the laptop to check-ins, papers and money until the PIN you chose when locking it is typed. See [Events, entries and check-in](../race-day/events-and-entries.md).
 
 ## Save Support Info
 
