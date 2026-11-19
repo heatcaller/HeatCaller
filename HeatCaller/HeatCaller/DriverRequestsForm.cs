@@ -358,13 +358,20 @@ internal sealed class DriverRequestReasonForm : Form
         var btnOk = new Button { Text = "Decline", DialogResult = DialogResult.OK };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // THE LOOK (18 Nov 2026, dialog pass): the question and its box in
+        // one card, as SignupReasonForm, and Decline in the app's colour.
+        // The window is wider by the card's edges, so the question wraps
+        // where it did.
+        var card = new Section("Your words to them");
+        card.Add(lbl, gapBelow: UiLayout.HintGap);
+        card.Add(_txt, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lbl, gapBelow: UiLayout.HintGap);
-        page.Add(_txt, gapBelow: UiLayout.SectionGap);
+        page.Add(card, gapBelow: UiLayout.SectionGap);
 
         // A pixel either side for the ring the theme draws round the box -
         // as SignupReasonForm.
-        _txt.Margin = new Padding(1, 0, 1, UiLayout.SectionGap);
+        _txt.Margin = new Padding(1, 0, 1, 0);
         Pieces.KeepHeightTold(_txt);
 
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
@@ -378,6 +385,9 @@ internal sealed class DriverRequestReasonForm : Form
 
         AppTheme.ApplyRecursively(this);
 
-        DialogFit.Keep(this, page, width: 472);
+        // After the theme pass: Decline in the app's colour.
+        AppTheme.StyleButton(btnOk, AppTheme.ButtonKind.Primary);
+
+        DialogFit.Keep(this, page, width: 472 + Section.Inset.Horizontal);
     }
 }

@@ -525,8 +525,9 @@ public sealed class ChassisTemplateForm : Form
 /// again. Both were got right once, and the code for them is the code the
 /// two windows had, moved here unchanged.
 ///
-/// On the layout pieces (DialogFit): the sheets taking the height, their
-/// four buttons in a column beside them (Beside), and Close at the foot
+/// On the layout pieces (DialogFit): one card with a line on what a sheet
+/// is, and in it the sheets taking the height, their four buttons in a
+/// column beside them (Beside); and Close at the foot
 /// against the right-hand edge. It used to be built in pixels in a 460x340
 /// window: a 300x280 list, the buttons a fixed 120px wide at fixed places
 /// beside it, and Close at the bottom of that column.
@@ -681,10 +682,22 @@ internal sealed class ChassisSheetsForm : Form
         sheets.AddSide(btnDuplicate, gapBelow: UiLayout.ButtonGap);
         sheets.AddSide(btnDelete, gapBelow: 0);
 
-        var page = new FillPage();
-        page.AddFill(sheets, sheets.LeastHeight);
+        // THE LOOK (18 Nov 2026, dialog jazz-up): the sheets and their
+        // buttons in one card, with a line on what a sheet is for.
+        var card = new Section("The club's setup sheets");
+        card.Add(new Label
+        {
+            Text = "A sheet is the chassis diagram and fields a setup is logged on. Each chassis type can pick one.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        }, gapBelow: UiLayout.RowGap);
+        card.AddFill(sheets, () => sheets.LeastHeight(Math.Max(1, sheets.Width)), gapBelow: 0);
 
-        // Close under the column, against the right-hand edge - it used to
+        var page = new FillPage();
+        page.AddFill(card, card.LeastHeight);
+
+        // Close under the card, against the right-hand edge - it used to
         // be the column's last button, level with the bottom of the list.
         page.Add(new ButtonBar(alignRight: true).With(btnClose), gapBelow: 0);
 
@@ -697,9 +710,11 @@ internal sealed class ChassisSheetsForm : Form
 
         // Wider than the 460 it was made at: the buttons are as wide as a
         // standard button now, 148px rather than 120, and this keeps the
-        // list the 300px it had. The height it had. It can be made bigger,
-        // for a club with many sheets.
-        DialogFit.Keep(this, page, width: 490, height: 340);
+        // list the 300px it had - with the card's edges on top. Taller than
+        // the 340 it had by the card's caption, line and edges, so the list
+        // keeps its height. It can be made bigger, for a club with many
+        // sheets.
+        DialogFit.Keep(this, page, width: 524, height: 436);
     }
 
     /// <summary>

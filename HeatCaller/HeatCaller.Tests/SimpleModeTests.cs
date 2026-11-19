@@ -505,6 +505,11 @@ public sealed class SimpleModeTests : IDisposable
         "AdvancedModeForm.cs|Before you turn it on",
         "RestoreDefaultsForm.cs|What goes back",
 
+        // The manager PIN and Put back earlier settings (ManagerPinForm,
+        // PutBackSettingsForm; 18 Nov 2026, dialog pass 8).
+        "AdvancedModeForm.cs|To turn on Advanced mode",
+        "RestoreDefaultsForm.cs|Saved copies",
+
         // Themes, Sponsors, Local Screens, Club Website.
         "LooksControl.cs|Looks", "LooksControl.cs|Club logo", "LooksControl.cs|Appearance",
         "LooksControl.cs|Crowd screens", "AchievementsControl.cs|Whose achievements", "GarageControl.cs|Which cars", "GarageControl.cs|Garage",
@@ -546,6 +551,17 @@ public sealed class SimpleModeTests : IDisposable
         "CarTransfer.cs|Who gets it", "CarTransfer.cs|What goes with it", "BatteryForms.cs|Packs",
         "ClubBatteriesForm.cs|The club's packs",
 
+        // Add/Edit Pack's and Transfer Pack's cards (BatteryPackEditForm, PackTransferForm;
+        // 18 Nov 2026, dialog pass 8).
+        "BatteryForms.cs|The pack", "BatteryForms.cs|Notes", "BatteryForms.cs|Who gets it",
+
+        // The rest of the garage's popups in cards (18 Nov 2026, dialog jazz-up, eighth batch):
+        // Photos, Lend a Car, Chassis Types, Chassis Setup Sheets and Setups Without a Car.
+        // Car Details' header card has no caption.
+        "GarageForms.cs|Photos of this car", "GarageForms.cs|Who takes it", "GarageForms.cs|Chassis types",
+        "GarageForms.cs|Selected chassis", "ChassisTemplateForm.cs|The club's setup sheets",
+        "SetupLinking.cs|Setups to link",
+
         // Checked In Late's card (LateArrivalsForm, 18 Nov 2026, dialog jazz-up). The lap
         // breakdown window (LapDetailWindow) is painted, with no Section.
         "RaceProgramControl.LateArrivals.cs|Add to the heats",
@@ -563,12 +579,23 @@ public sealed class SimpleModeTests : IDisposable
         "SignupForms.cs|Their details",
         "DriverRequestsForm.cs|Their details", "DriverRequestsForm.cs|Online and email",
         "BelongsToForm.cs|The driver", "BelongsToForm.cs|Where is it?",
+
+        // Invite Drivers, Turn Down / Code for Someone Here, a phone request declined,
+        // the Desk Inbox's quick replies, Call It Off and Add a Driver to This Round,
+        // one card or two each (InviteDriversForm, SignupReasonForm, DriverRequestReasonForm,
+        // QuickRepliesForm, CallOffForm, RoundRosterForm.DriverPicker; 18 Nov 2026, dialog pass 8).
+        "SignupForms.cs|Who to invite", "SignupForms.cs|For your list", "SignupForms.cs|Your words to them",
+        "DriverRequestsForm.cs|Your words to them", "DeskInboxForm.cs|Decline replies",
+        "NextNightForms.cs|Your words", "NextNightForms.cs|Who is told", "RoundRosterForm.cs|Saved drivers",
         "DeleteRaceDayForm.cs|Saved races",
 
         // A driver's profile and a driver's handicap, in cards (18 Nov 2026, dialog jazz-up).
         "ProfileForm.cs|Who they are", "ProfileForm.cs|Car and class", "ProfileForm.cs|On the PA",
         "ProfileForm.cs|Their crew", "ProfileForm.cs|Junior", "ProfileForm.cs|Privacy", "ProfileForm.cs|Contact",
         "ProfileForm.cs|Driver card", "ProfileForm.cs|Records", "ProfileForm.cs|Notes", "HandicapForms.cs|Credit", "HandicapForms.cs|Lock", "HandicapForms.cs|Notes",
+
+        // Suggest Handicaps' card (HandicapSuggestForm; 18 Nov 2026, dialog pass 8).
+        "HandicapForms.cs|Suggestions",
         "RcpStockForm.cs|Boxed sets", "RcpStockForm.cs|Loose parts", "RcpPrintForm.cs|Parts", "RcpPrintForm.cs|Scale",
         "RcpTrackEditorForm.cs|Build me a track", "RcpTrackEditorForm.cs|Check against a kit", "RcpTrackEditorForm.cs|Keys",
         // Lanes, Plan file and Trace a photo went with the rethought window (8 Nov 2026), and Rail the edge,
@@ -591,11 +618,19 @@ public sealed class SimpleModeTests : IDisposable
         "RaceDaySetupWizard.cs|Sound", "RaceDaySetupWizard.cs|Classes racing", "RaceDaySetupWizard.cs|How they race",
         "RaceDaySetupWizard.cs|Race format", "RaceDaySetupWizard.cs|Who's here",
         "RaceDaySetupWizard.cs|Ready to build", "RaceDaySetupWizard.cs|Where things stand",
+
+        // Set Up Tonight's Add Class and Add Driver windows (QuickClassForm,
+        // QuickDriverForm; 18 Nov 2026, dialog pass 8).
+        "RaceDaySetupWizard.cs|New class", "RaceDaySetupWizard.cs|New driver",
         "RentalTransponderForms.cs|Who's taking it", "RentalTransponderForms.cs|Deposit",
 
         // The class editor's and the time penalty's cards (18 Nov 2026).
         "RaceClassForms.cs|The class", "RaceClassForms.cs|Qualifying", "RaceClassForms.cs|Mains",
         "RaceClassForms.cs|On the track", "RaceClassForms.cs|Fees",
+
+        // Tech Checklist's and Add/Edit Rental Unit's cards (TechChecklistForm,
+        // RentalUnitEditForm; 18 Nov 2026, dialog pass 8).
+        "RaceClassForms.cs|Checks", "RentalTransponderForms.cs|The unit", "RentalTransponderForms.cs|Notes",
         "RaceControlControl.Leaderboard.cs|Penalty",
 
         // Third dialog batch, D (18 Nov 2026): Close the Night / Ready to Race

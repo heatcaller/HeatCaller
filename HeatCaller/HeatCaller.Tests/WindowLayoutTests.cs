@@ -160,6 +160,7 @@ internal static partial class WindowCatalog
         all.AddRange(GarageWindows());
         all.AddRange(CarTransferWindows());
         all.AddRange(ChassisSheetWindows());
+        all.AddRange(UnlinkedSetupsWindows());
         all.AddRange(SetupWindows());
         all.AddRange(BatteryWindows());
 
@@ -195,6 +196,9 @@ internal static partial class WindowCatalog
 
         // Announce the next night, from Next Steps (18 Nov 2026, dialog jazz-up).
         all.AddRange(AnnounceNightWindows());
+
+        // Quick replies, a request declined and a night called off (18 Nov 2026, dialog pass).
+        all.AddRange(DeskPromptWindows());
 
         // Last: some of its windows close the day that is open, which the
         // windows above do not expect to find closed.

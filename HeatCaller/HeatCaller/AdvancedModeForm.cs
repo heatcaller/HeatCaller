@@ -154,18 +154,36 @@ public sealed class ManagerPinForm : Form
 
         body.Add(new Label
         {
+            Text = "Enter the manager PIN",
+            AutoSize = true,
+            Font = AppTheme.HeadingFont,
+        }, gapBelow: UiLayout.LabelGap);
+
+        // 18 Nov 2026, the dialog look, as AdvancedModeForm: a heading over
+        // one card - where the PIN comes from as its hint line, the box, and
+        // the line kept for a wrong PIN. The box, its masking and the check
+        // as before.
+        var card = new Section("To turn on Advanced mode");
+
+        card.Add(new Label
+        {
             Text = "Advanced mode needs the manager PIN on this PC. It's the PIN the race-day manager's phone page asks for.",
             AutoSize = true,
-            Font = AppTheme.BodyFont,
-        });
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+        }, gapBelow: UiLayout.RowGap);
 
         var grid = new FieldGrid();
         grid.AddRow("Manager PIN:", _txtPin);
-        body.Add(grid, gapBelow: UiLayout.HintGap);
+        card.Add(grid, gapBelow: UiLayout.HintGap);
 
         _lblWrong.ForeColor = AppTheme.Danger;
         _lblWrong.Font = AppTheme.SmallFont;
-        body.Add(_lblWrong, gapBelow: 0);
+        card.Add(_lblWrong, gapBelow: 0);
+
+        // The last part of the body: nothing under it inside the part that
+        // scrolls - see DialogFit.Body.
+        body.Add(card, gapBelow: 0);
 
         var btnOk = new Button { Text = "OK", Font = AppTheme.BodyFont };
         var btnCancel = new Button { Text = "Cancel", Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
@@ -194,6 +212,9 @@ public sealed class ManagerPinForm : Form
         Load += (_, _) => ActiveControl = _txtPin;
 
         AppTheme.ApplyRecursively(this);
+
+        // The way on, in the primary colour, as Turn On Advanced Mode is.
+        AppTheme.StyleButton(btnOk, AppTheme.ButtonKind.Primary);
 
         _txtPin.Width = UiLayout.AtTextSize(140);
 
