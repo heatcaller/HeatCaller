@@ -770,7 +770,7 @@ internal sealed class Section : TableLayoutPanel
             // spaced when short enough for the spacing to help.
             var text = caption.Trim().ToUpperInvariant();
 
-            _caption = new Label
+            _caption = new MeasuredLabel
             {
                 Text = text.Length <= 28 ? AppTheme.Spaced(text) : text,
                 AutoSize = true,
@@ -1040,7 +1040,9 @@ internal sealed class FieldGrid : TableLayoutPanel
     /// </summary>
     public Label AddRow(string caption, Control field, bool stretch = false)
     {
-        var label = new Label
+        // Measured once app-wide (RememberedSizes): the captions were most
+        // of Driver Profile's opening.
+        var label = new MeasuredLabel
         {
             Text = caption,
             AutoSize = true,
@@ -1179,7 +1181,7 @@ internal sealed class FieldGrid : TableLayoutPanel
     /// A line of help under the field above, in the field's column, in the
     /// small muted type the app's hints use, wrapping to the room there is.
     /// </summary>
-    public Label AddHint(string text) => AddHint(new Label { Text = text });
+    public Label AddHint(string text) => AddHint(new MeasuredLabel { Text = text });
 
     /// <summary>
     /// The same, for a hint the page keeps hold of to reword - a
@@ -3210,65 +3212,25 @@ internal sealed class SteadyLabel : Label
     /// </summary>
     private readonly Dictionary<int, Size> _measured = new();
 
+    protected override void OnFontChanged(EventArgs e)
+    {
+        _measured.Clear();
+        base.OnFontChanged(e);
+    }
+
     /// <summary>
-    /// What the label itself measured its text to (base.GetPreferredSize),
-    /// by the size it was asked at. Cleared when the text, font or padding
-    /// changes.
+    /// What the label itself measures its text to (base.GetPreferredSize),
+    /// through RememberedSizes.
     ///
     /// WHY (18 Nov 2026): the wordings were cached on 13 Nov, but the text
     /// on show was still measured afresh every pass - a rulebook paragraph
     /// in Sanctioning Preset, the state lines in Broadcast - and that was
     /// nearly all of Sanctioning Preset's opening (a CPU profile: 98% in
-    /// here).
+    /// here). Kept per label at first; shared with every label since
+    /// 19 Nov, so a window opened again measures none of it.
     /// </summary>
-    private readonly Dictionary<Size, Size> _ownMeasured = new();
-
-    private bool _ownMnemonic = true;
-
-    protected override void OnFontChanged(EventArgs e)
-    {
-        _measured.Clear();
-        _ownMeasured.Clear();
-        base.OnFontChanged(e);
-    }
-
-    protected override void OnTextChanged(EventArgs e)
-    {
-        _ownMeasured.Clear();
-        base.OnTextChanged(e);
-    }
-
-    protected override void OnPaddingChanged(EventArgs e)
-    {
-        _ownMeasured.Clear();
-        base.OnPaddingChanged(e);
-    }
-
-    /// <summary>The label's own measure of its text, worked out once per size asked - see _ownMeasured.</summary>
-    private Size OwnPreferredSize(Size proposedSize)
-    {
-        // The mnemonic setting changes what is measured; it is never changed
-        // once a label is built, but a change still starts the measures again.
-        if (_ownMnemonic != UseMnemonic)
-        {
-            _ownMeasured.Clear();
-            _ownMnemonic = UseMnemonic;
-        }
-
-        if (_ownMeasured.TryGetValue(proposedSize, out var known))
-        {
-            return known;
-        }
-
-        if (_ownMeasured.Count > 64)
-        {
-            _ownMeasured.Clear();
-        }
-
-        var size = base.GetPreferredSize(proposedSize);
-        _ownMeasured[proposedSize] = size;
-        return size;
-    }
+    private Size OwnPreferredSize(Size proposedSize) =>
+        RememberedSizes.Of(this, proposedSize, () => base.GetPreferredSize(proposedSize));
 
     public override Size GetPreferredSize(Size proposedSize)
     {

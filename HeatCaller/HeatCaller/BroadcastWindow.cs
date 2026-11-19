@@ -57,12 +57,12 @@ internal sealed class BroadcastWindow : Form
     /// <summary>The card across the top that what is on air is shown in - see HeadingRow.</summary>
     private readonly HeadingRow _onAirRow;
 
-    private readonly Label _lblAnnouncer = new();
-    private readonly Label _lblLast = new();
-    private readonly Label _lblTonight = new();
-    private readonly Label _lblThisRace = new();
-    private readonly Label _lblNotes = new();
-    private readonly Label _lblCrewNotes = new();
+    private readonly Label _lblAnnouncer = new MeasuredLabel();
+    private readonly Label _lblLast = new MeasuredLabel();
+    private readonly Label _lblTonight = new MeasuredLabel();
+    private readonly Label _lblThisRace = new MeasuredLabel();
+    private readonly Label _lblNotes = new MeasuredLabel();
+    private readonly Label _lblCrewNotes = new MeasuredLabel();
 
     /// <summary>
     /// The last prompt tonight that drivers' own notes made long
@@ -70,14 +70,21 @@ internal sealed class BroadcastWindow : Form
     /// line (15 Nov 2026, driver crew).
     /// </summary>
     internal Func<string?>? CrewNotesAlert { get; set; }
-    private readonly Label _lblVotes = new();
-    private readonly Label _lblShow = new();
-    private readonly Label _lblReplay = new();
-    private readonly Label _lblGap = new();
-    private readonly Button _btnSkipGap = new() { Text = "Skip Next Call-up" };
+    private readonly Label _lblVotes = new MeasuredLabel();
+    private readonly Label _lblShow = new MeasuredLabel();
+    private readonly Label _lblReplay = new MeasuredLabel();
+    private readonly Label _lblGap = new MeasuredLabel();
+    private readonly Button _btnSkipGap = new MeasuredButton { Text = "Skip Next Call-up" };
 
     /// <summary>Race Control's Skip Next Call-up, for the button beside Between races.</summary>
     internal Action? SkipGapLine { get; set; }
+
+    /// <summary>
+    /// The At a glance lines - held while ShowState rewords them, so it lays
+    /// out once. Made in the constructor, inside its build hold, which a
+    /// field's initialiser would run before.
+    /// </summary>
+    private readonly FieldGrid _glance;
 
     /// <param name="strip">Race Control's own row of broadcast controls, moved in here.</param>
     /// <param name="raceKey">
@@ -113,7 +120,7 @@ internal sealed class BroadcastWindow : Form
 
         var glance = new Section("At a glance");
         glance.Add(Hint("What the announcer is doing, in full. A line in colour wants a look."), gapBelow: UiLayout.RowGap);
-        var grid = new FieldGrid();
+        var grid = _glance = new FieldGrid();
 
         foreach (var (caption, value) in new[]
                  {
@@ -272,6 +279,25 @@ internal sealed class BroadcastWindow : Form
     {
         // Filled in while hidden as well - eight labels set only on a change -
         // so it opens showing now, not a second ago.
+        //
+        // The lines' grid held while they are set (19 Nov 2026): each line
+        // that changed laid the whole window out again, nine times over when
+        // it opens - a third of opening it (a CPU profile). Now once.
+        _glance.SuspendLayout();
+
+        try
+        {
+            ShowLines(director, enabled, speaking, muted, notesWaiting, votesIn, load, recapRunning, replaying, momentHeld);
+        }
+        finally
+        {
+            _glance.ResumeLayout(true);
+        }
+    }
+
+    private void ShowLines(CommentaryDirector? director, bool enabled, bool speaking, bool muted, int notesWaiting,
+        int votesIn, AnnouncerLoad? load, bool recapRunning, bool replaying, bool momentHeld)
+    {
         var on = director is not null && enabled;
 
         // The heading: the row's own reading of what is on air, lit as the
@@ -513,7 +539,7 @@ internal sealed class BroadcastWindow : Form
         }
     }
 
-    private static Label Hint(string text) => new()
+    private static Label Hint(string text) => new MeasuredLabel
     {
         Text = text,
         AutoSize = true,
