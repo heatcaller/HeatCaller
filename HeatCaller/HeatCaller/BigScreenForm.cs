@@ -9,13 +9,15 @@ namespace HeatCaller;
 /// wall, the phones and the club's site all match. The club's logo sits in
 /// the top-left corner when one is set.
 /// </summary>
-public sealed class BigScreenForm : Form
+public sealed partial class BigScreenForm : Form
 {
     // "Race Wall": this is a DISPLAY, not an interface. Read from two metres
     // away, in a room with the lights up, the things that matter are
-    // contrast and type size - card chrome, tonal steps and rounded panels
-    // all just eat room that the numbers should have. So only a handful of
-    // the look's colours are used, each in one role:
+    // contrast and type size - card chrome and tonal steps just eat room
+    // that the numbers should have. The rounded plates behind the clock and
+    // the bars (BigScreenForm.Wall.cs, 18 Nov 2026) take only a few pixels of
+    // inset and no type size. Only a handful of the look's colours are used,
+    // each in one role:
     //   canvas     = the look's Background   (window, grid, top bands)
     //   panel      = Surface                 (the on-deck bar)
     //   text       = Text                    (announcement, leaderboard)
@@ -68,7 +70,7 @@ public sealed class BigScreenForm : Form
     private Action<RaceState>? _stateChangedHandler;
     private Action<FlagState>? _flagChangedHandler;
 
-    private readonly Label _lblOnDeck = new();
+    private readonly WallPlate _lblOnDeck = new();
     private readonly PictureBox _picSponsor = new();
 
     /// <summary>
@@ -230,7 +232,7 @@ public sealed class BigScreenForm : Form
     // Yellow and black for a warning, black and white for a black flag -
     // the colours a driver already knows from the flags themselves, and
     // the same whatever look the screen is wearing.
-    private readonly Label _lblWarning = new();
+    private readonly WallPlate _lblWarning = new();
     private DateTime? _warningShownUtc;
     private static readonly TimeSpan WarningBannerTime = TimeSpan.FromSeconds(8);
     private Action<RacerStanding, RaceWarning>? _warningIssuedHandler;
@@ -241,14 +243,14 @@ public sealed class BigScreenForm : Form
     private bool _bannerIsWarning;
     private readonly Label _lblElapsed = new();
     private readonly Label _lblCountdown = new();
-    private readonly Label _lblRaceState = new();
+    private readonly FlagPill _lblRaceState = new();
     private readonly DataGridView _grid = new();
 
     // Kept as fields (they used to be locals in BuildLayout) so a change of
     // look can recolour them while the window is open.
     private readonly Label _lblHint = new();
     private readonly Panel _pnlTop = new();
-    private readonly Panel _pnlCountdown = new();
+    private readonly ClockPlate _pnlCountdown = new();
     private readonly Panel _pnlOnDeck = new();
 
     // The club logo, top-left, and an empty strip of the same width on the
@@ -386,7 +388,7 @@ public sealed class BigScreenForm : Form
     /// for anybody in the room who can't hear the PA. Up while
     /// AppSettings.BigScreenCaptions is on (key C); see UpdateCaptions.
     /// </summary>
-    private readonly Label _lblCaption = new();
+    private readonly WallPlate _lblCaption = new();
 
     /// <summary>The number of the caption line the strip shows, so it is only re-set when a new one is heard.</summary>
     private long _captionShownN;
@@ -750,7 +752,8 @@ public sealed class BigScreenForm : Form
         // is the look's own highlight now, like the countdown and on-deck.
         _lblSponsorRead.ForeColor = HighlightColor;
 
-        _pnlOnDeck.BackColor = PanelColor;
+        // The bar's plate is the label's (PanelColor, rounded) on the canvas
+        // - see ColourWall.
         _lblOnDeck.ForeColor = HighlightColor;
 
         // The captions strip on the on-air band's plate - Surface, or the
@@ -759,6 +762,9 @@ public sealed class BigScreenForm : Form
         _lblCaption.BackColor = CaptionPlate;
         _captionStrength = -1;
         UpdateCaptions();
+
+        // The rounded plates, the flag pill and the leader's row.
+        ColourWall();
 
         ApplyLogo();
     }
@@ -1000,6 +1006,7 @@ public sealed class BigScreenForm : Form
         Controls.Add(_pnlTop);
         Controls.Add(_lblHint);
 
+        BuildWall();
         ApplyScale(force: true);
     }
 
@@ -1066,7 +1073,9 @@ public sealed class BigScreenForm : Form
         try
         {
             _pnlTop.Height = Sized(132);
-            _lblRaceState.Height = Sized(32);
+            // Room for the flag pill; the band is no taller, so the
+            // announcement gives up the 8 pixels and still has two lines.
+            _lblRaceState.Height = Sized(40);
             _logoBox.Width = _pnlTop.Height;
             _logoBalance.Width = _pnlTop.Height;
 
@@ -1099,12 +1108,15 @@ public sealed class BigScreenForm : Form
             _lblCaption.Height = Sized(88);
             _lblCaption.Padding = new Padding(Sized(24), 0, Sized(24), 0);
 
+            // The plates' corners and insets, and the leader's bar.
+            ScaleWall();
+
             // The faces made again at this size; the old ones disposed once
             // nothing wears them.
             var old = _ownedFonts.ToList();
             _ownedFonts.Clear();
 
-            _lblRaceState.Font = Face(AppTheme.BoldFont.FontFamily, 13F);
+            _lblRaceState.Font = Face(AppTheme.BoldFont.FontFamily, 16F);
             _lblAnnouncement.Font = Face(AppTheme.BoldFont.FontFamily, 26F);
             _lblCountdown.Font = Face(AppTheme.BoldFont.FontFamily, 56F);
             _lblElapsed.Font = Face(AppTheme.BoldFont.FontFamily, 56F);
@@ -2647,6 +2659,7 @@ public sealed class BigScreenForm : Form
             }
         }
 
+        MarkLeaderRow();
         RefreshCountdownOnly();
     }
 
@@ -2880,6 +2893,9 @@ public sealed class BigScreenForm : Form
             ? "WARM-UP"
             : $"{_race.State.ToString().ToUpperInvariant()} — {FlagText.Shouted(_race.Flag)}";
         RefreshAnnouncementFallback();
+
+        // The pill's flag colour and the clock plate - compares, most ticks.
+        ShowFlagState();
     }
 
     /// <summary>
