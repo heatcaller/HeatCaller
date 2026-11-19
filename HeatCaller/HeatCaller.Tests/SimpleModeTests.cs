@@ -519,6 +519,12 @@ public sealed class SimpleModeTests : IDisposable
         "BroadcastWindow.cs|At a glance", "BroadcastWindow.cs|Controls", "ThisMonthForm.cs|This month", "ThisMonthForm.cs|Emails",
         "Shortcuts.cs|Anywhere", "Shortcuts.cs|Race Control", "Shortcuts.cs|Selected driver",
 
+        // The backup password and the Desk View's PIN in a card each (PasswordPromptForm,
+        // DeskPinForm; 18 Nov 2026, dialog pass 6). The shortcut sheet's cards are the
+        // groups above; the text prompt's card has no caption.
+        "SecretRecovery.cs|Password",
+        "MainForm.DeskView.cs|Choose a PIN", "MainForm.DeskView.cs|Type the PIN",
+
         // The look editor, badge details, report card and sponsor video preview in cards
         // (18 Nov 2026, dialog jazz-up): LookEditorForm, AchievementDetailForm, ReportCardForm
         // and SponsorVideoPreviewForm.
