@@ -47,6 +47,12 @@ public sealed class MissionControlForm : Form
         // set back to the body's.
         _lblHeadline.Font = AppTheme.HeadingFont;
 
+        // A dot in the headline's colour before it (18 Nov 2026, dialog
+        // look): the night's state at a glance from across the room, in the
+        // room the line already had.
+        _lblHeadline.Padding = new Padding(UiLayout.AtTextSize(StatusDot + 10), 0, 0, 0);
+        _lblHeadline.Paint += PaintStatusDot;
+
         DialogFit.Keep(this, page, width: 900, height: 560);
 
         // Shown beside the window it was opened from, not over it.
@@ -96,6 +102,31 @@ public sealed class MissionControlForm : Form
         };
 
         _wall.ShowTiles(tiles);
+    }
+
+    /// <summary>The headline's dot, at the normal text size.</summary>
+    private const int StatusDot = 16;
+
+    /// <summary>The dot before the headline: its colour, with a soft ring round it.</summary>
+    private void PaintStatusDot(object? sender, PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        var size = UiLayout.AtTextSize(StatusDot);
+        var ring = Math.Max(2, UiLayout.AtTextSize(3));
+        var top = (_lblHeadline.Height - size) / 2f;
+        var colour = _lblHeadline.ForeColor;
+
+        using (var halo = new SolidBrush(Looks.Mix(colour, _lblHeadline.BackColor, 0.7)))
+        {
+            g.FillEllipse(halo, 0, top, size, size);
+        }
+
+        using (var fill = new SolidBrush(colour))
+        {
+            g.FillEllipse(fill, ring, top + ring, size - ring * 2, size - ring * 2);
+        }
     }
 
     protected override void Dispose(bool disposing)
@@ -263,18 +294,86 @@ public sealed class MissionControlForm : Form
 
             const TextFormatFlags Line = TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
 
+            // The badge in the top-right corner, on the title's line - the
+            // title stops short of it.
+            var badge = UiLayout.AtTextSize(BadgeSize);
+            var badgeBox = new RectangleF(r.Right - UiLayout.AtTextSize(10) - badge, y + (AppTheme.MicroFont.Height - badge) / 2f, badge, badge);
+            var titleWidth = off ? inner : Math.Max(1, inner - badge - UiLayout.AtTextSize(6));
+
             TextRenderer.DrawText(g, AppTheme.Spaced(tile.Title.ToUpperInvariant()), AppTheme.MicroFont,
-                new Rectangle(left, y, inner, AppTheme.MicroFont.Height), muted, Line);
+                new Rectangle(left, y, titleWidth, AppTheme.MicroFont.Height), muted, Line);
+
+            if (!off)
+            {
+                DrawBadge(g, badgeBox, tile.Level, edge);
+            }
+
             y += AppTheme.MicroFont.Height + UiLayout.AtTextSize(4);
 
             TextRenderer.DrawText(g, tile.Value, AppTheme.StatFont,
                 new Rectangle(left, y, inner, AppTheme.StatFont.Height), ink, Line);
             y += AppTheme.StatFont.Height + UiLayout.AtTextSize(2);
 
-            var detail = new Rectangle(left, y, inner, Math.Max(1, (int)r.Bottom - y - UiLayout.AtTextSize(8)));
+            // Whole lines only: a box that ends part way down a line drew
+            // the top half of it, cut through the letters, under the last
+            // line that fitted.
+            var lineHeight = Math.Max(1, AppTheme.SmallFont.Height);
+            var lines = Math.Max(1, ((int)r.Bottom - y - UiLayout.AtTextSize(6)) / lineHeight);
+            var detail = new Rectangle(left, y, inner, lines * lineHeight);
 
             TextRenderer.DrawText(g, tile.Detail, AppTheme.SmallFont, detail, muted,
                 TextFormatFlags.NoPadding | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
+
+        /// <summary>The badge's size at the normal text size.</summary>
+        private const int BadgeSize = 18;
+
+        /// <summary>
+        /// A small round badge saying the tile's level by its shape as well as
+        /// its colour (18 Nov 2026, dialog look): a tick when it is fine, a
+        /// "!" when it wants a look or is a problem - on a problem's red, a
+        /// white badge with the "!" in red.
+        /// </summary>
+        private static void DrawBadge(Graphics g, RectangleF box, MissionControl.Level level, Color colour)
+        {
+            var problem = level == MissionControl.Level.Problem;
+            var fill = problem ? AppTheme.OnDanger : colour;
+            var mark = problem ? AppTheme.Danger : level == MissionControl.Level.Watch ? AppTheme.OnWarning : AppTheme.OnSuccess;
+
+            using (var brush = new SolidBrush(fill))
+            {
+                g.FillEllipse(brush, box);
+            }
+
+            var stroke = Math.Max(1.5f, box.Width / 8f);
+
+            using var pen = new Pen(mark, stroke)
+            {
+                StartCap = System.Drawing.Drawing2D.LineCap.Round,
+                EndCap = System.Drawing.Drawing2D.LineCap.Round,
+                LineJoin = System.Drawing.Drawing2D.LineJoin.Round,
+            };
+
+            var cx = box.Left + box.Width / 2f;
+            var w = box.Width;
+
+            if (level == MissionControl.Level.Good)
+            {
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(box.Left + w * 0.28f, box.Top + w * 0.52f),
+                    new PointF(box.Left + w * 0.44f, box.Top + w * 0.68f),
+                    new PointF(box.Left + w * 0.72f, box.Top + w * 0.36f),
+                });
+
+                return;
+            }
+
+            g.DrawLine(pen, cx, box.Top + w * 0.25f, cx, box.Top + w * 0.56f);
+
+            using var dot = new SolidBrush(mark);
+            var d = stroke * 1.1f;
+            g.FillEllipse(dot, cx - d / 2f, box.Top + w * 0.72f - d / 2f, d, d);
         }
 
         protected override void Dispose(bool disposing)

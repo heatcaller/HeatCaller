@@ -498,6 +498,13 @@ public sealed class SimpleModeTests : IDisposable
         "BackupRestoreControl.cs|Updates", "BackupRestoreControl.cs|Cloud copies",
         "BackupRestoreControl.cs|Existing backups", "BackupRestoreControl.Standby.cs|Standby PC",
 
+        // Windows Backup & Restore opens (AboutForm, AdvancedModeForm,
+        // RestoreDefaultsForm; 18 Nov 2026, dialog pass 6). The glossary's
+        // and the terms' cards have no literal caption.
+        "About.cs|What ships inside HeatCaller",
+        "AdvancedModeForm.cs|Before you turn it on",
+        "RestoreDefaultsForm.cs|What goes back",
+
         // Themes, Sponsors, Local Screens, Club Website.
         "LooksControl.cs|Looks", "LooksControl.cs|Club logo", "LooksControl.cs|Appearance",
         "LooksControl.cs|Crowd screens", "AchievementsControl.cs|Whose achievements", "GarageControl.cs|Which cars", "GarageControl.cs|Garage",
@@ -518,6 +525,12 @@ public sealed class SimpleModeTests : IDisposable
         "AnnouncerControl.cs|Running order", "AnnouncerControl.cs|Spotlight", "AnnouncerControl.cs|Talking points",
         "BroadcastWindow.cs|At a glance", "BroadcastWindow.cs|Controls", "ThisMonthForm.cs|This month", "ThisMonthForm.cs|Emails",
         "Shortcuts.cs|Anywhere", "Shortcuts.cs|Race Control", "Shortcuts.cs|Selected driver",
+
+        // The backup password and the Desk View's PIN in a card each (PasswordPromptForm,
+        // DeskPinForm; 18 Nov 2026, dialog pass 6). The shortcut sheet's cards are the
+        // groups above; the text prompt's card has no caption.
+        "SecretRecovery.cs|Password",
+        "MainForm.DeskView.cs|Choose a PIN", "MainForm.DeskView.cs|Type the PIN",
 
         // The look editor, badge details, report card and sponsor video preview in cards
         // (18 Nov 2026, dialog jazz-up): LookEditorForm, AchievementDetailForm, ReportCardForm

@@ -36,16 +36,24 @@ public sealed class AdvancedModeForm : Form
             Font = AppTheme.HeadingFont,
         }, gapBelow: UiLayout.LabelGap);
 
-        body.Add(new Label
+        // 18 Nov 2026, the dialog look: the warning, the race line and the
+        // tick in one card under the heading, with a hint line under the tick.
+        var card = new Section("Before you turn it on");
+
+        card.Add(new Label
         {
             Text = SettingsModes.WarningText,
             AutoSize = true,
             Font = AppTheme.BodyFont,
+
+            // "Backup & Restore", not "Backup  Restore" with the & taken for
+            // a shortcut key.
+            UseMnemonic = false,
         });
 
         if (raceRunning)
         {
-            body.Add(new Label
+            card.Add(new Label
             {
                 Text = SettingsModes.WarningRaceLine,
                 AutoSize = true,
@@ -58,9 +66,19 @@ public sealed class AdvancedModeForm : Form
         _chkUnderstand.AutoSize = true;
         _chkUnderstand.Font = AppTheme.BodyFont;
 
+        card.Add(_chkUnderstand, stretch: false, gapBelow: UiLayout.HintGap);
+
+        card.Add(new Label
+        {
+            Text = "Turn On Advanced Mode works once this is ticked.",
+            AutoSize = true,
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+        }, gapBelow: 0);
+
         // The last part of the body: nothing under it inside the part that
         // scrolls - see DialogFit.Body.
-        body.Add(_chkUnderstand, stretch: false, gapBelow: 0);
+        body.Add(card, gapBelow: 0);
 
         var btnTurnOn = new Button { Text = SettingsModes.TurnOnButton, Font = AppTheme.BodyFont, DialogResult = DialogResult.OK, Enabled = false };
         var btnStay = new Button { Text = SettingsModes.StayButton, Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
@@ -82,11 +100,14 @@ public sealed class AdvancedModeForm : Form
 
         AppTheme.ApplyRecursively(this);
 
+        // The way on, in the primary colour; still greyed until the tick.
+        AppTheme.StyleButton(btnTurnOn, AppTheme.ButtonKind.Primary);
+
         // As wide as it is at the normal text size, or wider when the tick's
-        // words need more on one line - a tick does not wrap.
+        // words need more on one line inside the card - a tick does not wrap.
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + _chkUnderstand.GetPreferredSize(Size.Empty).Width + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + _chkUnderstand.GetPreferredSize(Size.Empty).Width + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }

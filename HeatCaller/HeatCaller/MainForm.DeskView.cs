@@ -242,7 +242,8 @@ internal sealed class DeskPinForm : Form
                   + "digits to unlock it with; it's kept only until HeatCaller closes."
                 : "Type the PIN the desk view was locked with.",
             AutoSize = true,
-            MaximumSize = new Size(420, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
         };
 
         var grid = new FieldGrid();
@@ -257,10 +258,20 @@ internal sealed class DeskPinForm : Form
         var btnOk = new Button { Text = choosing ? "Lock" : "Unlock", AutoSize = true };
         btnOk.Click += (_, _) => Accept();
 
+        // THE LOOK (18 Nov 2026, dialog pass 6): one card - what the PIN is
+        // for as its hint line, the PIN boxes, and what went wrong under
+        // them - with the buttons under it, as the other dialogs have them.
+        var card = choosing ? new Section("Choose a PIN") : new Section("Type the PIN");
+        card.Add(lbl, gapBelow: UiLayout.RowGap);
+        card.Add(grid, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(_lblProblem, stretch: false, gapBelow: 0);
+
+        // A line kept for what went wrong, so it appearing never moves the
+        // buttons under the pointer.
+        _lblProblem.MinimumSize = new Size(0, Pieces.LineHeight(AppTheme.BodyFont));
+
         var page = new FillPage();
-        page.Add(lbl, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(grid, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(_lblProblem, stretch: false, gapBelow: UiLayout.RowGap);
+        page.Add(card, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnOk), gapBelow: 0);
 
         Controls.Add(page);
@@ -268,7 +279,20 @@ internal sealed class DeskPinForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 480, height: choosing ? 280 : 200);
+
+        // After the theme pass, which gives every label the ordinary text
+        // colour: what went wrong in the warning colour it was made with,
+        // the hint line muted.
+        _lblProblem.ForeColor = AppTheme.Warning;
+        lbl.ForeColor = AppTheme.TextMuted;
+
+        // Lock or Unlock is the window's one button in the app's colour: the
+        // theme goes by the caption, and knows neither.
+        AppTheme.StyleButton(btnOk, AppTheme.ButtonKind.Primary);
+
+        // As tall as what it holds. Wider by the card's edges than the 480
+        // it had.
+        DialogFit.Keep(this, page, width: 480 + Section.Inset.Horizontal);
     }
 
     private void Accept()

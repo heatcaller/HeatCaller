@@ -9,6 +9,8 @@ internal static partial class WindowCatalog
     /// meeting (DriversMeetingForm) built from a full night; and Driver Paid
     /// (DriverPaidForm) with a family on the slip, one of them settled
     /// already and one with the catalog's longest name, and with nobody on it.
+    /// And the Desk View's PIN (DeskPinForm): chosen to lock the laptop to
+    /// Who's Racing, and typed to unlock it.
     /// </summary>
     private static IEnumerable<(string Name, Func<Form> Build)> DeskAndMeetingWindows() => new (string, Func<Form>)[]
     {
@@ -31,6 +33,8 @@ internal static partial class WindowCatalog
             PapersChecked: true)))),
         ("Driver Paid", () => DriverPaidWindow(4)),
         ("Driver Paid (nobody yet)", () => DriverPaidWindow(0)),
+        ("Desk View", () => new DeskPinForm(choosing: true)),
+        ("Unlock the Desk View", () => new DeskPinForm(choosing: false)),
     };
 
     private static Form ReadyToRaceWindow()

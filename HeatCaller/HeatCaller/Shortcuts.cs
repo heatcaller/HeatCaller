@@ -70,8 +70,9 @@ public static class ShortcutCatalog
 /// to manage.
 ///
 /// On the layout pieces (DialogFit): two columns in a Beside - Race
-/// Control's keys and the driver keys down the left, the app-wide ones down
-/// the right - each a field grid, the chips in a column as wide as the
+/// Control's keys down the left, the driver keys and the app-wide ones down
+/// the right - each group a card (18 Nov 2026) with its note as the hint
+/// line and a field grid under it, the chips in a column as wide as the
 /// widest of them and what each does beside it, wrapping to the room there.
 /// The columns are the window's body, which scrolls on a screen too short
 /// for all thirty shortcuts, and "Press any key to close." is under it at
@@ -97,9 +98,6 @@ public sealed class ShortcutSheetForm : Form
     /// <summary>Under a group's note, before its first shortcut.</summary>
     private const int NoteGap = 6;
 
-    /// <summary>Between the last shortcut of one group and the title of the next down the same column.</summary>
-    private const int GroupGap = 16;
-
     public ShortcutSheetForm()
     {
         Text = "Keyboard shortcuts";
@@ -107,46 +105,46 @@ public sealed class ShortcutSheetForm : Form
         Font = AppTheme.BodyFont;
 
         var chips = new List<Label>();
+        var notes = new List<Label>();
 
-        // Race Control and the driver keys on the left, since they are the
-        // ones looked for mid-race; the app-wide ones on the right. A grid
-        // for each column: the two groups on the left share one, so their
-        // keys line up down it.
-        var left = new FieldGrid();
-        var right = new FieldGrid();
-        var leftHeadings = new List<Label>();
-        var rightHeadings = new List<Label>();
+        // THE LOOK (18 Nov 2026, dialog pass 6): each group a card, its
+        // title the card's caption and its note the card's hint line. Race
+        // Control's keys down the left, the driver keys at the top of the
+        // right - the ones looked for mid-race at the top of each - and the
+        // app-wide ones under them. The driver keys moved across from under
+        // Race Control's: with the cards' edges and captions the left-hand
+        // column ran taller than a 1920x1080 screen, and the sheet scrolled;
+        // the two columns are near the same height now, and shorter.
+        var cards = ShortcutCatalog.Sections
+            .Select(section => GroupCard(section, chips, notes))
+            .ToList();
 
-        for (var i = 0; i < ShortcutCatalog.Sections.Count; i++)
-        {
-            var onLeft = i < 2;
-            AddGroup(onLeft ? left : right, ShortcutCatalog.Sections[i], chips, onLeft ? leftHeadings : rightHeadings);
-        }
+        // Each column as wide as its widest card's lines on one line - a key
+        // and what it does, or a group's note or caption - and the card's
+        // edges. Measured now, before the cards are in the window, so the
+        // window is never laid out with a column of no width: every line in
+        // them was given its face as it was made (GroupCard), and the theme
+        // pass changes none of them.
+        var leftWidth = cards[0].Width;
+        var rightWidth = cards.Skip(1).Max(card => card.Width);
 
-        // Each column as wide as its widest line on one line - a key and
-        // what it does, or a group's title or note. Measured now, before the
-        // columns are in the window, so the window is never laid out with a
-        // column of no width: every line in them was given its face as it
-        // was made (AddGroup), and the theme pass changes none of them.
-        var leftWidth = OneLineWidth(left, leftHeadings);
-        var rightWidth = OneLineWidth(right, rightHeadings);
-
-        // The left column is the Beside's own - it has twice the shortcuts,
-        // so it is the taller, and the Beside is as tall as it - and a
-        // section gap wider than its lines: the room between the two
-        // columns, less the row gap the Beside keeps between them itself.
-        // The right takes the width left beside it.
-        var columns = new Beside(leftWidth + UiLayout.SectionGap - UiLayout.RowGap)
+        // The left column is the Beside's own, exactly as tall as its
+        // shortcuts, not the column's height - see Beside.AddSideMeasured.
+        // The right takes the width left beside it, the row gap the Beside
+        // keeps between them away; the Beside is as tall as the taller.
+        var columns = new Beside(leftWidth)
         {
             SideOnLeft = true,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
         };
 
-        // Exactly as tall as its shortcuts, not the column's height - see
-        // Beside.AddSideMeasured.
-        columns.AddSideMeasured(left, gapBelow: 0);
-        columns.Add(right, gapBelow: 0);
+        columns.AddSideCard(cards[0].Card, gapBelow: 0);
+
+        for (var i = 1; i < cards.Count; i++)
+        {
+            columns.Add(cards[i].Card, gapBelow: i == cards.Count - 1 ? 0 : UiLayout.RowGap);
+        }
 
         var footer = new Label
         {
@@ -173,10 +171,17 @@ public sealed class ShortcutSheetForm : Form
         ForeColor = AppTheme.TextDark;
         footer.ForeColor = AppTheme.TextMuted;
 
+        // The chips in the page's colour on the card's, as keys stand out
+        // of a keyboard - on the card, the card's own colour would lose them.
         foreach (var chip in chips)
         {
-            chip.BackColor = AppTheme.Surface;
+            chip.BackColor = AppTheme.Background;
             chip.ForeColor = AppTheme.Accent;
+        }
+
+        foreach (var note in notes)
+        {
+            note.ForeColor = AppTheme.TextMuted;
         }
 
         KeyDown += (_, e) =>
@@ -200,13 +205,12 @@ public sealed class ShortcutSheetForm : Form
         // window's own were - the rim a click closed it from.
         page.Click += (_, _) => Close();
 
-        // The two columns and the section gap between them, the page's
-        // margins round them - and room for the body's scrollbar, which
-        // takes its width from the right-hand column on a screen too short
-        // for them.
+        // The two columns and the row gap between them, the page's margins
+        // round them - and room for the body's scrollbar, which takes its
+        // width from the right-hand column on a screen too short for them.
         var width = UiLayout.PageLeft
             + leftWidth
-            + UiLayout.SectionGap
+            + UiLayout.RowGap
             + rightWidth
             + SystemInformation.VerticalScrollBarWidth
             + UiLayout.PageRight;
@@ -215,29 +219,18 @@ public sealed class ShortcutSheetForm : Form
     }
 
     /// <summary>
-    /// One group of shortcuts added to a column's grid: its title and its
-    /// note across the grid, then a line for each shortcut - the keys in a
-    /// chip in the grid's caption column, what they do beside them. Spaced
-    /// as the sheet always was, closer than a form's fields: the grid's own
-    /// gaps are replaced as each part goes in. The chips go in
-    /// <paramref name="chips"/> to be coloured once the theme pass is done,
-    /// and the title and note in <paramref name="headings"/>, whose widths
-    /// the column's is measured with (OneLineWidth).
+    /// One group of shortcuts as a card: its title the caption, its note
+    /// the hint line under it, then a grid with a line for each shortcut -
+    /// the keys in a chip in the grid's caption column, what they do beside
+    /// them. Spaced as the sheet always was, closer than a form's fields:
+    /// the grid's own gaps are replaced as each part goes in. The chips go
+    /// in <paramref name="chips"/> and the note in <paramref name="notes"/>
+    /// to be coloured once the theme pass is done. With the card, how wide
+    /// it is with every line on one line, its edges included.
     /// </summary>
-    private static void AddGroup(FieldGrid grid, ShortcutCatalog.Section section, List<Label> chips, List<Label> headings)
+    private static (Section Card, int Width) GroupCard(ShortcutCatalog.Section section, List<Label> chips, List<Label> notes)
     {
-        // A group under another in the same column keeps a gap above its
-        // title; the first in a column starts at the top.
-        var first = grid.RowCount == 0;
-
-        var title = grid.AddWide(new Label { Text = section.Title, AutoSize = true, Font = AppTheme.BoldFont });
-        title.Margin = new Padding(0, first ? 0 : GroupGap - ShortcutGap, 0, 0);
-
-        var note = grid.AddWide(new Label { Text = section.Note, AutoSize = true, Font = AppTheme.SmallFont });
-        note.Margin = new Padding(0, 0, 0, NoteGap);
-
-        headings.Add(title);
-        headings.Add(note);
+        var grid = new FieldGrid();
 
         foreach (var item in section.Items)
         {
@@ -258,11 +251,20 @@ public sealed class ShortcutSheetForm : Form
 
             chips.Add(chip);
         }
-    }
 
-    /// <summary>How wide a column's grid is with each line on one line: its keys and what they do, or a title or note when that is wider (the grid does not count what goes across it).</summary>
-    private static int OneLineWidth(FieldGrid grid, IReadOnlyList<Label> headings) =>
-        Math.Max(
+        var note = new Label { Text = section.Note, AutoSize = true, Font = AppTheme.SmallFont };
+        notes.Add(note);
+
+        var card = new Section(section.Title);
+        card.Add(note, gapBelow: NoteGap);
+        card.Add(grid, gapBelow: 0);
+
+        // The grid's keys and what they do on one line, the note, or the
+        // caption - whichever is widest - and the card's edges.
+        var lines = Math.Max(
             grid.GetPreferredSize(Size.Empty).Width,
-            headings.Max(heading => heading.GetPreferredSize(Size.Empty).Width + heading.Margin.Horizontal));
+            Math.Max(note.GetPreferredSize(Size.Empty).Width, card.CaptionWidth));
+
+        return (card, lines + Section.Inset.Horizontal);
+    }
 }

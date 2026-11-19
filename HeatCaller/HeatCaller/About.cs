@@ -377,10 +377,10 @@ internal static class ThirdPartyCatalog
 /// rather than on a page of its own that a club would meet once.
 ///
 /// On the layout pieces (DialogFit), the way the glossary is
-/// (RacingWordsForm): the name, version and a line about the app across the
-/// top with the support address and the guides under them, then the
-/// components taking the height the window has and scrolling on their own,
-/// and Close at the foot where it stays in view.
+/// (RacingWordsForm): a card across the top with the name, version and a
+/// line about the app, the support address and the guides under them, then
+/// the components in a card of their own taking the height the window has
+/// and scrolling on their own, and Close at the foot where it stays in view.
 /// </summary>
 public sealed class AboutForm : Form
 {
@@ -455,30 +455,39 @@ public sealed class AboutForm : Form
         // The components scroll down on their own, as wide as the lines over
         // them: no margins of their own - the page's are round them - and no
         // room under the last line, which the theme pass gives a panel that
-        // scrolls (ScrollTheming.NoRoomBelow).
-        var components = new PageStack { Padding = Padding.Empty };
+        // scrolls (ScrollTheming.NoRoomBelow). On the surface of the card
+        // round them.
+        var components = new PageStack
+        {
+            Padding = Padding.Empty,
+            BackColor = AppTheme.Surface,
+            Tag = AppTheme.KeepBackColor,
+        };
         ScrollTheming.NoRoomBelow(components);
         BuildComponents(components);
 
-        var page = new FillPage();
-        page.Add(lblName, gapBelow: 2);
-        page.Add(lblVersion);
-        page.Add(lblWhat);
-        page.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail));
-        page.Add(lnkDocs);
-        page.Add(lnkTerms);
+        // 18 Nov 2026, the dialog look: the name, version and line about the
+        // app in a card across the top with the address, the guides and the
+        // terms under them - a hint's gap between those, so the card is no
+        // taller than the lines were on the page - and the components in a
+        // card of their own under it, its caption the heading they had.
+        var header = new Section();
+        header.Add(lblName, gapBelow: 2);
+        header.Add(lblVersion, gapBelow: UiLayout.RowGap);
+        header.Add(lblWhat, gapBelow: UiLayout.RowGap);
+        header.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail), gapBelow: UiLayout.HintGap);
+        header.Add(lnkDocs, gapBelow: UiLayout.HintGap);
+        header.Add(lnkTerms, gapBelow: 0);
 
-        page.Add(new Label
-        {
-            Text = "WHAT SHIPS INSIDE HEATCALLER",
-            AutoSize = true,
-            Font = AppTheme.MicroFont,
-            ForeColor = AppTheme.Primary,
-        }, gapBelow: 2);
+        var shipped = new Section("What ships inside HeatCaller");
 
         // The components take the height; they keep a few lines before the
         // window scrolls instead.
-        page.AddFill(components, _ => LeastLines * Pieces.LineHeight(Font), gapBelow: UiLayout.RowGap);
+        shipped.AddFill(components, () => LeastLines * Pieces.LineHeight(Font), gapBelow: 0);
+
+        var page = new FillPage();
+        page.Add(header, gapBelow: UiLayout.RowGap);
+        page.AddFill(shipped, shipped.LeastHeight, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, as a dialog's buttons go.
         page.Add(new ButtonBar(alignRight: true).With(btnClose), gapBelow: 0);
@@ -492,6 +501,11 @@ public sealed class AboutForm : Form
 
         // After the theme pass, which gives every label the page's colour.
         lblVersion.ForeColor = AppTheme.Primary;
+
+        // Close is the only way on; Copy Address is a helper beside the
+        // address, not the window's main action - the theme pass read the
+        // "add" in "Address" and made it orange.
+        AppTheme.StyleButton(btnCopyEmail, AppTheme.ButtonKind.Secondary);
 
         DialogFit.Keep(this, page, width: 620, height: 600);
 

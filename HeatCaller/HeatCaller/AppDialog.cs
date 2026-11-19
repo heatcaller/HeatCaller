@@ -259,6 +259,12 @@ public static class AppDialog
 
         private readonly Color _accent;
 
+        /// <summary>The text colour on a fill of <see cref="_accent"/> - the mark in the icon's disc.</summary>
+        private readonly Color _onAccent;
+
+        /// <summary>The buttons' bar, with a hairline drawn over it (PaintDivider).</summary>
+        private readonly ButtonBar _bar;
+
         /// <summary>The button Enter presses and the focus starts on. See OnShown.</summary>
         private readonly Button _defaultButton;
 
@@ -269,6 +275,7 @@ public static class AppDialog
         public DialogForm(string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon, MessageBoxDefaultButton defaultButton, string[]? labels = null)
         {
             _accent = AccentFor(icon);
+            _onAccent = OnAccentFor(icon);
 
             Text = string.IsNullOrWhiteSpace(caption) ? "HeatCaller" : caption;
 
@@ -332,7 +339,7 @@ public static class AppDialog
                 };
 
                 row.Add(lblText, gapBelow: 0);
-                row.AddSide(new Glyph(icon, _accent) { Height = UiLayout.AtTextSize(IconSize) }, gapBelow: 0);
+                row.AddSide(new Glyph(icon, _accent, _onAccent) { Height = UiLayout.AtTextSize(IconSize) }, gapBelow: 0);
                 body.Add(row, gapBelow: 0);
             }
             else
@@ -347,6 +354,7 @@ public static class AppDialog
             // bar puts its first button furthest right, so they go in last
             // first. Tab goes through them left to right all the same.
             var bar = new ButtonBar(alignRight: true).With(Enumerable.Reverse(made).ToArray<Control>());
+            _bar = bar;
 
             for (var i = 0; i < made.Length; i++)
             {
@@ -375,6 +383,20 @@ public static class AppDialog
             // colour that says what KIND of message this is.
             lblCaption.ForeColor = _accent;
 
+            // The title a size up from the message (18 Nov 2026, dialog
+            // look): it says what the message is about, and reads first.
+            // Before the measuring below, which takes the face it has.
+            lblCaption.Font = AppTheme.HeadingFont;
+
+            // A hairline between the message and the buttons, in the gap the
+            // page already leaves there - nothing taller for it.
+            if (bar.Parent is { } rows)
+            {
+                rows.Paint += PaintDivider;
+                rows.Resize += (_, _) => rows.Invalidate();
+                bar.LocationChanged += (_, _) => rows.Invalidate();
+            }
+
             // As wide as the message needs, measured now in the faces the
             // theme pass left - its longest line, up to the measure - and
             // never narrower than the title (up to the same measure) or the
@@ -402,6 +424,25 @@ public static class AppDialog
             // caption bar to grab. The page and what is in it cover the
             // window, so each of them hands a press on to it (see DragWindow).
             DragFrom(page);
+        }
+
+        /// <summary>The hairline over the buttons, halfway down the gap above them, across the page.</summary>
+        private void PaintDivider(object? sender, PaintEventArgs e)
+        {
+            if (sender is not Control rows || !_bar.Visible)
+            {
+                return;
+            }
+
+            var y = _bar.Top - UiLayout.SectionGap / 2;
+
+            if (y <= 0)
+            {
+                return;
+            }
+
+            using var line = new Pen(AppTheme.Border);
+            e.Graphics.DrawLine(line, 0, y, rows.ClientSize.Width, y);
         }
 
         /// <summary>A press on <paramref name="part"/> or anything in it but a button or a scrollbar drags the window.</summary>
@@ -538,6 +579,14 @@ public static class AppDialog
             _ => AppTheme.Primary,
         };
 
+        private static Color OnAccentFor(MessageBoxIcon icon) => icon switch
+        {
+            MessageBoxIcon.Error => AppTheme.OnDanger,
+            MessageBoxIcon.Warning => AppTheme.OnWarning,
+            MessageBoxIcon.Question => AppTheme.OnAccent,
+            _ => AppTheme.OnPrimary,
+        };
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -551,6 +600,13 @@ public static class AppDialog
             using var path = Rounded(new Rectangle(0, 0, Width - 1, Height - 1), Corner);
 
             g.DrawPath(edge, path);
+
+            // A band of the message's colour along the top, in the room kept
+            // for the rim (18 Nov 2026, dialog look): what kind of message it
+            // is, before a word is read. The rounded window clips its ends.
+            using var band = new SolidBrush(_accent);
+            g.SmoothingMode = SmoothingMode.None;
+            g.FillRectangle(band, 0, 0, Width, RimRoom);
         }
 
         /// <summary>
@@ -562,11 +618,13 @@ public static class AppDialog
         {
             private readonly MessageBoxIcon _icon;
             private readonly Color _accent;
+            private readonly Color _onAccent;
 
-            public Glyph(MessageBoxIcon icon, Color accent)
+            public Glyph(MessageBoxIcon icon, Color accent, Color onAccent)
             {
                 _icon = icon;
                 _accent = accent;
+                _onAccent = onAccent;
 
                 SetStyle(
                     ControlStyles.UserPaint
@@ -590,14 +648,20 @@ public static class AppDialog
                 var side = Math.Max(1, Math.Min(Width, Height));
                 var bounds = new Rectangle(0, 0, side, side);
 
-                using (var disc = new SolidBrush(Color.FromArgb(48, _accent)))
+                // A soft halo of the colour, and a solid disc inside it with
+                // the mark in the colour that reads on it (18 Nov 2026,
+                // dialog look) - it used to be a pale disc with a ring.
+                using (var halo = new SolidBrush(Color.FromArgb(56, _accent)))
                 {
-                    g.FillEllipse(disc, bounds);
+                    g.FillEllipse(halo, bounds);
                 }
 
-                using (var ring = new Pen(_accent, 2f))
+                var inset = Math.Max(2, side / 8);
+                var inner = Rectangle.Inflate(bounds, -inset, -inset);
+
+                using (var disc = new SolidBrush(_accent))
                 {
-                    g.DrawEllipse(ring, bounds.X + 1, bounds.Y + 1, bounds.Width - 2, bounds.Height - 2);
+                    g.FillEllipse(disc, inner);
                 }
 
                 var mark = _icon switch
@@ -612,8 +676,8 @@ public static class AppDialog
                 // PointsForPixels keeps the mark that share of the circle on a
                 // screen the app draws at 150% (--dpi-aware), rather than half
                 // as big again. The same size at 96 DPI.
-                using var font = new Font(AppTheme.BoldFont.FontFamily, UiLayout.PointsForPixels(bounds.Height * 0.52f, g), FontStyle.Bold);
-                using var brush = new SolidBrush(_accent);
+                using var font = new Font(AppTheme.BoldFont.FontFamily, UiLayout.PointsForPixels(bounds.Height * 0.46f, g), FontStyle.Bold);
+                using var brush = new SolidBrush(_onAccent);
 
                 var size = g.MeasureString(mark, font);
 

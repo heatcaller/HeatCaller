@@ -230,14 +230,14 @@ public sealed class RacingWordsForm : Form
     };
 
     /// <summary>
-    /// The sheet, down <paramref name="words"/>: for each group its heading
-    /// and the line about it, then each word in bold with what it means
-    /// under it - every line as wide as the column, wrapping to it. Spaced
-    /// as it always was: a hair between a heading and its line, a row's gap
-    /// and a hair before each word, a hint's gap between a word and its
-    /// meaning, and a section's gap before the next group. Nothing under the
-    /// last meaning - the last part of a column that scrolls, whose gap
-    /// would be scrolled to as blank room.
+    /// The sheet, down <paramref name="words"/>: each group a card of its
+    /// own (18 Nov 2026, the dialog look) - its heading the card's caption
+    /// and the line about it the card's hint - then each word in bold with
+    /// what it means under it, every line as wide as the card, wrapping to
+    /// it. A row's gap and a hair before each word, a hint's gap between a
+    /// word and its meaning, and a section's gap between one card and the
+    /// next. Nothing under the last card - the last part of a column that
+    /// scrolls, whose gap would be scrolled to as blank room.
     /// </summary>
     private static void BuildWords(PageStack words)
     {
@@ -246,16 +246,9 @@ public sealed class RacingWordsForm : Form
         for (var g = 0; g < groups.Length; g++)
         {
             var group = groups[g];
+            var card = new Section(group.Heading);
 
-            words.Add(new Label
-            {
-                Text = group.Heading.ToUpperInvariant(),
-                AutoSize = true,
-                Font = AppTheme.MicroFont,
-                ForeColor = AppTheme.Primary,
-            }, gapBelow: 2);
-
-            words.Add(new Label
+            card.Add(new Label
             {
                 Text = group.Blurb,
                 AutoSize = true,
@@ -267,7 +260,7 @@ public sealed class RacingWordsForm : Form
             {
                 var word = group.Words[w];
 
-                words.Add(new Label
+                card.Add(new Label
                 {
                     Text = word.Term,
                     AutoSize = true,
@@ -277,16 +270,16 @@ public sealed class RacingWordsForm : Form
 
                 var lastInGroup = w == group.Words.Length - 1;
 
-                words.Add(new Label
+                card.Add(new Label
                 {
                     Text = word.Meaning,
                     AutoSize = true,
                     Font = AppTheme.BodyFont,
                     ForeColor = AppTheme.TextDark,
-                }, gapBelow: !lastInGroup
-                    ? UiLayout.RowGap + 2
-                    : g < groups.Length - 1 ? UiLayout.SectionGap : 0);
+                }, gapBelow: lastInGroup ? 0 : UiLayout.RowGap + 2);
             }
+
+            words.Add(card, gapBelow: g < groups.Length - 1 ? UiLayout.SectionGap : 0);
         }
     }
 }
