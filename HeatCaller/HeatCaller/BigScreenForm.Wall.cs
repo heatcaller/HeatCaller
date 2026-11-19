@@ -188,6 +188,11 @@ public sealed partial class BigScreenForm
     /// <summary>Lights the clock band's plate while there is a time on it, and puts it out when there isn't.</summary>
     private void LightClockPlate()
     {
+        // The clocks' words fitted to their boxes - a compare unless the
+        // words' shape or a box changed (FitLabel).
+        _lblCountdown.Refit();
+        _lblElapsed.Refit();
+
         var lit = _lblCountdown.Text.Length > 0 || _lblElapsed.Text.Length > 0;
 
         if (_clockLit == lit)
@@ -527,6 +532,142 @@ public sealed partial class BigScreenForm
             }
 
             base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>
+    /// A clock label whose words always fit on one line in its box: the
+    /// face it is given (Font) when they fit - so the clock on its own is as
+    /// big as ever - and a smaller copy of that face when they don't, as
+    /// with "00:00  (PAUSED)" on a red flag or "WARM-UP 1:59 LEFT".
+    /// </summary>
+    /// <remarks>
+    /// Fitted only when the SHAPE of the words changes - the same words with
+    /// other digits are the same shape - or the box or the face does, so the
+    /// ticking clock measures nothing and makes nothing: a red flag makes one
+    /// smaller face, and the green flag puts the full one back. The fitted
+    /// face is this label's own and is disposed here; the one it was given
+    /// belongs to the window (OwnFont).
+    /// </remarks>
+    private sealed class FitLabel : Label
+    {
+        private const TextFormatFlags Measure = TextFormatFlags.TextBoxControl | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+
+        private Font? _wanted;
+        private Font? _fitted;
+
+        private int _fitShape;
+        private Size _fitRoom;
+        private Font? _fitFor;
+
+        /// <remarks>
+        /// Takes the face as given and fits nothing: the window calls Refit
+        /// once its layout is done (ApplyScale) and on every tick, never from
+        /// inside a layout - changing a docked label's face while its panel
+        /// is laying it out left the band's labels at their first size.
+        /// </remarks>
+        public override Font Font
+        {
+            get => base.Font;
+            set
+            {
+                _wanted = value;
+                _fitFor = null;
+
+                var old = _fitted;
+                _fitted = null;
+                base.Font = value;
+                old?.Dispose();
+            }
+        }
+
+        /// <summary>The words' shape: their length and every character but the digits, which all count as one.</summary>
+        private static int Shape(string text)
+        {
+            var hash = text.Length;
+
+            foreach (var c in text)
+            {
+                hash = unchecked(hash * 31 + (c is >= '0' and <= '9' ? '0' : c));
+            }
+
+            return hash;
+        }
+
+        /// <summary>Fits the words to the box, if their shape, the box or the face changed since last time - otherwise a compare.</summary>
+        public void Refit()
+        {
+            if (_wanted is null || Width <= 0 || Height <= 0)
+            {
+                return;
+            }
+
+            var room = new Size(ClientSize.Width - Padding.Horizontal, ClientSize.Height - Padding.Vertical);
+            var text = Text ?? string.Empty;
+            var shape = Shape(text);
+
+            if (shape == _fitShape && room == _fitRoom && ReferenceEquals(_fitFor, _wanted))
+            {
+                return;
+            }
+
+            _fitShape = shape;
+            _fitRoom = room;
+            _fitFor = _wanted;
+
+            var use = _wanted;
+
+            if (text.Length > 0 && room.Width > 0 && room.Height > 0)
+            {
+                var size = _wanted.SizeInPoints;
+
+                // A little room to spare, so other digits of the same shape
+                // fit too; and smaller in steps until it really does.
+                // The face as given is kept whenever its words fit at all,
+                // so a clock that fitted before keeps every point of it.
+                for (var step = 0; step < 12 && !Fits(text, use, room, ReferenceEquals(use, _wanted) ? 1f : 0.96f); step++)
+                {
+                    var needed = TextRenderer.MeasureText(text, use, new Size(int.MaxValue, int.MaxValue), Measure);
+                    var shrink = Math.Min(room.Width * 0.94f / Math.Max(1, needed.Width), room.Height * 0.98f / Math.Max(1, needed.Height));
+                    size = Math.Max(1f, size * Math.Min(0.95f, shrink));
+
+                    var smaller = new Font(_wanted.FontFamily, size, _wanted.Style, GraphicsUnit.Point);
+
+                    if (!ReferenceEquals(use, _wanted))
+                    {
+                        use.Dispose();
+                    }
+
+                    use = smaller;
+                }
+            }
+
+            var old = _fitted;
+            _fitted = ReferenceEquals(use, _wanted) ? null : use;
+            base.Font = use;
+
+            if (old is not null && !ReferenceEquals(old, _fitted))
+            {
+                old.Dispose();
+            }
+        }
+
+        /// <summary>Whether the words fit on one line in <paramref name="share"/> of the box's width - a smaller face keeps a margin for wider digits.</summary>
+        private static bool Fits(string text, Font font, Size room, float share)
+        {
+            var needed = TextRenderer.MeasureText(text, font, new Size(int.MaxValue, int.MaxValue), Measure);
+            return needed.Width <= room.Width * share && needed.Height <= room.Height + 1;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+
+            if (disposing)
+            {
+                _fitted?.Dispose();
+                _fitted = null;
+            }
         }
     }
 

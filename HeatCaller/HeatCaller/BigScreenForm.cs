@@ -241,8 +241,8 @@ public sealed partial class BigScreenForm : Form
 
     /// <summary>True while the banner shows a warning - a fastest sector never covers one.</summary>
     private bool _bannerIsWarning;
-    private readonly Label _lblElapsed = new();
-    private readonly Label _lblCountdown = new();
+    private readonly FitLabel _lblElapsed = new();
+    private readonly FitLabel _lblCountdown = new();
     private readonly FlagPill _lblRaceState = new();
     private readonly DataGridView _grid = new();
 
@@ -1141,6 +1141,12 @@ public sealed partial class BigScreenForm : Form
         {
             ResumeLayout(true);
         }
+
+        // Once the band is laid out at its new size, never during: a clock
+        // line too long for its box ("00:00  (PAUSED)") on one line in a
+        // smaller face - see FitLabel.
+        _lblCountdown.Refit();
+        _lblElapsed.Refit();
 
         int Sized(int pixels) => (int)Math.Round(UiLayout.AtDpi(pixels) * _scale);
 
