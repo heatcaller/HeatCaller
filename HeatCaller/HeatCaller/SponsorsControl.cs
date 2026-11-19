@@ -509,10 +509,8 @@ public sealed class SponsorsControl : UserControl
         // room, one under the other when there is not (CardColumns).
         var settingsCards = new CardColumns();
 
-        // The rotation timing and the video's sound are Advanced (1 Nov
-        // 2026, Simple mode); the slides and the reads are the sponsors.
-        settingsCards.AddLeft(SimpleMode.Hide(timingCard));
-        settingsCards.AddRight(SimpleMode.Hide(videoCard));
+        settingsCards.AddLeft(timingCard);
+        settingsCards.AddRight(videoCard);
 
         // --- The page ---
 
@@ -522,12 +520,11 @@ public sealed class SponsorsControl : UserControl
         page.Add(_chkEnabled, stretch: false);
         page.Add(new TileStrip(_tiles), gapBelow: UiLayout.SectionGap);
         page.AddFill(slidesCard, slidesCard.LeastHeight);
-        page.Add(SimpleMode.Hide(settingsCards));
+        page.Add(settingsCards);
         page.Add(readsCard);
         page.Add(_sponsorListCard!);
         page.Add(_sponsorCard!);
         page.Add(_reportCard!, gapBelow: 0);
-        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
         Controls.Add(page);
 

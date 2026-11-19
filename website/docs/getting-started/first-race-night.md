@@ -6,8 +6,6 @@ Set aside an hour before your first real night to go through it. Doing it once w
 
 This walkthrough uses a direct **EasyLap** or **I-Lap** connection. HeatCaller also reads several other decoders, still marked Beta (see [The Beta decoders](../timing/decoders.md#the-beta-decoders)); with any of them, HeatCaller runs the race itself. See [Decoders](../timing/decoders.md).
 
-A new install is in Simple mode, which shows what a race night needs and hides the tuning. Everything in this walkthrough is there in Simple mode except where it says otherwise. See [Simple and Advanced mode](simple-and-advanced-mode.md).
-
 ## Before you start
 
 - HeatCaller is installed and opens. [Download the installer](https://github.com/heatcaller/HeatCaller-releases/releases/latest/download/HeatCallerApp-beta.msi) and see [Installing and running](install.md).
@@ -25,7 +23,7 @@ If you ran the first-run wizard, you may already have a track, a class and some 
     - **I-Lap Decoder (Serial)**. Pick the **COM port:** and the **Baud:** rate your decoder uses (usually 9600). Use **Rescan** if you plugged it in after opening the page.
 3. Click **Connect**.
 4. Check that the **Status:** line and dot turn green.
-5. Drive a car over the loop. In Advanced mode you'll see its crossing in the Developer console at the bottom of the page. In Simple mode the console is hidden; the **Pre-race check** in step 7 tells you whether each car is being heard.
+5. Drive a car over the loop. You'll see its crossing in the Developer console at the bottom of the page, and the **Pre-race check** in step 7 tells you whether each car is being heard.
 
 Full detail and troubleshooting: [Decoders](../timing/decoders.md).
 
@@ -132,7 +130,7 @@ The announcer calls the grid, the start, fast laps, lead changes and the finish 
 
 - **Announcer Screen** on **Race Control** (or <kbd>A</kbd>) opens the Announcer screen, a window with talking points for whoever is on the mic. It can sit beside the main window or on a second monitor, and its **Race Control** button brings the main window forward.
 - **Mute Announcer** at the bottom of the sidebar silences it instantly.
-- If nothing is heard, look at **Sounds → Mixer**, which shows "NO VOICE:" and the reason when the announcer can't speak, and, in Advanced mode, at the Developer Console on the **Connection** page. Lines starting `[voice]` say why an announcement was skipped.
+- If nothing is heard, look at **Sounds → Mixer**, which shows "NO VOICE:" and the reason when the announcer can't speak, and at the Developer Console on the **Connection** page. Lines starting `[voice]` say why an announcement was skipped.
 
 Full detail: [Voice announcements](../announcer/voice.md), [Commentary](../announcer/commentary.md) and [Sounds and music](../announcer/sounds-and-music.md).
 
@@ -179,7 +177,7 @@ For your first nights on HeatCaller, keep your club's current timing system read
 If HeatCaller misbehaves during a race:
 
 1. **Finish the race on the old system**, and run the rest of the night there if you need to. The drivers come first.
-2. **Don't lose what HeatCaller has.** Every finished race is already saved in **Race History**. A race that was running when the app stopped is kept on disk and offered back the next time HeatCaller opens (see [Crash recovery](../race-control/corrections-and-recovery.md#crash-recovery)), so you can still save it later. A wrong lap count in a saved race can be fixed afterwards with **Edit Result**, once **Allow corrections to saved results** is ticked on the **Race-day manager (phone)** card of **Local Screens**, which is shown in Advanced mode (see [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result)).
+2. **Don't lose what HeatCaller has.** Every finished race is already saved in **Race History**. A race that was running when the app stopped is kept on disk and offered back the next time HeatCaller opens (see [Crash recovery](../race-control/corrections-and-recovery.md#crash-recovery)), so you can still save it later. A wrong lap count in a saved race can be fixed afterwards with **Edit Result**, once **Allow corrections to saved results** is ticked on the **Race-day manager (phone)** card of **Local Screens** (see [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result)).
 3. **Save the evidence before you close anything.** On **Backup & Restore**, click **Save Support Info**. It saves one `.zip` with the last few runs' console, the crash log and the version, with driver names and email addresses taken out. Note roughly when it happened and what you were doing.
 
 ## Who to call

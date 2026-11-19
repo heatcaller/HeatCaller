@@ -38,33 +38,17 @@ public sealed class BugHunt17_RestoredSettingsTests
             RestoredSettings.WhatNeedsConfirming(Settings(ClubRelay, ClubRelay), Settings(ClubRelay, string.Empty)));
     }
 
-    [Fact]
-    public void The_hold_message_can_name_the_address_for_a_page_that_does_not_show_it()
-    {
-        var message = RestoredSettings.PublishRelayMessageNaming(" " + EvilRelay + " ");
-
-        Assert.Contains(EvilRelay + " -", message, StringComparison.Ordinal);
-        Assert.DoesNotContain("address above", message, StringComparison.Ordinal);
-
-        // Nothing to name: the usual words.
-        Assert.Equal(RestoredSettings.PublishRelayMessage, RestoredSettings.PublishRelayMessageNaming("  "));
-    }
-
     /// <summary>
     /// The Club Website page's side of it, pinned in the source: its window
     /// is not one these tests can press buttons on.
     /// </summary>
     [Fact]
-    public void The_Club_Website_page_names_a_hidden_address_and_does_not_offer_a_held_last_good()
+    public void The_Club_Website_page_does_not_offer_a_held_last_good()
     {
         var page = File.ReadAllText(Path.Combine(SourceDir(), "RelaySettingsControl.cs"));
 
         // Ticking Publish is not a check of the address.
         Assert.Contains("SaveFields(confirmRestored: false);", page, StringComparison.Ordinal);
-
-        // Simple mode hides the address row, so the Status card names it.
-        Assert.Contains("RestoredSettings.PublishRelayMessageNaming(address)", page, StringComparison.Ordinal);
-        Assert.Contains("&& (SimpleMode.ShowAll || _restoredAddressNamed);", page, StringComparison.Ordinal);
 
         // Restore Last Working is not offered while held.
         Assert.Contains("if (!HasLastGood() || RestoredSettings.IsHeld(RestoredSettings.Part.PublishRelay))", page, StringComparison.Ordinal);

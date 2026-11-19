@@ -50,26 +50,11 @@ public sealed partial class BackupRestoreControl : UserControl
     /// </summary>
     public Func<bool>? IsRaceUnderWay { get; set; }
 
-    /// <summary>
-    /// Raised by the Settings mode card's button (1 Nov 2026): the host
-    /// (MainForm) turns Advanced mode on behind its warning, or goes back to
-    /// Simple, and calls <see cref="ShowMode"/> with the result.
-    /// </summary>
-    public event Action? SettingsModeToggleRequested;
-
     /// <summary>Raised by Restore Default Settings (round 4): the host asks, saves a copy, resets and restarts - see MainForm.RestoreDefaultSettings.</summary>
     public event Action? RestoreDefaultsRequested;
 
     /// <summary>Raised by Put Back Earlier Settings (round 4): the host lists the copies - see MainForm.PutBackEarlierSettings.</summary>
     public event Action? PutBackSettingsRequested;
-
-    private readonly Label _lblMode = new();
-    private readonly Button _btnMode = new();
-
-    /// <summary>"Ask for the manager PIN to turn on Advanced mode" (round 5) - AppSettings.AdvancedNeedsManagerPin.</summary>
-    private readonly CheckBox _chkAdvancedPin = new ThemedCheckBox();
-
-    private readonly Label _lblAdvancedPinHint = new();
 
     private readonly Button _btnBackupNow = new();
 
@@ -232,7 +217,7 @@ public sealed partial class BackupRestoreControl : UserControl
 
         var thisPc = new CardColumns();
         thisPc.AddLeft(BuildStandbyCard());
-        thisPc.AddLeft(BuildModeCard());
+        thisPc.AddLeft(BuildSettingsCard());
         thisPc.AddRight(BuildSupportCard());
         thisPc.AddRight(BuildUpdatesCard());
         page.Add(thisPc);
@@ -250,29 +235,12 @@ public sealed partial class BackupRestoreControl : UserControl
     }
 
     /// <summary>
-    /// SETTINGS MODE (1 Nov 2026, Simple and Advanced mode, round 1): where
-    /// Advanced mode is turned on - here rather than a switch in the
-    /// sidebar's footer, which Asher found too much for something a
-    /// volunteer should not stumble on. What mode this PC is in, and one
-    /// button for the other. The host does the asking (SettingsModeToggleRequested).
+    /// DEFAULT SETTINGS (1 Nov 2026, round 4): Restore Default Settings, the
+    /// way to undo tuning that went wrong, and the copies it saves. Simple
+    /// and Advanced mode, whose card this was, were taken out on 18 Nov 2026.
     /// </summary>
-    private Section BuildModeCard()
+    private Section BuildSettingsCard()
     {
-        _lblMode.AutoSize = true;
-
-        _btnMode.Click += (_, _) => SettingsModeToggleRequested?.Invoke();
-
-        var lblHint = new Label
-        {
-            Text = SettingsModes.CardHint,
-            AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-        };
-
-        _textSize.Wear(lblHint, () => AppTheme.SmallFont);
-
-        // RESTORE DEFAULT SETTINGS (round 4), in both modes: the way a Simple
-        // user undoes settings changed in Advanced, and the copies it saves.
         var btnRestore = new Button { Text = "Restore Default Settings..." };
         btnRestore.Click += (_, _) => RestoreDefaultsRequested?.Invoke();
 
@@ -281,77 +249,20 @@ public sealed partial class BackupRestoreControl : UserControl
 
         var lblRestoreHint = new Label
         {
-            Text = "Restore Default Settings puts every setting Simple mode hides back to how HeatCaller ships, after saving a "
-                   + "copy. Your drivers, classes, tracks, results and keys are never touched.",
+            Text = "Restore Default Settings puts the tuning settings - sounds, voice, timing and the like - back to how "
+                   + "HeatCaller ships, after saving a copy. Your drivers, classes, tracks, results and keys are never touched.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
 
         _textSize.Wear(lblRestoreHint, () => AppTheme.SmallFont);
 
-        // ASKING FOR THE MANAGER PIN (round 5), for a PC volunteers run: in
-        // Advanced mode only, so nobody in Simple can untick it - and greyed
-        // until the club has a manager PIN to ask for.
-        _chkAdvancedPin.Text = "Ask for the manager PIN to turn on Advanced mode";
-        _chkAdvancedPin.AutoSize = true;
-        _chkAdvancedPin.Checked = _settings.AdvancedNeedsManagerPin;
-        _chkAdvancedPin.CheckedChanged += (_, _) =>
-        {
-            if (_settings.AdvancedNeedsManagerPin != _chkAdvancedPin.Checked)
-            {
-                _settings.AdvancedNeedsManagerPin = _chkAdvancedPin.Checked;
-                _settings.Save();
-            }
-        };
+        var card = new Section("Default settings");
 
-        _lblAdvancedPinHint.AutoSize = true;
-        _lblAdvancedPinHint.ForeColor = AppTheme.TextMuted;
-        _textSize.Wear(_lblAdvancedPinHint, () => AppTheme.SmallFont);
-
-        var card = new Section("Settings mode");
-
-        card.Add(_lblMode, gapBelow: UiLayout.LabelGap);
-        card.Add(new ButtonBar().With(_btnMode));
-        card.Add(lblHint, gapBelow: UiLayout.RowGap);
-        card.Add(SimpleMode.Hide(_chkAdvancedPin), stretch: false, gapBelow: 0);
-        card.Add(SimpleMode.Hide(_lblAdvancedPinHint), gapBelow: UiLayout.SectionGap);
-
-        // The manager PIN is set on Local Screens, so it is read again each
-        // time this page is shown.
-        VisibleChanged += (_, _) =>
-        {
-            if (Visible)
-            {
-                ShowAdvancedPin();
-            }
-        };
         card.Add(new ButtonBar().With(btnRestore, btnPutBack));
         card.Add(lblRestoreHint, gapBelow: 0);
 
-        ShowMode(_settings.SettingsMode);
-
         return card;
-    }
-
-    /// <summary>The Settings mode card brought up to date with the mode this PC is in. UI thread.</summary>
-    public void ShowMode(SettingsMode mode)
-    {
-        // The bar sizes the button to its new words by itself.
-        _lblMode.Text = SettingsModes.CardStatus(mode);
-        _btnMode.Text = SettingsModes.CardButton(mode);
-
-        ShowAdvancedPin();
-    }
-
-    /// <summary>The manager PIN tick: greyed, and the hint says why, until the club has a manager PIN to ask for.</summary>
-    private void ShowAdvancedPin()
-    {
-        var hasPin = RaceDayService.IsUsableManagerPin(_settings.ManagerPin);
-
-        _chkAdvancedPin.Enabled = hasPin;
-        _lblAdvancedPinHint.Text = hasPin
-            ? "For a PC volunteers run: Advanced mode then needs the PIN the race-day manager's phone page asks for."
-            : "Set a manager PIN first, on Local Screens in the Race-day manager card (six digits or more).";
     }
 
     /// <summary>

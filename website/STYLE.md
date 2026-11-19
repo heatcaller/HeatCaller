@@ -30,11 +30,11 @@ Race Analytics (Overview, Personal Bests, Lap Times, Head to Head, Trends, Pace)
 Practice, Ghost Cars, Demo Mode, Venues, Themes (no tabs: Looks, Club logo and Appearance cards), Sponsors, Local Screens,
 Club Website (Website, Recording), Voice (Voice, Cast, Race Calls with Rivalries at its end, AI Commentary),
 Sounds (Mixer, Soundscapes, Imaging, Effects, Ambience, Music, Lap Beeps), Connection, Backup & Restore.
-There's a "Search pages..." box and "Manage Navigation..." to reorder/hide pages (in both Simple and Advanced mode since 6 Nov 2026).
+There's a "Search pages..." box and "Manage Navigation..." to reorder/hide pages.
 The sidebar shows the pages in groups: ESSENTIALS, then CLUB TOOLS (Race Day, Championship, Rentals, Handicaps, Venues,
 Sponsors, Local Screens, Club Website), each in the order above; while a race day is open, TONIGHT (Race Day, Race Control,
-Championship) sits on top. Simple mode leaves out Venues and hides the Race Calls, Imaging, Effects, Ambience, Lap Beeps
-and Recording tabs; the "not yet tested" tick keeps Championship, Garage, Handicaps, Rentals and Venues out of the sidebar.
+Championship) sits on top. Every page and tab shows (Simple and Advanced mode were taken out on 18 Nov 2026);
+the "not yet tested" tick keeps Championship, Garage, Handicaps, Rentals and Venues out of the sidebar.
 Batteries is not a page: a driver's packs are on Driver Hub, the club's on Garage (Club Batteries).
 (Checked against the code on 2 Nov 2026: MainForm.Pages.cs `_navItems`, NavTiers.cs, SimpleMode.cs and each page's
 TabPages. "Voice Announcements" was renamed "Voice", "Setup Log" became "Garage", Themes' Announcer Style became
@@ -72,7 +72,6 @@ docs/getting-started/index.md                  What HeatCaller does, what you ne
 docs/getting-started/install.md                Installing/running, updates, where data lives, first-run wizard
 docs/getting-started/tour.md                   Tour of the window: sidebar, pages, search, Manage Navigation, themes, console, tray icon
 docs/getting-started/first-race-night.md       A walkthrough from empty install to first race (links out)
-docs/getting-started/simple-and-advanced-mode.md  Simple and Advanced mode: the switch, what Simple hides, race calls on/off, AI commentary's section switches, Restore default settings, the manager-PIN lock
 docs/race-day/drivers-and-classes.md           Driver Hub (incl. a driver's batteries), Classes, Rentals, Venues, Track Layouts, Garage (incl. club batteries)
 docs/race-day/track-designer.md               The Track Designer: drawing, lanes, the lap, stock, Build me a track, print and share, the angled view
 docs/race-day/events-and-entries.md            Race Day → Setup, Who's Racing, Calendar; the set-up wizard; check-in desk; Scrutineering log; readiness check; QR check-ins

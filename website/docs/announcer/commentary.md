@@ -13,9 +13,6 @@ It tries the relay first and falls back to the built-in model **for each line**,
 
 Settings are on **Voice → AI Commentary**.
 
-!!! note "In Simple mode"
-    In Simple mode, the tab shows only **Enable AI commentary** and a **What it talks about** card: six switches, **Before the race**, **During the race**, **Between races**, **After the flag**, **Recap show** and **Opening and closing the night**, each turning a part of the night on or off, and **Talking points on the Announcer screen - never spoken** under them. The cards this page describes are in Advanced mode. See [AI commentary in Simple mode](../getting-started/simple-and-advanced-mode.md#ai-commentary-in-simple-mode).
-
 ## What it's used for
 
 | Use | When | Spoken? |
@@ -198,7 +195,7 @@ The portable copy of HeatCaller has no model beside it. It also looks in `%LOCAL
 ## Turn commentary on
 
 1. Open **Voice → AI Commentary**.
-2. Tick **Enable AI commentary**. In Simple mode that's all there is to it: the **What it talks about** switches pick what it says. The steps below need Advanced mode.
+2. Tick **Enable AI commentary**.
 3. On the **Who writes it** card, the first on the tab, check **Write through the club relay when it can** and **Let the model on this PC write when the relay can't**. Both are on to start with. The line under the relay box says what will write.
 4. Press **Test Connection**, at the bottom of the same card.
     - "Working - replied in 2.1s. That's comfortably within the gap between races." means you're set.
@@ -216,7 +213,7 @@ The model takes a few seconds to load into memory the first time it's used. Heat
 
 ## Settings
 
-The settings are on cards down the **Voice → AI Commentary** tab in Advanced mode: **Who writes it** first, then **How it's written**, since it covers every line, then the rest in the order the night happens: **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Between races**. Above them is the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
+The settings are on cards down the **Voice → AI Commentary** tab: **Who writes it** first, then **How it's written**, since it covers every line, then the rest in the order the night happens: **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Between races**. Above them is the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
 
 Who speaks - the announcer's and the recap host's names, the co-host, the Technical Lead, the Team Principal and the achievements reader, with their voices - is on **Voice → Cast**. One **Load Voices**, on the **Voices** card at the top, fills every voice list on the tab. Under it, every speaker has a card laid out the same way: what the speaker does under the card's title, then **Name:**, **Voice:** with **Test Voice**, and **If ElevenLabs runs out:** (the Kokoro voice they switch to, with its own **Test Voice**; see [Each of the cast when ElevenLabs runs out](voice.md#each-of-the-cast-when-elevenlabs-runs-out)), then the switches and settings for what they do - the **Announcer** card first. The show's music is on **Sounds → Imaging**, and recording the night is on **Club Website → Recording**. The sections below still describe those settings here, where they're explained.
 
@@ -346,12 +343,12 @@ A second commentator, for the segments that suit one. The announcer makes a rema
 | **Two voices in the booth** | Turns the co-host on. Only the segments marked as a two-hander in the table above use them. | Off |
 | **Name:** | What the announcer calls them. Leave it blank and they are spoken *to* but never named — the model is told not to invent one. | Blank |
 | **Voice:** | Which voice reads their half. With nothing picked for the engine you're using, the announcer's own voice reads both halves — still a conversation, and better than silence. **Test Voice** beside it says a line in the voice picked. | Blank |
-| **If ElevenLabs runs out:** | The Kokoro voice they read in while Kokoro stands in, with its own **Test Voice**. Shown in Advanced mode. See [Each of the cast when ElevenLabs runs out](voice.md#each-of-the-cast-when-elevenlabs-runs-out). | Adam (American, male) |
+| **If ElevenLabs runs out:** | The Kokoro voice they read in while Kokoro stands in, with its own **Test Voice**. See [Each of the cast when ElevenLabs runs out](voice.md#each-of-the-cast-when-elevenlabs-runs-out). | Adam (American, male) |
 | **What they're like:** | Their point of view — see below. | Even-handed |
 | **How much they talk:** | **Brief - a remark and a reply**, **Conversational - three turns** or **Full - four turns**. Each turn is another line the AI writes, and, on the relay, another line of the club's month. | Conversational |
 | **Two voices in the heats too, not just the mains** | The co-host is normally kept for the mains, which helps a main sound like one. Ticking this lets them out in the heats as well; it doesn't make the night any chattier. **Lively** and **Non-stop** under [How chatty](#how-chatty) do the same. | Off |
 
-The co-host also asks the questions in the Technical Lead's and the Team Principal's interviews. The card is grayed out while every one of those, and every two-hander segment, is switched off. In Simple mode, **If ElevenLabs runs out:**, **What they're like** and **How much they talk** are hidden.
+The co-host also asks the questions in the Technical Lead's and the Team Principal's interviews. The card is grayed out while every one of those, and every two-hander segment, is switched off.
 
 Anything that can't be split cleanly into two voices is simply said in one instead. That costs a second request to the model, so it's worth knowing it happens — but it only happens when the model ignores the format, and a silence would cost more.
 
@@ -556,7 +553,7 @@ A voice is kept for each engine, so if you switch engine on **Voice → Voice**,
 
 #### Drivers' own crew
 
-Each driver can have their own Team Principal and Technical Lead: a name and a voice for each, picked from their phone. They can also share a few words the interviews use. Turn it on with **Drivers can pick their own crew** on the **Drivers' own crew** card on **Voice → Cast** (Advanced). It's off by default.
+Each driver can have their own Team Principal and Technical Lead: a name and a voice for each, picked from their phone. They can also share a few words the interviews use. Turn it on with **Drivers can pick their own crew** on the **Drivers' own crew** card on **Voice → Cast**. It's off by default.
 
 - **A voice** comes from every voice on the engine in use, less any you hide. The list is refreshed every 10 minutes (a minute after a failed try), so a voice added to your ElevenLabs account reaches the phones, and one you delete stops being used: a driver whose voice has gone hears the club's voice instead. Click **Voices drivers can pick...** and untick a voice to hide it, such as a cloned voice of a real person. The announcer's voice and the co-hosts' voices are never offered. A voice a driver picks is used straight away. If you switch engine, their pick is left behind and they hear the club's voice until they pick again; their phone asks them to.
 - **A name** for each, which they make up. Blank, they get the club's name from the card above.
@@ -656,7 +653,7 @@ A race day can use a different preset for that day only: **Between-race talk:** 
 
 **The console says why a call-up didn't go**, once a gap per reason, on a line starting `[gap]`: "Call-up for Heat 3 held - inside the quiet before the call".
 
-**Start the countdown by itself from the run sheet, at** _5 min, 1 min_ calls the countdown by itself, from the time against the next race on **Race Day → Timetable**. Pick any of 10, 5, 2 and 1 minutes, and **time's up**. In Simple mode the same setting is **Count down to each race by itself, from the Timetable** on the **Countdown** card, which uses the minute marks picked here. (The Timetable's **Reminder countdown** card was taken out on 13 Nov 2026.) Off until you tick it.
+**Start the countdown by itself from the run sheet, at** _5 min, 1 min_ calls the countdown by itself, from the time against the next race on **Race Day → Timetable**. Pick any of 10, 5, 2 and 1 minutes, and **time's up**. (The Timetable's **Reminder countdown** card was taken out on 13 Nov 2026.) Off until you tick it.
 
 #### Your own lines
 
@@ -844,7 +841,7 @@ Untick all of them and nothing gets music, which is a different thing from switc
 
 ### Recording the night
 
-This card is on **Club Website → Recording** now, a tab shown in Advanced mode. Recording carries on in Simple mode as it was set. Every race is recorded as it goes out — the announcer and the effects, not the music or the crowd — and **each driver gets an mp3 of the stretches where the announcer called them**, and can get a highlight video for their phone too, with the music and the crowd under the call as the room heard them. See also [Race recordings](sounds-and-music.md#race-recordings).
+This card is on **Club Website → Recording** now. Every race is recorded as it goes out — the announcer and the effects, not the music or the crowd — and **each driver gets an mp3 of the stretches where the announcer called them**, and can get a highlight video for their phone too, with the music and the crowd under the call as the room heard them. See also [Race recordings](sounds-and-music.md#race-recordings).
 
 The clips are the half worth having. A driver who posts the forty seconds where their pass for the lead was called is the best advertisement your club has, and nobody else in RC timing produces one at all.
 
@@ -1157,7 +1154,7 @@ The **Club notes** chip lists what's waiting for you, and **Show done** lists wh
 
 ### Letting the room send them
 
-Two switches under **Club notes** on the **Room & Web** card, on **Club Website → Website** (in Advanced mode), and both are **off** until you turn them on:
+Two switches under **Club notes** on the **Room & Web** card, on **Club Website → Website**, and both are **off** until you turn them on:
 
 | Switch | Who can send | Where from |
 |---|---|---|

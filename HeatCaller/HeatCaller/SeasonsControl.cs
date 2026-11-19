@@ -311,8 +311,7 @@ public sealed class SeasonsControl : UserControl
         var rules = new Section("Scoring rules");
 
         rules.Add(_lblRules);
-        // Custom scoring rules are Advanced (1 Nov 2026, Simple mode).
-        rules.Add(new ButtonBar().With(SimpleMode.Hide(btnRules)), gapBelow: 0);
+        rules.Add(new ButtonBar().With(btnRules), gapBelow: 0);
 
         var pointsView = new Beside(() => UiLayout.AtTextSize(RulesWidth));
 

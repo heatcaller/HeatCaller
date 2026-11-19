@@ -23,8 +23,6 @@ public sealed class RaceControlColumnsVisitTests
                 HasCompletedFirstRun = true,
                 HasSeenRaceDaySetup = true,
                 AutoBackupEnabled = false,
-                SettingsMode = SettingsMode.Advanced,
-                SettingsModeDecided = true,
                 ConnectDecodersAtStartup = false,
             }.Save();
 

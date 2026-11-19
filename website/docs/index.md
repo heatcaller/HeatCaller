@@ -20,7 +20,7 @@ HeatCaller runs RC race nights from one Windows laptop. It times the laps from y
 
 ## What's in these docs
 
-**Getting started** — what you need, installing, a tour of the window, Simple and Advanced mode, and a first-night walkthrough.
+**Getting started** — what you need, installing, a tour of the window, and a first-night walkthrough.
 
 **Race day** — drivers, classes and venues; the track designer; race days, check-in and scrutineering at the desk; building the program, qualifying, mains and the timetable.
 

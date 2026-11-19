@@ -247,15 +247,6 @@ internal static class RestoredSettings
         "These relay settings came from a restored backup, so nothing is published or collected until you check them. "
         + "If the address above is your club's relay, press Save or Test Connection.";
 
-    /// <summary>
-    /// The same with the address named, for where the page has no address
-    /// "above" to check: Simple mode hides that row (Bug hunt 17).
-    /// </summary>
-    public static string PublishRelayMessageNaming(string address) =>
-        address.Trim().Length == 0
-            ? PublishRelayMessage
-            : "These relay settings came from a restored backup, so nothing is published or collected until you check them. "
-              + $"They send to {address.Trim()} - if that is your club's relay, press Save or Test Connection.";
 
     /// <summary>Why Restore Last Working is not offered while the relay is held, for the Club Website page.</summary>
     public const string LastGoodHeldMessage =

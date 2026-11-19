@@ -31,11 +31,6 @@ internal static partial class WindowCatalog
             MessageBoxButtons.OK,
             MessageBoxIcon.Error)),
 
-        // The warning before Advanced mode (1 Nov 2026): as it opens between
-        // races, and with the race line under it while one is running.
-        ("Turn on Advanced mode?", () => new AdvancedModeForm(raceRunning: false)),
-        ("Turn on Advanced mode? (race running)", () => new AdvancedModeForm(raceRunning: true)),
-
         // Restore default settings (round 4): between races, and greyed with
         // its line while one runs. Put back earlier settings: ten copies, the
         // most kept, and none yet.
@@ -47,9 +42,6 @@ internal static partial class WindowCatalog
                 .ToList(),
             raceRunning: false)),
         ("Put back earlier settings (none yet)", () => new PutBackSettingsForm(new List<(string, DateTime)>(), raceRunning: false)),
-
-        // The manager PIN before Advanced mode (round 5).
-        ("Manager PIN", () => new ManagerPinForm("482913")),
 
         ("Message (no icon)", () => AppDialog.BuildForLayoutCheck(
             "Every driver ticked here is added to the round, in the order they are ticked.",

@@ -168,8 +168,6 @@ public sealed class BugHunt11_DecoderClientsTests
         HasCompletedFirstRun = true,
         HasSeenRaceDaySetup = true,
         AutoBackupEnabled = false,
-        SettingsMode = SettingsMode.Advanced,
-        SettingsModeDecided = true,
         LastConnectionType = line,
         ConnectDecodersAtStartup = false,
         DirectDecoderAutoConnect = false,

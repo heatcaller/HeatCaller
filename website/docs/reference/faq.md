@@ -80,7 +80,7 @@ When the internet drops mid-night, the **Next Up** bar says "Website offline - r
 
 ### I can't find a setting these pages mention. Where is it?
 
-It's probably hidden by Simple mode, which a new install starts in. Type it in the **Search pages...** box: if Simple mode hides it, an **Advanced mode settings** row appears under **IN ADVANCED MODE**. To see every setting, open **Backup & Restore** and click **Turn On Advanced Mode** on the **Settings mode** card. Hidden settings keep working either way. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
+Every setting shows on its page. Type it in the **Search pages...** box, which matches common words for what's on each page as well as page names. See [Search pages...](../getting-started/tour.md#search-pages).
 
 If it's a whole page, it may be unticked in **Manage Navigation**. A sidebar search still finds it. See [Reordering and hiding pages](../getting-started/tour.md#reordering-and-hiding-pages).
 
@@ -133,7 +133,7 @@ Check these in order:
 3. The HeatCaller voice is chosen with no announcer voice picked, or the relay is refusing, on a PC that hasn't got Kokoro's voice file to stand in. On any PC that has it, this shows up as the whole night in the Kokoro voice rather than silence.
 4. Kokoro's own voice file isn't on this PC, or it's there and won't load. Kokoro is the bottom of the ladder and nothing stands in underneath it, so this is the one state where the announcer has nothing at all to speak with. Open **Voice → Voice** and press **Download (about 310 MB)** under the Kokoro choice in **Speak with**. See [When nothing can speak](../announcer/voice.md#when-nothing-can-speak).
 
-**Sounds → Mixer** shows "NO VOICE:" and the reason when the announcer can't speak, and **Voice → Voice** shows a red "NOTHING CAN SPEAK -" line when there's no Kokoro voice file either. In Advanced mode, the Developer Console on the **Connection** page tells you more: choose the **Voice** filter and look for lines like "Skipped announcement - ElevenLabs API key or voice not configured." or "NO VOICE -" and a reason. See [Voice announcements](../announcer/voice.md).
+**Sounds → Mixer** shows "NO VOICE:" and the reason when the announcer can't speak, and **Voice → Voice** shows a red "NOTHING CAN SPEAK -" line when there's no Kokoro voice file either. The Developer Console on the **Connection** page tells you more: choose the **Voice** filter and look for lines like "Skipped announcement - ElevenLabs API key or voice not configured." or "NO VOICE -" and a reason. See [Voice announcements](../announcer/voice.md).
 
 ### Where do I find the results?
 

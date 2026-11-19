@@ -484,10 +484,6 @@ public sealed partial class RaceDayEventControl : UserControl
         _lblAutoAdvanceHint.Text = "Which race it reaches for when the one that just finished is recorded.";
         runGrid.AddHint(_lblAutoAdvanceHint);
 
-        // Which race it reaches for is Advanced (1 Nov 2026, Simple mode);
-        // the tick above stays.
-        SimpleMode.HideRow(runGrid, _cmbAutoAdvanceScope);
-
 
         _fields.AddRunRows(runGrid);
 

@@ -316,8 +316,7 @@ public sealed class CastControl : UserControl
             _chkPrincipalAfter.Checked = _settings.PrincipalAfterRace;
         }
 
-        // And the achievements, which AI Commentary's After the flag switch
-        // turns on and off in Simple mode (1 Nov 2026 - CommentarySections).
+        // And the achievements.
         if (_chkBadgeHonours.Checked != _settings.RecapBadgeHonours)
         {
             _chkBadgeHonours.Checked = _settings.RecapBadgeHonours;
@@ -879,28 +878,20 @@ public sealed class CastControl : UserControl
         // every list on the page, the announcer's included since that list's
         // own Load Voices went, so it goes above all of them. Then the
         // announcer, the voice everyone hears all night (22 Oct 2026).
-        // Simple mode (1 Nov 2026, Asher's pick): Voices, the Announcer and the
-        // Co-host's tick, name, voice and "in the heats too"; the rest of the
-        // cast, and what the co-host is like and how much they talk, are
-        // Advanced. See SimpleMode.
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.Add(voices);
         page.Add(announcer);
-        page.Add(SimpleMode.Hide(recapHost));
+        page.Add(recapHost);
         page.Add(coHost);
-        page.Add(SimpleMode.Hide(mechanic));
-        page.Add(SimpleMode.Hide(principal));
-        page.Add(SimpleMode.Hide(crewSection));
-        page.Add(SimpleMode.Hide(honours), gapBelow: 0);
-        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
+        page.Add(mechanic);
+        page.Add(principal);
+        page.Add(crewSection);
+        page.Add(honours, gapBelow: 0);
 
-        SimpleMode.HideRow(coHostGrid, _cmbCoHostStance);
-        SimpleMode.HideRow(coHostGrid, _cmbExchangeTurns);
 
-        // The Kokoro voice for when ElevenLabs runs out is a refinement, so
-        // Advanced (5 Nov 2026) - in Simple mode each of the cast still has a
-        // voice of their own, CastStandIns' default for them.
-        SimpleMode.HideRow(coHostGrid, _cmbCoHostStandIn);
+        // The Kokoro voice for when ElevenLabs runs out (5 Nov 2026): left
+        // alone, each of the cast still has a voice of their own, CastStandIns'
+        // default for them.
 
         _standIns = new[]
         {

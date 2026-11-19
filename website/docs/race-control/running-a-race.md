@@ -14,7 +14,7 @@ From top to bottom, the page has:
 - **The Session row.** Choose the round, the track and the session name.
 - **The Next Up bar.** Shows what's running now, what's next, and how the day is going.
 - **The Race Control card.** Holds one row of flag buttons, all the same width and centered across the card over the On Air bar under them. The lit flag button and the board show where the race is. Only the buttons that mean something at that moment are shown (see [The flag row](#the-flag-row)). The lit button shows the flag in effect. **Red**, **Checkered** and **Reset** have to be pressed and held for a second (see [Press and hold](#press-and-hold)); the line under the row says so, and shows the hold as it fills. The same line is the **On Air bar** while anything is going out (see [The On Air bar](#the-on-air-bar)).
-- **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, then one row of controls: the **Start: Stage | On Air** switch (see [On Air](#on-air)), the **Warm-up: Off | On** switch (see [Warm-up](#warm-up)), the **Auto: Off | On** switch (see [Auto start between races](#auto-start-between-races)), **Format** (see [The race format](#the-race-format)) and **Expand** (see [Make the leaderboard bigger](#make-the-leaderboard-bigger)). **Start:** and **Warm-up:** are shown in Advanced mode only (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
+- **The Leaderboard card.** Takes up the rest of the page. Click a driver to open their corrections drawer under their row (see [The leaderboard](#the-leaderboard)). Along its foot are the format chip, then one row of controls: the **Start: Stage | On Air** switch (see [On Air](#on-air)), the **Warm-up: Off | On** switch (see [Warm-up](#warm-up)), the **Auto: Off | On** switch (see [Auto start between races](#auto-start-between-races)), **Format** (see [The race format](#the-race-format)) and **Expand** (see [Make the leaderboard bigger](#make-the-leaderboard-bigger)).
 - **The clock column** on the right. It holds the race clock, then **Quick Race**, **Big Screen**, **Announcer Screen**, **Qualifying Projection**, **Pre-race check**, **Mission Control** and **Broadcast**, with the level meters under **Broadcast** (see [Level meters](#level-meters)). The small **▴** in the clock's bottom right-hand corner folds away everything under the clock (see [Make the leaderboard bigger](#make-the-leaderboard-bigger)).
 
 ### Make the leaderboard bigger
@@ -134,8 +134,6 @@ HeatCaller uses the first of these that exists:
 
 For a class or a round, untick **Use a custom format (untick to follow the app default)** to go back to the app default.
 
-In Simple mode the format shows only the lap limit, the time limit and **Start:**. The rest keep their values and keep working; turn on Advanced mode to see them (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
-
 ## Start the race
 
 1. Pick the round (or leave the session freeform).
@@ -198,7 +196,7 @@ The warm-up is a flag of its own. While it's open the **Warm-up** button is lit,
 
 **The Warm-up button.** The first button on the flag row before the green. It opens a warm-up whether or not the format has one: the format's length, or two minutes if it has none. It doesn't open one over a race that's staged, counting down or running; the log says why.
 
-**Warm-up: Off | On.** At the foot of the leaderboard (Advanced mode), beside **Start:**. Switched **On**, every start opens a warm-up first: **Start Next**, **Auto start**, the program's **Start**, <kbd>F1</kbd>, the phone, **Stage** and **Quick Race**. With **Start:** on **On Air** too, On Air's opening comes first, then the warm-up. It's **Off** by default, and a format with a warm-up still has one either way.
+**Warm-up: Off | On.** At the foot of the leaderboard, beside **Start:**. Switched **On**, every start opens a warm-up first: **Start Next**, **Auto start**, the program's **Start**, <kbd>F1</kbd>, the phone, **Stage** and **Quick Race**. With **Start:** on **On Air** too, On Air's opening comes first, then the warm-up. It's **Off** by default, and a format with a warm-up still has one either way.
 
 **Reset** cancels a warm-up. A warm-up never opens during practice, or over a race that's staged, counting down or running.
 
@@ -358,7 +356,7 @@ The board orders drivers by most laps, then by lowest total time. Total time inc
 
 ### Columns
 
-Right-click a column heading on the leaderboard to choose the columns and their order. A list drops down with every column: the ones on the board come first, ticked, in board order, and the rest follow under **Hidden**. Tick or untick a column to show or hide it, and use the ▲ ▼ arrows on a row to move it left or right. The board changes as you go. With the keyboard, Space ticks and Ctrl+Up or Ctrl+Down moves the picked column. The last column on the board can't be hidden. **Restore default columns** puts back **Pos**, **Driver**, **Car**, **Laps**, **Best Lap**, **Gap to P1** and **Streak**. **More column options...** opens the full picker, which also says what each column shows. Press Esc or click away to close the list. **Undo** takes back everything you changed while it was open, in one step. **Choose the board's columns** at the foot of a driver's right-click menu opens the same list. It's there in Simple mode too.
+Right-click a column heading on the leaderboard to choose the columns and their order. A list drops down with every column: the ones on the board come first, ticked, in board order, and the rest follow under **Hidden**. Tick or untick a column to show or hide it, and use the ▲ ▼ arrows on a row to move it left or right. The board changes as you go. With the keyboard, Space ticks and Ctrl+Up or Ctrl+Down moves the picked column. The last column on the board can't be hidden. **Restore default columns** puts back **Pos**, **Driver**, **Car**, **Laps**, **Best Lap**, **Gap to P1** and **Streak**. **More column options...** opens the full picker, which also says what each column shows. Press Esc or click away to close the list. **Undo** takes back everything you changed while it was open, in one step. **Choose the board's columns** at the foot of a driver's right-click menu opens the same list.
 
 | Column | Shows |
 |---|---|

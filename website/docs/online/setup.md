@@ -6,8 +6,6 @@ You can also reach this page from **Local Screens**, which shows a one-line rela
 
 The page has two tabs. Everything below is on the first, **Website**. The second, **Recording**, holds the race recordings, the drivers' clips and their highlight videos on the **Recording the night** card, and the pieces the commentary writes from the evening on the **Written from the night** card. It moved here from **Sounds** on 26 October 2026; see [Race recordings](../announcer/sounds-and-music.md#race-recordings) and [Written from the night](../announcer/commentary.md#written-from-the-night).
 
-In Simple mode, the **Recording** tab, the relay **Address:** row and the **What gets published**, **Look**, **Personal PINs**, **Email (for racer PINs)**, **Race-day manager** and **Room & Web** cards are hidden, along with **Include photos** on the **Online check-in** card. They keep their settings and go on working; turn on Advanced mode to change them. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
-
 ![Club Website page, Website tab: the Relay card filled in with the address, Club id and a hidden Publish token, and What gets published below](../assets/images/club-website.png)
 
 ## Before you start
@@ -175,7 +173,7 @@ The pages' colors and the club logo used to be set here too. Since 0.48 they're 
 
 ## Your first night guide
 
-The **Your first night guide** card holds the guide a driver on their first night at the club sees on their phone, **Your first night - what happens** (see [The first-night guide](check-in.md#the-first-night-guide)). The box starts with HeatCaller's standard guide, the club rules, for you to reword. The card shows in Simple mode too.
+The **Your first night guide** card holds the guide a driver on their first night at the club sees on their phone, **Your first night - what happens** (see [The first-night guide](check-in.md#the-first-night-guide)). The box starts with HeatCaller's standard guide, the club rules, for you to reword.
 
 - Write one part per paragraph, with a blank line between parts, each starting with its heading and a colon, for example "Parking: round the back, by the bins." A paragraph with no colon near its start is shown as words with no heading. The relay keeps up to 20 parts, with a heading of up to 60 characters and up to 600 characters of words each.
 - Nothing reaches the phones as you type. Click **Send to the club's pages** and the guide goes within a few seconds. A driver who had hidden the old guide with **Got it - hide this** sees the new one.
@@ -187,7 +185,7 @@ Since 6 November 2026 the standard guide is general club rules. A club that had 
 
 ## Club updates
 
-The **Club updates** card puts the club's news, such as a change of night, a new track layout or a race coming up, in a **Club updates** card on the club's **Home** page. It's optional: leave the box empty for no card. It shows in Simple mode too.
+The **Club updates** card puts the club's news, such as a change of night, a new track layout or a race coming up, in a **Club updates** card on the club's **Home** page. It's optional: leave the box empty for no card.
 
 - Write one item per paragraph, with a blank line between items. Start an item with a heading and a colon to give it a heading. Up to 10 items, of up to 1,000 characters each.
 - As with the guide, nothing goes until you click **Send to the club's pages**. Each phone can hide the card with **Got it - hide this**; new updates show again on a phone that had hidden the last ones.

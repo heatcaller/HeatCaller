@@ -7,7 +7,7 @@ namespace HeatCaller;
 /// whether video shows on public results - and lists tonight's stream, one
 /// row a piece, for pasting the YouTube link and nudging it into line.
 /// "Stream went live now" / "Stream stopped" are for a club without the OBS
-/// link. Advanced only: the club decides to stream.
+/// link.
 /// </summary>
 public sealed partial class RelaySettingsControl
 {
@@ -141,8 +141,7 @@ public sealed partial class RelaySettingsControl
         }
 
         DrawPieces();
-        // Advanced only: the club decides to stream. Tagged here, where it is built.
-        return SimpleMode.Hide(card);
+        return card;
     }
 
     /// <summary>Fills the card from settings - called with the rest in LoadFromSettings.</summary>

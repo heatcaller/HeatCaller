@@ -503,14 +503,10 @@ public sealed class RaceClassEditForm : Form
         // that wide to hold one column of fields reads as a mistake. The
         // row takes a second line instead and the dialog grows downwards,
         // which is the direction nobody minds.
-        // Simple mode (1 Nov 2026) keeps the race format (its lap and time
-        // limits - the window hides its own tuning), color and sanctioning
-        // preset; the tech list, qualifier format and warning ladder are
-        // Advanced. See SimpleMode.
         // On the page itself, not in a card: on a 1280x720 screen a card's
         // caption, hint and insets took another 80px from the settings over
         // them, which already scroll there (layout pictures, 18 Nov 2026).
-        page.Add(new ButtonBar().With(SimpleMode.Hide(btnTechList), btnFormat, SimpleMode.Hide(btnQualFormat), btnColour, btnPreset, SimpleMode.Hide(btnWarnings)), gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar().With(btnTechList, btnFormat, btnQualFormat, btnColour, btnPreset, btnWarnings), gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to

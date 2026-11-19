@@ -1,13 +1,13 @@
 namespace HeatCaller;
 
-/// <summary>Where a setting stands in Simple mode - see SettingsTable.</summary>
+/// <summary>What Restore Default Settings does with a setting - see SettingsTable.</summary>
 internal enum SettingGroup
 {
-    /// <summary>On screen in Simple mode: what a race night needs.</summary>
-    ShownInSimple,
+    /// <summary>What a race night needs - the track, lap count, voice, volumes, look. Restored only when asked to (RestoreDefaultsForm.AlsoShown).</summary>
+    Everyday,
 
-    /// <summary>Tuning: on screen only in Advanced mode. Keeps its value, and keeps working, while hidden.</summary>
-    HiddenInSimple,
+    /// <summary>Tuning: what Restore Default Settings always puts back.</summary>
+    Tuning,
 
     /// <summary>The club's own: keys, accounts, PINs, the decoder's port, backups, first-run flags and bookkeeping. Restore default settings never touches these.</summary>
     KeptOnRestore,
@@ -17,14 +17,13 @@ internal enum SettingGroup
 }
 
 /// <summary>
-/// THE SETTINGS TABLE (1 Nov 2026, Simple and Advanced mode, round 1). Every
+/// THE SETTINGS TABLE (1 Nov 2026). Every
 /// setting the app saves, in settings.json and in the voice, music, ambience
 /// and imaging files, sorted into one of four groups (SettingGroup).
 ///
-/// What reads it: the update check (SettingsModes.Decide) - an install that
-/// has changed anything hidden in Simple stays in Advanced, so nothing
-/// someone tuned vanishes from view - and, in round 4, Restore default
-/// settings, which puts every HiddenInSimple setting back.
+/// What reads it: Restore Default Settings, which puts every Tuning setting
+/// back, and the Everyday ones too when asked. (Simple and Advanced mode,
+/// which it was made for, were taken out on 18 Nov 2026.)
 ///
 /// A new setting is in no group until someone puts it in one, and
 /// SettingsTableTests fails until then: every setting has to be decided,
@@ -108,8 +107,8 @@ internal static class SettingsTable
             nameof(AppSettings.UpdateChecksOn),
 
             // The sidebar: Manage Navigation's order, hidden pages and choices.
-            // Its footer button shows in Simple too (6 Nov 2026) - a club
-            // re-orders or hides pages whichever mode it is in.
+            // Its footer button always shows (6 Nov 2026) - a club has to be
+            // able to re-order or hide pages.
             nameof(AppSettings.HiddenTabs),
             nameof(AppSettings.NavOrder),
             nameof(AppSettings.NavConnectionAboveBackup),
@@ -154,7 +153,6 @@ internal static class SettingsTable
             nameof(AppSettings.CommentaryNightsPerMonth),
             nameof(AppSettings.CommentaryBudgetNight),
             nameof(AppSettings.CommentarySegmentsOff),
-            nameof(AppSettings.CommentarySectionsRemembered),
             nameof(AppSettings.CommentaryChatter),
             nameof(AppSettings.CommentaryTimeoutSeconds),
             nameof(AppSettings.CommentaryRaceIntros),
@@ -497,11 +495,6 @@ internal static class SettingsTable
             nameof(AppSettings.ShowTourOnNextStart),
             nameof(AppSettings.ShowMusicStarted),
             nameof(AppSettings.UpdateWaitingForNextStart),
-            nameof(AppSettings.SettingsMode),
-            nameof(AppSettings.SettingsModeDecided),
-
-            // A lock, not tuning: a restore must not take it off.
-            nameof(AppSettings.AdvancedNeedsManagerPin),
 
             // Retired, kept only so older files still load.
             nameof(AppSettings.DarkMode),
@@ -670,7 +663,7 @@ internal static class SettingsTable
             nameof(AmbienceSettings.SoundscapeCrowdVersion),
         });
 
-    /// <summary>imaging.json - ImagingSettings. Its tab is hidden in Simple.</summary>
+    /// <summary>imaging.json - ImagingSettings. All of it Tuning.</summary>
     internal static readonly IReadOnlyDictionary<string, SettingGroup> Imaging = Build(
         shown: Array.Empty<string>(),
         hidden: new[]
@@ -707,8 +700,8 @@ internal static class SettingsTable
             }
         }
 
-        Put(shown, SettingGroup.ShownInSimple);
-        Put(hidden, SettingGroup.HiddenInSimple);
+        Put(shown, SettingGroup.Everyday);
+        Put(hidden, SettingGroup.Tuning);
         Put(kept, SettingGroup.KeptOnRestore);
         Put(memory, SettingGroup.Memory);
 

@@ -46,7 +46,6 @@ public sealed class BugHunt17_MainForm_DeskViewTests
         Assert.Contains("pnlSidebarFooter.Controls.Add(btnUndo);", designer);
         Assert.Contains("pnlSidebarFooter.Controls.Add(btnManageNav);", designer);
         Assert.Contains("pnlSidebarFooter.Controls.Add(btnMuteToggle);", designer);
-        Assert.Contains("pnlSidebarFooter.Controls.Add(_advancedChip);", Source("MainForm.SettingsMode.cs"));
         Assert.Contains("pnlSidebarFooter.Controls.Add(_usageChip);", Source("MainForm.Usage.cs"));
     }
 
