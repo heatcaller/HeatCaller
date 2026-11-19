@@ -163,6 +163,14 @@ A few things to know:
 - **Rehearsal never updates.** The **HeatCaller Rehearsal** copy doesn't check.
 - **To turn update checks off**, close HeatCaller, open `settings.json` in `%AppData%\HeatCaller`, change `"UpdateChecksOn": true` to `"UpdateChecksOn": false` and save it. There's no switch for it on screen yet.
 
+### Installing a newer .msi over an existing install
+
+You can also update by running a newer **HeatCallerApp-beta.msi** over the copy you already have. There's no need to uninstall first. Close HeatCaller (and **HeatCaller Rehearsal**) first. The installer replaces the program in `%LocalAppData%\HeatCallerApp`, and your drivers, results, settings and saved voice lines are kept.
+
+Unlike **Update now**, running the .msi yourself doesn't make a backup first. If the laptop has club data on it, make one in **Backup & Restore** before you start.
+
+To go back to an older version, uninstall first and then install the older .msi. Your data is kept through the uninstall.
+
 ## Uninstalling
 
 1. Close HeatCaller.
