@@ -7,12 +7,13 @@ namespace HeatCaller;
 /// that don't apply are hidden rather than greyed - a form where half the
 /// boxes are permanently dead is harder to read than one that changes.
 ///
-/// On the layout pieces (DialogFit): the name, the car and the Enabled tick
-/// lined up in a field grid; under the PACE heading a second grid, its
-/// captions in one column with the first's - what the pace is based on,
-/// then only the rows that source uses (the driver, the date range, what a
-/// live ghost follows, the lap time), the adjustment with the line spelling
-/// it out under it, and the consistency; and Save and Cancel at the foot.
+/// On the layout pieces (DialogFit): two cards, each with a line on what it
+/// is for (18 Nov 2026, dialog jazz-up - it was two field grids under a PACE
+/// heading): the name, the car and the Enabled tick; then what the pace is
+/// based on, only the rows that source uses (the driver, the date range,
+/// what a live ghost follows, the lap time), the adjustment with the line
+/// spelling it out under it, and the consistency. The two grids' captions
+/// in one column; Save, the main button, and Cancel at the foot.
 /// The fields are the window's body, which scrolls on a screen too short for
 /// them while Save and Cancel stay in view. It opens tall enough for the
 /// source that shows the most rows, so picking another never scrolls them
@@ -187,14 +188,6 @@ public sealed class GhostEditForm : Form
 
         identity.AddField(_chkEnabled);
 
-        var lblPaceHeading = new Label
-        {
-            Text = "PACE",
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
-            ForeColor = AppTheme.Primary,
-        };
-
         var lblFixedSuffix = new Label { Text = "seconds", ForeColor = AppTheme.TextMuted };
         var lblAdjustSuffix = new Label { Text = "%", ForeColor = AppTheme.TextMuted };
 
@@ -223,14 +216,25 @@ public sealed class GhostEditForm : Form
         pace.AddHint(_lblPaceHint);
         captions.Add(pace.AddRow("Consistency:", _cmbConsistency, stretch: true));
 
+        // --- The cards: each a group of fields and a line on what they do ---
+        // Two, and no tiles over them: on a 1280x720 screen tiles and a third
+        // card put the last fields under the fold (layout pictures, 18 Nov
+        // 2026), and the fields already say all a tile would.
+        var ghostCard = new Section("The ghost");
+        ghostCard.Add(CardHint("What the announcer calls it. Untick Enabled to keep it off the track."));
+        ghostCard.Add(identity, gapBelow: 0);
+
+        var paceCard = new Section("Pace");
+        paceCard.Add(CardHint("Where its lap times come from, and how it drives them."));
+        paceCard.Add(pace, gapBelow: 0);
+
         // The fields are the body: on a screen too short for all of them -
         // a small one at a large text size - they scroll, and Save and
         // Cancel under them stay in view.
         var page = new FillPage();
         var body = DialogFit.Body(page);
-        body.Add(identity, gapBelow: UiLayout.SectionGap);
-        body.Add(lblPaceHeading, stretch: false, gapBelow: UiLayout.HeadingGap);
-        body.Add(pace, gapBelow: 0);
+        body.Add(ghostCard);
+        body.Add(paceCard, gapBelow: 0);
 
         var btnSave = new Button { Text = "Save" };
         btnSave.Click += BtnSave_Click;
@@ -252,6 +256,7 @@ public sealed class GhostEditForm : Form
         UpdatePaceFields();
 
         AppTheme.ApplyRecursively(this);
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
 
         // The captions in one column down both grids, as wide as the longest
         // of them - the lap time's other wording included, so picking another
@@ -279,9 +284,9 @@ public sealed class GhostEditForm : Form
         // room for the body's scrollbar, which takes its width from the
         // fields on a screen too short for them. The caption column beside
         // it as the grids work it out: the widest caption and the gap after
-        // it. Kept in locals, never read back from the drop-downs - they are
-        // in the page already, which cuts them to the width of a window not
-        // sized yet.
+        // it - and the cards' insets round both. Kept in locals, never read
+        // back from the drop-downs - they are in the page already, which cuts
+        // them to the width of a window not sized yet.
         (Font Font, int Count, int Width)? sourceWidth = null;
         (Font Font, int Count, int Width)? driverWidth = null;
         (Font Font, int Count, int Width)? basisWidth = null;
@@ -300,7 +305,8 @@ public sealed class GhostEditForm : Form
 
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + captionColumn + fieldColumn + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + captionColumn + fieldColumn
+            + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
 
@@ -479,6 +485,15 @@ public sealed class GhostEditForm : Form
         _lblLiveBasis.Visible = wantsBasis;
         _cmbLiveBasis.Visible = wantsBasis;
     }
+
+    /// <summary>A card's line saying what it is for, in the small muted face.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 
     /// <summary>Spells out what the adjustment actually does, in plain terms.</summary>
     private void UpdatePaceHint()

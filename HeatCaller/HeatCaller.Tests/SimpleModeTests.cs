@@ -452,6 +452,11 @@ public sealed class SimpleModeTests : IDisposable
         "GhostControl.cs|Your ghosts", "DemoModeControl.cs|Settings", "DemoModeControl.cs|Racers", "DemoModeControl.cs|Log",
         // Their page jazz-up's cards (17 Nov 2026).
         "PracticeModeControl.cs|Run practice", "GhostControl.cs|Ghost racing", "GhostControl.cs|Quick Rival",
+        // The ghost car and chart windows' cards: GhostEditForm, GhostRivalPickerForm
+        // and ChartExportForm (18 Nov 2026, dialog pass 5). KpiPickerForm's and
+        // RaceReplayForm's cards have no caption.
+        "GhostEditForm.cs|The ghost", "GhostEditForm.cs|Pace", "GhostControl.cs|Driver",
+        "ChartExport.cs|Image", "ChartExport.cs|Preview",
         "DemoModeControl.cs|Run the demo", "DemoModeControl.cs|Race history",
         "TrackLayoutForms.cs|Track layouts", "TrackLayoutForms.cs|Selected track",
         "HandicapControl.cs|Drivers", "RentalTransponderControl.cs|Transponders",
