@@ -332,9 +332,10 @@ internal sealed record PackChoice(BatteryPack? Pack, string Caption)
 /// the club's, and "No pack recorded" at the end. Internal, so the layout
 /// test can build it (WindowCatalog) without a click.
 ///
-/// On the layout pieces (DialogFit): the packs taking the height, and Set
-/// and Cancel at the foot; as wide as it was made, or wider for the
-/// longest pack's line and for Set and Cancel on one line.
+/// On the layout pieces (DialogFit): the packs in a card with a line on what
+/// to do, taking the height, and Set and Cancel at the foot; as wide as it
+/// was made, or wider for the longest pack's line and for Set and Cancel on
+/// one line.
 /// </summary>
 internal sealed class PackPickerForm : Form
 {
@@ -397,8 +398,20 @@ internal sealed class PackPickerForm : Form
         var ok = new Button { Text = "Set", DialogResult = DialogResult.OK };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // The packs in one card with a line on what to do (18 Nov 2026,
+        // dialog jazz-up), the list taking the height the card has.
+        var packsCard = new Section("Packs");
+        packsCard.Add(new Label
+        {
+            Text = "Pick the pack this session was run on. Double-click one to set it.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        });
+        packsCard.AddFill(_list, () => LeastRows * _list.ItemHeight + 4, gapBelow: 0);
+
         var page = new FillPage();
-        page.AddFill(_list, _ => LeastRows * _list.ItemHeight + 4);
+        page.AddFill(packsCard, packsCard.LeastHeight);
 
         // Against the right-hand edge, Cancel furthest right - and Tab still
         // reaches Set first: the bar takes them right to left, in the order
@@ -435,13 +448,15 @@ internal sealed class PackPickerForm : Form
 
         var forPacks = Math.Min(
             UiLayout.AtTextSize(MostWidth),
-            UiLayout.PageLeft + widest + SystemInformation.VerticalScrollBarWidth + 8 + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + widest + SystemInformation.VerticalScrollBarWidth + 8 + UiLayout.PageRight);
 
         var width = Math.Max(
             Math.Max(UiLayout.AtTextSize(DialogWidth), forPacks),
             UiLayout.PageLeft + buttons.OneLineWidth + UiLayout.PageRight);
 
-        DialogFit.Keep(this, page, width, height: 300, widthMeasured: true);
+        // 70px taller than it was (300): the card's caption, hint and insets
+        // come out of that, so the list keeps the height it had.
+        DialogFit.Keep(this, page, width, height: 370, widthMeasured: true);
     }
 
     /// <summary>The pack picked, or null for "No pack recorded". Only meaningful after DialogResult.OK.</summary>

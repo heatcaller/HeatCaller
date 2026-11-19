@@ -22,11 +22,22 @@ namespace HeatCaller;
 /// short. At a larger text size the words beside the rounds box ran past
 /// the window's edge, and the window grew taller than the screen, Save and
 /// Cancel under its edge.
+///
+/// 18 Nov 2026, dialog jazz-up: three tiles across the top of the body -
+/// how races join, which race days count and how many rounds each driver
+/// counts, following the fields - and the two headings became three cards
+/// in the same order: What counts (the race days with it - a card of their
+/// own made the window too tall for a 1080 screen), How it adds up and
+/// For the announcer. Every field, tick and note is where it was in the tab order;
+/// Save is in the app's colour.
 /// </summary>
 public sealed class SeasonRulesForm : Form
 {
-    /// <summary>How wide the window is inside its frame at the normal text size - wider for a line that has to be on one (see the constructor).</summary>
-    private const int DialogWidth = 484;
+    /// <summary>How wide the window is inside its frame at the normal text size - wider for a line that has to be on one (see the constructor). Wider than the 484 it was, for the cards' insets.</summary>
+    private const int DialogWidth = 520;
+
+    /// <summary>The rules at a glance across the top: how races join, the race days counted, the rounds counted (ShowTiles).</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new() };
 
     /// <summary>The class drop-down's width at the normal text size - wider for a longer class name.</summary>
     private const int ClassWidth = 260;
@@ -63,6 +74,9 @@ public sealed class SeasonRulesForm : Form
     /// </summary>
     private readonly TextBox _txtNote = new() { MaxLength = Season.AnnouncerNoteMaxLength };
 
+    /// <summary>Save - kept to give it the app's colour after the theme pass.</summary>
+    private readonly Button _btnSave = new() { Text = "Save", DialogResult = DialogResult.OK };
+
     private readonly Label _lblPlannedHint = new();
     private readonly Label _lblBestHint = new();
 
@@ -70,6 +84,11 @@ public sealed class SeasonRulesForm : Form
 
     public SeasonRulesForm(Season season, RaceClassStore classes, RaceEventStore? events)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         _season = season;
 
         Text = $"Scoring rules - {(string.IsNullOrWhiteSpace(season.Name) ? "championship" : season.Name)}";
@@ -118,9 +137,10 @@ public sealed class SeasonRulesForm : Form
         // works it out: the caption and the gap after it, then the field -
         // the box and the words each with the gap the row keeps after them.
         // And room beside them for the body's scrollbar, on a screen too
-        // short for all of it. Worked out from the widths set above, never
-        // read back from the controls: the page has cut them to the room it
-        // has before the window is sized.
+        // short for all of it - and the insets of the card each is in.
+        // Worked out from the widths set above, never read back from the
+        // controls: the page has cut them to the room it has before the
+        // window is sized.
         var classLine = CaptionWidth(classCaption) + classWidth + _cmbClass.Margin.Horizontal;
 
         var bestLine = CaptionWidth(bestCaption)
@@ -129,7 +149,10 @@ public sealed class SeasonRulesForm : Form
 
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + Math.Max(classLine, bestLine) + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
+            UiLayout.PageLeft + Math.Max(classLine, bestLine) + Section.Inset.Horizontal + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
+
+        // After the theme pass, which does not know it: Save in the app's colour.
+        AppTheme.StyleButton(_btnSave, AppTheme.ButtonKind.Primary);
 
         DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
@@ -146,14 +169,6 @@ public sealed class SeasonRulesForm : Form
     /// </summary>
     private (FillPage Page, PageStack Body, FieldGrid[] Grids, Label ClassCaption, Label BestCaption) BuildLayout(RaceClassStore classes, RaceEventStore? events)
     {
-        var lblWhat = new Label
-        {
-            Text = "WHAT COUNTS",
-            AutoSize = true,
-            Font = AppTheme.MicroFont,
-            ForeColor = AppTheme.Primary,
-        };
-
         _chkAuto.Text = "Add new races to this championship automatically";
         _chkAuto.AutoSize = true;
         _chkAuto.Font = AppTheme.BodyFont;
@@ -225,14 +240,6 @@ public sealed class SeasonRulesForm : Form
         };
 
         // --- Scoring ---
-        var lblScoring = new Label
-        {
-            Text = "HOW IT ADDS UP",
-            AutoSize = true,
-            Font = AppTheme.MicroFont,
-            ForeColor = AppTheme.Primary,
-        };
-
         _numBest.Minimum = 0;
         _numBest.Maximum = 60;
         _numBest.Font = AppTheme.BodyFont;
@@ -294,7 +301,7 @@ public sealed class SeasonRulesForm : Form
         };
 
         // --- Buttons ---
-        var btnOk = new Button { Text = "Save", DialogResult = DialogResult.OK };
+        var btnOk = _btnSave;
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
         // Enter presses Save too (AcceptButton), and goes through this same
@@ -331,35 +338,59 @@ public sealed class SeasonRulesForm : Form
         var page = new FillPage();
         var body = DialogFit.Body(page);
 
-        body.Add(lblWhat, gapBelow: UiLayout.RowGap);
-        body.Add(_chkAuto, stretch: false, gapBelow: UiLayout.HintGap);
-        Indented(body.Add(lblAutoHint, gapBelow: UiLayout.RowGap));
-        body.Add(classRow, gapBelow: UiLayout.RowGap);
-        body.Add(_chkMainsOnly, stretch: false, gapBelow: UiLayout.RowGap);
-        body.Add(_chkAllEvents, stretch: false, gapBelow: UiLayout.RowGap);
+        // The rules at a glance, following the fields (ShowTiles).
+        foreach (var tile in _tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        _chkAuto.CheckedChanged += (_, _) => ShowTiles();
+        _chkAllEvents.CheckedChanged += (_, _) => ShowTiles();
+        _numBest.ValueChanged += (_, _) => ShowTiles();
+
+        // Raised before the tick changes: counted with the one being changed.
+        _lstEvents.ItemCheck += (_, e) => ShowTiles(
+            _lstEvents.CheckedItems.Count + (e.NewValue == CheckState.Checked ? 1 : 0) - (e.CurrentValue == CheckState.Checked ? 1 : 0));
+
+        body.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
+
+        // WHAT COUNTS: whether races join by themselves, and which.
+        var whatCard = new Section("What counts");
+        whatCard.Add(_chkAuto, stretch: false, gapBelow: UiLayout.HintGap);
+        Indented(whatCard.Add(lblAutoHint, gapBelow: UiLayout.RowGap));
+        whatCard.Add(classRow, gapBelow: UiLayout.RowGap);
+        whatCard.Add(_chkMainsOnly, stretch: false, gapBelow: UiLayout.RowGap);
+
+        // The race days, every one or those ticked, in the same card: a
+        // card of their own made the window too tall for a 1080 screen.
+        whatCard.Add(_chkAllEvents, stretch: false, gapBelow: UiLayout.RowGap);
 
         // A pixel on the right for the ring the theme draws round the list,
-        // outside it (Pieces.RingRoom): at the edge of the body's column it
+        // outside it (Pieces.RingRoom): at the edge of the card's column it
         // would be drawn where nothing shows.
-        body.Add(_lstEvents, gapBelow: UiLayout.HintGap);
+        whatCard.Add(_lstEvents, gapBelow: UiLayout.HintGap);
         _lstEvents.Margin = new Padding(TickBox.CaptionIndent, 0, 1, UiLayout.HintGap);
 
-        Indented(body.Add(lblTagged, gapBelow: UiLayout.SectionGap));
-        body.Add(lblScoring, gapBelow: UiLayout.RowGap);
-        body.Add(bestRow, gapBelow: UiLayout.HintGap);
-        body.Add(lblDropHint, gapBelow: UiLayout.SectionGap);
+        Indented(whatCard.Add(lblTagged, gapBelow: 0));
+        body.Add(whatCard, gapBelow: UiLayout.RowGap);
 
-        // HOW LONG THE SEASON IS (12 Oct 2026). Under the scoring rules
-        // because that is where a club is already thinking about the shape
-        // of the season, and it is the one field on this window that
-        // changes no points at all - see Season.PlannedRounds.
-        body.Add(plannedRow, gapBelow: UiLayout.HintGap);
-        body.Add(lblPlannedWhy, gapBelow: UiLayout.SectionGap);
+        // HOW IT ADDS UP.
+        var scoringCard = new Section("How it adds up");
+        scoringCard.Add(bestRow, gapBelow: UiLayout.HintGap);
+        scoringCard.Add(lblDropHint, gapBelow: 0);
+        body.Add(scoringCard, gapBelow: UiLayout.RowGap);
 
-        // THE SEASON'S OWN SENTENCE (7 Nov 2026, known issues), under its
-        // length: the two things on this window only the announcer reads.
-        body.Add(noteRow, gapBelow: UiLayout.HintGap);
-        body.Add(lblNoteWhy, gapBelow: 0);
+        // HOW LONG THE SEASON IS (12 Oct 2026) and THE SEASON'S OWN SENTENCE
+        // (7 Nov 2026, known issues): the two things on this window only the
+        // announcer reads, and the only ones that change no points at all -
+        // see Season.PlannedRounds.
+        var announcerCard = new Section("For the announcer");
+        announcerCard.Add(plannedRow, gapBelow: UiLayout.HintGap);
+        announcerCard.Add(lblPlannedWhy, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
+        announcerCard.Add(noteRow, gapBelow: UiLayout.HintGap);
+        announcerCard.Add(lblNoteWhy, gapBelow: 0);
+        body.Add(announcerCard, gapBelow: 0);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to left,
@@ -421,6 +452,31 @@ public sealed class SeasonRulesForm : Form
         UpdateBestHint();
         UpdatePlannedHint();
         UpdateEnabled();
+        ShowTiles();
+    }
+
+    /// <summary>
+    /// The tiles, from the fields as they stand. <paramref name="ticked"/>
+    /// is the race days ticked, when the list is part-way through a change.
+    /// </summary>
+    private void ShowTiles(int? ticked = null)
+    {
+        var auto = _chkAuto.Checked;
+        var days = ticked ?? _lstEvents.CheckedItems.Count;
+
+        _tiles[0].Set(auto ? "Automatic" : "By hand", "Races join");
+
+        // Short words: at the narrowest the window opens, a tile has room
+        // for about ten letters before its "...".
+        _tiles[1].Set(
+            !auto ? "Picked"
+            : _chkAllEvents.Checked ? "All"
+            : days.ToString(System.Globalization.CultureInfo.CurrentCulture),
+            days == 1 && auto && !_chkAllEvents.Checked ? "Race day" : "Race days");
+
+        _tiles[2].Set(
+            _numBest.Value == 0 ? "All" : $"Best {_numBest.Value:0}",
+            "Rounds counted");
     }
 
     /// <summary>Writes the dialog back onto the season. Called by the caller after an OK.</summary>
@@ -544,7 +600,7 @@ public sealed class SeasonRulesForm : Form
     /// </summary>
     private void UpdatePlannedHint() =>
         _lblPlannedHint.Text = _numPlanned.Value == 0
-            ? "not said - the announcer stays quiet about what is still possible"
+            ? "not said - the announcer keeps quiet"
             : Plural.Word((long)_numPlanned.Value, "round");
 
     /// <summary>

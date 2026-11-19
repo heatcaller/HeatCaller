@@ -577,9 +577,10 @@ internal static class SecretRecovery
     /// Internal rather than private so the layout test can build it
     /// (WindowCatalog); only RunIfNeeded shows it.
     ///
-    /// On the layout pieces (DialogFit): the heading, what the password is
-    /// for, the box to type it in and two lines kept under the box for what
-    /// went wrong, one under another across the window, and Unlock and Skip
+    /// On the layout pieces (DialogFit): one card (18 Nov 2026) with the
+    /// heading, what the password is for, the box to type it in and two
+    /// lines kept under the box for what went wrong, one under another
+    /// across it, and Unlock and Skip
     /// at the foot against the right-hand edge; as tall as that. It used to
     /// be placed in pixels: each line a fixed distance under the one above,
     /// the text wrapped at a fixed 440px, and the window sized to where the
@@ -647,25 +648,31 @@ internal static class SecretRecovery
             // DialogResult on the button closes the dialog on its own.
             var btnSkip = new Button { Text = _skipText, DialogResult = DialogResult.Cancel };
 
-            var page = new FillPage();
-            page.Add(lblCaption, gapBelow: UiLayout.RowGap);
-            page.Add(lblMessage, gapBelow: UiLayout.RowGap);
+            // THE LOOK (18 Nov 2026, dialog pass 6): the heading, the words,
+            // the box and the lines for what went wrong in one card, the
+            // buttons under it - the same parts, as the other dialogs have them.
+            var card = new Section("Password");
+            card.Add(lblCaption, gapBelow: UiLayout.RowGap);
+            card.Add(lblMessage, gapBelow: UiLayout.RowGap);
 
-            // Across the page, as the box was across the text above it; what
+            // Across the card, as the box was across the text above it; what
             // went wrong a hint's gap under it.
-            page.Add(_txtPassword, gapBelow: UiLayout.HintGap);
+            card.Add(_txtPassword, gapBelow: UiLayout.HintGap);
 
             // A pixel either side of the box for the ring the theme draws round
             // it, outside it, on what holds it (Pieces.RingRoom): stretched
-            // across the page, the box's sides would be the page's edges, and
-            // the ring's sides would be drawn past them, where nothing shows.
+            // across the card, the box's sides would be the card's inner edges,
+            // and the ring's sides would be drawn past them, where nothing shows.
             _txtPassword.Margin = new Padding(1, 0, 1, UiLayout.HintGap);
 
             // Its height is the box's own, and changes when the theme takes its
             // border off - see Pieces.KeepHeightTold.
             Pieces.KeepHeightTold(_txtPassword);
 
-            page.Add(_lblError, gapBelow: UiLayout.RowGap);
+            card.Add(_lblError, gapBelow: 0);
+
+            var page = new FillPage();
+            page.Add(card, gapBelow: UiLayout.RowGap);
 
             // Against the right-hand edge, Skip furthest right, as they were -
             // and Tab still reaches Unlock first: the bar takes them right to
@@ -696,7 +703,8 @@ internal static class SecretRecovery
             // (Pieces.LineHeight) - see ErrorLines.
             _lblError.MinimumSize = new Size(0, ErrorLines * Pieces.LineHeight(_lblError.Font) + _lblError.Padding.Vertical);
 
-            DialogFit.Keep(this, page, width: DialogWidth);
+            // Wider by the card's edges, so the words wrap where they did.
+            DialogFit.Keep(this, page, width: DialogWidth + Section.Inset.Horizontal);
         }
 
         protected override void OnShown(EventArgs e)

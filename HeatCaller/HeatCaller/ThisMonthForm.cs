@@ -24,6 +24,15 @@ public sealed class ThisMonthForm : Form
     /// <summary>What it says with nothing metered - no relay set up for commentary or the voice, and no ElevenLabs key.</summary>
     internal const string NothingMetered = "Nothing on this PC is metered - the relay isn't set up and the voice is free.";
 
+    /// <summary>
+    /// The window's layout held while it is built, and let go at the end of
+    /// its constructor (18 Nov 2026) - see LayoutFreeze.HoldWhileBuilding.
+    /// The first field, so the card the fields below make is made inside it.
+    /// Built live, most parts had their windows before the theme pass, which
+    /// made many of them again.
+    /// </summary>
+    private readonly IDisposable _building = LayoutFreeze.HoldWhileBuilding();
+
     private readonly AppSettings _settings;
     private readonly Func<VoiceProfile?> _voice;
     private readonly Func<IReadOnlyList<Meter>> _meters;
@@ -60,6 +69,9 @@ public sealed class ThisMonthForm : Form
         Func<IReadOnlyList<TopUpAsk>> requests,
         bool refreshOnOpen)
     {
+        // Let go however the constructor ends - see _building.
+        using var building = _building;
+
         _settings = settings;
         _voice = voice;
         _meters = meters;
@@ -76,7 +88,10 @@ public sealed class ThisMonthForm : Form
         };
 
         // --- The meters, one line each, in the store's order ---
+        // The line on where the figures come from is this card's hint now
+        // (18 Nov 2026, dialog jazz-up), rather than a line over the cards.
         var metersCard = new Section("This month");
+        metersCard.Add(lblIntro, gapBelow: UiLayout.RowGap);
 
         foreach (var kind in Enum.GetValues<MeterKind>())
         {
@@ -138,7 +153,15 @@ public sealed class ThisMonthForm : Form
         var sendTo = new FieldGrid();
         sendTo.AddRow("Send to:", _txtEmailTo);
 
+        var lblEmailsHint = new Label
+        {
+            Text = "A heads-up by email before an allowance runs out, so nobody finds out on race night.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
         var emailsCard = new Section("Emails");
+        emailsCard.Add(lblEmailsHint, gapBelow: UiLayout.RowGap);
         emailsCard.Add(_chkEmails, stretch: false, gapBelow: UiLayout.HintGap);
         emailsCard.Add(sendTo, stretch: false, gapBelow: UiLayout.HintGap);
         emailsCard.Add(_lblEmailTo, gapBelow: 0);
@@ -152,7 +175,6 @@ public sealed class ThisMonthForm : Form
         var page = new FillPage();
         var body = DialogFit.Body(page);
 
-        body.Add(lblIntro, gapBelow: UiLayout.RowGap);
         body.Add(metersCard);
         body.Add(_requestsCard);
         body.Add(emailsCard, gapBelow: 0);
@@ -167,9 +189,14 @@ public sealed class ThisMonthForm : Form
         // The hints keep the small face the theme pass gives every label
         // the body's.
         lblIntro.Font = AppTheme.SmallFont;
+        lblEmailsHint.Font = AppTheme.SmallFont;
+        lblEmailsHint.ForeColor = AppTheme.TextMuted;
         _lblEmailTo.Font = AppTheme.SmallFont;
         _lblChecked.Font = AppTheme.SmallFont;
         _lblNone.Font = AppTheme.SmallFont;
+
+        // Asking now is the one thing the window does.
+        AppTheme.StyleButton(_btnRefresh, AppTheme.ButtonKind.Primary);
 
         ShowAll();
         ShowEmailTo();

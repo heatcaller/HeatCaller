@@ -7,6 +7,11 @@ namespace HeatCaller;
 /// it's called, the classes on, the times, and whether drivers can say
 /// they're coming from their phones. Publish puts it on the phones' Home
 /// page; Take Down (DialogResult.Abort) takes it off.
+///
+/// On the layout pieces (DialogFit), in two columns (18 Nov 2026, dialog
+/// jazz-up): cards for the night and the classes on down the left, the
+/// classes list taking the height, and the times beside them, each card
+/// with a hint line; Publish in the app's colour at the foot.
 /// </summary>
 internal sealed class AnnounceNightForm : Form
 {
@@ -35,15 +40,6 @@ internal sealed class AnnounceNightForm : Form
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
 
-        var lblHow = new Label
-        {
-            Text = "Puts the next race night on the Home page of the club's phone pages: the date, the classes on and the times. "
-                   + "Drivers can say they're coming from their Me page, so the desk knows who to expect. Comes down by itself after the night.",
-            AutoSize = true,
-            MaximumSize = new Size(480, 0),
-            ForeColor = AppTheme.TextMuted,
-        };
-
         _dtpDay.Value = start.Day.Date < DateTime.Today ? DateTime.Today : start.Day.Date;
         _dtpDay.MinDate = DateTime.Today;
         _txtTitle.Text = start.Title;
@@ -62,14 +58,33 @@ internal sealed class AnnounceNightForm : Form
         _chkEntries.Text = "Let drivers say they're coming from their phones";
         _chkEntries.Checked = start.TakingEntries;
 
-        var grid = new FieldGrid();
-        grid.AddRow("Night:", _dtpDay);
-        grid.AddRow("Called:", _txtTitle);
-        grid.AddRow("Venue:", _txtVenue);
-        grid.AddRow("Classes on:", _lstClasses);
-        grid.AddRow("First race at:", FieldGrid.Inline(_dtpFirst, _chkFirst));
-        grid.AddRow("Entries close at:", FieldGrid.Inline(_dtpClose, _chkClose));
-        grid.AddField(_chkEntries);
+        // THE LOOK (18 Nov 2026, dialog jazz-up): three cards in the order
+        // the fields always ran, so Tab goes the same way - the night, the
+        // classes on (the list taking the height the window has spare) and
+        // the times - each with a line on what it does. The note that was
+        // over the grid is shared out as their hints, and Publish is in the
+        // app's colour.
+        var nightGrid = new FieldGrid();
+        nightGrid.AddRow("Night:", _dtpDay);
+        nightGrid.AddRow("Called:", _txtTitle);
+        nightGrid.AddRow("Venue:", _txtVenue);
+
+        var nightCard = new Section("The night");
+        nightCard.Add(CardHint("Goes on the Home page of the club's phone pages, and comes down by itself after the night."), gapBelow: UiLayout.RowGap);
+        nightCard.Add(nightGrid, gapBelow: 0);
+
+        var classesCard = new Section("Classes on");
+        classesCard.Add(CardHint("Tick the classes racing. Drivers see them in this order."), gapBelow: UiLayout.RowGap);
+        classesCard.AddFill(_lstClasses, () => UiLayout.AtTextSize(ClassesLeastHeight), gapBelow: 0);
+
+        var timesGrid = new FieldGrid();
+        timesGrid.AddRow("First race at:", FieldGrid.Inline(_dtpFirst, _chkFirst));
+        timesGrid.AddRow("Entries close at:", FieldGrid.Inline(_dtpClose, _chkClose));
+        timesGrid.AddField(_chkEntries);
+
+        var timesCard = new Section("Times and entries");
+        timesCard.Add(CardHint("Tick Set to show a time. Drivers can say they're coming from their Me page, so the desk knows who to expect."), gapBelow: UiLayout.RowGap);
+        timesCard.Add(timesGrid, gapBelow: 0);
 
         var btnTakeDown = new Button { Text = "Take Down", DialogResult = DialogResult.Abort, AutoSize = true, Visible = announcedAlready };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
@@ -81,8 +96,16 @@ internal sealed class AnnounceNightForm : Form
         };
 
         var page = new FillPage();
-        page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(grid, stretch: false, gapBelow: UiLayout.RowGap);
+        // In two columns, so the window is no taller than it was: the night
+        // and the classes on the left, the times beside them. Tab still
+        // goes the night, the classes, the times - the left-hand column
+        // comes first.
+        var columns = new Beside(() => UiLayout.AtTextSize(SideWidth));
+        columns.Add(nightCard, gapBelow: UiLayout.RowGap);
+        columns.AddFill(classesCard, classesCard.LeastHeight);
+        columns.AddSideCard(timesCard, gapBelow: 0);
+
+        page.AddFill(columns, columns.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnPublish, btnTakeDown), gapBelow: 0);
 
         Controls.Add(page);
@@ -90,8 +113,40 @@ internal sealed class AnnounceNightForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 560, height: 560);
+        AppTheme.StyleButton(btnPublish, AppTheme.ButtonKind.Primary);
+
+        // The night's fields as wide as they were at the normal text size,
+        // at the size in use: at 200% the date was cut to "Tuesday, ...".
+        // The date wider, for a long one in full: "Wednesday, September 30, 2026".
+        foreach (var field in new Control[] { _txtTitle, _txtVenue })
+        {
+            field.Width = UiLayout.AtTextSize(220);
+        }
+
+        _dtpDay.Width = UiLayout.AtTextSize(300);
+
+        DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
     }
+
+    /// <summary>How wide the window is inside its frame at the normal text size: the two columns.</summary>
+    private const int DialogWidth = 880;
+
+    /// <summary>How tall the window is inside its frame at the normal text size - lower than the 560 it had, the times beside the rest.</summary>
+    private const int DialogHeight = 480;
+
+    /// <summary>The right-hand column, the times, at the normal text size.</summary>
+    private const int SideWidth = 420;
+
+    /// <summary>The classes list's least height at the normal text size - the 120 it was made.</summary>
+    private const int ClassesLeastHeight = 120;
+
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 
     private AnnouncedNight Read() => new()
     {

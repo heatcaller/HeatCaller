@@ -9,8 +9,9 @@ namespace HeatCaller;
 /// (WindowCatalog). The answer is as typed; the caller trims it if it
 /// wants it trimmed.
 ///
-/// On the layout pieces (DialogFit): the question, the box under it
-/// across the window, and OK and Cancel at the foot; as tall as that.
+/// On the layout pieces (DialogFit): one card with the question and the
+/// box under it across the card, and OK and Cancel at the foot; as tall
+/// as that.
 /// It used to be built in pixels in a 400x130 window, the box a fixed
 /// 372px and the buttons at fixed places and widths under it.
 /// </summary>
@@ -31,16 +32,22 @@ internal sealed class TextPromptForm : Form
         var ok = new Button { Text = "OK", DialogResult = DialogResult.OK };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // THE LOOK (18 Nov 2026, dialog pass 6): the question and its box in
+        // one card, with no caption - the window's title already says what
+        // is asked, and the many callers each give their own. The window is
+        // as wide as it always was, so the box is narrower by the card's edges.
+        var card = new Section();
+        card.Add(lbl, gapBelow: UiLayout.HintGap);
+        card.Add(_txt, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lbl, gapBelow: UiLayout.HintGap);
-        page.Add(_txt, gapBelow: UiLayout.SectionGap);
+        page.Add(card, gapBelow: UiLayout.SectionGap);
 
         // A pixel either side of the box for the ring the theme draws round
         // it, outside it, on what holds it (Pieces.RingRoom): stretched
-        // across the page, the box's sides would be the page's edges, and
-        // the ring's sides would be drawn past them, where nothing shows.
-        // The gap under the box stays as it was.
-        _txt.Margin = new Padding(1, 0, 1, UiLayout.SectionGap);
+        // across the card, the box's sides would be the card's inner edges,
+        // and the ring's sides would be drawn past them, where nothing shows.
+        _txt.Margin = new Padding(1, 0, 1, 0);
 
         // Its height is the box's own, and changes when the theme takes its
         // border off - see Pieces.KeepHeightTold.
@@ -59,6 +66,9 @@ internal sealed class TextPromptForm : Form
         CancelButton = cancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // OK is the window's one button in the app's colour.
+        AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
 
         DialogFit.Keep(this, page, width: 400);
     }

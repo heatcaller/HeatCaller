@@ -7,8 +7,11 @@ namespace HeatCaller;
 /// corner is the single thing on this sheet that needs acting on before
 /// racing starts, so it has to be impossible to skim past.
 ///
-/// On the layout pieces (DialogFit): the posts taking the height, the
-/// summary under them and the buttons at the foot. It used to be placed in
+/// On the layout pieces (DialogFit): tiles for the rounds, the posts
+/// covered and those uncovered across the top (18 Nov 2026, dialog
+/// jazz-up), the posts taking the height, the summary under them and the
+/// buttons at the foot, Copy as Text in the app's colour. With no posts
+/// set, a card saying how to set them up. It used to be placed in
 /// pixels in a 700x520 window - the buttons at a fixed height the summary
 /// ran into at a larger text size.
 /// </summary>
@@ -36,18 +39,60 @@ public sealed class MarshalAssignmentsForm : Form
         // what to set up instead.
         DataGridView? grid = null;
 
+        // Copy as Text, made below when there is a roster to copy.
+        Button? copyButton = null;
+
         if (assignments.Count == 0)
         {
-            page.Add(new Label
+            // THE LOOK (18 Nov 2026, dialog jazz-up): what fills the sheet,
+            // in a card of its own, with how to set it up as its hint.
+            var noneCard = new Section("No marshal posts yet");
+            noneCard.Add(new Label
             {
-                Text = "No marshal posts are set for this track layout.\r\n\r\n"
-                     + "Open Track Layouts, pick the layout, and set how many corner posts it has.",
+                Text = "No marshal posts are set for this track layout.",
                 AutoSize = true,
+            }, gapBelow: UiLayout.HintGap);
+            noneCard.Add(new Label
+            {
+                Text = "Open Track Layouts, pick the layout, and set how many corner posts it has. Who marshals each round shows here.",
+                AutoSize = true,
+                Font = AppTheme.SmallFont,
                 ForeColor = AppTheme.TextMuted,
-            });
+            }, gapBelow: 0);
+
+            page.Add(noneCard);
         }
         else
         {
+            // THE LOOK (18 Nov 2026, dialog jazz-up): the sheet at a glance
+            // in tiles across the top - the rounds, the posts covered, and
+            // the posts nobody is on, red while there are any - over the
+            // list. The window is taller by the tiles, so the list keeps its
+            // height. The dialog is built at the text size in use, so the
+            // tiles take their faces here.
+            var tiles = new[] { new StatTile(), new StatTile(), new StatTile() };
+
+            foreach (var tile in tiles)
+            {
+                tile.Value.Font = AppTheme.TitleFont;
+                tile.Caption.Font = AppTheme.MicroFont;
+            }
+
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            var posts = assignments.SelectMany(a => a.Posts).ToList();
+            var uncovered = posts.Count(p => !p.IsFilled);
+
+            tiles[0].Set(assignments.Count.ToString(culture), assignments.Count == 1 ? "Round" : "Rounds");
+            tiles[1].Set($"{posts.Count - uncovered} of {posts.Count}", "Posts covered");
+            tiles[2].Set(uncovered.ToString(culture), "Uncovered");
+
+            if (uncovered > 0)
+            {
+                tiles[2].Value.ForeColor = AppTheme.Danger;
+            }
+
+            page.Add(new TileStrip(tiles), gapBelow: UiLayout.RowGap);
+
             grid = new DataGridView
             {
                 ReadOnly = true,
@@ -145,6 +190,7 @@ public sealed class MarshalAssignmentsForm : Form
             };
 
             buttons.With(btnCopy);
+            copyButton = btnCopy;
         }
 
         if (swap is not null && grid is not null)
@@ -175,13 +221,24 @@ public sealed class MarshalAssignmentsForm : Form
 
         AppTheme.ApplyRecursively(this);
 
+        // Copy as Text in the app's colour: sending the sheet round is what
+        // it is opened for. After the theme pass, which does not know it.
+        if (copyButton is not null)
+        {
+            AppTheme.StyleButton(copyButton, AppTheme.ButtonKind.Primary);
+        }
+
         // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
         if (grid is not null)
         {
             Pieces.KeepHeadingsWhole(grid);
         }
 
-        // With nothing to list, as tall as the note that says so.
-        DialogFit.Keep(this, page, width: 700, height: assignments.Count == 0 ? null : 520);
+        // With nothing to list, as tall as the card that says so; with a
+        // list, the 520 it had and taller by the tiles (DialogHeight).
+        DialogFit.Keep(this, page, width: 700, height: assignments.Count == 0 ? null : DialogHeight);
     }
+
+    /// <summary>How tall the window is inside its frame at the normal text size, with a list: the 520 it had, and room for the tiles.</summary>
+    private const int DialogHeight = 520 + 70;
 }

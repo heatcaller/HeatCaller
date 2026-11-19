@@ -11,8 +11,8 @@ namespace HeatCaller;
 ///
 /// On the layout pieces (DialogFit): the name and the two buttons that set
 /// the diagram's picture along the top (a field grid); under them the
-/// diagram taking the room left, with a column down its right (Beside) of
-/// two cards - the selected point, as tall as it needs, and the other
+/// diagram in a card of its own taking the room left, with a column down
+/// its right (Beside) of two cards - the selected point, as tall as it needs, and the other
 /// tuning fields, whose list takes the height the column has left - and
 /// Save and Cancel at the foot. Each card's buttons are in a tight row, and
 /// the column is never narrower than those rows need on one line. It used
@@ -325,8 +325,15 @@ public sealed class ChassisTemplateForm : Form
         // The diagram in the width the column leaves, the two cards in the
         // column - the point's as tall as it needs, the other fields' taking
         // the rest of the column's height.
+        // The diagram in a card of its own (18 Nov 2026, dialog jazz-up), so
+        // the window reads as three cards side by side. Its line on what to
+        // do is the one the diagram draws along its foot, so the card adds
+        // only its caption and insets.
+        var grpDiagram = new Section("Diagram");
+        grpDiagram.AddFill(_canvas, () => UiLayout.AtTextSize(CanvasLeastHeight), gapBelow: 0);
+
         var band = new Beside(() => SideWidth(pointButtons, extraButtons, grpExtras));
-        band.AddFill(_canvas, _ => UiLayout.AtTextSize(CanvasLeastHeight));
+        band.AddFill(grpDiagram, grpDiagram.LeastHeight);
         band.AddSideCard(grpPoint);
         band.AddSideFill(grpExtras, grpExtras.LeastHeight, gapBelow: 0);
 

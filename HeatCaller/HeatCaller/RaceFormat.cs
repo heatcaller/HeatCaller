@@ -252,6 +252,15 @@ public sealed class RaceFormat
 /// way to a longer caption, the window as wide as its widest row and as
 /// tall as its last, and nothing to stop that running off a small screen
 /// with OK and Cancel under it.
+///
+/// 18 Nov 2026, dialog jazz-up: under the tick, tiles with the format at a
+/// glance - how long, how it starts, the warm-up - following the fields;
+/// then the fields in four cards in the order they always ran, each with a
+/// line on what it is for: Race length, Lap counting, Start, and Start
+/// sequence and finish, their captions in one column down all four. Simple
+/// mode hides the second and fourth whole, as it hid every row in them.
+/// The sentence about the default is a card of its own in their place.
+/// OK is in the app's colour.
 /// </summary>
 public sealed class RaceFormatForm : Form
 {
@@ -263,15 +272,25 @@ public sealed class RaceFormatForm : Form
     /// the start types in a 200px box, too narrow for the longest of them.
     /// Measured, that box needs about 305px, and this leaves it that beside
     /// the captions with the body's scrollbar showing, on a screen too short
-    /// for all the fields.
+    /// for all the fields. Wider by the cards' insets (16 either side, see
+    /// Section.Inset) since 18 Nov 2026, so the fields keep that room.
     /// </summary>
-    private const int DialogWidth = 560;
+    private const int DialogWidth = 560 + 32;
 
     /// <summary>
     /// The edited format, or null for "use the default" - only ever null
     /// when the form was opened with a default to fall back to.
     /// </summary>
     public RaceFormat? Result { get; private set; }
+
+    /// <summary>
+    /// The window's layout held while it is built, and let go at the end of
+    /// its constructor (18 Nov 2026) - see LayoutFreeze.HoldWhileBuilding.
+    /// The first field, so the grid the fields below make is made inside
+    /// it. Built live, nearly every part had its window before the theme
+    /// pass, which made many of them again.
+    /// </summary>
+    private readonly IDisposable _building = LayoutFreeze.HoldWhileBuilding();
 
     private readonly CheckBox _chkCustom = new ThemedCheckBox();
     private readonly NumericUpDown _numLapLimit = new();
@@ -293,8 +312,27 @@ public sealed class RaceFormatForm : Form
     /// <summary>What "following the default" actually means right now - shown in place of the fields when custom is unticked.</summary>
     private readonly Label _lblFollowing = new();
 
-    /// <summary>Everything that only exists for a custom format - hidden outright when following the default, because a page of disabled ghost text reads as broken, not as off.</summary>
-    private readonly FieldGrid _fields = new();
+    /// <summary>The card the sentence about the default is in - in the fields' place while it is followed.</summary>
+    private readonly Section _followingCard = new Section("Following the app default");
+
+    /// <summary>
+    /// Everything that only exists for a custom format - the tiles and the
+    /// cards - hidden outright when following the default, because a page
+    /// of disabled ghost text reads as broken, not as off.
+    /// </summary>
+    private readonly List<Control> _customParts = new();
+
+    /// <summary>The fields, card by card, their captions lined up in one column after the theme pass (FieldGrid.LineUp).</summary>
+    private readonly FieldGrid _lengthGrid = new();
+    private readonly FieldGrid _countGrid = new();
+    private readonly FieldGrid _startGrid = new();
+    private readonly FieldGrid _sequenceGrid = new();
+
+    /// <summary>The format at a glance across the top: how long, how it starts, the warm-up (ShowTiles).</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new() };
+
+    /// <summary>OK - kept to give it the app's colour after the theme pass.</summary>
+    private readonly Button _btnOk = new() { Text = "OK" };
 
     private readonly RaceFormat? _fallback;
 
@@ -313,6 +351,9 @@ public sealed class RaceFormatForm : Form
     /// </param>
     public RaceFormatForm(RaceFormat? current, string title, bool allowUseDefault, RaceFormat? fallback = null)
     {
+        // Let go however the constructor ends - see _building.
+        using var building = _building;
+
         _allowUseDefault = allowUseDefault;
         _fallback = fallback;
 
@@ -333,8 +374,13 @@ public sealed class RaceFormatForm : Form
         AppTheme.ApplyRecursively(this);
 
         // The fields' widths, measured in the faces the theme pass leaves
-        // them in.
+        // them in, and one caption column down every card - measured in the
+        // captions' faces, which is why after the theme pass.
         SizeFields();
+        FieldGrid.LineUp(new[] { _lengthGrid, _countGrid, _startGrid, _sequenceGrid });
+
+        // After the theme pass, which does not know it: OK in the app's colour.
+        AppTheme.StyleButton(_btnOk, AppTheme.ButtonKind.Primary);
 
         // One full repaint after everything has settled. The theme pass
         // recreates the combos' handles (owner-draw changes do that) and
@@ -370,35 +416,40 @@ public sealed class RaceFormatForm : Form
 
             // Sits where the fields sit; the two are never visible at once,
             // so they take turns in the same place. Nothing is under it while
-            // it shows, so no gap either.
+            // it shows, so no gap either. In a card of its own (18 Nov 2026,
+            // dialog jazz-up), its caption saying what it is, with the
+            // numbers when the caller has them.
             _lblFollowing.AutoSize = true;
-            _lblFollowing.ForeColor = AppTheme.TextMuted;
+            _lblFollowing.ForeColor = AppTheme.TextDark;
             _lblFollowing.Text = _fallback is null
-                ? "Following the app default."
-                : "Following the app default:\n\n" + _fallback.Describe();
+                ? "This uses the app default, whatever it is set to."
+                : _fallback.Describe();
 
-            body.Add(_lblFollowing, gapBelow: 0);
+            _followingCard.Add(_lblFollowing, gapBelow: UiLayout.HintGap);
+            _followingCard.Add(CardHint("A change to the app default reaches it. Tick the box above to give it numbers of its own."), gapBelow: 0);
+            body.Add(_followingCard, gapBelow: 0);
         }
 
-        // A caption and its field on each row. The captions share one
-        // column, as wide as the longest of them at the text size in use -
+        // A caption and its field on each row, in the card it belongs to.
+        // The captions share one column down every card (FieldGrid.LineUp,
+        // after the theme pass), as wide as the longest of them at the text size in use -
         // a fixed column against these captions is how the old panel ended
         // up with "Lap limit" and the rest cut off - and the fields line up
         // beside them. Their widths are set after the theme pass
         // (SizeFields).
         _numLapLimit.Maximum = 9999;
         _numLapLimit.Value = Math.Clamp(seed.LapLimit, 0, 9999);
-        _fields.AddRow("Lap limit (0 = none):", _numLapLimit);
+        _lengthGrid.AddRow("Lap limit (0 = none):", _numLapLimit);
 
         _numTimeLimit.Maximum = 180;
         _numTimeLimit.Value = Math.Clamp(seed.TimeLimitMinutes, 0, 180);
-        _fields.AddRow("Time limit, min (0 = none):", _numTimeLimit);
+        _lengthGrid.AddRow("Time limit, min (0 = none):", _numTimeLimit);
 
         _numMinLap.Minimum = 100;
         _numMinLap.Maximum = 60000;
         _numMinLap.Increment = 100;
         _numMinLap.Value = Math.Clamp(seed.MinLapTimeMs, 100, 60000);
-        _fields.AddRow("Min valid lap (ms):", _numMinLap);
+        _countGrid.AddRow("Min valid lap (ms):", _numMinLap);
 
         _numStreakWindow.Minimum = 1;
         _numStreakWindow.Maximum = 200;
@@ -406,7 +457,7 @@ public sealed class RaceFormatForm : Form
         _chkStreakFaster.Text = "faster too";
         _chkStreakFaster.AutoSize = true;
         _chkStreakFaster.Checked = seed.StreakFasterBreaks;
-        _fields.AddRow("Streak window ±%:", FieldGrid.Inline(_numStreakWindow, _chkStreakFaster));
+        _countGrid.AddRow("Streak window ±%:", FieldGrid.Inline(_numStreakWindow, _chkStreakFaster));
 
         _cboStartType.DropDownStyle = ComboBoxStyle.DropDownList;
         // The two qualifying philosophies are named rather than left for
@@ -443,11 +494,11 @@ public sealed class RaceFormatForm : Form
         SelectStartType(seed.StartType);
 
         _cboStartType.SelectedIndexChanged += (_, _) => UpdateStaggerEnabled();
-        _fields.AddRow("Start:", _cboStartType);
+        _startGrid.AddRow("Start:", _cboStartType);
 
         // Across both columns, under the start types it explains, wrapping
         // to the grid's width.
-        _fields.AddWide(new Label
+        _startGrid.AddWide(new Label
         {
             Text = "For qualifying, the first and last starts are the ones that matter. \"All away together\" is a grid start on one shared "
                  + "clock (PN Racing's PNWC qualifiers), so the run to the loop is on your time. \"Own clock from "
@@ -472,7 +523,7 @@ public sealed class RaceFormatForm : Form
         _cboStaggerClock.Items.Add(new ClockItem(StaggerClock.OwnRelease, "Clock: own release"));
         _cboStaggerClock.Items.Add(new ClockItem(StaggerClock.SharedGreen, "Clock: shared green"));
         SelectStaggerClock(seed.StaggerClockMode);
-        _fields.AddRow("Stagger gap (s):", FieldGrid.Inline(_numStaggerGap, _cboStaggerClock));
+        _startGrid.AddRow("Stagger gap (s):", FieldGrid.Inline(_numStaggerGap, _cboStaggerClock));
 
         // Before the start-sequence rows because it happens before them:
         // warm-up, then Stage -> Countdown -> Green.
@@ -493,7 +544,7 @@ public sealed class RaceFormatForm : Form
 
         UpdateWarmUpHint();
         _numWarmUp.ValueChanged += (_, _) => UpdateWarmUpHint();
-        _fields.AddRow("Warm-up (s, 0 = none):", FieldGrid.Inline(_numWarmUp, lblWarmUpHint));
+        _sequenceGrid.AddRow("Warm-up (s, 0 = none):", FieldGrid.Inline(_numWarmUp, lblWarmUpHint));
 
         // The two ticks run from the left-hand edge, across both columns, as
         // they always have: they say what they are themselves, and the
@@ -501,7 +552,7 @@ public sealed class RaceFormatForm : Form
         _chkAutoAdvance.Text = "Run the start sequence automatically (Stage \u2192 Countdown \u2192 Green)";
         _chkAutoAdvance.AutoSize = true;
         _chkAutoAdvance.Checked = seed.AutoAdvance;
-        _fields.AddWide(_chkAutoAdvance, stretch: false);
+        _sequenceGrid.AddWide(_chkAutoAdvance, stretch: false);
 
         _numStaging.Minimum = 1;
         _numStaging.Maximum = 300;
@@ -509,19 +560,60 @@ public sealed class RaceFormatForm : Form
         _numCountdown.Minimum = 1;
         _numCountdown.Maximum = 60;
         _numCountdown.Value = Math.Clamp(seed.CountdownSeconds, 1, 60);
-        _fields.AddRow("Stage (s):", _numStaging);
-        _fields.AddRow("Countdown (s):", _numCountdown);
+        _sequenceGrid.AddRow("Stage (s):", _numStaging);
+        _sequenceGrid.AddRow("Countdown (s):", _numCountdown);
 
         _chkFinishOnCrossing.Text = "Leader takes the flag, others finish their lap";
         _chkFinishOnCrossing.AutoSize = true;
         _chkFinishOnCrossing.Checked = seed.FinishOnNextCrossing;
-        _fields.AddWide(_chkFinishOnCrossing, stretch: false);
+        _sequenceGrid.AddWide(_chkFinishOnCrossing, stretch: false);
 
-        // Last in the body whenever it shows - the sentence above it is
+        // THE TOP (18 Nov 2026, dialog jazz-up): the format at a glance,
+        // following the fields as they change. The dialog is built at the
+        // text size in use, so the tiles take their faces here.
+        foreach (var tile in _tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        _numLapLimit.ValueChanged += (_, _) => ShowTiles();
+        _numTimeLimit.ValueChanged += (_, _) => ShowTiles();
+        _cboStartType.SelectedIndexChanged += (_, _) => ShowTiles();
+        _numWarmUp.ValueChanged += (_, _) => ShowTiles();
+        ShowTiles();
+
+        var tileStrip = new TileStrip(_tiles);
+
+        // The cards, in the order the fields always ran - so Tab goes
+        // through them as it did - each with a line on what it is for.
+        // The note on the start types is the start card's line.
+        var lengthCard = new Section("Race length");
+        lengthCard.Add(CardHint("When the race ends. 0 means no limit."), gapBelow: UiLayout.RowGap);
+        lengthCard.Add(_lengthGrid, gapBelow: 0);
+
+        var countCard = new Section("Lap counting");
+        countCard.Add(CardHint("Passes quicker than the min valid lap are decoder noise, not laps."), gapBelow: UiLayout.RowGap);
+        countCard.Add(_countGrid, gapBelow: 0);
+
+        var startCard = new Section("Start");
+        startCard.Add(_startGrid, gapBelow: 0);
+
+        var sequenceCard = new Section("Start sequence and finish");
+        sequenceCard.Add(CardHint("Warm-up, then Stage, Countdown and Green - and how the race ends."), gapBelow: UiLayout.RowGap);
+        sequenceCard.Add(_sequenceGrid, gapBelow: 0);
+
+        _customParts.AddRange(new Control[] { tileStrip, lengthCard, countCard, startCard, sequenceCard });
+
+        // Last in the body whenever they show - the sentence above them is
         // hidden then.
-        body.Add(_fields, gapBelow: 0);
+        body.Add(tileStrip, gapBelow: UiLayout.RowGap);
+        body.Add(lengthCard, gapBelow: UiLayout.RowGap);
+        body.Add(countCard, gapBelow: UiLayout.RowGap);
+        body.Add(startCard, gapBelow: UiLayout.RowGap);
+        body.Add(sequenceCard, gapBelow: 0);
 
-        var btnOk = new Button { Text = "OK" };
+        var btnOk = _btnOk;
         btnOk.Click += (_, _) =>
         {
             Result = _allowUseDefault && !_chkCustom.Checked ? null : Collect();
@@ -693,14 +785,61 @@ public sealed class RaceFormatForm : Form
     /// </summary>
     private void SetCustomVisible(bool custom)
     {
-        _fields.Visible = custom;
-        _lblFollowing.Visible = _allowUseDefault && !custom;
+        foreach (var part in _customParts)
+        {
+            part.Visible = custom;
+        }
+
+        _followingCard.Visible = _allowUseDefault && !custom;
 
         if (custom)
         {
             UpdateStaggerEnabled();
         }
     }
+
+    /// <summary>The tiles, from the fields as they stand: how long the race is, how it starts, and the warm-up.</summary>
+    private void ShowTiles()
+    {
+        var laps = (int)_numLapLimit.Value;
+        var minutes = (int)_numTimeLimit.Value;
+
+        var (length, lengthCaption) = (minutes, laps) switch
+        {
+            ( > 0, > 0) => ($"{minutes} min", $"or {Plural.Of(laps, "lap")}"),
+            ( > 0, _) => ($"{minutes} min", "Time limit"),
+            (_, > 0) => (Plural.Of(laps, "lap"), "Lap limit"),
+            _ => ("None", "Race length"),
+        };
+
+        _tiles[0].Set(length, lengthCaption);
+
+        _tiles[1].Set(SelectedStartType() switch
+        {
+            RaceStartType.Standard => "Together",
+            RaceStartType.StaggeredGrid or RaceStartType.StaggeredReverse or RaceStartType.StaggeredHandicap => "Staggered",
+            RaceStartType.HandReleased => "By hand",
+            RaceStartType.Qualifier => "Own clock",
+            _ => "Standard",
+        }, "Start");
+
+        var warmUp = (int)_numWarmUp.Value;
+        _tiles[2].Set(
+            warmUp <= 0 ? "Off"
+            : warmUp % 60 == 0 ? $"{warmUp / 60} min"
+            : warmUp < 60 ? $"{warmUp} s"
+            : $"{warmUp / 60}:{warmUp % 60:00}",
+            "Warm-up");
+    }
+
+    /// <summary>A card's line saying what it is for, in the small muted face.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 
     private RaceFormat Collect() => new()
     {

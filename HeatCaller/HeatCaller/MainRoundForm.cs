@@ -37,7 +37,15 @@ public sealed class MainRoundForm : Form
         }
         _cmbTrack.SelectedIndex = 0;
 
-        var lblDrivers = new Label { Text = "Drivers in this main:", AutoSize = true, Font = AppTheme.BoldFont };
+        // The card's caption says what this bold label over the list used
+        // to; it stays, as the card's line on how to tick them.
+        var lblDrivers = new Label
+        {
+            Text = "Tick who's racing, or the top qualifiers in one go.",
+            AutoSize = true,
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+        };
 
         _clbDrivers.CheckOnClick = true;
 
@@ -103,9 +111,17 @@ public sealed class MainRoundForm : Form
         btnSave.Click += BtnSave_Click;
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // Two cards (18 Nov 2026, dialog jazz-up, third batch): the main
+        // itself - its label and track, with a line on what the label is for
+        // - and the drivers in it, the list taking the height, the picking
+        // buttons under it.
         var fields = new FieldGrid();
         fields.AddRow("Round Label:", _txtLabel, stretch: true);
         fields.AddRow("Track Layout:", _cmbTrack);
+        fields.AddHint("A-Main, B-Main and so on: the letter is the main's place for bump-ups.");
+
+        var mainCard = new Section("The main");
+        mainCard.Add(fields, gapBelow: 0);
 
         // "Top [6] from Qualifying", and All and None beside it - each only
         // as wide as its caption, so the line fits the dialog's width (see
@@ -114,11 +130,14 @@ public sealed class MainRoundForm : Form
         picking.Add(lblTopN, _numTopN);
         picking.Add(null, new ButtonBar(tight: true).With(btnSelectTopN, btnSelectAll, btnSelectNone));
 
+        var driversCard = new Section("Drivers in this main");
+        driversCard.Add(lblDrivers, gapBelow: UiLayout.HintGap);
+        driversCard.AddFill(_clbDrivers, () => LeastRows * _clbDrivers.ItemHeight + 4, gapBelow: UiLayout.RowGap);
+        driversCard.Add(picking, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(fields);
-        page.Add(lblDrivers, stretch: false, gapBelow: UiLayout.HintGap);
-        page.AddFill(_clbDrivers, _ => LeastRows * _clbDrivers.ItemHeight + 4, gapBelow: UiLayout.RowGap);
-        page.Add(picking);
+        page.Add(mainCard, gapBelow: UiLayout.RowGap);
+        page.AddFill(driversCard, driversCard.LeastHeight, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as a dialog's buttons go.
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
@@ -130,6 +149,12 @@ public sealed class MainRoundForm : Form
         BackColor = AppTheme.Background;
         AppTheme.ApplyRecursively(this);
 
+        // The window's own button in the app's colour; the line over the
+        // list in the hint's face, whatever the theme pass gave it.
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
+        lblDrivers.Font = AppTheme.SmallFont;
+        lblDrivers.ForeColor = AppTheme.TextMuted;
+
         // After the theme pass, in the faces it leaves them in: the label box
         // as wide as the grid gives it, the track as wide as its longest
         // layout's name, the count for two digits.
@@ -140,8 +165,10 @@ public sealed class MainRoundForm : Form
         // Wide enough for "Top", its count and the three buttons on one
         // line at the normal text size: at 420 they came to 408px in a line
         // of 388, and the buttons went onto a line of their own (layout
-        // pictures, 29 Sep).
-        DialogFit.Keep(this, page, width: 460, height: 460);
+        // pictures, 29 Sep). The cards' room either side added to that, and
+        // their captions to the height, so the list keeps the rows it had
+        // before they went in (18 Nov 2026).
+        DialogFit.Keep(this, page, width: 460 + Section.Inset.Horizontal, height: 560);
 
         void BtnSave_Click(object? sender, EventArgs e)
         {

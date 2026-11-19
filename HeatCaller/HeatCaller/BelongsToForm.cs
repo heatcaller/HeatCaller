@@ -30,7 +30,7 @@ internal sealed class BelongsToForm : Form
     private readonly string? _fromDriver;
 
     private readonly TextBox _txtFind = new();
-    private readonly ListBox _lstDrivers = new();
+    private readonly DriverList _lstDrivers = new();
     private readonly RadioButton _rdoInCar = new ThemedRadioButton();
     private readonly ComboBox _cmbCar = new();
     private readonly RadioButton _rdoMoves = new ThemedRadioButton();
@@ -102,21 +102,31 @@ internal sealed class BelongsToForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // (18 Nov 2026, dialog pass) In two cards - the driver, and where it
+        // goes - with what it did across the top and what pressing the button
+        // will do over the buttons. Every control in the order it was, so Tab
+        // goes round them as it did. The two ticks across the whole card, so
+        // the car list sits beside its tick rather than under it.
         var where = new FieldGrid();
-        where.AddField(ButtonsBeside(_rdoInCar, _cmbCar));
-        where.AddField(_rdoMoves);
+        where.AddWide(ButtonsBeside(_rdoInCar, _cmbCar), stretch: false);
+        where.AddWide(_rdoMoves, stretch: false);
         where.AddRow("It replaces:", _cmbReplaces);
         where.AddHint("A replaced transponder is retired: it stays theirs, and so does everything timed on it.");
 
         var find = new FieldGrid();
         find.AddRow("Find:", _txtFind, stretch: true);
 
+        var driverCard = new Section("The driver");
+        driverCard.Add(find, gapBelow: UiLayout.RowGap);
+        driverCard.AddFill(_lstDrivers, () => LeastRows * _lstDrivers.ItemHeight + 4, gapBelow: 0);
+
+        var whereCard = new Section("Where is it?");
+        whereCard.Add(where, gapBelow: 0);
+
         var page = new FillPage();
         page.Add(lblWhat, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(find, gapBelow: UiLayout.HintGap);
-        page.AddFill(_lstDrivers, _ => LeastRows * _lstDrivers.ItemHeight + 4, gapBelow: UiLayout.RowGap);
-        page.Add(new Label { Text = "Where is it?", AutoSize = true, Font = AppTheme.BoldFont }, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(where);
+        page.AddFill(driverCard, driverCard.LeastHeight, gapBelow: UiLayout.RowGap);
+        page.Add(whereCard, gapBelow: UiLayout.RowGap);
         page.Add(_lblOutcome, stretch: false);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, _btnGive), gapBelow: 0);
 
@@ -129,6 +139,11 @@ internal sealed class BelongsToForm : Form
         AppTheme.ApplyRecursively(this);
         _lblOutcome.ForeColor = AppTheme.TextMuted;
 
+        // The window's own button in the app's colour, kept as its caption
+        // changes with the driver picked.
+        AppTheme.StyleButton(_btnGive, AppTheme.ButtonKind.Primary);
+        _lstDrivers.Remeasure();
+
         // (22 Oct 2026, page tidy): the two grids had a caption column each,
         // so the Find box and "It replaces:" started at different places.
         // One column down both now, measured in the faces the theme pass left.
@@ -137,13 +152,103 @@ internal sealed class BelongsToForm : Form
         // After the theme pass, in the faces it leaves them in.
         FitPickers();
 
-        DialogFit.Keep(this, page, width: 520, height: 560);
+        DialogFit.Keep(this, page, width: 600, height: 600);
     }
 
     /// <summary>One driver in the list.</summary>
-    private sealed record DriverChoice(DriverProfile Profile, string Label)
+    private sealed record DriverChoice(DriverProfile Profile, string Label, string Name, string Detail)
     {
         public override string ToString() => Label;
+    }
+
+    /// <summary>
+    /// The drivers, one to a row (18 Nov 2026, dialog pass): the name in
+    /// bold, and their number, transponder and cars in grey after it, the
+    /// picked row on the rounded band the app's other lists use. As many
+    /// rows to the height as the plain list had, near enough - a row is a
+    /// line of text and a little room round it.
+    /// </summary>
+    private sealed class DriverList : ListBox
+    {
+        public DriverList()
+        {
+            DrawMode = DrawMode.OwnerDrawFixed;
+            IntegralHeight = false;
+            Remeasure();
+        }
+
+        /// <summary>The rows as tall as a bold line and a little room, at the text size in use.</summary>
+        public void Remeasure()
+        {
+            ItemHeight = Math.Min(255, AppTheme.BoldFont.Height + UiLayout.AtDpi(4));
+            Invalidate();
+        }
+
+        protected override void OnDrawItem(DrawItemEventArgs e)
+        {
+            using var buffer = BufferedGraphicsManager.Current.Allocate(e.Graphics, e.Bounds);
+            DrawRow(buffer.Graphics, e);
+            buffer.Render(e.Graphics);
+        }
+
+        private void DrawRow(Graphics g, DrawItemEventArgs e)
+        {
+            using (var back = new SolidBrush(AppTheme.Surface))
+            {
+                g.FillRectangle(back, e.Bounds);
+            }
+
+            if (e.Index < 0 || e.Index >= Items.Count || Items[e.Index] is not DriverChoice choice)
+            {
+                return;
+            }
+
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            var selected = (e.State & DrawItemState.Selected) != 0;
+            var row = Rectangle.Inflate(e.Bounds, -UiLayout.AtDpi(2), -UiLayout.AtDpi(1));
+
+            if (selected)
+            {
+                using var path = AppTheme.RoundedRect(new RectangleF(row.X + 0.5f, row.Y + 0.5f, row.Width - 1f, row.Height - 1f), UiLayout.AtDpi(6));
+                using var fill = new SolidBrush(AppTheme.SecondaryButton);
+                g.FillPath(fill, path);
+                using var pen = new Pen(AppTheme.Primary, Math.Max(1f, UiLayout.AtDpi(1)));
+                g.DrawPath(pen, path);
+            }
+
+            // TextRenderer ignores the buffer's translate unless told - see LayoutList.
+            const TextFormatFlags line = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+                                         | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix
+                                         | TextFormatFlags.PreserveGraphicsTranslateTransform | TextFormatFlags.PreserveGraphicsClipping;
+
+            var pad = UiLayout.AtDpi(8);
+            var room = Math.Max(1, row.Width - pad * 2);
+
+            // The details as wide as they need, up to half the row; the name in what is left.
+            var detailWidth = Math.Min(room / 2, TextRenderer.MeasureText(g, choice.Detail, AppTheme.SmallFont, Size.Empty, TextFormatFlags.NoPadding).Width);
+            var nameWidth = Math.Max(1, room - detailWidth - pad);
+
+            TextRenderer.DrawText(g, choice.Name, AppTheme.BoldFont,
+                new Rectangle(row.X + pad, row.Y, nameWidth, row.Height), AppTheme.TextDark, line);
+
+            TextRenderer.DrawText(g, choice.Detail, AppTheme.SmallFont,
+                new Rectangle(row.Right - pad - detailWidth, row.Y, detailWidth, row.Height), AppTheme.TextMuted,
+                line & ~TextFormatFlags.Left | TextFormatFlags.Right);
+        }
+
+        /// <summary>No flashing white between rows as the list redraws.</summary>
+        protected override void OnPaintBackground(PaintEventArgs pevent)
+        {
+            using var back = new SolidBrush(AppTheme.Surface);
+            pevent.Graphics.FillRectangle(back, ClientRectangle);
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            Invalidate();
+        }
     }
 
     /// <summary>One line of a drop-down with a value behind it.</summary>
@@ -179,7 +284,8 @@ internal sealed class BelongsToForm : Form
             var number = string.IsNullOrWhiteSpace(profile.RaceNumber) ? string.Empty : $"  #{profile.RaceNumber.Trim()}";
             var cars = _cars.OwnedBy(profile).Count(c => !c.Retired);
             var carText = cars == 1 ? "1 car" : $"{cars} cars";
-            _lstDrivers.Items.Add(new DriverChoice(profile, $"{NameOf(profile)}{number}  ·  {profile.Transponder}  ·  {carText}"));
+            var detail = (number.Length > 0 ? $"#{profile.RaceNumber.Trim()}  ·  " : string.Empty) + $"{profile.Transponder}  ·  {carText}";
+            _lstDrivers.Items.Add(new DriverChoice(profile, $"{NameOf(profile)}{number}  ·  {profile.Transponder}  ·  {carText}", NameOf(profile), detail));
         }
 
         _lstDrivers.EndUpdate();

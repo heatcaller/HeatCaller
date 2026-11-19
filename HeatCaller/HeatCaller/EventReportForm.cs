@@ -59,6 +59,11 @@ public sealed class EventReportForm : Form
         HandicapStore? handicaps = null,
         RaceEventStore? events = null)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         _history = history;
         _handicaps = handicaps;
         _events = events;
@@ -92,7 +97,7 @@ public sealed class EventReportForm : Form
 
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + captionColumn + fieldColumn + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
@@ -136,8 +141,6 @@ public sealed class EventReportForm : Form
         _cmbDay.SelectedIndexChanged += (_, _) => UpdatePreview();
 
         _txtName.Text = "Club Race Day";
-
-        var lblInclude = new Label { Text = "Include", AutoSize = true, Font = AppTheme.BoldFont };
 
         _chkQualifying.Text = "Qualifying standings";
         _chkQualifying.AutoSize = true;
@@ -184,14 +187,25 @@ public sealed class EventReportForm : Form
 
         // Everything but the line about the day and the buttons: on a screen
         // too short for all of it, it scrolls and they stay in view.
+        //
+        // In two cards (18 Nov 2026, dialog look): the day and the name it
+        // goes out under, and what to put in, each with a line on what it
+        // is for.
+        var dayCard = new Section("The report");
+        dayCard.Add(fields, gapBelow: UiLayout.HintGap);
+        dayCard.Add(CardHint("Only days with races are listed. The name heads the page."), gapBelow: 0);
+
+        var includeCard = new Section("Include");
+        includeCard.Add(CardHint("What goes in beside the results and the fastest laps, which are always there."), gapBelow: UiLayout.HintGap);
+        includeCard.Add(_chkQualifying, stretch: false, gapBelow: UiLayout.HintGap);
+        includeCard.Add(_chkTech, stretch: false, gapBelow: UiLayout.HintGap);
+        includeCard.Add(_chkRentals, stretch: false, gapBelow: UiLayout.HintGap);
+        includeCard.Add(_chkLapDetail, stretch: false, gapBelow: 0);
+
         var body = DialogFit.Body(page);
         body.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        body.Add(fields);
-        body.Add(lblInclude, stretch: false, gapBelow: UiLayout.HintGap);
-        body.Add(_chkQualifying, stretch: false, gapBelow: UiLayout.HintGap);
-        body.Add(_chkTech, stretch: false, gapBelow: UiLayout.HintGap);
-        body.Add(_chkRentals, stretch: false, gapBelow: UiLayout.HintGap);
-        body.Add(_chkLapDetail, stretch: false, gapBelow: 0);
+        body.Add(dayCard, gapBelow: UiLayout.RowGap);
+        body.Add(includeCard, gapBelow: 0);
 
         // Beside the buttons, so what Generate will cover is in view however
         // far the body is scrolled.
@@ -213,6 +227,15 @@ public sealed class EventReportForm : Form
     }
 
     private void UpdatePreview() => _lblPreview.Text = PreviewFor(_cmbDay.SelectedItem as DayItem);
+
+    /// <summary>A card's line on what it is for, in the small muted type of a hint.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 
     /// <summary>What the line about the day says for <paramref name="day"/> - or, with none chosen, that there is nothing to report on.</summary>
     private string PreviewFor(DayItem? day)

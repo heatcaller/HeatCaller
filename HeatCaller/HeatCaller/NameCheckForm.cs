@@ -25,11 +25,13 @@ namespace HeatCaller;
 /// the ear, not the editor, in the way RacingWordsForm is a reference sheet
 /// and nothing else.
 ///
-/// On the layout pieces (DialogFit): the introduction wrapping across the
-/// top, the drivers taking the height the window has, the line saying what
-/// is being read under them, and at the foot the tick box and the count on
-/// the left with Say It, Say the Next One and Close against the right-hand
-/// edge.
+/// On the layout pieces (DialogFit): one card with the introduction as its
+/// hint line, the drivers taking the height the window has and the line
+/// saying what is being read under them; and at the foot the tick box and
+/// the count on the left with Say It, Say the Next One (in the app's colour
+/// - it is what the window is for) and Close against the right-hand edge,
+/// on one line (18 Nov 2026, dialog jazz-up; it was the same parts with no
+/// card, the count on a line of its own over the buttons).
 /// </summary>
 public sealed class NameCheckForm : Form
 {
@@ -38,6 +40,15 @@ public sealed class NameCheckForm : Form
 
     /// <summary>What the line under the list says before anything has been read.</summary>
     private const string Idle = "Nothing read yet.";
+
+    /// <summary>What the list says with nobody in it.</summary>
+    private const string EmptyList = "No names to check. The drivers listed where you opened this show here, each with the name the announcer reads.";
+
+    /// <summary>How wide the window is inside its frame at the normal text size.</summary>
+    private const int DialogWidth = 780;
+
+    /// <summary>How tall the window is inside its frame at the normal text size.</summary>
+    private const int DialogHeight = 560;
 
     /// <summary>
     /// One driver to listen to: who they are, and the words the announcer
@@ -197,7 +208,7 @@ public sealed class NameCheckForm : Form
         var lblIntro = new Label
         {
             AutoSize = true,
-            Font = AppTheme.BodyFont,
+            Font = AppTheme.SmallFont,
             ForeColor = AppTheme.TextMuted,
             Text = _speak is null
                 ? "The names the announcer will read tonight, word for word. The voice isn't available from this "
@@ -229,6 +240,25 @@ public sealed class NameCheckForm : Form
             {
                 SayRow(e.RowIndex);
             }
+        };
+
+        // An empty list says what fills it, painted where the rows would be
+        // rather than a control of its own, so nothing moves when it fills.
+        _grid.Paint += (_, e) =>
+        {
+            if (_grid.Rows.Count > 0)
+            {
+                return;
+            }
+
+            var room = Rectangle.FromLTRB(
+                UiLayout.RowGap,
+                _grid.ColumnHeadersHeight + UiLayout.SectionGap,
+                Math.Max(UiLayout.RowGap + 1, _grid.ClientSize.Width - UiLayout.RowGap),
+                Math.Max(_grid.ColumnHeadersHeight + UiLayout.SectionGap + 1, _grid.ClientSize.Height - UiLayout.RowGap));
+
+            TextRenderer.DrawText(e.Graphics, EmptyList, AppTheme.BodyFont, room, AppTheme.TextMuted,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.Top | TextFormatFlags.WordBreak);
         };
 
         _chkTonight.Text = "Only the drivers checked in tonight";
@@ -282,10 +312,20 @@ public sealed class NameCheckForm : Form
         _btnNext.TabIndex = 1;
         btnClose.TabIndex = 2;
 
+        // No row of tiles over it: at 1280x720 the window is as tall as the
+        // screen lets it be, and tiles there came out of the list - two
+        // drivers fewer on show (layout pictures, 18 Nov 2026). The count
+        // in the footer says what they would.
+        //
+        // The names in one card: what to do as its hint, the list taking the
+        // height, and what is being read under it.
+        var card = new Section("Names to hear");
+        card.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        card.AddFill(_grid, () => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
+        card.Add(_lblSaying, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblIntro);
-        page.AddFill(_grid, _ => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
-        page.Add(_lblSaying, gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(footer, gapBelow: 0);
 
         Controls.Add(page);
@@ -297,14 +337,20 @@ public sealed class NameCheckForm : Form
 
         AppTheme.ApplyRecursively(this);
 
+        // After the theme pass: the button the window is for in the app's
+        // colour - pressed over and over to work down the roster.
+        AppTheme.StyleButton(_btnNext, AppTheme.ButtonKind.Primary);
+
         // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
         Pieces.KeepHeadingsWhole(_grid);
 
         Fill();
 
-        // The size it had at the normal text size. It can be made bigger: a
-        // long respelling beside a long name wants the width.
-        DialogFit.Keep(this, page, width: 720, height: 560);
+        // Wider than the 720 it had at the normal text size, so the count
+        // and the three buttons share a line and the card's caption costs
+        // the list nothing; the height it had. It can be made bigger: a long
+        // respelling beside a long name wants the width.
+        DialogFit.Keep(this, page, width: DialogWidth, height: DialogHeight);
     }
 
     /// <summary>The line under the list while a name is being read.</summary>

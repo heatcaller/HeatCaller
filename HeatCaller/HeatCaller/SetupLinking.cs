@@ -158,6 +158,8 @@ internal sealed class PickCarForm : Form
         {
             Text = $"Logged {entry.RecordedAtUtc.ToLocalTime():d MMM yyyy} for {driver}, car {typed}. Pick the car it was for - it stays with that car from now on.",
             AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
         };
 
         // The driver named on it first: almost always it is one of theirs.
@@ -200,9 +202,15 @@ internal sealed class PickCarForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // THE LOOK (18 Nov 2026, dialog jazz-up): the garage's cars in one
+        // card, what the setup says as its line on what it is for, and Link
+        // to Car in the app's colour.
+        var card = new Section("Cars in the garage");
+        card.Add(lblWhat, gapBelow: UiLayout.RowGap);
+        card.AddFill(_lstCars, () => LeastRows * _lstCars.ItemHeight + 4, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblWhat, stretch: false, gapBelow: UiLayout.RowGap);
-        page.AddFill(_lstCars, _ => LeastRows * _lstCars.ItemHeight + 4, gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, _btnLink), gapBelow: 0);
 
         Controls.Add(page);
@@ -210,7 +218,11 @@ internal sealed class PickCarForm : Form
         AcceptButton = _btnLink;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 520, height: 440);
+        AppTheme.StyleButton(_btnLink, AppTheme.ButtonKind.Primary);
+
+        // Wider and taller than the 520x440 it was made at by the card's
+        // edges and caption, so the list is the size it was.
+        DialogFit.Keep(this, page, width: 552, height: 470);
     }
 
     private void Link()

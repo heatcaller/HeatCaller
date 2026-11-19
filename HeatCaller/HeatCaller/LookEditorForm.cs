@@ -13,13 +13,14 @@ namespace HeatCaller;
 /// Warnings about hard-to-read combinations are shown, never enforced: a
 /// club can save a look that fails them - it's their wall.
 ///
-/// On the layout pieces (DialogFit): down the left, one field grid - the
-/// name, the description, the style and the note under it, then the colours
-/// under their heading, each a swatch and its code beside its caption - so
-/// every caption is in one column and the swatches and boxes line up down
-/// the window. Down the right, beside it (a Beside), the preview under its
-/// heading, as big as it was made at the normal text size, at the size in
-/// use, and what might be hard to read under that, down to the foot of the
+/// On the layout pieces (DialogFit): down the left, two cards (18 Nov 2026,
+/// dialog jazz-up) - The look: the name, the description, the style and the
+/// note under it; then Colors: a line on how to set them, and each colour a
+/// swatch and its code beside its caption - the two cards' captions in one
+/// column, so the swatches and boxes line up down the window. Down the
+/// right, beside them (a Beside), the preview in a card of its own, as big
+/// as it was made at the normal text size, at the size in use, and what
+/// might be hard to read in a card under that, down to the foot of the
 /// colours. The two are the window's body, which scrolls on a screen too
 /// short for them, and Save and Cancel stay in view under it. The preview is
 /// drawn as it always was (LookPreview). It used to be placed in pixels:
@@ -34,9 +35,10 @@ public sealed class LookEditorForm : Form
     /// <summary>
     /// How wide the window is inside its frame at the normal text size - what
     /// the old one worked out there from its two columns: the captions, the
-    /// 300px fields, and the 420px preview beside them.
+    /// 300px fields, and the 420px preview beside them (980) - and the room
+    /// inside the cards either side of both (18 Nov 2026).
     /// </summary>
-    private const int DialogWidth = 980;
+    private const int DialogWidth = 1044;
 
     /// <summary>The preview's size at the normal text size, as it was made. It is drawn in the app's own faces, so it grows with the text size.</summary>
     private const int PreviewWidth = 420;
@@ -68,6 +70,12 @@ public sealed class LookEditorForm : Form
     private readonly Label _lblWarnings = new();
     private readonly List<ColourRow> _rows = new();
 
+    /// <summary>The look's fields and the colours, a grid in each card - lined up once the theme pass is done (SizeFields).</summary>
+    private FieldGrid[] _grids = Array.Empty<FieldGrid>();
+
+    /// <summary>The cards' hint lines, given their small face back after the theme pass (SizeFields).</summary>
+    private readonly List<Label> _hints = new();
+
     /// <summary>The fields beside the preview and the warnings - laid out again when the warnings are rewritten (UpdatePreview). Null only while the window is being built.</summary>
     private Beside? _band;
 
@@ -91,6 +99,11 @@ public sealed class LookEditorForm : Form
 
     public LookEditorForm(Look look, bool isNew)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, nearly every part had its window before
+        // the theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         _key = look.Key;
 
         Text = isNew ? "New Look" : $"Edit Look - {look.Name}";
@@ -170,10 +183,13 @@ public sealed class LookEditorForm : Form
         _cmbStyle.SelectedIndex = familyIndex < 0 ? 1 : familyIndex;
         _cmbStyle.SelectedIndexChanged += (_, _) => UpdatePreview();
 
-        // One caption column for every row - the name's, the style's and each
-        // colour's - as wide as the widest caption in the font it is drawn
-        // in, so the swatches and boxes line up down the window. The name and
-        // the description run to the grid's right-hand edge.
+        // Two cards down the left (18 Nov 2026, dialog jazz-up): the look's
+        // name, description and style, then its colours under a line on how
+        // to set them. One caption column for every row of both - the
+        // name's, the style's and each colour's - as wide as the widest
+        // caption in the font it is drawn in (FieldGrid.LineUp, once the
+        // theme pass is done), so the swatches and boxes line up down the
+        // window. The name and the description run to the card's edge.
         var fields = new FieldGrid();
         fields.AddRow("Name:", _txtName, stretch: true);
         fields.AddRow("Description:", _txtDescription, stretch: true);
@@ -181,11 +197,16 @@ public sealed class LookEditorForm : Form
         fields.AddHint("Light or Dark sets how phones and the online pages treat the page. Synthwave effects adds the "
                        + "animated sunset header and the neon race clock.");
 
-        var lblColours = fields.AddWide(new Label { Text = "Colors", AutoSize = true, Font = AppTheme.BoldFont }, stretch: false);
+        var colourGrid = new FieldGrid();
+        _grids = new[] { fields, colourGrid };
 
-        // Nearer the colours it heads than the note above it, as it was: a
-        // row's gap and a hint's above it, a hint's and two more below.
-        lblColours.Margin = new Padding(0, UiLayout.HintGap, 0, UiLayout.HintGap + 2);
+        var lookCard = new Section("The look");
+        lookCard.Add(fields, gapBelow: 0);
+
+        var colourCard = new Section("Colors");
+        colourCard.Add(Hint("Click a swatch to pick a color, or type its code. The preview follows as you go."),
+            gapBelow: UiLayout.RowGap);
+        colourCard.Add(colourGrid, gapBelow: 0);
 
         foreach (var (caption, get, set) in definitions)
         {
@@ -228,7 +249,7 @@ public sealed class LookEditorForm : Form
 
             // The swatch, then its box, beside the caption. Tab goes
             // caption-free: swatch, then its box, row by row.
-            fields.AddRow(caption + ":", FieldGrid.Inline(swatch, box));
+            colourGrid.AddRow(caption + ":", FieldGrid.Inline(swatch, box));
 
             _rows.Add(row);
         }
@@ -245,22 +266,30 @@ public sealed class LookEditorForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
         };
 
-        band.Add(fields, gapBelow: 0);
-        fields.Margin = new Padding(0, 0, FieldsGap, 0);
+        band.Add(lookCard, gapBelow: UiLayout.RowGap);
+        band.Add(colourCard, gapBelow: 0);
+        lookCard.Margin = new Padding(0, 0, FieldsGap, UiLayout.RowGap);
+        colourCard.Margin = new Padding(0, 0, FieldsGap, 0);
 
-        band.AddSide(Heading("Preview"), gapBelow: UiLayout.HintGap + 2);
-        band.AddSide(_preview, gapBelow: UiLayout.RowGap + 4);
-        band.AddSide(Heading("Readability"), gapBelow: UiLayout.HintGap + 2);
+        // Down the right, two cards: the preview, with a line on what it
+        // shows, and what might be hard to read.
+        var previewCard = new Section("Preview");
+        previewCard.Add(Hint("A page of the app in this look, updated as you change it."), gapBelow: UiLayout.RowGap);
+        previewCard.Add(_preview, gapBelow: 0);
+        band.AddSideMeasured(previewCard, gapBelow: UiLayout.RowGap);
 
-        // Whatever it says, wrapped to the column - never less than the lines
-        // kept for it - and down to the foot of the colours when they come
-        // further down the window. Rewritten as colours are typed, and laid
-        // out again then (UpdatePreview).
+        // Whatever it says, wrapped to the card - never less than the lines
+        // kept for it - and the card down to the foot of the colours when
+        // they come further down the window. Rewritten as colours are typed,
+        // and laid out again then (UpdatePreview).
+        var readCard = new Section("Readability");
+        readCard.AddFill(_lblWarnings, WarningsLeast, gapBelow: 0);
+
         band.AddSideFill(
-            _lblWarnings,
-            width => Math.Max(
-                WarningLines * Pieces.LineHeight(_lblWarnings.Font),
-                _lblWarnings.GetPreferredSize(new Size(width, 0)).Height),
+            readCard,
+            width => readCard.LeastHeight(width) - WarningsLeast() + Math.Max(
+                WarningsLeast(),
+                _lblWarnings.GetPreferredSize(new Size(Math.Max(1, width - Section.Inset.Horizontal), 0)).Height),
             gapBelow: 0);
 
         _band = band;
@@ -296,15 +325,18 @@ public sealed class LookEditorForm : Form
         // buttons.
         return (page, body);
 
-        // A heading over the preview or over the warnings: one line of the
-        // bold face. The column gives it its width, and this its height.
-        static Label Heading(string text)
+        // A card's hint line: the small face, muted - put back after the
+        // theme pass (SizeFields), which gives every label the body's.
+        Label Hint(string text)
         {
-            var heading = new Label { Text = text, Font = AppTheme.BoldFont };
-            heading.Height = heading.GetPreferredSize(Size.Empty).Height;
-            return heading;
+            var hint = new Label { Text = text, AutoSize = true, Font = AppTheme.SmallFont, ForeColor = AppTheme.TextMuted };
+            _hints.Add(hint);
+            return hint;
         }
     }
+
+    /// <summary>The lines kept for what might be hard to read, whatever it says, in its face.</summary>
+    private int WarningsLeast() => WarningLines * Pieces.LineHeight(_lblWarnings.Font);
 
     /// <summary>
     /// The fields' sizes, in the faces the theme pass left them in: the style
@@ -347,7 +379,19 @@ public sealed class LookEditorForm : Form
         // and the gap after that.
         var colourRow = swatchWidth + UiLayout.ButtonGap + 1 + hexWidth + 1 + UiLayout.ButtonGap;
 
-        _fieldsLeast = captionColumn + Math.Max(styleWidth, colourRow) + FieldsGap;
+        // With the cards' own room either side of the fields.
+        _fieldsLeast = Section.Inset.Horizontal + captionColumn + Math.Max(styleWidth, colourRow) + FieldsGap;
+
+        // The two cards' grids share one caption column, and the hints keep
+        // their small face and muted ink over the body's the theme pass gave
+        // them.
+        FieldGrid.LineUp(_grids);
+
+        foreach (var hint in _hints)
+        {
+            hint.Font = AppTheme.SmallFont;
+            hint.ForeColor = AppTheme.TextMuted;
+        }
     }
 
     /// <summary>
@@ -360,7 +404,8 @@ public sealed class LookEditorForm : Form
     /// </summary>
     private int PreviewColumnWidth(int band)
     {
-        var made = UiLayout.AtTextSize(PreviewWidth);
+        // The preview as it was made, in its card.
+        var made = UiLayout.AtTextSize(PreviewWidth) + Section.Inset.Horizontal;
 
         if (band <= 0 || _fieldsLeast <= 0)
         {

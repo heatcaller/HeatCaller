@@ -118,6 +118,17 @@ internal sealed partial class RaceDaySetupWizard : Form
 
     public const int StepProgramme = 4;
 
+    /// <summary>
+    /// The window's layout held while it is built, and let go at the end of
+    /// its constructor (18 Nov 2026) - see LayoutFreeze.HoldWhileBuilding,
+    /// and the Welcome wizard, which does the same. The first field, so the
+    /// step pages the fields below make are made inside it; the welcome
+    /// step, in the other file, is made in the constructor for that reason.
+    /// Built live, each step page made its window as it was made, so every
+    /// field put in it made one too, and the theme pass made many again.
+    /// </summary>
+    private readonly IDisposable _building = LayoutFreeze.HoldWhileBuilding();
+
     private readonly AppSettings _settings;
     private readonly RaceClassStore _raceClasses;
     private readonly ProfileStore _profiles;
@@ -294,6 +305,13 @@ internal sealed partial class RaceDaySetupWizard : Form
         RaceDaySetupHost host,
         int startStep = 0)
     {
+        // Let go however the constructor ends - see _building.
+        using var building = _building;
+
+        // Made here, not as a field: it is in the other file, whose fields
+        // may be made before this file's first, outside the hold.
+        _welcomeStep = new PageStack();
+
         _settings = settings;
         _raceClasses = raceClasses;
         _profiles = profiles;

@@ -11,10 +11,10 @@ namespace HeatCaller;
 /// knowing that three people have it and one of them got it in April - so
 /// this is mostly other people's names, deliberately.
 ///
-/// On the layout pieces (DialogFit): the header across the top and the
-/// holders taking the height under it, both edge to edge as they always
-/// were - each paints its own background - and the hint and Close along the
-/// foot, in from the window's edges by the page's margins. The header and
+/// On the layout pieces (DialogFit): the header as a card across the top and
+/// the holders in a "Who has it" card taking the height under it (18 Nov
+/// 2026, dialog jazz-up - they used to run edge to edge), and the hint and
+/// Close along the foot. The header and
 /// the holders are drawn here, each measurement in them chosen at the normal
 /// text size and drawn at the text size in use (Px), so they keep their
 /// proportions at every size - at fixed pixels the badge's name was cut off
@@ -35,7 +35,7 @@ public sealed class AchievementDetailForm : Form
     /// so the two stay in step. The page is given it as the header's own
     /// height, which it lays the header out at.
     /// </summary>
-    private static int HeaderHeight => Px(214);
+    private static int HeaderHeight => Px(196);
 
     /// <summary>A measurement chosen at the normal text size, at the text size in use - the header's and the holders', as LapDetailPopup and the badge page do theirs.</summary>
     private static int Px(float value) => UiLayout.AtTextSize(value);
@@ -100,22 +100,24 @@ public sealed class AchievementDetailForm : Form
             DialogResult = DialogResult.Cancel,
         };
 
-        // No margins round the page: the header and the holders run to the
-        // window's edges, as they did docked, and draw their own insets. Only
-        // the foot is in from the edges - the page's usual margins, on the
-        // row itself - with the page's usual margin under it.
-        var page = new FillPage { Padding = new Padding(0, 0, 0, UiLayout.PageTop) };
-        page.Add(header, gapBelow: 0);
-        page.AddFill(_list, _ => HolderList.LeastHeight(LeastRows), gapBelow: UiLayout.RowGap);
+        // A header card over a card of the holders (18 Nov 2026, dialog
+        // jazz-up), in from the window's edges by the page's margins as every
+        // other dialog is. They used to run edge to edge, the header a band
+        // with a rule under it and the holders on the page's colour under a
+        // "WHO HAS IT" of their own; the heading is the card's caption now.
+        var holdersCard = new Section("Who has it");
+        holdersCard.AddFill(_list, () => HolderList.LeastHeight(LeastRows), gapBelow: 0);
+
+        var page = new FillPage();
+        page.Add(header, gapBelow: UiLayout.RowGap);
+        page.AddFill(holdersCard, holdersCard.LeastHeight, gapBelow: UiLayout.RowGap);
 
         // The hint on the left and Close against the right-hand edge, on one
         // line - or Close under the hint when a narrow window has no room
         // for both (SplitBar).
-        var footer = page.Add(
+        page.Add(
             new SplitBar(new ButtonBar().With(hint), new ButtonBar(alignRight: true).With(close)),
             gapBelow: 0);
-
-        footer.Margin = new Padding(UiLayout.PageLeft, 0, UiLayout.PageRight, 0);
 
         Controls.Add(page);
 
@@ -124,9 +126,11 @@ public sealed class AchievementDetailForm : Form
 
         AppTheme.ApplyRecursively(this);
 
-        // The size it had. It can be made bigger, or shorter down to the
-        // header, a few of the holders and the foot.
-        DialogFit.Keep(this, page, width: 760, height: 640);
+        // The width it had, and 40px taller than its 640 so the holders keep
+        // the room the card's caption and insets take - wherever the screen
+        // has it. It can be made bigger, or shorter down to the header, a few
+        // of the holders and the foot.
+        DialogFit.Keep(this, page, width: 760, height: 680);
     }
 
     /// <summary>Everyone at the club with this badge, oldest first.</summary>
@@ -216,10 +220,14 @@ public sealed class AchievementDetailForm : Form
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
-            using (var background = new SolidBrush(AppTheme.Surface))
+            // A card on the page, as the cards under it are: the page's
+            // colour in the corners.
+            using (var background = new SolidBrush(Parent?.BackColor ?? AppTheme.Background))
             {
                 g.FillRectangle(background, ClientRectangle);
             }
+
+            AppTheme.DrawCard(g, new RectangleF(0, 0, Width, Height));
 
             var badge = _owner._badge;
             var mine = _owner._holders.FirstOrDefault(h =>
@@ -235,7 +243,7 @@ public sealed class AchievementDetailForm : Form
 
             // Medallion, big. This is the one place the artwork gets to be
             // the size it deserves.
-            var medallion = new RectangleF(pad, pad, Px(104), Px(104));
+            var medallion = new RectangleF(pad, Px(20), Px(96), Px(96));
             BadgeArt.DrawMedallion(g, medallion, badge, earned);
 
             var left = medallion.Right + pad;
@@ -257,10 +265,10 @@ public sealed class AchievementDetailForm : Form
             // The name's box at the text size in use, as its face is: a fixed
             // 32px box was shorter than a line of it from 150%, which cut the
             // name off.
-            g.DrawString(badge.Name, nameFont, titleBrush, new RectangleF(left, Px(22), width, Px(32)), near);
+            g.DrawString(badge.Name, nameFont, titleBrush, new RectangleF(left, Px(16), width, Px(32)), near);
 
             // Tier and group, as chips.
-            float chipY = Px(58);
+            float chipY = Px(52);
             float tierWidth = Px(86);
             float chipHeight = Px(24);
 
@@ -287,12 +295,12 @@ public sealed class AchievementDetailForm : Form
 
             // What it takes.
             TextRenderer.DrawText(g, badge.Description, AppTheme.BodyFont,
-                Rectangle.Round(new RectangleF(left, chipY + Px(34), width, Px(44))),
+                Rectangle.Round(new RectangleF(left, chipY + Px(32), width, Px(42))),
                 AppTheme.TextDark,
                 TextFormatFlags.WordBreak | TextFormatFlags.Top | TextFormatFlags.Left | TextFormatFlags.NoPrefix);
 
             // How this driver stands.
-            float statusY = Px(136);
+            float statusY = Px(128);
             float lineHeight = Px(22);
 
             if (earned)
@@ -319,7 +327,7 @@ public sealed class AchievementDetailForm : Form
                 g.DrawString($"{progress.Current} of {progress.Target} {progress.Noun}", AppTheme.BoldFont, titleBrush,
                     new RectangleF(pad, statusY, Px(260), lineHeight), near);
 
-                var track = new RectangleF(pad, statusY + Px(26), Math.Max(Px(120), Width - Px(48)), Px(10));
+                var track = new RectangleF(pad, statusY + Px(24), Math.Max(Px(120), Width - Px(48)), Px(10));
                 var radius = Px(5);
 
                 using (var trackPath = AppTheme.RoundedRect(track, radius))
@@ -358,10 +366,7 @@ public sealed class AchievementDetailForm : Form
             }
 
             g.DrawString(rarity, AppTheme.SmallFont, mutedBrush,
-                new RectangleF(pad, Height - Px(34), Width - Px(48), Px(20)), near);
-
-            using var rule = new Pen(AppTheme.Border);
-            g.DrawLine(rule, 0, Height - 1, Width, Height - 1);
+                new RectangleF(pad, Height - Px(30), Width - Px(48), Px(20)), near);
         }
     }
 
@@ -399,8 +404,13 @@ public sealed class AchievementDetailForm : Form
         /// <summary>A holder's row, at the text size in use - it carries a line of the bold face and one of the small face, which grow with it.</summary>
         private static int RowHeight => Px(46);
 
-        /// <summary>Where the first row starts, under "WHO HAS IT", at the text size in use as the heading is.</summary>
-        private static int FirstRowTop => Px(34);
+        /// <summary>
+        /// Where the first row starts: at the top, now the heading over the
+        /// rows is the caption of the card the list is in (18 Nov 2026,
+        /// dialog jazz-up). It used to be Px(34) down, under a "WHO HAS IT"
+        /// the list drew itself.
+        /// </summary>
+        private static int FirstRowTop => 0;
 
         private readonly List<Holder> _holders;
         private readonly string _mine;
@@ -411,9 +421,9 @@ public sealed class AchievementDetailForm : Form
         public event Action<string>? Picked;
 
         /// <summary>
-        /// How tall the list has to be to show its heading and
-        /// <paramref name="rows"/> holders whole: the first row starts
-        /// FirstRowTop down, under "WHO HAS IT" (see RowAt and OnPaint). At
+        /// How tall the list has to be to show <paramref name="rows"/>
+        /// holders whole: the first row starts FirstRowTop down (see RowAt
+        /// and OnPaint). At
         /// the text size in use, as the rows are - asked by the window's page
         /// whenever it works out its least height.
         /// </summary>
@@ -436,12 +446,11 @@ public sealed class AchievementDetailForm : Form
         private int RowAt(Point point)
         {
             // WHY (20 Oct 2026): C# integer division rounds toward zero, so a
-            // point on the "WHO HAS IT" heading (a little above the first row)
-            // came out as row 0 - the first holder lit up and a double-click
-            // there picked them. Now anything above the rows' band (OnPaint's
-            // clip, so a row scrolled up under the heading can't be picked
-            // through it) or above the first row is no row at all.
-            if (point.Y < Px(30))
+            // point a little above the first row came out as row 0 - the
+            // first holder lit up and a double-click there picked them. Now
+            // anything above the list, or above the first row, is no row at
+            // all.
+            if (point.Y < 0)
             {
                 return -1;
             }
@@ -511,7 +520,8 @@ public sealed class AchievementDetailForm : Form
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
-            using (var background = new SolidBrush(AppTheme.Background))
+            // On the card it is in.
+            using (var background = new SolidBrush(AppTheme.Surface))
             {
                 g.FillRectangle(background, ClientRectangle);
             }
@@ -524,41 +534,31 @@ public sealed class AchievementDetailForm : Form
                 LineAlignment = StringAlignment.Center,
             };
 
-            // The heading, the empty-list line and the rows' band at the text
-            // size in use, as their faces and the rows are.
-            var pad = Px(24);
-
-            g.DrawString(AppTheme.Spaced("WHO HAS IT"), AppTheme.MicroFont, mutedBrush,
-                new RectangleF(pad, Px(8), Px(300), Px(20)), near);
-
+            // The empty-list lines at the text size in use, as their faces
+            // are: that nobody has it, and what fills the list.
             if (_holders.Count == 0)
             {
                 g.DrawString("Nobody at the club has earned this one yet - it's there to be taken.",
-                    AppTheme.BodyFont, mutedBrush, new RectangleF(pad, Px(44), Width - Px(48), Px(24)), near);
+                    AppTheme.BodyFont, mutedBrush, new RectangleF(0, Px(4), Width, Px(24)), near);
+                g.DrawString("Whoever earns it first is listed here, marked FIRST, with everyone after them under it.",
+                    AppTheme.SmallFont, mutedBrush, new RectangleF(0, Px(30), Width, Px(20)), near);
                 return;
             }
 
-            var clip = g.Save();
-            var bandTop = Px(30);
-            g.SetClip(new RectangleF(0, bandTop, Width, Height - bandTop));
-
             var rowHeight = RowHeight;
             var firstRowTop = FirstRowTop;
-            var hiddenAbove = Px(24);
 
             for (var i = 0; i < _holders.Count; i++)
             {
                 var top = firstRowTop + i * rowHeight - _scroll;
 
-                if (top > Height || top + rowHeight < hiddenAbove)
+                if (top > Height || top + rowHeight < 0)
                 {
                     continue;
                 }
 
                 DrawRow(g, _holders[i], i, top);
             }
-
-            g.Restore(clip);
         }
 
         private void DrawRow(Graphics g, Holder holder, int index, float top)
@@ -569,7 +569,8 @@ public sealed class AchievementDetailForm : Form
             // the lines in it are. The card's rounding stays the app's one
             // (AppTheme.CornerRadius, which DrawCard uses), so the hover wash
             // keeps it too.
-            var bounds = new RectangleF(Px(16), top, Width - Px(32), RowHeight - Px(6));
+            // Across the card's inside, which gives the room either side.
+            var bounds = new RectangleF(0, top, Width, RowHeight - Px(6));
 
             AppTheme.DrawCard(g, bounds, isMine ? AppTheme.Primary : null);
 

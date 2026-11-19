@@ -24,6 +24,13 @@ namespace HeatCaller;
 /// be placed in pixels: the list a fixed 250px, too narrow for the presets'
 /// names, and each paragraph five lines of Font.Height, which cut the
 /// longest - what PN Racing's preset does not set - short.
+///
+/// 18 Nov 2026, dialog jazz-up: the presets in a "Presets" card down the
+/// left, and the three blocks each a card of its own beside it, in the
+/// order they always were - what it does not set no longer in the accent
+/// colour, which in most looks is a link's blue and read as one. The
+/// introduction a hint line in the small face, the note about the app
+/// default in the caution colour, and Apply in the app's colour.
 /// </summary>
 public sealed class SanctioningPresetForm : Form
 {
@@ -95,7 +102,7 @@ public sealed class SanctioningPresetForm : Form
                  + "exactly as it is - a preset never fills a gap in with a plausible number.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
-            Font = AppTheme.BodyFont,
+            Font = AppTheme.SmallFont,
         };
 
         // Given the height the column has, not snapped to whole rows - see Beside.AddSideFill.
@@ -126,10 +133,11 @@ public sealed class SanctioningPresetForm : Form
                 TextRenderer.MeasureText(_list.GetItemText(item) ?? string.Empty, _list.Font).Width + SystemInformation.VerticalScrollBarWidth + 8);
         }
 
-        var listColumn = listWidth + Pieces.RingRoom(_list).Horizontal;
+        // The list in its card, with the card's insets either side of it.
+        var listColumn = listWidth + Pieces.RingRoom(_list).Horizontal + Section.Inset.Horizontal;
 
-        // The presets down the left, taking the height the three blocks
-        // beside them come to; the blocks in the rest of the width.
+        // The presets down the left, taking the height the three cards
+        // beside them come to; the cards in the rest of the width.
         var band = new Beside(listColumn)
         {
             SideOnLeft = true,
@@ -137,16 +145,16 @@ public sealed class SanctioningPresetForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
         };
 
-        band.AddSideFill(_list, _ => LeastRows * _list.ItemHeight + 4, gapBelow: 0);
+        var presetsCard = new Section("Presets");
+        presetsCard.AddFill(_list, () => LeastRows * _list.ItemHeight + 4, gapBelow: 0);
+        band.AddSideFill(presetsCard, width => presetsCard.LeastHeight(width), gapBelow: 0);
 
-        AddBlock(band, "WHERE IT CAME FROM", _lblSource, SanctioningPresets.All.Select(p => p.Source), UiLayout.RowGap);
-        AddBlock(band, "WHAT IT SETS", _lblEncodes, SanctioningPresets.All.Select(p => p.Encodes), UiLayout.RowGap);
-        AddBlock(band, "WHAT IT DOES NOT SET", _lblCaveats, SanctioningPresets.All.Select(p => p.Caveats), gapBelow: 0);
-
-        _lblCaveats.ForeColor = AppTheme.Accent;
+        AddBlock(band, new Section("Where it came from"), _lblSource, SanctioningPresets.All.Select(p => p.Source), UiLayout.RowGap);
+        AddBlock(band, new Section("What it sets"), _lblEncodes, SanctioningPresets.All.Select(p => p.Encodes), UiLayout.RowGap);
+        AddBlock(band, new Section("What it does not set"), _lblCaveats, SanctioningPresets.All.Select(p => p.Caveats), gapBelow: 0);
 
         _lblBase.Font = AppTheme.SmallFont;
-        _lblBase.ForeColor = AppTheme.TextMuted;
+        _lblBase.ForeColor = AppTheme.Warning;
 
         // As tall as the note whether or not the preset picked says it, so
         // moving down the list never moves the buttons. Only a class that
@@ -190,40 +198,36 @@ public sealed class SanctioningPresetForm : Form
 
         AppTheme.ApplyRecursively(this);
 
+        // After the theme pass, which does not know it: Apply in the app's colour.
+        AppTheme.StyleButton(_btnApply, AppTheme.ButtonKind.Primary);
+
         // The list's column, the gap the Beside keeps after it, and the prose
-        // at its measure at the text size in use, inside the page's margins.
+        // at its measure at the text size in use in its cards, inside the
+        // page's margins.
         DialogFit.Keep(
             this,
             page,
-            UiLayout.PageLeft + listColumn + UiLayout.RowGap + UiLayout.AtTextSize(ProseWidth) + UiLayout.PageRight,
+            UiLayout.PageLeft + listColumn + UiLayout.RowGap + UiLayout.AtTextSize(ProseWidth) + Section.Inset.Horizontal + UiLayout.PageRight,
             body: body,
             widthMeasured: true);
     }
 
     /// <summary>
-    /// One heading and one wrapped paragraph, in the column beside the list.
-    /// The paragraph is as tall as the longest of <paramref name="wordings"/>
+    /// One card - its caption the heading - and one wrapped paragraph in it,
+    /// in the column beside the list. The paragraph is as tall as the longest of <paramref name="wordings"/>
     /// - what every preset says there - rather than what it says now,
     /// because it changes with the selection, and a paragraph that grew and
     /// shrank as somebody moved down the list would move everything under it
     /// every time.
     /// </summary>
-    private static void AddBlock(Beside band, string heading, SteadyLabel body, IEnumerable<string> wordings, int gapBelow)
+    private static void AddBlock(Beside band, Section card, SteadyLabel body, IEnumerable<string> wordings, int gapBelow)
     {
-        var label = new Label
-        {
-            Text = AppTheme.Spaced(heading),
-            AutoSize = true,
-            Font = AppTheme.MicroFont,
-            ForeColor = AppTheme.Primary,
-        };
-
         body.Font = AppTheme.SmallFont;
         body.ForeColor = AppTheme.TextDark;
         body.Wordings = wordings.ToList();
 
-        band.Add(label, gapBelow: UiLayout.HintGap);
-        band.Add(body, gapBelow: gapBelow);
+        card.Add(body, gapBelow: 0);
+        band.Add(card, gapBelow: gapBelow);
     }
 
     private void ShowDetail()

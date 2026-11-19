@@ -121,6 +121,9 @@ public sealed class AppTour : Form
 
     private int _index;
 
+    /// <summary>Where the hairline over the buttons is drawn - set by LayOut.</summary>
+    private int _dividerY;
+
     public AppTour(Form host, Action<string> goToPage)
     {
         _host = host;
@@ -206,12 +209,111 @@ public sealed class AppTour : Form
         ShowStop(0);
     }
 
-    /// <summary>A thin frame, since the window has no border of its own.</summary>
+    /// <summary>
+    /// The callout's shadow (18 Nov 2026, dialog look): a borderless window
+    /// has none of its own, and without one the card sat flat on the page
+    /// it describes.
+    /// </summary>
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.ClassStyle |= 0x00020000; // CS_DROPSHADOW
+            return cp;
+        }
+    }
+
+    /// <summary>Rounded corners on Windows 11, as the app's cards have; nothing changes on older Windows.</summary>
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        RoundCorners.Apply(Handle);
+    }
+
+    /// <summary>
+    /// A thin frame, since the window has no border of its own; a dot for
+    /// each stop beside the step line; and a hairline over the buttons
+    /// (18 Nov 2026, dialog look).
+    /// </summary>
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
+
+        var g = e.Graphics;
+
+        using (var divider = new Pen(AppTheme.Border))
+        {
+            g.DrawLine(divider, 20, _dividerY, Width - 21, _dividerY);
+        }
+
+        PaintStopDots(g);
+
         using var edge = new Pen(AppTheme.Border);
-        e.Graphics.DrawRectangle(edge, 0, 0, Width - 1, Height - 1);
+        g.DrawRectangle(edge, 0, 0, Width - 1, Height - 1);
+    }
+
+    /// <summary>
+    /// A dot for each stop after the first, on the right of the step line:
+    /// the stops already seen in a soft shade of the app's colour, the one on
+    /// show larger and in full, the rest in the border colour. Left out when
+    /// the step line, at a large text size, leaves no room for them.
+    /// </summary>
+    private void PaintStopDots(Graphics g)
+    {
+        var count = Stops.Length - 1;
+        var dot = Math.Max(4, UiLayout.AtTextSize(6));
+        var current = Math.Max(5, UiLayout.AtTextSize(9));
+        var left = _lblStep.Right + 16;
+        var right = Width - 20;
+        var pitch = Math.Min(UiLayout.AtTextSize(12), (right - left) / count);
+
+        if (pitch < current + 2)
+        {
+            return;
+        }
+
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+        var middle = _lblStep.Top + _lblStep.Height / 2f;
+        var start = right - pitch * count;
+        var seen = Looks.Mix(AppTheme.Primary, AppTheme.Surface, 0.45);
+
+        for (var i = 1; i <= count; i++)
+        {
+            var on = i == _index;
+            var size = on ? current : dot;
+            var centre = start + pitch * (i - 1) + pitch / 2f;
+            var colour = on ? AppTheme.Primary : i < _index ? seen : AppTheme.Border;
+
+            using var fill = new SolidBrush(colour);
+            g.FillEllipse(fill, centre - size / 2f, middle - size / 2f, size, size);
+        }
+    }
+
+    /// <summary>Asks Windows 11 for the round corners it gives its own popups. Fire and forget: older Windows says no, and the card stays square.</summary>
+    private static class RoundCorners
+    {
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll", PreserveSig = true)]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+        private const int CornerPreference = 33;
+        private const int Round = 2;
+
+        public static void Apply(IntPtr handle)
+        {
+            try
+            {
+                var value = Round;
+                DwmSetWindowAttribute(handle, CornerPreference, ref value, sizeof(int));
+            }
+            catch (DllNotFoundException)
+            {
+            }
+            catch (EntryPointNotFoundException)
+            {
+            }
+        }
     }
 
     /// <summary>The arrow keys step through the tour. Taken here, before a focused button can use them to move focus.</summary>
@@ -310,6 +412,8 @@ public sealed class AppTour : Form
         _btnNext.Location = new Point(Width - 20 - _btnNext.Width, buttonTop);
         _btnBack.Location = new Point(_btnNext.Left - 10 - _btnBack.Width, buttonTop);
         _btnSkip.Location = new Point(20, buttonTop);
+
+        _dividerY = buttonTop - 10;
 
         Height = _btnNext.Bottom + 20;
         HostMoved(this, EventArgs.Empty);

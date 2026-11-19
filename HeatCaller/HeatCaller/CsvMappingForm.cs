@@ -340,6 +340,11 @@ internal sealed class CsvMappingForm : Form
 
         btnImport.Click += (_, _) => TryImport();
 
+        // The window's own button in the app's colour, Next as well as Import
+        // (18 Nov 2026, dialog pass). The window is otherwise as it was: a card
+        // round the points picker took its height from the grid at 1280x720.
+        AppTheme.StyleButton(btnImport, AppTheme.ButtonKind.Primary);
+
         // Spaced as the old window spaced them: a row's gap between parts,
         // and a hint's under the picker the hint is about.
         var page = new FillPage();

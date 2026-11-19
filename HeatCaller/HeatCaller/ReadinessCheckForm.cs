@@ -14,8 +14,10 @@ namespace HeatCaller;
 /// drivers already on the board, which is the next most likely answer and
 /// is at least a list of real people rather than every profile ever saved.
 ///
-/// On the layout pieces (DialogFit): the verdict wrapping across the top,
-/// the list taking the height and the buttons at the foot. It used to be a
+/// On the layout pieces (DialogFit): tiles counting each verdict across the
+/// top (18 Nov 2026, dialog jazz-up), the verdict wrapping under them, the
+/// list taking the height and the buttons at the foot, Check again in the
+/// app's colour. It used to be a
 /// strip sized by hand to the first verdict over a list with columns of
 /// fixed widths, which a larger text size cut short.
 /// </summary>
@@ -34,9 +36,15 @@ public sealed class ReadinessCheckForm : Form
 
     private sealed record Line(Verdict Verdict, string Driver, string Transponder, string Detail);
 
+    /// <summary>How tall the window is inside its frame at the normal text size: the 520 it had, and room for the tiles.</summary>
+    private const int DialogHeight = 520 + 70;
+
     private readonly List<Line> _lines;
     private readonly Label _lblHeadline = new();
     private readonly ListView _list = new();
+
+    /// <summary>The cars heard fine, only just, not at all, and on track but not in this race - see ShowTiles.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new(), new() };
 
     public ReadinessCheckForm(
         IEnumerable<string> roster,
@@ -66,13 +74,26 @@ public sealed class ReadinessCheckForm : Form
             _lines.AddRange(Build(roster, watch, profiles, splitLoop));
             BuildHeadline(rosterSource);
             Fill();
+            ShowTiles();
         };
 
         _lblHeadline.AutoSize = true;
 
+        // THE LOOK (18 Nov 2026, dialog jazz-up): the count of each verdict
+        // in tiles across the top, red or amber while there is something to
+        // fix, over the verdict and the list. The window is taller by the
+        // tiles, so the list keeps its height. The dialog is built at the
+        // text size in use, so the tiles take their faces here.
+        foreach (var tile in _tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
         Fill();
 
         var page = new FillPage();
+        page.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
         page.Add(_lblHeadline);
         page.AddFill(_list, _ => (LeastRows + 1) * (Pieces.LineHeight(_list.Font) + 6));
 
@@ -102,13 +123,40 @@ public sealed class ReadinessCheckForm : Form
 
         AppTheme.ApplyRecursively(this);
 
+        // Check again in the app's colour: it is what the window is kept
+        // open for. After the theme pass, which does not know it.
+        AppTheme.StyleButton(btnRecheck, AppTheme.ButtonKind.Primary);
+
+        // After the theme pass too, which would otherwise give the values
+        // the page's own colour.
+        ShowTiles();
+
         // Each column at least as wide as it was made, or its heading; what
         // the decoder hears takes the rest - see Pieces.FitListColumns.
         // WHY (13 Nov 2026): the mark column was 34, which cut "OK" to "O..."
         // once the list's own padding was taken off; 48 holds it.
         Pieces.FitListColumns(_list, 3, 48, 170, 110, 420);
 
-        DialogFit.Keep(this, page, width: 760, height: 520);
+        DialogFit.Keep(this, page, width: 760, height: DialogHeight);
+    }
+
+    /// <summary>The tiles from the lines: each verdict's count, in the colour its rows are in while it is not nought.</summary>
+    private void ShowTiles()
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+
+        void Show(StatTile tile, Verdict verdict, string caption, Color warn)
+        {
+            var n = _lines.Count(l => l.Verdict == verdict);
+
+            tile.Set(n.ToString(culture), caption);
+            tile.Value.ForeColor = n > 0 ? warn : AppTheme.TextDark;
+        }
+
+        Show(_tiles[0], Verdict.Ready, "Heard", AppTheme.Success);
+        Show(_tiles[1], Verdict.Weak, "Weak", AppTheme.Warning);
+        Show(_tiles[2], Verdict.Missing, "Not heard", AppTheme.Danger);
+        Show(_tiles[3], Verdict.Stranger, "Not in race", AppTheme.Accent);
     }
 
     /// <summary>

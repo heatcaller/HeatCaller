@@ -142,6 +142,11 @@ public sealed class RaceClassEditForm : Form
 
     public RaceClassEditForm(RaceClass? existing, RaceClassStore? store = null)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, nearly every part had its window before
+        // the theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         // A new class starts with a race length (setup plan A5): see RaceFormat.ForNewClass.
         Result = existing ?? new RaceClass { Format = RaceFormat.ForNewClass(store?.AppDefaultFormat?.Invoke()) };
         _store = store;

@@ -127,6 +127,7 @@ internal static partial class WindowCatalog
 
         all.AddRange(MessageWindows());
         all.AddRange(NewDayAndRosterWindows());
+        all.AddRange(NightSetupWindows());
         all.AddRange(FormatAndResultWindows());
         all.AddRange(HeatBalanceWindows());
         all.AddRange(SignupWindows());
@@ -157,6 +158,7 @@ internal static partial class WindowCatalog
 
         // The garage, setup sheets and batteries (30 Sep).
         all.AddRange(GarageWindows());
+        all.AddRange(CarTransferWindows());
         all.AddRange(ChassisSheetWindows());
         all.AddRange(SetupWindows());
         all.AddRange(BatteryWindows());
@@ -165,10 +167,21 @@ internal static partial class WindowCatalog
         all.AddRange(SeasonWindows());
         all.AddRange(GhostWindows());
         all.AddRange(PickerWindows());
+
+        // Pick a driver, and which car a setup was for (18 Nov 2026, dialog jazz-up).
+        all.AddRange(PickOneWindows());
+
         all.AddRange(ClubToolWindows());
+
+        // A driver's report card and the sponsor video preview (18 Nov 2026, dialog jazz-up).
+        all.AddRange(CardAndPreviewWindows());
         all.AddRange(CsvImportWindows());
         all.AddRange(EntryImportWindows());
+
+        // A driver's phone changes approved, and a transponder given or transferred (18 Nov 2026).
+        all.AddRange(ApprovalAndTransponderWindows());
         all.AddRange(CloseNightWindows());
+        all.AddRange(DeskAndMeetingWindows());
         all.AddRange(PasteResultWindows());
 
         // The big editors, and the pages shown in windows of their own (30 Sep).
@@ -179,6 +192,9 @@ internal static partial class WindowCatalog
         all.AddRange(TrackWindows());
         all.AddRange(PageHostWindows());
         all.AddRange(AnnouncerWindows());
+
+        // Announce the next night, from Next Steps (18 Nov 2026, dialog jazz-up).
+        all.AddRange(AnnounceNightWindows());
 
         // Last: some of its windows close the day that is open, which the
         // windows above do not expect to find closed.

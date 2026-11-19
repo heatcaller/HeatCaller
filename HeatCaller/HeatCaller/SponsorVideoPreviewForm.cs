@@ -20,6 +20,9 @@ namespace HeatCaller;
 /// </summary>
 internal sealed class SponsorVideoPreviewForm : Form
 {
+    /// <summary>The least the video area can do with, at the normal text size - about what the old smallest window left it.</summary>
+    private const int ScreenLeast = 200;
+
     private readonly string _path;
     private readonly Panel _screen = new();
     private readonly Label _lblStatus = new();
@@ -38,16 +41,15 @@ internal sealed class SponsorVideoPreviewForm : Form
 
         Text = "Preview - " + Path.GetFileName(path);
         Font = AppTheme.BodyFont;
-        StartPosition = FormStartPosition.CenterParent;
+        BackColor = AppTheme.Background;
+        ForeColor = AppTheme.TextDark;
         ShowInTaskbar = false;
         MinimizeBox = false;
         KeyPreview = true;
-        ClientSize = new Size(UiLayout.AtTextSize(960), UiLayout.AtTextSize(600));
-        MinimumSize = new Size(UiLayout.AtTextSize(480), UiLayout.AtTextSize(340));
 
         // The video area: black like a TV, with a line of text in the middle
         // while the player starts or when it can't.
-        _screen.Dock = DockStyle.Fill;
+        _screen.Margin = Padding.Empty;
         _screen.BackColor = Color.Black;
 
         _lblStatus.Dock = DockStyle.Fill;
@@ -58,44 +60,75 @@ internal sealed class SponsorVideoPreviewForm : Form
         _screen.Controls.Add(_lblStatus);
 
         _btnPause.Text = "Pause";
-        _btnPause.AutoSize = true;
         _btnPause.Enabled = false;
         _btnPause.Click += (_, _) => TogglePause();
 
         _btnReplay.Text = "Play From Start";
-        _btnReplay.AutoSize = true;
         _btnReplay.Enabled = false;
         _btnReplay.Click += (_, _) => StartVideo();
 
         _btnClose.Text = "Close";
-        _btnClose.AutoSize = true;
         _btnClose.DialogResult = DialogResult.Cancel;
 
-        // Close furthest right, as in every other window in the app.
-        var bar = new FlowLayoutPanel
+        // On the layout pieces (18 Nov 2026, dialog jazz-up): the video in a
+        // card of its own - the file it plays as its hint - taking the
+        // height, and along the foot a line on what to listen for, with the
+        // buttons against the right-hand edge, Close furthest right as in
+        // every other window in the app. It used to be the video docked to
+        // the window's edges over a strip of buttons.
+        var lblFile = new Label
         {
-            Dock = DockStyle.Bottom,
+            Text = Path.GetFileName(path),
             AutoSize = true,
-            FlowDirection = FlowDirection.RightToLeft,
-            Padding = new Padding(UiLayout.AtTextSize(8)),
-            WrapContents = false,
+            AutoEllipsis = true,
+            UseMnemonic = false,
+            ForeColor = AppTheme.TextMuted,
         };
-        bar.Controls.Add(_btnClose);
-        bar.Controls.Add(_btnReplay);
-        bar.Controls.Add(_btnPause);
 
-        Controls.Add(_screen);
-        Controls.Add(bar);
+
+        var videoCard = new Section("The video");
+        videoCard.Add(lblFile, gapBelow: UiLayout.RowGap);
+        videoCard.AddFill(_screen, () => UiLayout.AtTextSize(ScreenLeast), gapBelow: 0);
+
+        var lblHint = new Label
+        {
+            Text = "Always plays with sound here. Space pauses.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Anchor = AnchorStyles.Left,
+        };
+
+        // Tab still reaches Pause, then Play From Start, then Close - the
+        // bar takes them right to left, in the order they are added.
+        var buttons = new ButtonBar(alignRight: true).With(_btnClose, _btnReplay, _btnPause);
+        _btnPause.TabIndex = 0;
+        _btnReplay.TabIndex = 1;
+        _btnClose.TabIndex = 2;
+
+        var page = new FillPage();
+        page.AddFill(videoCard, videoCard.LeastHeight, gapBelow: UiLayout.SectionGap);
+        page.Add(new SplitBar(new ButtonBar().With(lblHint), buttons), gapBelow: 0);
+
+        Controls.Add(page);
 
         CancelButton = _btnClose;
 
         AppTheme.ApplyRecursively(this);
         AppTheme.StyleButton(_btnReplay, AppTheme.ButtonKind.Primary);
 
-        // The theme pass recolours everything; the video area stays black.
+        // The theme pass recolours everything; the video area stays black,
+        // and the hints keep their small face and muted ink.
         _screen.BackColor = Color.Black;
         _lblStatus.BackColor = Color.Black;
         _lblStatus.ForeColor = Color.Gainsboro;
+        lblFile.Font = AppTheme.SmallFont;
+        lblFile.ForeColor = AppTheme.TextMuted;
+        lblHint.Font = AppTheme.SmallFont;
+        lblHint.ForeColor = AppTheme.TextMuted;
+
+        // The size it opened at, as it was. It can be made bigger, or
+        // smaller down to a video worth looking at.
+        DialogFit.Keep(this, page, width: 960, height: 600);
 
         _waitForEngine.Tick += (_, _) => TryStart();
 

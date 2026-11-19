@@ -84,6 +84,15 @@ public sealed class RcpTrackEditorForm : Form
     private const int TileSizeBoxWidth = 90;
     private const int SliderHeight = 32;
 
+    /// <summary>
+    /// The window's layout held while it is built, and let go at the end of
+    /// its constructor (18 Nov 2026) - see LayoutFreeze.HoldWhileBuilding.
+    /// The first field, so the pieces the fields below make are made inside
+    /// it. Built live, most of its parts had their windows before the theme
+    /// pass, which made many of them again.
+    /// </summary>
+    private readonly IDisposable _building = LayoutFreeze.HoldWhileBuilding();
+
     private readonly RcpTrackCanvas _canvas = new();
     private readonly List<PaletteButton> _paletteButtons = new();
     private readonly ToolTip _tips = new();
@@ -260,6 +269,9 @@ public sealed class RcpTrackEditorForm : Form
         (double Seconds, int Laps)? raced = null, double tuning = 1.0, int tunedLayouts = 0,
         IReadOnlyList<RcpRoutePoint>? racedLine = null)
     {
+        // Let go however the constructor ends - see _building.
+        using var building = _building;
+
         _raced = raced;
         _entered = averageLapSeconds is > 0 ? averageLapSeconds : null;
         _tuning = tuning > 0 ? tuning : 1.0;

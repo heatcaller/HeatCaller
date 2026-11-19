@@ -101,8 +101,14 @@ public sealed class ScheduleEntryForm : Form
             fields.AddRow("Description:", _txtDescription, stretch: true),
         };
 
+        // One card (18 Nov 2026, dialog pass 4), with a line on what the
+        // run sheet does with it.
+        var card = new Section("Run sheet line");
+        card.Add(NightSetupDialog.CardHint("A line of the day's run sheet: when it happens, the class it's for and what it says."), gapBelow: UiLayout.RowGap);
+        card.Add(fields, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(fields);
+        page.Add(card, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to left,
@@ -118,6 +124,7 @@ public sealed class ScheduleEntryForm : Form
 
         BackColor = AppTheme.Background;
         AppTheme.ApplyRecursively(this);
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
 
         // As wide as it was at the normal text size, at the size in use - or
         // wider when the fields' column needs more: the drop-down as wide as
@@ -137,7 +144,7 @@ public sealed class ScheduleEntryForm : Form
 
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight) + Section.Inset.Horizontal;
 
         DialogFit.Keep(this, page, width, widthMeasured: true);
     }

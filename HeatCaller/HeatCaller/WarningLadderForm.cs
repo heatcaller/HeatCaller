@@ -5,8 +5,8 @@ namespace HeatCaller;
 /// "time penalty" or "black flag". A rung set to "(end)" ends the ladder
 /// there, and the last real rung repeats for any warning after it.
 ///
-/// On the layout pieces (DialogFit): the hint across the top, then the five
-/// rungs in a field grid - each one's caption, and beside it what it does,
+/// On the layout pieces (DialogFit): a Warning ladder card, its hint under
+/// the caption, then the five rungs in a field grid - each one's caption, and beside it what it does,
 /// its seconds and the word "seconds" on one line - in a body that scrolls
 /// on a screen too short for them; Use Default on the left at the foot, and
 /// Save and Cancel against the right-hand edge. It used to be placed in
@@ -34,6 +34,11 @@ public sealed class WarningLadderForm : Form
 
     public WarningLadderForm(IReadOnlyList<WarningStep>? current, string title)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, nearly every part had its window before
+        // the theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         Text = title;
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;
@@ -128,10 +133,17 @@ public sealed class WarningLadderForm : Form
 
         // The hint and the rungs are the body: on a screen too short for
         // them they scroll, and the buttons under them stay in view.
+        //
+        // 18 Nov 2026, the dialog version of the Venues look: the rungs in
+        // one card, its hint line under the caption - as the class editor
+        // that opens this has its settings.
+        var card = new Section("Warning ladder");
+        card.Add(hint, gapBelow: UiLayout.RowGap);
+        card.Add(fields, gapBelow: 0);
+
         var page = new FillPage();
         var body = DialogFit.Body(page);
-        body.Add(hint, gapBelow: UiLayout.RowGap);
-        body.Add(fields, gapBelow: 0);
+        body.Add(card, gapBelow: 0);
 
         // Use Default on the left, Save and Cancel against the right-hand
         // edge, Cancel furthest right, as they were - on one line (SplitBar;
@@ -198,7 +210,7 @@ public sealed class WarningLadderForm : Form
 
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + Math.Max(captionColumn + rung, buttons) + UiLayout.PageRight);
+            UiLayout.PageLeft + Math.Max(card.Padding.Horizontal + captionColumn + rung, buttons) + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }

@@ -9,12 +9,13 @@ namespace HeatCaller;
 /// shorthand. Rather than shipping a fixed list that slowly goes stale,
 /// every option is editable here.
 ///
-/// On the layout pieces (DialogFit): the label, how it is filled in and the
-/// unit lined up in a field grid, the diagram tick in the field column under
-/// them; the options under their heading taking the height, with the buttons
-/// that change them in a column beside them (Beside) - three that change the
-/// list and two that reorder it, a section's gap between the groups - and the
-/// note on them under the list; OK and Cancel at the foot. It used to be
+/// On the layout pieces (DialogFit), in two cards (18 Nov 2026, dialog
+/// jazz-up): the field - a line on what it is, then the label, how it is
+/// filled in and the unit lined up in a field grid, the diagram tick in the
+/// field column under them; and its options - the note on them first, then
+/// the list taking the height, with the buttons that change them in a column
+/// beside them (Beside) - three that change the list and two that reorder
+/// it, a section's gap between the groups. OK and Cancel at the foot. It used to be
 /// placed in pixels in a 470x470 window: the captions in a fixed 94px, a list
 /// of a fixed size with the buttons stepped down beside it at fixed places
 /// and a fixed 124px wide, and the note two lines of a fixed height whatever
@@ -22,9 +23,9 @@ namespace HeatCaller;
 /// </summary>
 public sealed class SetupFieldEditorForm : Form
 {
-    /// <summary>The window's inside at the normal text size, as it was. It opens at least this big and can be made bigger, the options taking the height.</summary>
-    private const int DialogWidth = 470;
-    private const int DialogHeight = 470;
+    /// <summary>The window's inside at the normal text size - 50px wider and 90px taller than the 470x470 it had, for the cards' captions and insets. It opens at least this big and can be made bigger, the options taking the height.</summary>
+    private const int DialogWidth = 520;
+    private const int DialogHeight = 560;
 
     /// <summary>The drop-down of kinds at the normal text size, as it was - wider when its longest kind needs it.</summary>
     private const int KindWidth = 340;
@@ -36,7 +37,9 @@ public sealed class SetupFieldEditorForm : Form
     private const int LeastRows = 4;
 
     /// <summary>What the note under the options says - see UpdateOptionsEnabled.</summary>
-    private const string OptionsHint = "Changing an option doesn't change setups already saved - a value no longer in the list is kept and still shown.";
+    // One line since it became the Options card's hint (18 Nov 2026): two
+    // made the window too tall for a 1280x720 or 1366x768 screen.
+    private const string OptionsHint = "Saved setups keep their values, even ones no longer listed.";
     private const string NoOptionsHint = "This field type doesn't use an option list.";
 
     private readonly SetupField _field;
@@ -86,8 +89,6 @@ public sealed class SetupFieldEditorForm : Form
         _chkOnDiagram.Text = "Show as a callout on the chassis diagram";
         _chkOnDiagram.AutoSize = true;
         _chkOnDiagram.Checked = _field.OnDiagram;
-
-        var lblOptions = new Label { Text = "Options:", AutoSize = true, Font = AppTheme.BoldFont };
 
         _lstOptions.BackColor = AppTheme.Surface;
 
@@ -164,21 +165,36 @@ public sealed class SetupFieldEditorForm : Form
 
         // The buttons in one column down the right of the options, all as
         // wide as the widest caption needs, in their two groups as before: a
-        // button's gap inside a group, a section's between them. The list
+        // button's gap inside a group, a little more between them - a
+        // section's gap made the window too tall for 1280x720 once the options
+        // went into a card (18 Nov 2026). The list
         // takes the width the column leaves and the height down to the note.
         var options = new Beside();
         options.AddFill(_lstOptions, _ => LeastRows * _lstOptions.ItemHeight + 4);
         options.AddSide(btnAdd, gapBelow: UiLayout.ButtonGap);
         options.AddSide(btnEdit, gapBelow: UiLayout.ButtonGap);
-        options.AddSide(btnRemove, gapBelow: UiLayout.SectionGap);
+        options.AddSide(btnRemove, gapBelow: UiLayout.RowGap + UiLayout.HintGap);
         options.AddSide(btnUp, gapBelow: UiLayout.ButtonGap);
         options.AddSide(btnDown, gapBelow: 0);
 
+        // Two cards (18 Nov 2026, dialog jazz-up): the field itself, and its
+        // options - whose note, which says whether this kind takes options at
+        // all, is that card's line. The field's card has no line of its own:
+        // with one, the window was too tall for a 1280x720 screen, and its
+        // captions say what it holds.
+        var fieldCard = new Section("The field");
+        fieldCard.Add(fields, gapBelow: 0);
+
+        var optionsCard = new Section("Options");
+        optionsCard.Add(_lblOptionsHint);
+        // Asked at the card's width - or, before it has one, at about the
+        // width the window opens at, not at none, where the list and the
+        // button column would be measured squeezed.
+        optionsCard.AddFill(options, () => options.LeastHeight(Math.Max(UiLayout.AtTextSize(400), optionsCard.Width - Section.Inset.Horizontal)), gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(fields);
-        page.Add(lblOptions, stretch: false, gapBelow: UiLayout.HintGap);
-        page.AddFill(options, options.LeastHeight, gapBelow: UiLayout.HintGap);
-        page.Add(_lblOptionsHint);
+        page.Add(fieldCard, gapBelow: UiLayout.RowGap);
+        page.AddFill(optionsCard, optionsCard.LeastHeight, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches OK first: the bar takes them right to left,

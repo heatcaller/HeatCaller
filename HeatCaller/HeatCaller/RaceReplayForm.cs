@@ -18,7 +18,8 @@ namespace HeatCaller;
 /// the lanes cross when the order changes - which is exactly the thing worth
 /// watching, and is honest about what was measured.
 ///
-/// On the layout pieces (DialogFit): the lanes taking the room, and under
+/// On the layout pieces (DialogFit): the lanes taking the room, on a card
+/// (18 Nov 2026), and under
 /// them one line of playback controls - Play, the speed and the clock side by
 /// side, and the scrub bar across the rest of the line, or on a line of its
 /// own when the window leaves it too little. It opens at the size it had at
@@ -39,7 +40,7 @@ public sealed class RaceReplayForm : Form
     private const int LeastWindowWidth = 760;
 
     /// <summary>The least the lanes get at the normal text size before the window scrolls instead - about what they had in the smallest window the replay could be made.</summary>
-    private const int CanvasLeastHeight = 360;
+    private const int CanvasLeastHeight = 336;
 
     /// <summary>The speed drop-down's width at the normal text size - wider when its longest choice needs it.</summary>
     private const int SpeedWidth = 88;
@@ -147,8 +148,15 @@ public sealed class RaceReplayForm : Form
 
         // The lanes take the room; the playback controls are the last line
         // of the page, where their bar was.
+        // The lanes on a card (18 Nov 2026, dialog jazz-up), as Race
+        // Analytics' are - drawn on the card's surface, with the card's inset
+        // in place of most of the room they kept round themselves (see
+        // ReplayCanvas), so they have the height they had.
+        var lanesCard = new Section();
+        lanesCard.AddFill(_canvas, () => UiLayout.AtTextSize(CanvasLeastHeight), gapBelow: 0);
+
         var page = new FillPage();
-        page.AddFill(_canvas, UiLayout.AtTextSize(CanvasLeastHeight), gapBelow: UiLayout.RowGap);
+        page.AddFill(lanesCard, lanesCard.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(BuildTransportBar(), gapBelow: 0);
 
         Controls.Add(page);
@@ -489,7 +497,7 @@ public sealed class RaceReplayForm : Form
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-            using (var back = new SolidBrush(AppTheme.Background))
+            using (var back = new SolidBrush(AppTheme.Surface))
             {
                 g.FillRectangle(back, ClientRectangle);
             }
@@ -503,7 +511,11 @@ public sealed class RaceReplayForm : Form
             // Worked out on every paint - each tick while it plays, and on
             // every resize - so the drawing follows the room the window gives
             // it.
-            var margin = UiLayout.AtTextSize(24);
+            //
+            // The room round them: 8 where it was 24, as the card they are on
+            // keeps the rest (18 Nov 2026); the heading and the first lane as
+            // far down as they were for the same reason.
+            var margin = UiLayout.AtTextSize(8);
 
             if (runners.Count == 0)
             {
@@ -538,8 +550,8 @@ public sealed class RaceReplayForm : Form
             // lanes off the foot of a window that held them all at 100%.
             // Below that the lanes run off the foot as they always did. At
             // the normal text size this is exactly the 26 it was.
-            var top = UiLayout.AtTextSize(56);
-            var headingTop = UiLayout.AtTextSize(18);
+            var top = UiLayout.AtTextSize(46);
+            var headingTop = UiLayout.AtTextSize(8);
             var room = (Height - top - margin) / Math.Max(1, order.Count);
 
             // Never shorter than a line of the names' face and a pixel: at
@@ -586,7 +598,7 @@ public sealed class RaceReplayForm : Form
             TextRenderer.DrawText(g,
                 $"Lap {Math.Max(1, (int)Math.Floor(leader))}",
                 AppTheme.BoldFont,
-                new Point(Math.Max(UiLayout.AtTextSize(120), Width - UiLayout.AtTextSize(140)), headingTop),
+                new Point(Math.Max(UiLayout.AtTextSize(120), Width - margin - UiLayout.AtTextSize(116)), headingTop),
                 AppTheme.Primary);
 
             for (var place = 0; place < order.Count; place++)

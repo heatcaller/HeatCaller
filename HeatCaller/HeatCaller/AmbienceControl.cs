@@ -1503,8 +1503,12 @@ public sealed class AmbienceControl : UserControl
 /// </summary>
 public sealed class AmbienceLayerForm : Form
 {
-    /// <summary>How wide the window is inside its frame at the normal text size: the 640px it laid its rows out in, and its margins.</summary>
-    private const int DialogWidth = 672;
+    /// <summary>
+    /// How wide the window is inside its frame at the normal text size: the
+    /// 640px it laid its rows out in, its margins, and the cards' own room
+    /// either side (Section.Inset), so Browse... still fits beside the file.
+    /// </summary>
+    private const int DialogWidth = 704;
 
     /// <summary>
     /// The file box at the normal text size - enough to show a path's end
@@ -1567,6 +1571,11 @@ public sealed class AmbienceLayerForm : Form
 
     public AmbienceLayerForm(AmbienceLayer? existing, AmbienceService? ambience = null, AmbienceStore? store = null)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, nearly every part had its window before
+        // the theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         Result = existing?.Clone() ?? new AmbienceLayer();
         _ambience = ambience;
         _store = store;
@@ -1649,13 +1658,6 @@ public sealed class AmbienceLayerForm : Form
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
-        };
-
-        var lblVolumes = new Label
-        {
-            Text = "Volume at each race state",
-            AutoSize = true,
-            Font = AppTheme.BoldFont,
         };
 
         var lblVolumeHint = new Label
@@ -1788,13 +1790,21 @@ public sealed class AmbienceLayerForm : Form
         var page = new FillPage();
         var body = DialogFit.Body(page, gapBelow: UiLayout.RowGap);
 
-        body.Add(fields, gapBelow: UiLayout.RowGap);
-        body.Add(switches, gapBelow: UiLayout.HintGap);
-        body.Add(lblAlwaysOnHint);
-        body.Add(lblVolumes, gapBelow: UiLayout.HintGap);
-        body.Add(lblVolumeHint, gapBelow: UiLayout.RowGap);
-        body.Add(preview, gapBelow: UiLayout.RowGap);
-        body.Add(volumes, gapBelow: 0);
+        // (18 Nov 2026, dialog batch 5): two cards, as the Sounds page has
+        // them - the layer itself, and how loud it is at each race state,
+        // the heading over the sliders now that card's caption.
+        var layerCard = new Section("Layer");
+        layerCard.Add(fields, gapBelow: UiLayout.RowGap);
+        layerCard.Add(switches, gapBelow: UiLayout.HintGap);
+        layerCard.Add(lblAlwaysOnHint, gapBelow: 0);
+
+        var volumesCard = new Section("Volume at each race state");
+        volumesCard.Add(lblVolumeHint, gapBelow: UiLayout.RowGap);
+        volumesCard.Add(preview, gapBelow: UiLayout.RowGap);
+        volumesCard.Add(volumes, gapBelow: 0);
+
+        body.Add(layerCard, gapBelow: UiLayout.RowGap);
+        body.Add(volumesCard, gapBelow: 0);
 
         // Bottom-right, Cancel outermost - same as the app's other dialogs -
         // and Tab still reaches Save first: the bar takes them right to

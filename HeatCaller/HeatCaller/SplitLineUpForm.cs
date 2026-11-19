@@ -20,8 +20,10 @@ public sealed class SplitLineUpForm : Form
     // Tall enough that the intro, the list and the answer do not push the
     // buttons out of view either. Held to this at every text size by the
     // layout test, now that the window is on LayoutAudit.ConvertedWindows.
+    // Taller by the tiles and the two cards' captions (18 Nov 2026), so the
+    // list of crossings keeps the height it had.
     private const int DialogWidth = 620;
-    private const int DialogHeight = 480;
+    private const int DialogHeight = 632;
 
     private readonly SplitLoop _splitLoop;
     private readonly ProfileStore _profiles;
@@ -100,11 +102,26 @@ public sealed class SplitLineUpForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // The line-up at a glance across the top (18 Nov 2026, dialog
+        // jazz-up, third batch): the gap in force now, how many crossings
+        // both loops have read, and the gap they come to - kept up to date
+        // as they come in (ShowTiles). Then the how-to in a card, and the
+        // crossings in a card under it, with what they come to.
+        _tiles[0].Set(currentOffsetMs == 0 ? "None" : $"{currentOffsetMs} ms", "Saved now");
+        ShowTiles();
+
+        var howTo = new Section("Line it up");
+        howTo.Add(intro, gapBelow: UiLayout.HintGap);
+        howTo.Add(current, gapBelow: 0);
+
+        var crossings = new Section("Crossings");
+        crossings.AddFill(_list, () => UiLayout.AtTextSize(120), gapBelow: UiLayout.RowGap);
+        crossings.Add(_lblAnswer, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(intro, gapBelow: UiLayout.RowGap);
-        page.Add(current, gapBelow: UiLayout.RowGap);
-        page.AddFill(_list, _ => UiLayout.AtTextSize(120), gapBelow: UiLayout.RowGap);
-        page.Add(_lblAnswer, gapBelow: UiLayout.RowGap);
+        page.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
+        page.Add(howTo, gapBelow: UiLayout.RowGap);
+        page.AddFill(crossings, crossings.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnZero, _btnSave), gapBelow: 0);
         _btnSave.TabIndex = 0;
 
@@ -113,7 +130,11 @@ public sealed class SplitLineUpForm : Form
 
         AppTheme.ApplyRecursively(this);
         AppTheme.StyleButton(_btnSave, AppTheme.ButtonKind.Primary);
-        current.ForeColor = AppTheme.TextMuted;
+        current.ForeColor = AppTheme.TextDark;
+        current.Font = AppTheme.SmallFont;
+        intro.Font = AppTheme.SmallFont;
+        intro.ForeColor = AppTheme.TextMuted;
+        _lblAnswer.Font = AppTheme.BoldFont;
 
         DialogFit.Keep(this, page, DialogWidth, DialogHeight);
 
@@ -184,6 +205,26 @@ public sealed class SplitLineUpForm : Form
         // away again, and Save then stayed lit but did nothing when clicked. It now
         // follows the answer on every crossing.
         _btnSave.Enabled = _pairing.Answer is not null;
+
+        ShowTiles();
+    }
+
+    /// <summary>The gap in force, then the crossings so far and what they come to.</summary>
+    private readonly StatTile[] _tiles = RaceNightTiles.Make(3);
+
+    /// <summary>The crossings tile and the new gap's, from the pairing as it stands.</summary>
+    private void ShowTiles()
+    {
+        var count = _pairing.Gaps.Count;
+
+        // "1 of 3" until there are enough to work the gap out from.
+        _tiles[1].Set(count >= LineUpPairing.Least
+                ? count.ToString(System.Globalization.CultureInfo.CurrentCulture)
+                : $"{count} of {LineUpPairing.Least}",
+            "Crossings");
+        _tiles[2].Set(
+            _pairing.Answer is { } answer ? $"{Math.Abs(answer)} ms {(answer >= 0 ? "late" : "early")}" : "-",
+            "New gap");
     }
 
     private void FitColumns()

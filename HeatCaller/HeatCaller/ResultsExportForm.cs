@@ -21,7 +21,7 @@ namespace HeatCaller;
 public sealed class ResultsExportForm : Form
 {
     /// <summary>How wide the window is inside its frame at the normal text size.</summary>
-    private const int DialogWidth = 480;
+    private const int DialogWidth = 520;
 
     private readonly ComboBox _cmbFormat = new();
     private readonly RadioButton _rbSelected = new ThemedRadioButton();
@@ -54,8 +54,6 @@ public sealed class ResultsExportForm : Form
         });
         _cmbFormat.SelectedIndex = 0;
         _cmbFormat.SelectedIndexChanged += (_, _) => UpdateShape();
-
-        var lblScope = new Label { Text = "Sessions", AutoSize = true, Font = AppTheme.BoldFont };
 
         _rbSelected.Text = selectedCount > 0
             ? $"Selected only ({selectedCount})"
@@ -93,11 +91,20 @@ public sealed class ResultsExportForm : Form
         // it scrolls and Export and Cancel stay in view. The two choices are
         // in the same column, so they are still one group - picking one
         // clears the other.
+        //
+        // In two cards (18 Nov 2026, dialog look): the format and its shape,
+        // and which sessions go in - the two choices still in one column of
+        // one card, so still one group. The note on the formats under them.
+        var formatCard = new Section("The file");
+        formatCard.Add(fields, gapBelow: 0);
+
+        var sessionsCard = new Section("Sessions");
+        sessionsCard.Add(_rbSelected, stretch: false, gapBelow: UiLayout.HintGap);
+        sessionsCard.Add(_rbAll, stretch: false, gapBelow: 0);
+
         var body = DialogFit.Body(page);
-        body.Add(fields);
-        body.Add(lblScope, stretch: false, gapBelow: UiLayout.HintGap);
-        body.Add(_rbSelected, stretch: false, gapBelow: UiLayout.HintGap);
-        body.Add(_rbAll, stretch: false);
+        body.Add(formatCard, gapBelow: UiLayout.RowGap);
+        body.Add(sessionsCard, gapBelow: UiLayout.RowGap);
         body.Add(lblNote, gapBelow: 0);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
@@ -127,7 +134,7 @@ public sealed class ResultsExportForm : Form
 
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + captionColumn + Pieces.PickerWidth(_cmbFormat, ref formatWidth) + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + captionColumn + Pieces.PickerWidth(_cmbFormat, ref formatWidth) + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
