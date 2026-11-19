@@ -229,7 +229,19 @@ To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of
 
 - **Standby PC** lets a second laptop on the track's network keep a copy of this one's race data and take over by hand if this one dies. See [Standby PC](standby-pc.md).
 - **Default settings** has **Restore Default Settings...** and **Put Back Earlier Settings...**, which reset the tuning settings without touching your drivers, results or keys. See [Default settings](#default-settings) below.
-- **Getting help** has **Save Support Info** (below), **About HeatCaller** (the version, and the licenses of the components HeatCaller ships) and **License and Privacy** (the license agreement and privacy notice you accepted).
+- **Getting help** has **Save Support Info** (below), **About HeatCaller** (the version, and the licenses of the components HeatCaller ships) and **License and Privacy** (the license agreement and privacy notice you accepted). It also has **Send HeatCaller anonymous usage totals**, ticked to begin with: see [Usage totals](#usage-totals) below.
+
+## Usage totals
+
+While the relay is on, HeatCaller sends us a few totals once a day, through your club's relay, so we can see which parts of HeatCaller clubs use and decide what to improve next:
+
+- which pages and tabs were opened, how many times, and for how long;
+- the HeatCaller version;
+- whether a race day was open.
+
+They never include a driver's name or anything else about a driver, anything typed into HeatCaller, results, keys, or the order in which anything was done. They go with your club's relay sign-in, so we can tell which club they came from. The relay keeps them for 13 months.
+
+To stop them, untick **Send HeatCaller anonymous usage totals** on the **Getting help** card. **Restore Default Settings** never ticks it again. With the relay off, nothing is sent at all. The privacy notice (**License and Privacy**, Part 2, **Usage totals**) says the same.
 
 ## Default settings
 

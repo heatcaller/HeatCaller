@@ -2165,6 +2165,16 @@ public sealed class AppSettings
     /// </summary>
     public bool UpdateChecksOn { get; set; } = true;
 
+    /// <summary>
+    /// Whether this PC may send HeatCaller anonymous usage totals: which
+    /// pages and tabs were opened and for how long, per day, through the
+    /// club's relay (19 Nov 2026, plans/app-usage-analytics-plan.md). On by
+    /// default; the box on Backup &amp; Restore turns it off, and the privacy
+    /// notice (Terms, Part 2) says so. Never reset by Restore Default
+    /// Settings, so a club that said no stays no.
+    /// </summary>
+    public bool ShareUsageStats { get; set; } = true;
+
     // --- Race-day manager ---------------------------------------------
     //
     // Running the day from a phone - see RaceDayService.

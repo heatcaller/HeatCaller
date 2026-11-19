@@ -271,6 +271,11 @@ public sealed partial class BackupRestoreControl : UserControl
     /// wrong. On this page because it is where the app's files are looked
     /// after; the crash dialog and the console's menu point here too.
     /// </summary>
+    /// <summary>What the usage box sends, in the same words as the privacy notice (Terms, Part 2).</summary>
+    internal const string ShareUsageHint =
+        "Once a day, through your club's relay: which pages and tabs were opened and for how long, the HeatCaller version "
+        + "and whether a race day was open. Never driver names, anything typed, results or keys. Nothing is sent without the relay.";
+
     private Section BuildSupportCard()
     {
         var btnSupport = new Button { Text = "Save Support Info..." };
@@ -317,11 +322,42 @@ public sealed partial class BackupRestoreControl : UserControl
 
         _textSize.Wear(lblHint, () => AppTheme.SmallFont);
 
+        // The opt-out for anonymous usage totals (19 Nov 2026) - on by
+        // default, described in the privacy notice (License and Privacy,
+        // just above). Beside Save Support Info because both are about what
+        // this PC tells HeatCaller.
+        var chkShare = new ThemedCheckBox
+        {
+            Text = "Send HeatCaller anonymous usage totals",
+            AutoSize = true,
+            Checked = _settings.ShareUsageStats,
+        };
+
+        chkShare.CheckedChanged += (_, _) =>
+        {
+            if (_settings.ShareUsageStats != chkShare.Checked)
+            {
+                _settings.ShareUsageStats = chkShare.Checked;
+                _settings.Save();
+            }
+        };
+
+        var lblShareHint = new Label
+        {
+            Text = ShareUsageHint,
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblShareHint, () => AppTheme.SmallFont);
+
         var card = new Section("Getting help");
 
         card.Add(new ButtonBar().With(btnSupport, btnAbout, btnTerms));
         card.Add(lblHint);
-        card.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail), gapBelow: 0);
+        card.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail), gapBelow: UiLayout.RowGap);
+        card.Add(chkShare, stretch: false, gapBelow: 0);
+        card.Add(lblShareHint, gapBelow: 0);
 
         return card;
     }

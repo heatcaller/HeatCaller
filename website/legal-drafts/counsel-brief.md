@@ -173,7 +173,8 @@ The code is written by the owner with heavy use of AI coding assistants (Claude 
   - Names are removed on a best-effort basis.
   - Names not in the driver list, and free text, may remain.
   - Freeze dumps are excluded.
-- **Nothing from the laptop otherwise:** the desktop app has no telemetry, crash upload or analytics.
+- **Usage totals from the laptop (added 19 Nov 2026, Terms revision 3):** while the relay is on, once a day, per club per day: which pages and tabs were opened, how many times, active and on-screen seconds, the app version, and whether a race day was open. No driver data, no typed text, no click order. Sent with the club's relay token, so identified by club. On by default; the club can untick **Send HeatCaller anonymous usage totals** on **Backup & Restore**. The notice is the Terms change itself (every install must accept revision 3 before the app opens again) and the box's own description; there is no separate banner. Kept 13 months. See `plans/app-usage-analytics-plan.md`.
+- **Nothing else from the laptop:** no crash upload and no other analytics.
 
 ### 4.4 In visitors' browsers (the cookie policy)
 
@@ -230,13 +231,13 @@ Full detail is in `plans/children-privacy-and-ip-plan.md` (the status table) and
 - **Export and Forget:** Export gives a driver's data; Forget deletes it from the laptop and the relay.
 - **Vendors:** we ask ElevenLabs not to log, and clubs can turn on offline voices for juniors.
 
-**Paperwork:** the in-app Terms (revision 2) say all of this and replace the separate beta agreement.
+**Paperwork:** the in-app Terms (revision 3) say all of this and replace the separate beta agreement.
 
 ## 6. Documents to review, in order
 
 All paths are in the repository.
 
-1. `HeatCaller/HeatCaller/Assets/Legal/HeatCaller-Terms.md`: the in-app licence and privacy notice (revision 2). Every install must accept it. **The most important.**
+1. `HeatCaller/HeatCaller/Assets/Legal/HeatCaller-Terms.md`: the in-app licence and privacy notice (revision 3). Every install must accept it. **The most important.**
 2. `website/legal-drafts/driver-crew-children.md`: the children's memo (COPPA, UK and EU, US states, safeguarding, streams, vendors, retention, checklist, parent consent form).
 3. `website/legal-drafts/dpia.md`: data protection impact assessment.
 4. `website/legal-drafts/security-program.md`: COPPA §312.8-style security program.
@@ -291,6 +292,7 @@ Retired, no review needed:
 **General**
 17. **Liability.** Is limitation of liability to US$50, New York law and an as-is warranty enforceable as drafted for clubs outside New York? Should paid plans change it?
 18. **Outside the US.** For the UK, EU, Canada and Australia, what is the minimum before clubs there use the beta? The cookie policy tells visitors the relay is in the US: does the transfer need a named mechanism?
+18a. **Usage totals, on by default.** The laptop sends daily page-and-tab usage totals, identified by club, unless the club unticks a box on Backup & Restore (section 4.3). The notice is the Terms change, which every install must accept before the app opens, plus the box's own description; there is no banner. Is opt-out with that notice enough in the US? For clubs in the UK and EU, does ePrivacy Art. 5(3) / PECR reg. 6 need opt-in consent instead, and if so should the box start unticked for clubs there?
 
 **Cookies and browser storage** (detail in `cookie-policy-questions.md`)
 

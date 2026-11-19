@@ -41,7 +41,7 @@ HeatCaller is used by RC racing clubs whose drivers include children. It process
 ## 4. Necessity and proportionality
 
 - **Lawful basis.** The club: legitimate interests for results and timing; parental consent for notes, the about line and appearing on a stream. HeatCaller LLC: processing for the club. [CHECK]
-- **Minimisation.** No date of birth (age band only). No notes or about line from a junior's phone. Names always shortened online. No direct messages between drivers; fixed text only from the desk to a junior.
+- **Minimisation.** No date of birth (age band only). No notes or about line from a junior's phone. Names always shortened online. No direct messages between drivers; fixed text only from the desk to a junior. The laptop's daily usage totals (Terms Part 2, **Usage totals**, from revision 3) are page-and-tab counts and times only, with no driver data in them, so juniors' information is not part of them.
 - **Defaults.** Everything that puts a junior's information further out is off by default: rosters, photos, full names, notes on stream nights. Unset age band is treated as under 13.
 - **Retention.** Part 2 of the Terms: 180-day follows, 30-day junior sign-ins, 14-day freeze reports, 7-day podium videos, 12-hour check-ins, 14-day sign-ups; optional unpublish of old nights.
 - **Rights.** Export this driver's data; Forget this driver; parents can ask the club or email us.

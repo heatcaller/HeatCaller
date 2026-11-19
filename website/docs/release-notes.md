@@ -4,6 +4,8 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Anonymous usage totals, and new terms (19 November).** HeatCaller asks you to accept its terms again (revision 3) the next time it opens. The one change: while the relay is on, HeatCaller sends us a few totals once a day (which pages and tabs were used and for how long, the version, and whether a race day was open) so we know what to improve. Nothing about your drivers, nothing typed, no results or keys. Untick **Send HeatCaller anonymous usage totals** on **Backup & Restore** to stop them. See [Usage totals](admin/backups.md#usage-totals). Update HeatCaller on the race PC.
+
 - **Choose the leaderboard's columns from its headings (15 November).** Right-click a column heading on Race Control and a list of every column drops down, the board's columns first and ticked, the rest under **Hidden**.
     - **Tick or untick** to show or hide a column, and use the **▲ ▼** arrows on a row (or <kbd>Ctrl</kbd>+<kbd>Up</kbd> / <kbd>Ctrl</kbd>+<kbd>Down</kbd>) to move it left or right. The board changes as you go; the last column can't be hidden.
     - **Restore default columns** and **More column options...** (the full picker, with what each column shows) are at the foot. **Undo** takes back the whole visit in one step.

@@ -388,6 +388,10 @@ internal static class SettingsTable
         },
         kept: new[]
         {
+            // A privacy choice (Backup & Restore's Getting help card): a
+            // restore of defaults must never turn sharing back on.
+            nameof(AppSettings.ShareUsageStats),
+
             // The retired Next Level Timing connection, kept so old files load.
             nameof(AppSettings.Host),
             nameof(AppSettings.Port),

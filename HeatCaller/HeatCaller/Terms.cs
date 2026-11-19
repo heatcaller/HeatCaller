@@ -39,7 +39,7 @@ internal static class Terms
     internal const string AcceptanceFileName = "terms-accepted.json";
 
     /// <summary>The terms' own date, as their first line after the title gives it. Kept in the record beside the hash.</summary>
-    internal const string Edition = "Beta, 15 November 2026 (revision 2)";
+    internal const string Edition = "Beta, 19 November 2026 (revision 3)";
 
     private static string? _text;
 
