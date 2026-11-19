@@ -87,6 +87,21 @@ this one):**
   MissionControl, BroadcastWindow, DialogForm (the app's message box),
   BigScreenForm.
 
+**Missed by the first audit, found by the look-back and done in batch 8
+(PR 267):** the 17 Nov list counted 110 windows, but main has 132 Form
+classes. These 23 share a file with a bigger window:
+
+- Garage: CarDetail, CarPhotos, ChassisTypes, LendCar, ChassisSheets,
+  UnlinkedSetups.
+- Batteries, rentals and classes: BatteryPackEdit, PackTransfer, RentalPrompt,
+  RentalUnitEdit, HandicapSuggest, TechChecklist.
+- Signups and the desk: InviteDrivers, SignupReason, DriverRequestReason,
+  QuickReplies, CallOff, RoundRoster's DriverPicker.
+- Settings: QuickClass, QuickDriver, ManagerPin, PutBackSettings.
+
+RaceClassManagerForm is only the Classes page in a window, so it was left
+alone.
+
 **Looked at and left as they were, on purpose:**
 
 - TemplateEditForm, SoundscapeEditorForm: they already had cards, and more
