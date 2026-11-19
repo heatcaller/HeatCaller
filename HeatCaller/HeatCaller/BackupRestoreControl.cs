@@ -274,7 +274,8 @@ public sealed partial class BackupRestoreControl : UserControl
     /// <summary>What the usage box sends, in the same words as the privacy notice (Terms, Part 2).</summary>
     internal const string ShareUsageHint =
         "Once a day, through your club's relay: which pages and tabs were opened and for how long, the HeatCaller version "
-        + "and whether a race day was open. Never driver names, anything typed, results or keys. Nothing is sent without the relay.";
+        + "and whether a race day was open. Never driver names, anything typed, results or keys. Nothing is sent without the relay. "
+        + "Ticked to begin with only where Windows is set to the United States.";
 
     private Section BuildSupportCard()
     {
@@ -322,19 +323,22 @@ public sealed partial class BackupRestoreControl : UserControl
 
         _textSize.Wear(lblHint, () => AppTheme.SmallFont);
 
-        // The opt-out for anonymous usage totals (19 Nov 2026) - on by
-        // default, described in the privacy notice (License and Privacy,
-        // just above). Beside Save Support Info because both are about what
-        // this PC tells HeatCaller.
+        // The choice about anonymous usage totals (19 Nov 2026) - ticked to
+        // begin with in the US, unticked elsewhere (UsageSharing), described
+        // in the privacy notice (License and Privacy, just above). Beside
+        // Save Support Info because both are about what this PC tells
+        // HeatCaller.
         var chkShare = new ThemedCheckBox
         {
             Text = "Send HeatCaller anonymous usage totals",
             AutoSize = true,
-            Checked = _settings.ShareUsageStats,
+            Checked = UsageSharing.IsOn(_settings),
         };
 
         chkShare.CheckedChanged += (_, _) =>
         {
+            // Saved as the club's own choice from the first change on, so the
+            // region default never overrides it again.
             if (_settings.ShareUsageStats != chkShare.Checked)
             {
                 _settings.ShareUsageStats = chkShare.Checked;

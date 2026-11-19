@@ -38,8 +38,11 @@ change in the same PR as the first byte sent.
    the window in front and someone has used the mouse or keyboard in the last
    2 minutes. A laptop left on Live Timing all night counts as one hour
    "watching", not as eight hours of use (see "Watching time" below).
-4. **The club decides.** **On by default**, with an opt-out box and no banner
-   (decided 19 Nov 2026).
+4. **The club decides.** A box, no banner (decided 19 Nov 2026). **On by
+   default in the US only** (Windows region US or a US territory,
+   `UsageSharing.IsOn`); **off by default everywhere else** until counsel says
+   otherwise. The setting is null until the club changes the box, and the
+   club's choice then always wins.
    - **The box:** **Send HeatCaller anonymous usage totals**
      (`AppSettings.ShareUsageStats`) on Backup & Restore's **Getting help**
      card, beside Save Support Info and License and Privacy. Kept on Restore
@@ -50,9 +53,9 @@ change in the same PR as the first byte sent.
      asked to accept revision 3 before HeatCaller opens again. Release notes,
      `admin/backups.md#usage-totals`, `security-and-privacy.md`, the counsel
      brief (§4.3, question 18a) and the DPIA say the same.
-   - **Ship order:** the Terms say this happens, so the Terms change must not
-     reach clubs long before the sending does, and the sending must never
-     reach a club whose accepted Terms predate revision 3 (check the
+   - **Ship order:** no club runs HeatCaller yet (19 Nov 2026), so no one
+     has accepted older Terms. Still, once clubs exist, the sending must
+     never reach a club whose accepted Terms predate revision 3 (check the
      acceptance record's hash before the first send).
 5. **Nothing without the relay.** A club with no relay sends nothing. The
    rehearsal copy and the test suite never send (the same guard the top-up
@@ -103,7 +106,7 @@ ShowPage / SegmentTabs ──► AppUsage   POST /club/<id>/app-usage ──► 
   midnight, every finished day not yet sent goes as one report through the
   `RelayPublisher` queue at low priority (it never pushes race documents out).
   Kept on disk until the relay says 204, then dropped. At most 31 days held.
-- **Backup & Restore.** The opt-out box (built), then the **See what's sent** preview beside it.
+- **Backup & Restore.** The box (built; on in the US, off elsewhere), then the **See what's sent** preview beside it.
 
 ### 2. Relay
 
@@ -175,9 +178,10 @@ hand-made JSONL until real reports arrive).
 
 ## Open decisions
 
-1. ~~Default for the switch.~~ **Decided 19 Nov 2026: on, opt-out box, no
-   banner** (rule 4). Counsel is asked in question 18a whether that is enough,
-   above all for UK and EU clubs. Get the answer before round 3 ships.
+1. ~~Default for the switch.~~ **Decided 19 Nov 2026: box, no banner; on in
+   the US, off elsewhere** (rule 4). Counsel question 18a asks whether US
+   opt-out is enough, whether the Windows region is a good enough test, and
+   when other regions could move to opt-out.
 2. **Should the admin app see clubs by name,** or only "Club A, B, C"? By name
    helps support; anonymous is easier to defend. Recommend by name, since the
    admin app already shows each club's voice spend.

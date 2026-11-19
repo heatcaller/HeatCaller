@@ -229,11 +229,11 @@ To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of
 
 - **Standby PC** lets a second laptop on the track's network keep a copy of this one's race data and take over by hand if this one dies. See [Standby PC](standby-pc.md).
 - **Default settings** has **Restore Default Settings...** and **Put Back Earlier Settings...**, which reset the tuning settings without touching your drivers, results or keys. See [Default settings](#default-settings) below.
-- **Getting help** has **Save Support Info** (below), **About HeatCaller** (the version, and the licenses of the components HeatCaller ships) and **License and Privacy** (the license agreement and privacy notice you accepted). It also has **Send HeatCaller anonymous usage totals**, ticked to begin with: see [Usage totals](#usage-totals) below.
+- **Getting help** has **Save Support Info** (below), **About HeatCaller** (the version, and the licenses of the components HeatCaller ships) and **License and Privacy** (the license agreement and privacy notice you accepted). It also has **Send HeatCaller anonymous usage totals**, ticked to begin with in the United States only: see [Usage totals](#usage-totals) below.
 
 ## Usage totals
 
-While the relay is on, HeatCaller sends us a few totals once a day, through your club's relay, so we can see which parts of HeatCaller clubs use and decide what to improve next:
+While the relay is on and **Send HeatCaller anonymous usage totals** is ticked, HeatCaller sends us a few totals once a day, through your club's relay, so we can see which parts of HeatCaller clubs use and decide what to improve next:
 
 - which pages and tabs were opened, how many times, and for how long;
 - the HeatCaller version;
@@ -241,7 +241,9 @@ While the relay is on, HeatCaller sends us a few totals once a day, through your
 
 They never include a driver's name or anything else about a driver, anything typed into HeatCaller, results, keys, or the order in which anything was done. They go with your club's relay sign-in, so we can tell which club they came from. The relay keeps them for 13 months.
 
-To stop them, untick **Send HeatCaller anonymous usage totals** on the **Getting help** card. **Restore Default Settings** never ticks it again. With the relay off, nothing is sent at all. The privacy notice (**License and Privacy**, Part 2, **Usage totals**) says the same.
+**Where it starts ticked.** Only on a PC whose Windows region is the United States (or a US territory). Everywhere else the box starts unticked and nothing is sent unless you tick it. HeatCaller goes by the region in Windows settings (**Time & language → Language & region → Country or region**), because it never asks for your country.
+
+To stop them, untick the box on the **Getting help** card; to send them from outside the US, tick it. Once you've changed it, your choice stays, whatever the Windows region, and **Restore Default Settings** never changes it. With the relay off, nothing is sent at all. The privacy notice (**License and Privacy**, Part 2, **Usage totals**) says the same.
 
 ## Default settings
 
