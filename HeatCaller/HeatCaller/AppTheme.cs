@@ -1777,7 +1777,81 @@ public static class AppTheme
     /// in the header face in use, so it follows the text size.
     /// </summary>
     public static int HeaderLeastWidth(string heading) =>
-        TextRenderer.MeasureText((heading ?? string.Empty).ToUpperInvariant(), MicroFont, new Size(int.MaxValue, int.MaxValue), HeaderFlags).Width + 2;
+        LineWidth((heading ?? string.Empty).ToUpperInvariant(), MicroFont, HeaderFlags) + 2;
+
+    /// <summary>
+    /// Widths of single lines of text already measured, by the text, font
+    /// and flags - see LineWidth. Shared by every thread that builds windows
+    /// (the tests build them on several), and let go whole when it grows
+    /// past what an app's headings and short values come to.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string Text, Font Font, TextFormatFlags Flags), int> LineWidths = new();
+
+    private const int LineWidthsKept = 4096;
+
+    /// <summary>
+    /// How wide a single line of <paramref name="text"/> is in
+    /// <paramref name="font"/>, measured once and then remembered.
+    ///
+    /// Why (18 Nov 2026): a grid's headings and widest values are measured
+    /// at every layout pass to keep its columns whole - half the Announcer's
+    /// opening (a CPU profile: Pieces.ColumnLeast, 866 calls). The same few
+    /// strings, in the same faces, every time.
+    /// </summary>
+    public static int LineWidth(string text, Font font, TextFormatFlags flags = TextFormatFlags.Default)
+    {
+        var key = (text, font, flags);
+
+        if (LineWidths.TryGetValue(key, out var known))
+        {
+            return known;
+        }
+
+        if (LineWidths.Count > LineWidthsKept)
+        {
+            LineWidths.Clear();
+        }
+
+        var width = TextRenderer.MeasureText(text, font, new Size(int.MaxValue, int.MaxValue), flags).Width;
+        LineWidths[key] = width;
+        return width;
+    }
+
+    /// <summary>Sizes of text already measured wrapped to a room - see WrappedSize.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string Text, Font Font, Size Room, TextFormatFlags Flags), Size> WrappedSizes = new();
+
+    private const int WrappedSizesKept = 4096;
+
+    /// <summary>
+    /// TextRenderer.MeasureText(<paramref name="text"/>, <paramref name="font"/>,
+    /// <paramref name="room"/>, <paramref name="flags"/>), measured once and
+    /// then remembered - for long text measured again and again unchanged.
+    ///
+    /// Why (18 Nov 2026): Sanctioning Preset's labels are each as tall as the
+    /// longest of thirteen rulebook paragraphs (SteadyLabel.Wordings), so
+    /// opening it measured those paragraphs over a hundred times - three
+    /// quarters of a second, every time it was opened (a CPU profile: 98% in
+    /// SteadyLabel). Remembered here, the labels share them, and the next
+    /// opening measures none.
+    /// </summary>
+    public static Size WrappedSize(string text, Font font, Size room, TextFormatFlags flags)
+    {
+        var key = (text, font, room, flags);
+
+        if (WrappedSizes.TryGetValue(key, out var known))
+        {
+            return known;
+        }
+
+        if (WrappedSizes.Count > WrappedSizesKept)
+        {
+            WrappedSizes.Clear();
+        }
+
+        var size = TextRenderer.MeasureText(text, font, room, flags);
+        WrappedSizes[key] = size;
+        return size;
+    }
 
     /// <summary>
     /// Turns a GroupBox into a card: rounded surface, hairline outline, and

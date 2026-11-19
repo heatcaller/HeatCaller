@@ -289,6 +289,56 @@ internal static class ToggleCaption
     /// control asks for at the same proposed size (base.GetPreferredSize,
     /// which only the control can call).
     /// </summary>
+    /// <summary>
+    /// What a control measured to, by the size it was asked at, and what the
+    /// measuring depended on - see Measured.
+    /// </summary>
+    private sealed class MeasureCache
+    {
+        public (string Text, Font Font, Padding Padding, TextFormatFlags Flags, Size Min, Size Max, int Side, int Gap) Basis;
+        public readonly Dictionary<Size, Size> Sizes = new();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ButtonBase, MeasureCache> Measures = new();
+
+    /// <summary>
+    /// PreferredSize, worked out once for each size asked while nothing it
+    /// depends on - the caption, font, padding, flags, least and most sizes,
+    /// the box's own size - has changed. <paramref name="windows"/> is only
+    /// asked when it has to be worked out.
+    ///
+    /// Why (18 Nov 2026): layout asks a tick box its size many times over,
+    /// and each time the caption was measured afresh, and Windows' own size
+    /// asked as well - 41% of Import Entries' opening (a CPU profile), and
+    /// the radio buttons a good part of Print's.
+    /// </summary>
+    public static Size Measured(ButtonBase control, Size proposedSize, TextFormatFlags flags, Func<Size> windows)
+    {
+        var basis = (control.Text ?? string.Empty, control.Font, control.Padding, flags, control.MinimumSize, control.MaximumSize, TickBox.Side, TickBox.Gap);
+        var cache = Measures.GetOrCreateValue(control);
+
+        if (cache.Basis != basis)
+        {
+            cache.Sizes.Clear();
+            cache.Basis = basis;
+        }
+
+        if (cache.Sizes.TryGetValue(proposedSize, out var known))
+        {
+            return known;
+        }
+
+        // A box being resized by hand can ask at every width there is.
+        if (cache.Sizes.Count > 64)
+        {
+            cache.Sizes.Clear();
+        }
+
+        var size = PreferredSize(control, proposedSize, flags, windows());
+        cache.Sizes[proposedSize] = size;
+        return size;
+    }
+
     public static Size PreferredSize(ButtonBase control, Size proposedSize, TextFormatFlags flags, Size windows)
     {
         var hasCaption = !string.IsNullOrEmpty(control.Text);
@@ -475,7 +525,7 @@ internal class ThemedCheckBox : CheckBox
         // the keyboard cues for.
         var flags = string.IsNullOrEmpty(Text) ? TextFormatFlags.Default : CaptionFlags();
 
-        return ToggleCaption.PreferredSize(this, proposedSize, flags, base.GetPreferredSize(proposedSize));
+        return ToggleCaption.Measured(this, proposedSize, flags, () => base.GetPreferredSize(proposedSize));
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -633,7 +683,7 @@ internal class ThemedRadioButton : RadioButton
         // the keyboard cues for.
         var flags = string.IsNullOrEmpty(Text) ? TextFormatFlags.Default : CaptionFlags();
 
-        return ToggleCaption.PreferredSize(this, proposedSize, flags, base.GetPreferredSize(proposedSize));
+        return ToggleCaption.Measured(this, proposedSize, flags, () => base.GetPreferredSize(proposedSize));
     }
 
     protected override void OnPaint(PaintEventArgs e)

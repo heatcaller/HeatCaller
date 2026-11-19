@@ -3210,15 +3210,69 @@ internal sealed class SteadyLabel : Label
     /// </summary>
     private readonly Dictionary<int, Size> _measured = new();
 
+    /// <summary>
+    /// What the label itself measured its text to (base.GetPreferredSize),
+    /// by the size it was asked at. Cleared when the text, font or padding
+    /// changes.
+    ///
+    /// WHY (18 Nov 2026): the wordings were cached on 13 Nov, but the text
+    /// on show was still measured afresh every pass - a rulebook paragraph
+    /// in Sanctioning Preset, the state lines in Broadcast - and that was
+    /// nearly all of Sanctioning Preset's opening (a CPU profile: 98% in
+    /// here).
+    /// </summary>
+    private readonly Dictionary<Size, Size> _ownMeasured = new();
+
+    private bool _ownMnemonic = true;
+
     protected override void OnFontChanged(EventArgs e)
     {
         _measured.Clear();
+        _ownMeasured.Clear();
         base.OnFontChanged(e);
+    }
+
+    protected override void OnTextChanged(EventArgs e)
+    {
+        _ownMeasured.Clear();
+        base.OnTextChanged(e);
+    }
+
+    protected override void OnPaddingChanged(EventArgs e)
+    {
+        _ownMeasured.Clear();
+        base.OnPaddingChanged(e);
+    }
+
+    /// <summary>The label's own measure of its text, worked out once per size asked - see _ownMeasured.</summary>
+    private Size OwnPreferredSize(Size proposedSize)
+    {
+        // The mnemonic setting changes what is measured; it is never changed
+        // once a label is built, but a change still starts the measures again.
+        if (_ownMnemonic != UseMnemonic)
+        {
+            _ownMeasured.Clear();
+            _ownMnemonic = UseMnemonic;
+        }
+
+        if (_ownMeasured.TryGetValue(proposedSize, out var known))
+        {
+            return known;
+        }
+
+        if (_ownMeasured.Count > 64)
+        {
+            _ownMeasured.Clear();
+        }
+
+        var size = base.GetPreferredSize(proposedSize);
+        _ownMeasured[proposedSize] = size;
+        return size;
     }
 
     public override Size GetPreferredSize(Size proposedSize)
     {
-        var size = base.GetPreferredSize(proposedSize);
+        var size = OwnPreferredSize(proposedSize);
 
         if (_wordings.Count == 0)
         {
@@ -3233,8 +3287,7 @@ internal sealed class SteadyLabel : Label
         var key = UseMnemonic ? roomWidth : -roomWidth;
 
         if (!_measured.TryGetValue(key, out var needed))
-        {
-            // The flags a label wraps its text with.
+        {            // The flags a label wraps its text with.
             var flags = TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl;
 
             if (!UseMnemonic)
@@ -3251,7 +3304,7 @@ internal sealed class SteadyLabel : Label
                     continue;
                 }
 
-                var one = TextRenderer.MeasureText(wording, Font, room, flags);
+                var one = AppTheme.WrappedSize(wording, Font, room, flags);
                 needed = new Size(Math.Max(needed.Width, one.Width), Math.Max(needed.Height, one.Height));
             }
 
@@ -3848,7 +3901,8 @@ internal static class Pieces
             // TextRenderer's own room either side of the text, as the cell
             // draws it, the cell's padding, and the few pixels a text cell
             // keeps either side of its text and for its line.
-            least = Math.Max(least, TextRenderer.MeasureText(value, font).Width + padding.Horizontal + 8);
+            // TextFormatFlags.Bottom: what TextRenderer.MeasureText(text, font) measures with.
+            least = Math.Max(least, AppTheme.LineWidth(value, font, TextFormatFlags.Bottom) + padding.Horizontal + 8);
         }
 
         return least;
