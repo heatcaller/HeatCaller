@@ -39,12 +39,23 @@ public sealed partial class BigScreenForm
     {
         _grid.CellPainting += PaintLeaderStripe;
         Disposed += (_, _) => _leaderStripeBrush?.Dispose();
+
+        // A field bigger than the board has room for (eight cars at 64
+        // pixels a row on a 720p wall) scrolls, and Windows drew its own
+        // pale bar down the board's right edge - a white strip on a dark
+        // wall. The app's slim drawn bar instead, as every other grid has
+        // (AppTheme.StyleGrid): its track is the grid's BackColor, which
+        // ApplyLook keeps at the canvas. Rows and their sizes are untouched.
+        ThinScrollBar.Attach(_grid);
     }
 
     /// <summary>The plates' share of ApplyLook: run from it, so a change of look reaches them too.</summary>
     private void ColourWall()
     {
         _lblRaceState.Canvas = CanvasColor;
+
+        // The themed scroll bar's track (see BuildWall).
+        _grid.BackColor = CanvasColor;
 
         _pnlCountdown.Canvas = CanvasColor;
         _pnlCountdown.Fill = PanelColor;
