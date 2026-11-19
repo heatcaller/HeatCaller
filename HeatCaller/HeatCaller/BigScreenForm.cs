@@ -1007,6 +1007,7 @@ public sealed partial class BigScreenForm : Form
         Controls.Add(_lblHint);
 
         BuildWall();
+        BuildFit();
         ApplyScale(force: true);
     }
 
@@ -1085,12 +1086,10 @@ public sealed partial class BigScreenForm : Form
 
             _grid.ColumnHeadersHeight = Math.Max(1, Sized(38));
             _grid.DefaultCellStyle.Padding = new Padding(Sized(18), Sized(4), Sized(8), Sized(4));
-            _grid.RowTemplate.Height = Math.Max(1, Sized(64));
-
-            foreach (DataGridViewRow row in _grid.Rows)
-            {
-                row.Height = _grid.RowTemplate.Height;
-            }
+            // The normal row height at this size; FitTheBoard, run below once
+            // the window is laid out, makes the rows shorter for a field too
+            // big for the board.
+            _fullRowHeight = Math.Max(1, Sized(64));
 
             _pnlOnDeck.Height = Sized(62);
             _lblWarning.Height = Sized(84);
@@ -1121,7 +1120,8 @@ public sealed partial class BigScreenForm : Form
             _lblCountdown.Font = Face(AppTheme.BoldFont.FontFamily, 56F);
             _lblElapsed.Font = Face(AppTheme.BoldFont.FontFamily, 56F);
             _grid.ColumnHeadersDefaultCellStyle.Font = Face(AppTheme.BoldFont.FontFamily, 12F);
-            _grid.DefaultCellStyle.Font = Face(AppTheme.BodyFont.FontFamily, 24F);
+            // At the share of its size the field's fit has it at (FitTheBoard).
+            _grid.DefaultCellStyle.Font = Face(AppTheme.BodyFont.FontFamily, BoardPoints * _fit.FontShare);
             _lblOnDeck.Font = Face(AppTheme.BoldFont.FontFamily, 20F);
             _lblWarning.Font = Face(AppTheme.BoldFont.FontFamily, 30F);
             _lblCaption.Font = Face(AppTheme.BoldFont.FontFamily, 20F);
@@ -1147,6 +1147,10 @@ public sealed partial class BigScreenForm : Form
         // smaller face - see FitLabel.
         _lblCountdown.Refit();
         _lblElapsed.Refit();
+
+        // The rows at this size, fitted to the field once the board's room
+        // is laid out.
+        FitTheBoard();
 
         int Sized(int pixels) => (int)Math.Round(UiLayout.AtDpi(pixels) * _scale);
 
@@ -2591,6 +2595,9 @@ public sealed partial class BigScreenForm : Form
     {
         _kpiColumns = KpiCatalog.Resolve(_settings?.BigScreenKpis ?? new List<string>(), KpiCatalog.DefaultBigScreen);
 
+        // The rows first: RefreshAll updates rows where they are, so rows
+        // with the old columns' cells must not be left for it.
+        _grid.Rows.Clear();
         _grid.Columns.Clear();
         foreach (var kpi in _kpiColumns)
         {
@@ -2619,7 +2626,6 @@ public sealed partial class BigScreenForm : Form
 
         RefreshOnDeck();
 
-        _grid.Rows.Clear();
         var ordered = _race.GetOrderedStandings();
         _kpiTracker.Observe(ordered, _race.SessionGeneration);
 
@@ -2643,13 +2649,34 @@ public sealed partial class BigScreenForm : Form
             Achievements = _achievements?.Invoke(),
         };
 
+        // Rows updated where they are, not cleared and added again: clearing
+        // sent a board that had rolled down back to the top on every lap
+        // (BigScreenForm.Fit.cs). Spare rows go from the bottom.
+        while (_grid.Rows.Count > ordered.Count)
+        {
+            _grid.Rows.RemoveAt(_grid.Rows.Count - 1);
+        }
+
         for (var i = 0; i < ordered.Count; i++)
         {
             var values = _kpiColumns.Select(k => k.Compute(ordered[i], i, context)).ToList();
-            var rowIndex = _grid.Rows.Add(values.Select(v => (object)v.Text).ToArray());
 
-            for (var col = 0; col < values.Count; col++)
+            if (i >= _grid.Rows.Count)
             {
+                _grid.Rows.Add(values.Select(v => (object)v.Text).ToArray());
+            }
+
+            var row = _grid.Rows[i];
+
+            for (var col = 0; col < values.Count && col < row.Cells.Count; col++)
+            {
+                var cell = row.Cells[col];
+
+                if (!Equals(cell.Value, values[col].Text))
+                {
+                    cell.Value = values[col].Text;
+                }
+
                 // Only the positive highlights carry over here - a big
                 // screen read from across the room wants the fast lap to
                 // stand out, not a wall of red warnings.
@@ -2658,14 +2685,20 @@ public sealed partial class BigScreenForm : Form
                     // The selection colour too: the grid selects its first
                     // row on its own, and the leader's fast lap was painted
                     // in plain text colour because of it.
-                    var style = _grid.Rows[rowIndex].Cells[col].Style;
-                    style.ForeColor = colour;
-                    style.SelectionForeColor = colour;
+                    cell.Style.ForeColor = colour;
+                    cell.Style.SelectionForeColor = colour;
+                }
+                else if (cell.HasStyle && !cell.Style.ForeColor.IsEmpty)
+                {
+                    // A row is now someone else's: last lap's highlight goes.
+                    cell.Style.ForeColor = Color.Empty;
+                    cell.Style.SelectionForeColor = Color.Empty;
                 }
             }
         }
 
         MarkLeaderRow();
+        FitTheBoard();
         RefreshCountdownOnly();
     }
 
