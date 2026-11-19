@@ -58,40 +58,66 @@ numbered marks on the rail.
 HeatBalanceForm, PostHeatsForm, LapDetailWindow, LateArrivalsForm,
 SetupEntryForm, ResultEditForm, EventEditForm and TechInspectionEditForm.
 
-**Never reworked**, biggest first (lines of code), so the windows people
-meet most often come first:
+**Reworked in batches 3 to 7 (18-19 Nov 2026, PRs 259, 261, 263, 264 and
+this one):**
 
-BigScreenForm, MainForm chrome, Sheet, AmbienceLayerForm,
-TemplateDaysForm, SoundscapeEditorForm,
-PasswordPromptForm, PackPickerForm, ChassisTemplateForm, RaceFormatForm,
-AchievementDetailForm, DialogForm, RaceReplayForm, GhostRivalPickerForm,
-LookEditorForm, CarTransferForm, AboutForm, NoteWindow, CsvMappingForm,
-SeasonRulesForm, GhostEditForm, HandScoringForm, ApproveSignupForm,
-TargetLapForm, NameCheckForm,
-PhotoFinishForm, BroadcastWindow,
-QualifyingStandingsForm, PickCarForm, RoundRosterForm, AppTour,
-ThisMonthForm, BelongsToForm, UnsaidLinesForm,
-ApproveDriverRequestForm, DriversMeetingForm, WarningReasonForm,
-ChartExportForm, EventReportForm, DeskPinForm,
-CloseNightForm, QualifyingProjectionForm, SetupFieldEditorForm,
-TemplateEditForm, SanctioningPresetForm, ReadinessCheckForm,
-RacingWordsForm, DeleteRaceDayForm, MissionControlForm, JoinPosterForm,
-TermsForm, DriverPaidForm, SponsorVideoPreviewForm, ShortcutSheetForm,
-SplashForm, MainRoundForm, EntryImportForm, PasteResultForm,
-WarningLadderForm, CarriedPointsForm, RacerPinsForm, RcpStockForm,
-SplitLineUpForm, AdvancedModeForm, RestoreDefaultsForm, ClubBatteriesForm,
-MarshalAssignmentsForm, AnnounceNightForm, BreaksForm, ReportCardForm,
-ScheduleEntryForm, ClassOrderForm, PickDriverForm, AnnouncerForm,
-ResultsExportForm, BulkInspectionForm, RcpPrintForm, KpiPickerForm,
-FillTimesForm, OtherClassesForm, CrewVoicesForm, PageWindow,
-PaceAnalysisForm, TextPromptForm.
+- Qualifying and results: PhotoFinish, QualifyingStandings,
+  QualifyingProjection, MainRound, SplitLineUp, HandScoring, PasteResult,
+  FillTimes, ResultsExport, EventReport.
+- Rosters and pickers: NameCheck, RoundRoster, PickDriver, PickCar,
+  OtherClasses.
+- Race Control and desk popups: CloseNight, WarningReason, WarningLadder,
+  DriverPaid, DriversMeeting, TargetLap, DeskPin.
+- Setup: TemplateDays, Breaks, ClassOrder, ScheduleEntry.
+- Rules: RaceFormat, SeasonRules, SanctioningPreset, CarriedPoints,
+  RacerPins.
+- Garage: ChassisTemplate, SetupFieldEditor, CarTransfer, PackPicker,
+  ClubBatteries.
+- Sign-ups and imports: ApproveSignup, ApproveDriverRequest, BelongsTo,
+  EntryImport, DeleteRaceDay.
+- Sound: AmbienceLayer, CrewVoices, UnsaidLines.
+- Ghosts and charts: GhostEdit, GhostRivalPicker, RaceReplay, ChartExport,
+  KpiPicker.
+- Looks and reports: LookEditor, AchievementDetail, ReportCard, ThisMonth,
+  JoinPoster (primary button only), SponsorVideoPreview.
+- Track: RcpStock, RcpPrint, MarshalAssignments, BulkInspection,
+  ReadinessCheck, AnnounceNight.
+- App windows: About, Terms, AdvancedMode, RestoreDefaults, RacingWords,
+  PasswordPrompt, TextPrompt, ShortcutSheet, AppTour (callout only),
+  MissionControl, BroadcastWindow, DialogForm (the app's message box),
+  BigScreenForm.
 
-About a hundred windows are too many to redesign in a single change, so they
-are being done in batches. The first batch, the windows a club meets on its
-first night, and the second, the race-night windows, are done (above). The
-third batch should be the rest of race night: PhotoFinishForm,
-QualifyingStandingsForm, HandScoringForm, NameCheckForm, RoundRosterForm,
-CloseNightForm, WarningReasonForm and DriverPaidForm.
+**Missed by the first audit, found by the look-back and done in batch 8
+(PR 267):** the 17 Nov list counted 110 windows, but main has 132 Form
+classes. These 23 share a file with a bigger window:
 
-Before-pictures of the pages in this pass (1366x768, text 100%) are in
-`layout-check/before/` (git-ignored).
+- Garage: CarDetail, CarPhotos, ChassisTypes, LendCar, ChassisSheets,
+  UnlinkedSetups.
+- Batteries, rentals and classes: BatteryPackEdit, PackTransfer, RentalPrompt,
+  RentalUnitEdit, HandicapSuggest, TechChecklist.
+- Signups and the desk: InviteDrivers, SignupReason, DriverRequestReason,
+  QuickReplies, CallOff, RoundRoster's DriverPicker.
+- Settings: QuickClass, QuickDriver, ManagerPin, PutBackSettings.
+
+RaceClassManagerForm is only the Classes page in a window, so it was left
+alone.
+
+**Looked at and left as they were, on purpose:**
+
+- TemplateEditForm, SoundscapeEditorForm: they already had cards, and more
+  would shrink their fields.
+- CsvMappingForm: only its primary button changed. A card cost rows of its
+  grid.
+- AnnouncerForm, PaceAnalysisForm: frames around a page's own control.
+  Restyling them would change that page.
+- NoteWindow: the hover note. It already matches the app's tooltips.
+- SplashForm: already drawn with the app's branding, and anything more would
+  cost startup time.
+- PageWindow: anything added would change how a popped-out page looks.
+- Sheet: the dark see-through layer behind an open dialog (in
+  ControlSkins.cs). It has nothing of its own to restyle.
+- MainForm chrome: the sidebar holds the Race Control, Race Day and
+  Championship nav tabs, which are not to be changed.
+
+The Race Control, Race Day and Championship pages themselves were not changed
+in any batch. Only the popups they open were restyled, each in its own class.
