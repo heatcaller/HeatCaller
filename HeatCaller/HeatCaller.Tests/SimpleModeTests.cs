@@ -431,6 +431,14 @@ public sealed class SimpleModeTests : IDisposable
         // in cards (18 Nov 2026, dialog jazz-up, second batch).
         "EventsControl.cs|The day", "EventsControl.cs|Notes",
         "TechInspectionEditForm.cs|Car", "TechInspectionEditForm.cs|Checklist", "TechInspectionEditForm.cs|Result", "TechInspectionEditForm.cs|Notes",
+
+        // One inspection for several cars (BulkInspectionForm), the corner marshals with no posts set
+        // (MarshalAssignmentsForm) and announcing the next night (AnnounceNightForm), in cards
+        // (18 Nov 2026, dialog jazz-up, fifth batch). The track stock, track print and pre-race
+        // check windows have tiles, no new cards.
+        "BulkInspectionForm.cs|Cars", "BulkInspectionForm.cs|Result", "BulkInspectionForm.cs|Notes",
+        "MarshalAssignmentsForm.cs|No marshal posts yet",
+        "NextNightForms.cs|The night", "NextNightForms.cs|Classes on", "NextNightForms.cs|Times and entries",
         "SeasonsControl.cs|Championships", "SeasonsControl.cs|Races counted", "SeasonsControl.cs|Standings", "SeasonsControl.cs|Points scheme", "SeasonsControl.cs|Can they still win?", "SeasonsControl.cs|Scoring rules", "SeasonsControl.cs|Points carried in",
         "AnalyticsOverviewControl.cs|From the last race night",
         "AnalyticsOverviewControl.cs|Track records", "PersonalBestsControl.cs|Personal bests", "LapChartControl.cs|Drivers",

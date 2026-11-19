@@ -7,7 +7,9 @@ namespace HeatCaller;
 /// holds is saved with the club's settings (AppSettings.TrackStock), since
 /// it is the same cupboard for every layout.
 ///
-/// On the layout pieces (DialogFit): a line of what it is for, the boxes
+/// On the layout pieces (DialogFit): a line of what it is for, tiles for
+/// the boxes and the loose pieces of each size (18 Nov 2026, dialog
+/// jazz-up), the boxes
 /// in one measured column of captions and number boxes, the loose parts
 /// the same under a 30 cm / 50 cm switch, and the buttons at the foot. On
 /// a screen too short for all of it, the body scrolls and the buttons stay
@@ -23,6 +25,9 @@ public sealed class RcpStockForm : Form
     private readonly List<(Func<RcpLooseParts, int> Read, Action<RcpLooseParts, int> Write, NumericUpDown Box)> _loose = new();
     private readonly Button _btn30 = new() { Text = "30 cm" };
     private readonly Button _btn50 = new() { Text = "50 cm" };
+
+    /// <summary>The boxed sets, and the loose pieces at 30 cm and at 50 cm - see ShowTiles.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new() };
 
     /// <summary>The tile size whose loose parts the boxes show.</summary>
     private double _looseSize;
@@ -69,6 +74,7 @@ public sealed class RcpStockForm : Form
                 if (!_filling)
                 {
                     _stock.Sets[captured.Name] = (int)box.Value;
+                    ShowTiles();
                 }
             };
 
@@ -92,6 +98,7 @@ public sealed class RcpStockForm : Form
                 if (!_filling)
                 {
                     write(_stock.LooseFor(_looseSize), (int)box.Value);
+                    ShowTiles();
                 }
             };
 
@@ -126,6 +133,19 @@ public sealed class RcpStockForm : Form
         var page = new FillPage();
         var body = DialogFit.Body(page);
         body.Add(lblIntro, gapBelow: UiLayout.RowGap);
+
+        // THE LOOK (18 Nov 2026, dialog jazz-up): what the cupboard comes to
+        // in tiles over the cards - the boxes, and the loose pieces of each
+        // tile size - following the boxes as they are counted (ShowTiles).
+        // The dialog is built at the text size in use, so the tiles take
+        // their faces here.
+        foreach (var tile in _tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        body.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
         body.Add(setsCard, gapBelow: UiLayout.RowGap);
         body.Add(looseCard, gapBelow: 0);
 
@@ -139,9 +159,11 @@ public sealed class RcpStockForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
 
         // After the theme pass, which would otherwise grey them both.
         ShowLoose(_looseSize);
+        ShowTiles();
 
         DialogFit.Keep(this, page, width: DialogWidth, body: body);
     }
@@ -170,6 +192,23 @@ public sealed class RcpStockForm : Form
             + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
 
         return box;
+    }
+
+    /// <summary>The tiles: how many boxed sets, and how many loose pieces of each tile size, as counted so far.</summary>
+    private void ShowTiles()
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+
+        int Loose(double size) =>
+            _stock.Loose.FirstOrDefault(p => Math.Abs(p.TileSizeMm - size) < 1) is { } parts
+                ? _loose.Sum(l => l.Read(parts))
+                : 0;
+
+        var boxes = _sets.Sum(s => (int)s.Box.Value);
+
+        _tiles[0].Set(boxes.ToString(culture), boxes == 1 ? "Boxed set" : "Boxed sets");
+        _tiles[1].Set(Loose(300).ToString(culture), "30 cm loose");
+        _tiles[2].Set(Loose(500).ToString(culture), "50 cm loose");
     }
 
     /// <summary>Shows one tile size's loose parts in the boxes, and lights its button.</summary>

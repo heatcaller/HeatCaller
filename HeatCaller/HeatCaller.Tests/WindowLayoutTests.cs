@@ -193,6 +193,9 @@ internal static partial class WindowCatalog
         all.AddRange(PageHostWindows());
         all.AddRange(AnnouncerWindows());
 
+        // Announce the next night, from Next Steps (18 Nov 2026, dialog jazz-up).
+        all.AddRange(AnnounceNightWindows());
+
         // Last: some of its windows close the day that is open, which the
         // windows above do not expect to find closed.
         all.AddRange(SetupWizardWindows());
