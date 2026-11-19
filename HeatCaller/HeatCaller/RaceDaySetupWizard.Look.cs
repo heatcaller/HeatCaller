@@ -26,7 +26,8 @@ internal sealed partial class RaceDaySetupWizard
     private readonly StepTrack _stepTrack = new(StepNames.Length - 2);
 
     /// <summary>The welcome page: what the four steps are.</summary>
-    private readonly PageStack _welcomeStep = new();
+    // Made in the constructor, inside the window's build hold - see _building.
+    private readonly PageStack _welcomeStep;
 
     /// <summary>The last page's tiles: the day, the classes racing, who is in, and who is on file.</summary>
     private readonly StatTile[] _summaryTiles = { new(), new(), new(), new() };

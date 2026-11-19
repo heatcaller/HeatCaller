@@ -84,6 +84,11 @@ public sealed class SeasonRulesForm : Form
 
     public SeasonRulesForm(Season season, RaceClassStore classes, RaceEventStore? events)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         _season = season;
 
         Text = $"Scoring rules - {(string.IsNullOrWhiteSpace(season.Name) ? "championship" : season.Name)}";

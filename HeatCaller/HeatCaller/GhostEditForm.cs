@@ -126,6 +126,11 @@ public sealed class GhostEditForm : Form
 
     public GhostEditForm(GhostCar? existing, ProfileStore profiles)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, nearly every part had its window before
+        // the theme pass, which made the drop-downs' again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         _profiles = profiles;
 
         // Ghosts excluded - a ghost built from another ghost's pace is a
