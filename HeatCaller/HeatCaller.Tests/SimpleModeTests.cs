@@ -509,6 +509,15 @@ public sealed class SimpleModeTests : IDisposable
         "NameCheckForm.cs|Names to hear", "RoundRosterForm.cs|Running order", "OtherClassesForm.cs|Also races",
         "LateEntry.cs|Drivers", "SetupLinking.cs|Cars in the garage",
 
+        // A sign-up and a driver's phone changes approved, a transponder given and
+        // a race day's delete, in cards (ApproveSignupForm,
+        // ApproveDriverRequestForm, BelongsToForm, DeleteRaceDayForm;
+        // 18 Nov 2026, dialog pass). The entry import (EntryImportForm) has tiles, no Section.
+        "SignupForms.cs|Their details",
+        "DriverRequestsForm.cs|Their details", "DriverRequestsForm.cs|Online and email",
+        "BelongsToForm.cs|The driver", "BelongsToForm.cs|Where is it?",
+        "DeleteRaceDayForm.cs|Saved races",
+
         // A driver's profile and a driver's handicap, in cards (18 Nov 2026, dialog jazz-up).
         "ProfileForm.cs|Who they are", "ProfileForm.cs|Car and class", "ProfileForm.cs|On the PA",
         "ProfileForm.cs|Their crew", "ProfileForm.cs|Junior", "ProfileForm.cs|Privacy", "ProfileForm.cs|Contact",

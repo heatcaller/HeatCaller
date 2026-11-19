@@ -172,6 +172,9 @@ internal static partial class WindowCatalog
         all.AddRange(ClubToolWindows());
         all.AddRange(CsvImportWindows());
         all.AddRange(EntryImportWindows());
+
+        // A driver's phone changes approved, and a transponder given or transferred (18 Nov 2026).
+        all.AddRange(ApprovalAndTransponderWindows());
         all.AddRange(CloseNightWindows());
         all.AddRange(DeskAndMeetingWindows());
         all.AddRange(PasteResultWindows());
