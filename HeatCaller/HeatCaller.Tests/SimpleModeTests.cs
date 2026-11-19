@@ -473,6 +473,11 @@ public sealed class SimpleModeTests : IDisposable
         "SoundEffectsControl.cs|Every sound at once", "SoundEffectsControl.cs|Per lap",
         "SoundscapeEditorForm.cs|Sounds", "SoundscapeEditorForm.cs|Announcer",
 
+        // Dialog batch 5: the ambience layer editor, the crew voices picker
+        // and the lines the announcer didn't say.
+        "AmbienceControl.cs|Layer", "AmbienceControl.cs|Volume at each race state",
+        "CrewVoicesForm.cs|Crew voices", "UnsaidLinesForm.cs|This race",
+
         // Connection, Backup & Restore.
         "MainForm.ConnectionPage.cs|Timing decoder", "MainForm.ConnectionPage.cs|Start-up options", "MainForm.ConnectionPage.cs|Race tools",
         "BackupRestoreControl.cs|Manual backup and restore", "BackupRestoreControl.cs|Automatic backups",

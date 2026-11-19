@@ -35,7 +35,7 @@ internal static partial class WindowCatalog
             library: SoundscapeWholeLibrary())),
         ("Add Ambience Layer", () => new AmbienceLayerForm(null)),
         ("Edit Ambience Layer (long name and file)", () => new AmbienceLayerForm(SoundLongLayer())),
-    };
+    }.Concat(VoiceDialogWindows());
 
     /// <summary>
     /// The editor as the Soundscapes page opens it, over the soundscapes in
