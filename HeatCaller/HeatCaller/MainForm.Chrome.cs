@@ -142,7 +142,6 @@ public partial class MainForm
         // The month's allowances, over the buttons when there is anything
         // to say - words across the open sidebar, a dot in the rail.
         _usageChip.Rail = _navIconsOnly;
-        _advancedChip.Rail = _navIconsOnly;
 
         var footerHeight = _navIconsOnly ? PlaceRailFooter(width) : PlaceWideFooter(width);
 
@@ -163,22 +162,15 @@ public partial class MainForm
         var shift = (width - UiLayout.AtDpi(220)) / 2;
         var size = new Size(UiLayout.AtDpi(60), UiLayout.AtDpi(42));
 
-        // Each chip takes a line of its own above the row - the month's
-        // allowances, then Advanced mode under it - and the footer grows by
-        // just those lines; the row keeps its own room round it.
+        // The chip - the month's allowances - takes a line of its own above
+        // the row, and the footer grows by just that line; the row keeps its
+        // own room round it.
         var chip = 0;
 
         if (_usageChipShown)
         {
             var height = _usageChip.WantedHeight;
             _usageChip.Bounds = new Rectangle(UiLayout.AtDpi(12), UiLayout.AtDpi(8) + chip, Math.Max(1, width - UiLayout.AtDpi(24)), height);
-            chip += height;
-        }
-
-        if (_advancedChipShown)
-        {
-            var height = _advancedChip.WantedHeight;
-            _advancedChip.Bounds = new Rectangle(UiLayout.AtDpi(12), UiLayout.AtDpi(8) + chip, Math.Max(1, width - UiLayout.AtDpi(24)), height);
             chip += height;
         }
 
@@ -201,8 +193,8 @@ public partial class MainForm
 
     /// <summary>
     /// The footer's buttons, left to right: Manage Navigation, Mute and Undo.
-    /// The same in both modes - Simple used to drop Manage Navigation as
-    /// tuning, which left a club no way to re-order or hide a page (6 Nov 2026).
+    /// Manage Navigation always shows - without it a club has no way to
+    /// re-order or hide a page (6 Nov 2026).
     /// </summary>
     private List<Button> FooterButtons() => new() { btnManageNav, btnMuteToggle, btnUndo };
 
@@ -226,13 +218,6 @@ public partial class MainForm
         {
             var chip = _usageChip.WantedHeight;
             _usageChip.Bounds = new Rectangle(0, top, width, chip);
-            top += chip + gap;
-        }
-
-        if (_advancedChipShown)
-        {
-            var chip = _advancedChip.WantedHeight;
-            _advancedChip.Bounds = new Rectangle(0, top, width, chip);
             top += chip + gap;
         }
 

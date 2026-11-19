@@ -508,14 +508,10 @@ public sealed class RaceClassEditForm : Form
         // that wide to hold one column of fields reads as a mistake. The
         // row takes a second line instead and the dialog grows downwards,
         // which is the direction nobody minds.
-        // Simple mode (1 Nov 2026) keeps the race format (its lap and time
-        // limits - the window hides its own tuning), color and sanctioning
-        // preset; the tech list, qualifier format and warning ladder are
-        // Advanced. See SimpleMode.
         // On the page itself, not in a card: on a 1280x720 screen a card's
         // caption, hint and insets took another 80px from the settings over
         // them, which already scroll there (layout pictures, 18 Nov 2026).
-        page.Add(new ButtonBar().With(SimpleMode.Hide(btnTechList), btnFormat, SimpleMode.Hide(btnQualFormat), btnColour, btnPreset, SimpleMode.Hide(btnWarnings)), gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar().With(btnTechList, btnFormat, btnQualFormat, btnColour, btnPreset, btnWarnings), gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to
@@ -1078,9 +1074,20 @@ public sealed class RaceClassEditForm : Form
             checks.AddSide(btnDown, gapBelow: UiLayout.SectionGap);
             checks.AddSide(btnPreset, gapBelow: 0);
 
+            // The checks and their buttons in one card, the hint as its line
+            // on what it is for (18 Nov 2026, dialog jazz-up, as Edit Class
+            // has cards). With none yet, the hint says what fills the list.
+            if (_list.Items.Count == 0)
+            {
+                lblHint.Text += " None yet - Add one, or Add Common for the usual checks.";
+            }
+
+            var card = new Section("Checks");
+            card.Add(lblHint, gapBelow: UiLayout.RowGap);
+            card.AddFill(checks, () => checks.LeastHeight(Math.Max(1, checks.Width)), gapBelow: 0);
+
             var page = new FillPage();
-            page.Add(lblHint, gapBelow: UiLayout.RowGap);
-            page.AddFill(checks, checks.LeastHeight);
+            page.AddFill(card, card.LeastHeight);
 
             // Against the right-hand edge, Cancel furthest right, as they
             // were - and Tab still reaches OK first: the bar takes them right
@@ -1098,9 +1105,10 @@ public sealed class RaceClassEditForm : Form
 
             // Wider than the 420 it was made at: the buttons are as wide as
             // a standard button now, 148px rather than 116, and at 420 that
-            // came out of the list - this keeps it the 270px it had. The
-            // height it had. It can be made bigger, for a long list.
-            DialogFit.Keep(this, page, width: 460, height: 420);
+            // came out of the list - this keeps it the 270px it had. Wider
+            // and taller again by the card's insets and caption, so the list
+            // keeps its size. It can be made bigger, for a long list.
+            DialogFit.Keep(this, page, width: 492, height: 456);
         }
 
         /// <summary>The checks, in the order the list has them. Only meaningful after DialogResult.OK.</summary>

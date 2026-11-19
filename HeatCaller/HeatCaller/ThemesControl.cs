@@ -259,8 +259,8 @@ public sealed class ThemesControl : UserControl
         // TextSize.ReserveLines).
         _chkAskInWizards.Text = "Ask which sound to use in Set Up Tonight";
         _chkAskInWizards.AutoSize = true;
-        // Advanced only (1 Nov 2026, Simple mode), and only with settings to save to.
-        SimpleMode.Hide(_chkAskInWizards, own: () => _settings is not null);
+        // Only with settings to save to.
+        _chkAskInWizards.Visible = _settings is not null;
         _chkAskInWizards.Checked = _settings?.AskAboutSoundInWizards ?? true;
         _chkAskInWizards.CheckedChanged += (_, _) =>
         {
@@ -298,17 +298,13 @@ public sealed class ThemesControl : UserControl
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.Add(new TileStrip(_tiles));
 
-        // Simple mode (1 Nov 2026) picks, previews and applies; saving a new
-        // soundscape, the voice in previews and the wizards' question are
-        // Advanced - as are each card's Customize and Voice Lines (BuildCard).
-        page.Add(SimpleMode.Hide(FieldGrid.Inline(btnSaveNew, _chkPreviewVoice)), gapBelow: _settings is null ? UiLayout.RowGap : UiLayout.HintGap);
+        page.Add(FieldGrid.Inline(btnSaveNew, _chkPreviewVoice), gapBelow: _settings is null ? UiLayout.RowGap : UiLayout.HintGap);
 
         if (_settings is not null)
         {
             page.Add(_chkAskInWizards, stretch: false, gapBelow: UiLayout.RowGap);
         }
         page.Add(_lblStatus, gapBelow: UiLayout.RowGap);
-        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: UiLayout.RowGap);
 
         // At least a row of cards - below that the page scrolls.
         page.AddFill(scroller, _cards.LeastHeight, gapBelow: 0);
@@ -512,7 +508,7 @@ public sealed class ThemesControl : UserControl
 
         // One row of buttons, each only as wide as its caption and a little
         // room, so the four stay on one line in a card of readable width.
-        var buttons = new ButtonBar(tight: true).With(btnPreview, btnApply, SimpleMode.Hide(btnEdit), SimpleMode.Hide(btnLines));
+        var buttons = new ButtonBar(tight: true).With(btnPreview, btnApply, btnEdit, btnLines);
 
         _cardButtons.Add(buttons);
         card.Add(buttons, gapBelow: 0);

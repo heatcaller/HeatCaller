@@ -340,6 +340,9 @@ internal sealed class InviteDriversForm : Form
     /// <summary>The box shows at least this many addresses before the window scrolls instead.</summary>
     private const int LeastLines = 4;
 
+    /// <summary>How much taller the window is for the card round the box - its caption and edges - at the normal text size.</summary>
+    private const int CardRoom = 56;
+
     private readonly TextBox _txtPeople = new();
     private readonly Label _lblError = new();
 
@@ -373,9 +376,16 @@ internal sealed class InviteDriversForm : Form
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
         btnOk.Click += (_, _) => TryAccept();
 
+        // THE LOOK (18 Nov 2026, dialog pass): the explanation and the box
+        // of addresses in one card, the explanation as its line on what it
+        // is for, the card taking the height; what is wrong under the card,
+        // beside the buttons, and Send Invites in the app's colour.
+        var card = new Section("Who to invite");
+        card.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        card.AddFill(_txtPeople, () => LeastLines * Pieces.LineHeight(_txtPeople.Font) + UiLayout.HintGap * 2, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.AddFill(_txtPeople, _ => LeastLines * Pieces.LineHeight(_txtPeople.Font) + UiLayout.HintGap * 2, gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(_lblError, gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as it was - and
@@ -391,6 +401,9 @@ internal sealed class InviteDriversForm : Form
 
         AppTheme.ApplyRecursively(this);
 
+        // After the theme pass: Send Invites in the app's colour.
+        AppTheme.StyleButton(btnOk, AppTheme.ButtonKind.Primary);
+
         // Two lines kept for what is wrong, as the label draws them
         // (Pieces.LineHeight), so a message appearing takes nothing from the
         // box. A longer list of addresses that don't look right grows it,
@@ -398,8 +411,9 @@ internal sealed class InviteDriversForm : Form
         _lblError.MinimumSize = new Size(0, 2 * Pieces.LineHeight(_lblError.Font) + _lblError.Padding.Vertical);
 
         // The size it was at the normal text size - 552x390 inside, the box
-        // about 200px of that height.
-        DialogFit.Keep(this, page, width: 552, height: 390);
+        // about 200px of that height - and wider and taller by the card's
+        // edges and caption, so the box is the size it was.
+        DialogFit.Keep(this, page, width: 552 + Section.Inset.Horizontal, height: 390 + CardRoom);
     }
 
     private void TryAccept()
@@ -487,16 +501,22 @@ internal sealed class SignupReasonForm : Form
         var btnOk = new Button { Text = rejecting is null ? "Make Code" : "Turn Down", DialogResult = DialogResult.OK };
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // THE LOOK (18 Nov 2026, dialog pass): the question and its box in
+        // one card, captioned with what the words are for, and the button
+        // that does it in the app's colour. The window is wider by the
+        // card's edges, so the question wraps where it did.
+        var card = rejecting is null ? new Section("For your list") : new Section("Your words to them");
+        card.Add(lbl, gapBelow: UiLayout.HintGap);
+        card.Add(_txt, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lbl, gapBelow: UiLayout.HintGap);
-        page.Add(_txt, gapBelow: UiLayout.SectionGap);
+        page.Add(card, gapBelow: UiLayout.SectionGap);
 
         // A pixel either side of the box for the ring the theme draws round
         // it, outside it, on what holds it (Pieces.RingRoom): stretched across
-        // the page, the box's sides would be the page's edges, and the ring's
-        // sides would be drawn past them, where nothing shows. The gap under
-        // the box stays as it was.
-        _txt.Margin = new Padding(1, 0, 1, UiLayout.SectionGap);
+        // the card, the box's sides would be the card's inner edges, and the
+        // ring's sides would be drawn past them, where nothing shows.
+        _txt.Margin = new Padding(1, 0, 1, 0);
 
         // Its height is the box's own, and changes when the theme takes its
         // border off - see Pieces.KeepHeightTold.
@@ -516,6 +536,9 @@ internal sealed class SignupReasonForm : Form
 
         AppTheme.ApplyRecursively(this);
 
-        DialogFit.Keep(this, page, width: 472);
+        // After the theme pass: Make Code or Turn Down in the app's colour.
+        AppTheme.StyleButton(btnOk, AppTheme.ButtonKind.Primary);
+
+        DialogFit.Keep(this, page, width: 472 + Section.Inset.Horizontal);
     }
 }

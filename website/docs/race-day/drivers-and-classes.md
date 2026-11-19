@@ -461,7 +461,7 @@ The **Add Class** / **Edit Class** dialog has these settings:
 | **A jump start also costs the lap** | When on, a car that jumps the start loses the lap it jumped on as well as any time penalty. When off, it's credited with the start lap at the green like everyone else. | Off |
 | **Warn when a driver in a heat hasn't passed tech today** | When a heat is staged, Race Control warns about drivers in it who haven't been cleared by scrutineering today. It never stops the race. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control). | On |
 
-The row of buttons under the settings opens the class's sub-editors: **Tech Checklist**, **Format**, **Qualifier Format**, **Color**, **Sanctioning Preset** and **Warnings**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change. **Tech Checklist**, **Qualifier Format** and **Warnings** are shown in Advanced mode only; in Simple mode they're hidden but keep working (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
+The row of buttons under the settings opens the class's sub-editors: **Tech Checklist**, **Format**, **Qualifier Format**, **Color**, **Sanctioning Preset** and **Warnings**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change.
 
 !!! note
     Classes don't have a points scale. Points are set per championship — see [Results and championships](../race-control/results-and-championships.md).
@@ -603,8 +603,6 @@ The event report also lists any units still out. See [Results and championships]
 ## Venues
 
 A venue saves everything specific to one physical track so you can switch it all over with one click — useful if your club races at more than one place.
-
-The **Venues** page is in the sidebar in Advanced mode only. In Simple mode a button that would open it asks to turn on Advanced mode first. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
 
 ![The Venues page: two venues listed, and Venue settings for Home Track with its decoder, preferred soundscape and race defaults, and Apply This Venue](../assets/images/venues.png)
 

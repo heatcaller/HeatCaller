@@ -17,7 +17,7 @@ The sidebar is always dark, whatever look you use. From top to bottom it has:
 1. The **HEATCALLER** header, or your club logo if you've set one. With a look that has Synthwave effects, such as **Synthwave**, it's animated (unless the logo is showing).
 2. The **Search pages...** box, with a chevron beside it that narrows the sidebar to just its icons (see [Just the icons](#just-the-icons)).
 3. The list of pages. Click one to open it.
-4. Icon buttons at the bottom: **Manage Navigation**, the announcer mute, and **Undo**. They have no text on them - hover over one to see its name. They're described below. In Advanced mode an amber **Advanced** sits above them; see [Simple and Advanced mode](simple-and-advanced-mode.md). When your club uses the HeatCaller voice, the AI commentary through the relay or ElevenLabs, a small line above them shows how much of this month's allowance is used, for example "AI 47% · Voice 34%". Click it for the **This Month** window; see [The chip in the sidebar](../announcer/commentary.md#the-chip-in-the-sidebar).
+4. Icon buttons at the bottom: **Manage Navigation**, the announcer mute, and **Undo**. They have no text on them - hover over one to see its name. They're described below. When your club uses the HeatCaller voice, the AI commentary through the relay or ElevenLabs, a small line above them shows how much of this month's allowance is used, for example "AI 47% · Voice 34%". Click it for the **This Month** window; see [The chip in the sidebar](../announcer/commentary.md#the-chip-in-the-sidebar).
 
 HeatCaller opens on the **Race Control** page.
 
@@ -29,17 +29,13 @@ While a race day is open, a third group, **TONIGHT**, sits at the top with the t
 
 You can reorder pages within a group, or hide them (see [Reordering and hiding pages](#reordering-and-hiding-pages)), but a page stays in its own group.
 
-Not every page below may be in your sidebar:
-
-- **Venues** isn't shown in Simple mode, the mode a new install starts in. A sidebar search still finds it, under **IN ADVANCED MODE**. See [Simple and Advanced mode](simple-and-advanced-mode.md).
-
 ### Just the icons
 
 On a laptop at the track, the sidebar's 220 pixels is a column of the leaderboard. Click the chevron beside the **Search pages...** box, or press <kbd>Ctrl</kbd>+<kbd>B</kbd>, and the sidebar narrows to a rail of its icons - about a quarter of the width, with the rest going to the page beside it. Click the chevron again, or press <kbd>Ctrl</kbd>+<kbd>B</kbd> again, to open it. It slides shut and open rather than jumping. On **Race Control**, **Expand** at the foot of the leaderboard narrows the sidebar and folds away the column under the clock in one go (see [Make the leaderboard bigger](../race-control/running-a-race.md#make-the-leaderboard-bigger)).
 
 Nothing is hidden by this. Every page is still there, in the same order and in the same groups, and the page you were on stays on screen. What goes is the words: the page names, the group headings, the **Search pages...** box and the **HEATCALLER** header, which becomes **HC**. The club logo and the Synthwave scene go from the header too, since neither reads at that width; they come back when you open the sidebar. Hover over an icon to see its page's name, and its count if it has one - the **Rentals** count, for example, becomes a dot in the corner of the icon with the number in the tooltip.
 
-The buttons at the bottom stack into a column instead of sitting in a row, and the allowance line and the amber **Advanced** become dots. Dragging a page up or down still reorders it, and <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> still open pages by position. <kbd>Ctrl</kbd>+<kbd>F</kbd> opens the sidebar and puts the cursor in the search box, since the box isn't there to type in.
+The buttons at the bottom stack into a column instead of sitting in a row, and the allowance line becomes a dot. Dragging a page up or down still reorders it, and <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> still open pages by position. <kbd>Ctrl</kbd>+<kbd>F</kbd> opens the sidebar and puts the cursor in the search box, since the box isn't there to type in.
 
 How you leave it is remembered, so a club that prefers the rail gets it at every start.
 
@@ -64,8 +60,8 @@ How you leave it is remembered, so a club that prefers the rail gets it at every
 | **Themes** | How the app looks: the app's colors, the crowd screens' colors, the club logo and the **Appearance** options. See [Looks and the club logo](../screens/looks-and-logo.md). |
 | **Voice** | Everything the app says, in tabs: **Voice**, **Cast**, **Race Calls** (with **Rivalries** at its end) and **AI Commentary**. The announcer's own screen is a window, opened from **Race Control**. See [Voice announcements](../announcer/voice.md). |
 | **Sounds** | Everything else you hear, in tabs: **Mixer**, **Soundscapes** (voice and sound presets you can switch between), **Imaging**, **Effects**, **Ambience**, **Music** and **Lap Beeps**. See [Sounds and music](../announcer/sounds-and-music.md). |
-| **Connection** | Connecting to your decoder, **Mission Control**, the finish camera and, in Advanced mode, the split loop and the Developer Console. See [Decoders](../timing/decoders.md). |
-| **Backup & Restore** | Manual and automatic backups, the **Settings mode** card (Simple and Advanced mode, and **Restore Default Settings**), and the **Getting help** card. See [Backups](../admin/backups.md) and [Simple and Advanced mode](simple-and-advanced-mode.md). |
+| **Connection** | Connecting to your decoder, **Mission Control**, the finish camera, the split loop and the Developer Console. See [Decoders](../timing/decoders.md). |
+| **Backup & Restore** | Manual and automatic backups, the **Default settings** card (**Restore Default Settings** and **Put Back Earlier Settings**), and the **Getting help** card. See [Backups](../admin/backups.md). |
 
 #### Club Tools
 
@@ -75,12 +71,12 @@ How you leave it is remembered, so a club that prefers the rail gets it at every
 | **Championship** | The season, in two tabs: **Standings** (championships, points and results) and **Calendar** (events and their rounds). See [Results and championships](../race-control/results-and-championships.md). |
 | **Rentals** | Club transponders on loan. The sidebar shows a count next to **Rentals** while any are still out. |
 | **Handicaps** | Time or lap credits to even out a mixed-ability grid. See [Practice, ghosts and demo](../race-control/practice-and-ghosts.md). |
-| **Venues** | Save a track's connection settings, layout, soundscape and race defaults, and apply them all in one click. In the sidebar in Advanced mode only. See [Venues](../race-day/drivers-and-classes.md#venues). |
+| **Venues** | Save a track's connection settings, layout, soundscape and race defaults, and apply them all in one click. See [Venues](../race-day/drivers-and-classes.md#venues). |
 | **Sponsors** | Sponsor slides that rotate on the Big Screen. See [Big Screen](../screens/big-screen.md). |
 | **Local Screens** | The Wi-Fi web server for phones: phone remote, self check-in, race-day manager and OBS overlay. See [Local Screens](../screens/phone-and-web.md). |
 | **Club Website** | Publishing to your club's online relay, online check-in, racer PINs and email, on its **Website** tab. Its **Recording** tab has the race recordings, the drivers' clips and highlight videos (it was on **Sounds** until 26 October 2026). See [Online setup](../online/setup.md) and [Race recordings](../announcer/sounds-and-music.md#race-recordings). |
 
-Some pages have tabs along the top. Race Day, Championship, Race Analytics, Voice, Sounds and Club Website all do. The tabs refresh when you open them, so they always show the latest data. In Simple mode a few tabs are hidden: **Race Calls** on **Voice**, **Imaging**, **Effects**, **Ambience** and **Lap Beeps** on **Sounds**, and **Recording** on **Club Website**. They keep working; see [What Simple mode hides](simple-and-advanced-mode.md#what-simple-mode-hides).
+Some pages have tabs along the top. Race Day, Championship, Race Analytics, Voice, Sounds and Club Website all do. The tabs refresh when you open them, so they always show the latest data.
 
 ## Page headers
 
@@ -102,7 +98,7 @@ Type in the **Search pages...** box to filter the sidebar (<kbd>Ctrl</kbd>+<kbd>
 | `elevenlabs`, `commentary` | Voice |
 | `beep`, `music`, `crowd` | Sounds |
 | `token`, `club id` | Club Website |
-| `advanced`, `simple mode`, `default settings` | Backup & Restore |
+| `default settings`, `reset settings`, `put back` | Backup & Restore |
 | `obs`, `overlay` | Local Screens |
 | `look`, `dark mode`, `24-hour` | Themes |
 | `logo` | Themes, Sponsors |
@@ -123,15 +119,13 @@ Short keywords filed under a tab, such as `vs`, work the same way.
 
 If nothing matches, the full list stays in place, so the sidebar never goes blank. Clear the box to see every page again.
 
-A search also turns up pages that are kept out of the sidebar, at the foot of the list: in Simple mode the **Venues** page, under **IN ADVANCED MODE**. In Simple mode, typing a setting that Simple mode hides, such as `ducking` or `split loop`, adds an **Advanced mode settings** row there too. Picking an **IN ADVANCED MODE** row offers to turn on Advanced mode.
-
 ## Reordering and hiding pages
 
 You can put the pages you use most at the top, and hide the ones you never use.
 
 **To reorder by dragging:** drag a page up or down in the sidebar list. The new order is saved straight away. A page stays in its own group (Essentials or Club Tools); drop it in the other group and it moves back into its own.
 
-**To reorder or hide with Manage Navigation** (in Simple and Advanced mode alike):
+**To reorder or hide with Manage Navigation**:
 
 1. Click **Manage Navigation** at the bottom of the sidebar.
 2. In the **Manage Navigation** dialog:
@@ -180,7 +174,7 @@ Press <kbd>?</kbd> at any time you're not typing in a box to see a sheet of the 
 
 ## The sidebar buttons
 
-Icon buttons, with no text on them - hover over one to see its name. All three are there in Simple and Advanced mode alike.
+Icon buttons, with no text on them - hover over one to see its name.
 
 | Button | What it does |
 |---|---|
@@ -193,7 +187,7 @@ Icon buttons, with no text on them - hover over one to see its name. All three a
 
 ## The Developer Console
 
-The **Connection** page has a **Developer console** card at the bottom, in Advanced mode (Simple mode hides it). Despite the name, it's the app's running log, and it's useful to anyone. Every page writes to it: decoder messages, laps, flags, what the announcer said or skipped and why, backups, sessions saved, and warnings. It keeps logging while it's hidden, and **Save Support Info** on **Backup & Restore** includes it either way.
+The **Connection** page has a **Developer console** card at the bottom. Despite the name, it's the app's running log, and it's useful to anyone. Every page writes to it: decoder messages, laps, flags, what the announcer said or skipped and why, backups, sessions saved, and warnings. It keeps logging while you're on other pages, and **Save Support Info** on **Backup & Restore** includes it.
 
 | Control | What it does |
 |---|---|

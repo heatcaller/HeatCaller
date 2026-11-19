@@ -43,8 +43,6 @@ New drivers who aren't on your books yet can sign themselves up with an invite; 
 5. Click **Open Check-in Page** to see the page as drivers will.
 6. Print QR check-ins: go to **Race Day → Who's Racing** and click **Print QR Check-ins** (see [QR check-ins](#qr-check-ins)).
 
-In Simple mode, **Include photos** and the **Personal PINs** and **Email (for racer PINs)** cards are hidden; they keep working as set. Turn on Advanced mode to change them (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)).
-
 While online check-in is on, a driver who types their personal PIN on the **Me** tab is checked in there and then (see [Opening your night with your PIN](index.md#opening-your-night-with-your-pin)). (Until 29 October 2026 check-in had a tab of its own, and until 30 October **Me** linked to this page instead. From 30 October to 5 November the home page also had a **Check in: tap Me and type your PIN** line; Home no longer mentions check-in.)
 
 When you untick **Let drivers check in from their own phones**, the check-in page says it's closed and the list of names is taken back off the relay.

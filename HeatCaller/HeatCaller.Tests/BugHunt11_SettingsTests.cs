@@ -103,7 +103,6 @@ public sealed class BugHunt11_SettingsTests : IDisposable
         File.WriteAllText(SettingsPath, JsonSerializer.Serialize(new AppSettings
         {
             RaceMinLapTimeMs = shipped.RaceMinLapTimeMs + 900,
-            SettingsMode = SettingsMode.Advanced,
         }));
         var imaging = Path.Combine(_folder, "imaging.json");
         File.WriteAllText(imaging, damaged);
@@ -112,7 +111,6 @@ public sealed class BugHunt11_SettingsTests : IDisposable
 
         var back = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath))!;
         Assert.Equal(shipped.RaceMinLapTimeMs, back.RaceMinLapTimeMs);
-        Assert.Equal(SettingsMode.Simple, back.SettingsMode);
         Assert.Contains("App: RaceMinLapTimeMs", changed);
         Assert.Equal(damaged, File.ReadAllText(imaging));
     }
@@ -188,21 +186,18 @@ public sealed class BugHunt11_SettingsTests : IDisposable
     }
 
     [Fact]
-    public void Putting_back_keeps_simple_mode_and_the_manager_pin_lock()
+    public void Putting_back_keeps_the_manager_pin()
     {
-        File.WriteAllText(SettingsPath, $$"""
-            { "SettingsMode": {{(int)SettingsMode.Simple}}, "AdvancedNeedsManagerPin": true, "ManagerPin": "9876" }
+        File.WriteAllText(SettingsPath, """
+            { "ManagerPin": "9876" }
             """);
 
-        var zip = MakeCopy(new DateTime(2026, 11, 1), ("settings.json", $$"""
-            { "SettingsMode": {{(int)SettingsMode.Advanced}}, "AdvancedNeedsManagerPin": false, "ManagerPin": "" }
+        var zip = MakeCopy(new DateTime(2026, 11, 1), ("settings.json", """
+            { "ManagerPin": "" }
             """));
 
         SettingsRestore.PutBack(_folder, zip);
-        var back = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath))!;
 
-        Assert.Equal(SettingsMode.Simple, back.SettingsMode);
-        Assert.True(back.AdvancedNeedsManagerPin);
         Assert.Equal("9876", ReadSettings()["ManagerPin"]!.GetValue<string>());
     }
 

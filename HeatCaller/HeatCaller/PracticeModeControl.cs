@@ -493,9 +493,6 @@ public sealed class PracticeModeControl : UserControl
         fields.AddRow("Rolling average over:", FieldGrid.Inline(_numRollingWindow, new Label { Text = "laps" }));
         fields.AddHint("Streak = clean laps now; Best Streak = longest this session; Streak Pace = average lap in the current streak.");
 
-        // The rolling average is Advanced (1 Nov 2026, Simple mode).
-        SimpleMode.HideRow(fields, _numRollingWindow);
-
         var setup = new Section("Setup");
 
         setup.Add(Hint("Where practice is run, how long it goes on, and how the table's averages are worked out."));
@@ -702,9 +699,7 @@ public sealed class PracticeModeControl : UserControl
 
         session.Add(_lblStatus);
         session.AddFill(_grid, () => _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height);
-        // The Columns button is Advanced (1 Nov 2026, Simple mode) - the bar
-        // with it, its only button.
-        session.Add(SimpleMode.Hide(new ButtonBar().With(btnColumns)), gapBelow: 0);
+        session.Add(new ButtonBar().With(btnColumns), gapBelow: 0);
 
         var page = new FillPage();
 

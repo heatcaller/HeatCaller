@@ -100,35 +100,6 @@ public sealed class BugHunt16_AutoCountdownTickTests : IDisposable
         Assert.False(seen);
     }
 
-    /// <summary>
-    /// 13 Nov 2026: with the Timetable's tick gone, Simple mode has its own on
-    /// AI Commentary's Countdown card - the same setting as Between races, and
-    /// not grayed when commentary is off, since the countdown needs none.
-    /// </summary>
-    [Fact]
-    public void The_simple_countdown_tick_and_the_between_races_tick_agree()
-    {
-        var seen = StaThread.Run(() =>
-        {
-            var settings = new AppSettings { CommentaryEnabled = false };
-            using var page = new CommentaryControl(settings, new CommentaryService(ProfileStore.Load(), settings));
-
-            var simple = Box(page, "Count down to each race by itself");
-            var advanced = Box(page, "Start the countdown by itself");
-
-            simple.Checked = true;
-            var on = (advanced.Checked, settings.BetweenRacesAutoCountdown, simple.Enabled);
-
-            advanced.Checked = false;
-            var off = (simple.Checked, settings.BetweenRacesAutoCountdown);
-
-            return (on, off);
-        }, TimeSpan.FromSeconds(60), () => "building the AI Commentary page");
-
-        Assert.Equal((true, true, true), seen.on);
-        Assert.Equal((false, false), seen.off);
-    }
-
     /// <summary>13 Nov 2026: the Timetable has no countdown of its own any more - no Start, no tick.</summary>
     [Fact]
     public void The_timetable_has_no_reminder_countdown()

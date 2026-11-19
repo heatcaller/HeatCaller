@@ -20,8 +20,6 @@ public sealed class StreamDecoderSourceTests
                 HasCompletedFirstRun = true,
                 HasSeenRaceDaySetup = true,
                 AutoBackupEnabled = false,
-                SettingsMode = SettingsMode.Advanced,
-                SettingsModeDecided = true,
                 LastConnectionType = DecoderConnection.MyLapsP3,
                 ConnectDecodersAtStartup = false,
             };

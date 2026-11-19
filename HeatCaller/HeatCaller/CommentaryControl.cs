@@ -1299,15 +1299,9 @@ public sealed class CommentaryControl : UserControl
 
         page.Add(master);
 
-        // SIMPLE MODE (1 Nov 2026, round 3): the master switch above, then
-        // six section switches and the talking points tick, in place of
-        // every card below - see BuildSectionsCard and CommentarySections.
-        page.Add(SimpleMode.ShowInSimpleOnly(BuildSectionsCard(Hint, Check)));
-        page.Add(SimpleMode.ShowInSimpleOnly(BuildCountdownCard(Hint)));
-
         // Who writes it first (1 Nov 2026, asked for by Asher: "move who
         // writes it card to the top"), then How it's written, whose wording
-        // covers every card below. All of them Advanced.
+        // covers every card below.
         //
         // Side by side on a wide page (17 Nov 2026), in pairs that read in
         // the same order one under another on a narrow one: who writes and
@@ -1315,25 +1309,24 @@ public sealed class CommentaryControl : UserControl
         int WideFrom() => UiLayout.AtTextSize(1200);
 
         var setUp = new CardColumns { TwoColumnsFrom = WideFrom };
-        setUp.AddLeft(SimpleMode.Hide(connection));
-        setUp.AddRight(SimpleMode.Hide(style));
+        setUp.AddLeft(connection);
+        setUp.AddRight(style);
 
         var afterTheFlag = new CardColumns { TwoColumnsFrom = WideFrom };
-        afterTheFlag.AddLeft(SimpleMode.Hide(after));
-        afterTheFlag.AddRight(SimpleMode.Hide(recap));
+        afterTheFlag.AddLeft(after);
+        afterTheFlag.AddRight(recap);
 
-        page.Add(SimpleMode.Hide(setUp));
-        page.Add(SimpleMode.Hide(before));
-        page.Add(SimpleMode.Hide(segments));
-        page.Add(SimpleMode.Hide(afterTheFlag));
+        page.Add(setUp);
+        page.Add(before);
+        page.Add(segments);
+        page.Add(afterTheFlag);
 
         // --- Between races (31 Oct 2026): the gap after the recap and before
         // the next race is called - see BetweenRacesCard.
         var (betweenRaces, betweenGrids) = BetweenRacesCard.Build(_settings, _textSize,
             () => TonightsGap?.Invoke(), lines => PlayGap?.Invoke(lines), () => _settings.CommentaryEnabled,
             () => SponsorReadsBetweenRaces?.Invoke() ?? false);
-        page.Add(SimpleMode.Hide(betweenRaces), gapBelow: 0);
-        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
+        page.Add(betweenRaces, gapBelow: 0);
 
         Controls.Add(page);
 
@@ -1547,13 +1540,6 @@ public sealed class CommentaryControl : UserControl
     /// </summary>
     private void SaveSegmentSwitches()
     {
-        // The boxes are being put in step with the settings (ShowTicks) -
-        // the settings are already right, and half-moved boxes are not.
-        if (_syncing)
-        {
-            return;
-        }
-
         _settings.CommentarySegmentsOff = CommentaryBudget.SaveSwitches(
             _segmentBoxes.Where(pair => !pair.Value.Checked).Select(pair => pair.Key));
 
@@ -1731,242 +1717,8 @@ public sealed class CommentaryControl : UserControl
         }
     }
 
-    // ==================== Simple mode: the section switches ====================
-
-    /// <summary>The six section switches, by section.</summary>
-    private readonly Dictionary<CommentarySection, CheckBox> _sectionBoxes = new();
-
-    /// <summary>The grey word beside each: "custom", "needs Recap show", or nothing.</summary>
-    private readonly Dictionary<CommentarySection, Label> _sectionNotes = new();
-
-    /// <summary>Talking points, in the Simple view - the same setting as the tick on Through the night.</summary>
-    private readonly CheckBox _chkTalkingPointsSimple = new ThemedCheckBox();
-
-    /// <summary>True while the page's boxes are put in step with the settings, so their handlers save nothing.</summary>
-    private bool _syncing;
-
-    /// <summary>
-    /// The engine the announcer speaks with, for whether a Cast voice is set
-    /// (SecondVoice.IsSetFor). Set by MainForm; the HeatCaller voice without it.
-    /// </summary>
-    internal Func<VoiceEngine>? AnnouncerEngine { get; set; }
-
-    /// <summary>Whether the Cast voice a piece needs is set - see CommentarySections.</summary>
-    private bool CastSet(CastNeed need)
-    {
-        var engine = AnnouncerEngine?.Invoke() ?? VoiceEngine.HeatCaller;
-
-        return need switch
-        {
-            CastNeed.TechnicalLead => _settings.MechanicVoice.IsSetFor(engine),
-            CastNeed.TeamPrincipal => _settings.PrincipalVoice.IsSetFor(engine),
-            CastNeed.AchievementsReader => _settings.HonoursVoice.IsSetFor(engine),
-            _ => true,
-        };
-    }
-
-    /// <summary>
-    /// AI Commentary in Simple mode (1 Nov 2026, round 3): a switch for each
-    /// part of the night, named after the cards Advanced shows, and the
-    /// talking points tick, which is never spoken and so sits apart. Grayed
-    /// with the master switch off - the one place Simple grays rather than
-    /// hides, so the club can see what it would get.
-    /// </summary>
-    private Section BuildSectionsCard(Func<string, Label> hint, Func<CheckBox, string, CheckBox> check)
-    {
-        var card = new Section("What it talks about");
-
-        card.Add(hint("Each switch turns a part of the night on or off. Off remembers what was on, so on again puts it back."));
-
-        foreach (var section in Enum.GetValues<CommentarySection>())
-        {
-            var box = new ThemedCheckBox();
-
-            check(box, CommentarySections.Title(section));
-
-            var note = new Label { AutoSize = true, ForeColor = AppTheme.TextMuted };
-            _textSize.Wear(note, () => AppTheme.SmallFont);
-
-            box.CheckedChanged += (_, _) =>
-            {
-                if (_syncing)
-                {
-                    return;
-                }
-
-                CommentarySections.Set(_settings, section, box.Checked, CastSet);
-                _settings.Save();
-
-                ShowTicks();
-                UpdateEnabledState();
-            };
-
-            _sectionBoxes[section] = box;
-            _sectionNotes[section] = note;
-
-            card.Add(FieldGrid.Inline(box, note), stretch: false, gapBelow: 0);
-            card.Add(hint(CommentarySections.What(section)), gapBelow: UiLayout.HintGap);
-        }
-
-        check(_chkTalkingPointsSimple, "Talking points on the Announcer screen - never spoken");
-        _chkTalkingPointsSimple.CheckedChanged += (_, _) =>
-        {
-            if (_syncing)
-            {
-                return;
-            }
-
-            _settings.CommentaryTalkingPoints = _chkTalkingPointsSimple.Checked;
-            _settings.Save();
-
-            ShowTicks();
-            UpdateEnabledState();
-        };
-
-        card.Add(_chkTalkingPointsSimple, stretch: false, gapBelow: 0);
-
-        ShowSections();
-
-        // Read again each time it comes into view - switching to Simple, or
-        // opening the tab - since a tick on the Cast tab is one of its pieces.
-        card.VisibleChanged += (_, _) =>
-        {
-            if (card.Visible)
-            {
-                ShowSections();
-            }
-        };
-
-        return card;
-    }
-
-    /// <summary>
-    /// The run sheet's countdown in Simple mode (13 Nov 2026). Its only other
-    /// tick, on the Timetable's Reminder countdown card, was taken out, and the
-    /// Between races card that has it is Advanced only - so without this a
-    /// Simple club could not switch it on. The same setting as the card's
-    /// "Start the countdown by itself from the run sheet", written and heard
-    /// through AutoCountdownTick so the two always agree. Not grayed with the
-    /// master switch: the countdown is written by HeatCaller and needs no
-    /// commentary. Which marks it calls stays on the Between races card.
-    /// </summary>
-    private Section BuildCountdownCard(Func<string, Label> hint)
-    {
-        var card = new Section("Countdown");
-
-        var box = new ThemedCheckBox
-        {
-            Text = "Count down to each race by itself, from the Timetable",
-            AutoSize = true,
-            Checked = _settings.BetweenRacesAutoCountdown,
-        };
-
-        box.CheckedChanged += (_, _) => AutoCountdownTick.Set(_settings, box.Checked);
-
-        void Ticked(AppSettings settings)
-        {
-            if (ReferenceEquals(settings, _settings) && !box.IsDisposed)
-            {
-                // Its CheckedChanged finds the setting already says so and saves nothing.
-                box.Checked = settings.BetweenRacesAutoCountdown;
-            }
-        }
-
-        AutoCountdownTick.Changed += Ticked;
-
-        // A static event would keep this page alive (10 Nov 2026, bug hunt 16).
-        box.Disposed += (_, _) => AutoCountdownTick.Changed -= Ticked;
-
-        card.Add(box, stretch: false, gapBelow: UiLayout.HintGap);
-        card.Add(hint("The announcer calls the minutes left before each race, from the time against it on Race Day → Timetable - "
-                      + "at 5 and 1 minutes unless changed in Advanced mode, on Between races. Works with commentary off."),
-            gapBelow: 0);
-
-        return card;
-    }
-
-    /// <summary>The section switches and their notes, from the settings as they stand. UI thread.</summary>
-    private void ShowSections()
-    {
-        if (_sectionBoxes.Count == 0)
-        {
-            return;
-        }
-
-        var on = _settings.CommentaryEnabled;
-
-        // Kept, not cleared after: a tick ShowTicks sets calls this through
-        // UpdateEnabledState, and ShowTicks is not finished.
-        var was = _syncing;
-        _syncing = true;
-
-        try
-        {
-            foreach (var (section, box) in _sectionBoxes)
-            {
-                box.Checked = CommentarySections.IsOn(_settings, section);
-                box.Enabled = on;
-
-                _sectionNotes[section].Text =
-                    section == CommentarySection.AfterTheFlag && CommentarySections.AfterTheFlagNeedsRecaps(_settings) ? "needs Recap show"
-                    : CommentarySections.IsCustom(_settings, section, CastSet) ? "custom"
-                    : string.Empty;
-            }
-
-            _chkTalkingPointsSimple.Checked = _settings.CommentaryTalkingPoints;
-            _chkTalkingPointsSimple.Enabled = on;
-        }
-        finally
-        {
-            _syncing = was;
-        }
-    }
-
-    /// <summary>
-    /// Every tick on the Advanced cards put in step with the settings, after
-    /// a section switch has changed them - so a tick that is hidden never
-    /// holds an old value it could save back later. UI thread.
-    /// </summary>
-    private void ShowTicks()
-    {
-        var was = _syncing;
-        _syncing = true;
-
-        try
-        {
-            _chkIntros.Checked = _settings.CommentaryRaceIntros;
-            _chkDriverIntros.Checked = _settings.CommentaryDriverIntros;
-            _chkQualifyingRecap.Checked = _settings.CommentaryQualifyingRecap;
-            _chkPitLane.Checked = _settings.PrincipalBeforeRace;
-            _chkFlagResult.Checked = _settings.FlagResultRead;
-            _chkFlagTechLead.Checked = _settings.RecapMechanicInterview;
-            _chkTeaser.Checked = _settings.SummaryTeaserEnabled;
-            _chkAdBreak.Checked = _settings.RecapAdBreak;
-            _chkSummaries.Checked = _settings.CommentaryRaceSummaries;
-            _chkMentionFastestLap.Checked = _settings.CommentarySummaryMentionFastestLap;
-            _chkOpening.Checked = _settings.RecapBroadcastOpening;
-            _chkBoothPrincipal.Checked = _settings.PrincipalAfterRace;
-            _chkClosing.Checked = _settings.RecapBroadcastClosing;
-            _chkTalkingPoints.Checked = _settings.CommentaryTalkingPoints;
-
-            var off = CommentaryBudget.ParseSwitches(_settings.CommentarySegmentsOff);
-
-            foreach (var (kind, box) in _segmentBoxes)
-            {
-                box.Checked = !off.Contains(kind);
-            }
-        }
-        finally
-        {
-            _syncing = was;
-        }
-    }
-
     private void UpdateEnabledState()
     {
-        // The section switches follow every change, on either view.
-        ShowSections();
-
         // The recording card and the show's music moved to Sounds on
         // 17 Oct 2026 (RecordingControl, ShowTreatmentCard), and read the
         // master switch from the settings when they are shown.

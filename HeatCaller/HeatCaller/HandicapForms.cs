@@ -322,8 +322,10 @@ public sealed class HandicapSuggestForm : Form
         _numSessions.Width = NumberWidth(_numSessions);
         _numLaps.Width = NumberWidth(_numLaps);
 
-        // The size it had. It can be made bigger, for a long roster.
-        DialogFit.Keep(this, page, width: 680, height: 520);
+        // 66px taller than it was (520): the card's caption and insets come
+        // out of that, so the suggestions keep the height they had. It can be
+        // made bigger, for a long roster.
+        DialogFit.Keep(this, page, width: 680, height: 586);
     }
 
     /// <summary>The page, top to bottom, with the suggestions taking the height the rest leave. Returns it, for DialogFit.</summary>
@@ -335,6 +337,7 @@ public sealed class HandicapSuggestForm : Form
                  + "so the target is everyone finishing together. Nothing is applied until you tick it.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
         };
 
         var lblSessions = new Label { Text = "Use last:", AutoSize = true };
@@ -439,11 +442,20 @@ public sealed class HandicapSuggestForm : Form
         numbers.Add(lblSessions, FieldGrid.Inline(_numSessions, lblSessionsUnit));
         numbers.Add(lblLaps, FieldGrid.Inline(_numLaps, lblLapsUnit));
 
+        // Everything in one card (18 Nov 2026, dialog jazz-up, as Handicap
+        // beside it has cards): how the credits are worked out as its line
+        // on what it is for, the two numbers, the suggestions taking the
+        // height and what they come to under them. One card, not two: on a
+        // 1280x720 screen a second card's caption and insets came out of the
+        // list.
+        var card = new Section("Suggestions");
+        card.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        card.Add(numbers, gapBelow: UiLayout.RowGap);
+        card.AddFill(_grid, () => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2);
+        card.Add(_lblSummary, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(numbers, gapBelow: UiLayout.RowGap);
-        page.AddFill(_grid, _ => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
-        page.Add(_lblSummary);
+        page.AddFill(card, card.LeastHeight);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Apply Ticked first: the bar takes them right

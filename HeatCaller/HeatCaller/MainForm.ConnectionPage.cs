@@ -284,15 +284,9 @@ public partial class MainForm
             ForeColor = AppTheme.TextMuted,
         };
 
-        // Simple mode (1 Nov 2026): the decoder, its port, Connect, status,
-        // Before a race and the finish camera. The timing thread, pass
-        // recording, the split loop and the console are Advanced - the split
-        // status row follows the split loop's own switch as well
-        // (RenderSplitStatus). See SimpleMode. The split loop has a card of
-        // its own now (17 Nov 2026), so the whole card is what is hidden.
-        SimpleMode.HideRow(options, chkTimingThread);
-        SimpleMode.HideRow(options, chkRecordPasses);
-        SimpleMode.Hide(split);
+        // The split status row follows the split loop's own switch
+        // (RenderSplitStatus). The split loop has a card of its own (17 Nov
+        // 2026).
 
         // The start-up ticks and the race tools side by side on a wide
         // page, one over the other on a narrow one or at a large text size.
@@ -310,8 +304,7 @@ public partial class MainForm
         page.Add(decoder);
         page.Add(middle);
         page.Add(split);
-        page.Add(SimpleMode.MoreLine(), stretch: false);
-        page.AddFill(SimpleMode.Hide(console), console.LeastHeight, gapBelow: 0);
+        page.AddFill(console, console.LeastHeight, gapBelow: 0);
 
         // The hint's face and the fields' widths follow the text size. The
         // page wears the window's font, so a new text size reaches it as a

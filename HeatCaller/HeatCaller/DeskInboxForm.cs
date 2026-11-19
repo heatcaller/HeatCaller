@@ -1831,7 +1831,6 @@ internal sealed class QuickRepliesForm : Form
             Text = "What Decline offers before Other reason..., one a line, up to eight. The driver's phone shows the words as they are. "
                  + "Leave it empty to go back to HeatCaller's own. Juniors always get HeatCaller's own.",
             AutoSize = true,
-            MaximumSize = new Size(UiLayout.AtTextSize(460), 0),
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
         };
@@ -1842,15 +1841,24 @@ internal sealed class QuickRepliesForm : Form
         var ok = new Button { Text = "Save", DialogResult = DialogResult.OK };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // THE LOOK (18 Nov 2026, dialog pass): the replies in one card, as
+        // the inbox's own cards, what they are for as its line over the box
+        // (wrapped by the card now, not at a fixed width), the card taking
+        // the height, and Save in the app's colour. Wider and taller by the
+        // card's edges and caption, so the box is the size it was.
+        var card = new Section("Decline replies");
+        card.Add(blurb, gapBelow: UiLayout.RowGap);
+        card.AddFill(_box, () => UiLayout.AtTextSize(120), gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(blurb, gapBelow: UiLayout.RowGap);
-        page.AddFill(_box, _ => UiLayout.AtTextSize(120), gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
         Controls.Add(page);
 
         CancelButton = cancel;
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 500, height: 320);
+        AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
+        DialogFit.Keep(this, page, width: 500 + Section.Inset.Horizontal, height: 320 + 56);
     }
 
     /// <summary>

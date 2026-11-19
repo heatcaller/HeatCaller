@@ -291,8 +291,6 @@ To change the columns:
 
 **Restore Defaults** puts back that leaderboard's default set. If you untick everything, the defaults are used.
 
-In Simple mode these buttons are hidden: **Choose Columns** on Practice, both column choosers on **Local Screens**, and the **What gets published** card on **Club Website** with its own. Turn on Advanced mode to change the columns; the leaderboards keep the columns you chose either way. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
-
 Race Control and Practice update as soon as you press **OK**. The web page updates straight away, and the club's website with its next update. The Big Screen picks up the change the next time you open it, so close it and open it again.
 
 <!-- screenshot: Choose columns - Big Screen window with a few columns ticked -->
@@ -364,7 +362,7 @@ HeatCaller plays videos with VLC's own decoders, bundled inside it, so a file th
 
 To check a video before the night, select it and press **Preview Video**. It plays in a window of its own through the same player the Big Screen uses, always with its sound, with **Pause** and **Play From Start**. It doesn't touch an open Big Screen.
 
-These are on the **Video sound** card. In Simple mode the card is hidden, along with **Rotation timing**; the settings keep working as set. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
+These are on the **Video sound** card.
 
 | Setting | What it does | Default |
 |---|---|---|

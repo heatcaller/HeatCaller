@@ -221,8 +221,8 @@ public partial class MainForm
         },
         ["Ghost Cars"] = new[] { "ghost", "virtual", "opponent", "rival", "solo", "practice alone", "ai car", "pace" },
         ["Sounds"] = new[] { "soundscape", "soundscapes", "preset", "voice pack", "sound pack", "announcer style", "personality", "sound effects", "music", "soundtrack", "track", "song", "playlist", "beep", "beeps", "cue", "chime", "per-driver", "ambience", "crowd", "atmosphere", "track noise", "tone", "beep", "audio", "volume", "level", "duck", "ducking", "test", "imaging", "jingle", "sweeper", "bumper", "stinger", "music bed", "run of show", "radio", "hit the post", "post mark", "out mark", "on air", "show music", "show treatment", "opener", "club sting" },
-        // The Settings mode card since 1 Nov 2026: Advanced mode, and Restore default settings.
-        ["Backup & Restore"] = new[] { "save", "restore", "export", "zip", "auto backup", "support", "help", "logs", "log file", "crash", "send logs", "license", "privacy", "terms", "eula", "advanced", "simple mode", "settings mode", "default settings", "reset settings", "put back" },
+        // The Default settings card: Restore Default Settings and its copies.
+        ["Backup & Restore"] = new[] { "save", "restore", "export", "zip", "auto backup", "support", "help", "logs", "log file", "crash", "send logs", "license", "privacy", "terms", "eula", "default settings", "reset settings", "put back" },
         ["Garage"] = new[] { "car", "cars", "chassis", "shell", "bodyshell", "tuning", "setup log", "setup", "tires", "gearing", "ride height", "springs", "loan", "borrow", "club car" },
     };
 
@@ -489,65 +489,10 @@ public partial class MainForm
         // A page not yet tested at a real event is left out too while the
         // club hides those (22 Oct 2026) - RebuildNav still lets a search
         // turn one up, under its own heading. See NavTiers.UntestedPages.
-        // And a page Simple mode hides (1 Nov 2026 - SimpleMode.HiddenPages),
-        // which a search turns up under "In Advanced mode".
         return ordered
             .Where(n => n == "Connection" || !_settings.HiddenTabs.Contains(n))
             .Where(n => !(NavTiers.HidingUntested && NavTiers.IsUntested(n)))
-            .Where(n => SimpleMode.ShowAll || !SimpleMode.HiddenPages.Contains(n))
             .ToList();
-    }
-
-    /// <summary>
-    /// What a search turns up that Simple mode hides, for the foot of the
-    /// list under "In Advanced mode": the hidden pages it matches, then the
-    /// one Advanced mode settings row when it matches a hidden tab, card or
-    /// setting (SimpleMode.SearchWords). Empty in Advanced.
-    /// </summary>
-    private List<string> AdvancedMatching(string query)
-    {
-        var found = new List<string>();
-
-        if (SimpleMode.ShowAll || query.Length == 0)
-        {
-            return found;
-        }
-
-        found.AddRange(SimpleMode.HiddenPages.Where(n => !_settings.HiddenTabs.Contains(n) && MatchesNavSearch(n, query)));
-
-        if (SimpleMode.SearchFindsHidden(query))
-        {
-            found.Add(SimpleMode.SearchRow);
-        }
-
-        return found;
-    }
-
-    /// <summary>
-    /// A row under "In Advanced mode" picked: the Advanced warning, and the
-    /// page once it is on. True when the pick was one of those rows - the
-    /// caller shows nothing else then.
-    /// </summary>
-    private bool PickedAdvancedRow(string name)
-    {
-        if (SimpleMode.ShowAll || (name != SimpleMode.SearchRow && !SimpleMode.HiddenPages.Contains(name)))
-        {
-            return false;
-        }
-
-        // After this pick has finished: the warning is modal, and turning
-        // Advanced on rebuilds this list.
-        BeginInvoke(new Action(() =>
-        {
-            TurnOnAdvancedMode();
-
-            if (SimpleMode.ShowAll && name != SimpleMode.SearchRow)
-            {
-                GoToPage(name);
-            }
-        }));
-
-        return true;
     }
 
     /// <summary>
@@ -584,7 +529,6 @@ public partial class MainForm
         {
             var matched = names.Where(n => MatchesNavSearch(n, query))
                 .Concat(UntestedPagesMatching(query))
-                .Concat(AdvancedMatching(query))
                 .ToList();
             // Never filter down to nothing - an empty sidebar looks broken
             // and leaves no way back, so a query with no hits just shows
@@ -615,7 +559,7 @@ public partial class MainForm
             && _navItems.Any(i => i.Name == _shownPage)
             && (_raceMode || (query.Length == 0 && _shownPage != previouslySelected));
 
-        var toSelect = NavRowToSelect(names, keepShown ? _shownPage : null, previouslySelected, SimpleMode.ShowAll);
+        var toSelect = NavRowToSelect(names, keepShown ? _shownPage : null, previouslySelected);
 
         // Moving the highlight raises SelectionChanged, which would show the
         // highlighted page by itself - held off here, so the page shown is
@@ -630,38 +574,19 @@ public partial class MainForm
             _rebuildingNav = false;
         }
 
-        // Nothing highlighted (10 Nov 2026, bug hunt 16): the search found
-        // only rows under "In Advanced mode", so the page on screen stays up.
         var toShow = keepShown ? _shownPage! : toSelect ?? _shownPage ?? "Race Control";
         ShowPage(toShow);
         SelectSearchedTab(toShow);
     }
 
     /// <summary>
-    /// A row under "In Advanced mode" - a page Simple mode hides, or the one
-    /// Advanced mode settings row. Picking one goes through PickedAdvancedRow
-    /// and its warning. Never one in Advanced.
-    /// </summary>
-    internal static bool IsAdvancedRow(string name, bool showAll) =>
-        !showAll && (name == SimpleMode.SearchRow || SimpleMode.HiddenPages.Contains(name));
-
-    /// <summary>
     /// The row RebuildNav highlights: the page kept on screen, else the one
     /// picked before, else Race Control, else the first row - or null, for
     /// nothing highlighted.
-    ///
-    /// Never a row under "In Advanced mode" (10 Nov 2026, bug hunt 16). A
-    /// search for "venue" in Simple mode found only Venues and the Advanced
-    /// mode settings row, and the first-row fallback picked Venues - with the
-    /// highlight's SelectionChanged held off, so the hidden page came up with
-    /// no Advanced warning. A search that found only the Advanced mode
-    /// settings row highlighted it the same way, and a highlighted row raises
-    /// nothing when clicked, so the one row in the sidebar was dead. Left
-    /// unhighlighted, the first click on either goes through the warning.
     /// </summary>
-    internal static string? NavRowToSelect(IReadOnlyList<string> names, string? keptShown, string? previouslySelected, bool showAll)
+    internal static string? NavRowToSelect(IReadOnlyList<string> names, string? keptShown, string? previouslySelected)
     {
-        bool Usable(string? n) => n is not null && names.Contains(n) && !IsAdvancedRow(n, showAll);
+        bool Usable(string? n) => n is not null && names.Contains(n);
 
         if (Usable(keptShown))
         {
@@ -680,7 +605,7 @@ public partial class MainForm
 
         // An empty list (none in practice - a search never filters down to
         // nothing) keeps the old answer.
-        return names.Count == 0 ? "Race Control" : names.FirstOrDefault(n => !IsAdvancedRow(n, showAll));
+        return names.Count == 0 ? "Race Control" : names[0];
     }
 
     /// <summary>True while RebuildNav moves the highlight - see there.</summary>
@@ -1032,18 +957,6 @@ public partial class MainForm
     /// </summary>
     private void GoToPage(string name)
     {
-        // A page Simple mode hides is reached through Advanced mode, with its
-        // warning - from a button, a shortcut or a search alike (1 Nov 2026).
-        if (!SimpleMode.ShowAll && SimpleMode.HiddenPages.Contains(name))
-        {
-            TurnOnAdvancedMode();
-
-            if (!SimpleMode.ShowAll)
-            {
-                return;
-            }
-        }
-
         if (!lstNav.Items.Contains(name) && txtNavSearch.Text.Length > 0)
         {
             // Rebuilds the sidebar through TextChanged.
@@ -1541,11 +1454,6 @@ public partial class MainForm
 
         if (lstNav.SelectedItem is string name)
         {
-            if (PickedAdvancedRow(name))
-            {
-                return;
-            }
-
             ShowPage(name);
             SelectSearchedTab(name);
         }
@@ -1554,9 +1462,6 @@ public partial class MainForm
     /// <summary>Persists a new nav order after a drag-and-drop reorder in the sidebar.</summary>
     private void LstNav_ItemsReordered(List<string> newOrder)
     {
-        // The Advanced mode settings row a search adds is not a page.
-        newOrder = newOrder.Where(n => n != SimpleMode.SearchRow).ToList();
-
         // Persist the FULL order, hidden items included, so hiding/showing
         // later doesn't lose this arrangement.
         //

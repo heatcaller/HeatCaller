@@ -344,8 +344,23 @@ public sealed class RoundRosterForm : Form
             var ok = new Button { Text = "Add", DialogResult = DialogResult.OK };
             var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+            // THE LOOK (18 Nov 2026, dialog pass): the drivers in one card,
+            // as Drivers in Round's own, with a line on what the list is and
+            // Add in the app's colour.
+            var card = new Section("Saved drivers");
+            card.Add(new Label
+            {
+                Text = candidates.Count == 0
+                    ? "Every saved driver is in this round already."
+                    : "Drivers on file who aren't in this round yet. Pick one and click Add.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+                Font = AppTheme.SmallFont,
+            }, gapBelow: UiLayout.RowGap);
+            card.AddFill(_list, () => LeastRows * _list.ItemHeight + 4, gapBelow: 0);
+
             var page = new FillPage();
-            page.AddFill(_list, _ => LeastRows * _list.ItemHeight + 4);
+            page.AddFill(card, card.LeastHeight);
 
             // Against the right-hand edge, Cancel furthest right, as a
             // dialog's buttons go - and Tab still reaches Add first, as it
@@ -360,6 +375,7 @@ public sealed class RoundRosterForm : Form
             CancelButton = cancel;
 
             AppTheme.ApplyRecursively(this);
+            AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
 
             // The width it was made at, at the text size in use - or wider,
             // up to the screen, for the longest name on the list: at 360px a
@@ -373,11 +389,13 @@ public sealed class RoundRosterForm : Form
                 .DefaultIfEmpty(0)
                 .Max();
 
+            // Since the card (18 Nov 2026), wider and taller by its edges,
+            // caption and line, so the list is the size it was.
             var width = Math.Max(
-                UiLayout.AtTextSize(360),
-                UiLayout.PageLeft + widest + SystemInformation.VerticalScrollBarWidth + 8 + UiLayout.PageRight);
+                UiLayout.AtTextSize(360 + Section.Inset.Horizontal),
+                UiLayout.PageLeft + Section.Inset.Horizontal + widest + SystemInformation.VerticalScrollBarWidth + 8 + UiLayout.PageRight);
 
-            DialogFit.Keep(this, page, width: width, height: 380, widthMeasured: true);
+            DialogFit.Keep(this, page, width: width, height: 380 + 80, widthMeasured: true);
         }
 
         /// <summary>The driver picked, or null for none. Only meaningful after DialogResult.OK.</summary>

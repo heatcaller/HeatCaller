@@ -318,22 +318,15 @@ public sealed class RaceFormatForm : Form
     /// <summary>
     /// Everything that only exists for a custom format - the tiles and the
     /// cards - hidden outright when following the default, because a page
-    /// of disabled ghost text reads as broken, not as off. The cards Simple
-    /// mode hides as well are in <see cref="_advancedCards"/> instead.
+    /// of disabled ghost text reads as broken, not as off.
     /// </summary>
     private readonly List<Control> _customParts = new();
-
-    /// <summary>The cards only Advanced mode shows, and only with the fields - tagged with SimpleMode.Hide, so shown through SimpleMode.Refresh.</summary>
-    private readonly List<Control> _advancedCards = new();
 
     /// <summary>The fields, card by card, their captions lined up in one column after the theme pass (FieldGrid.LineUp).</summary>
     private readonly FieldGrid _lengthGrid = new();
     private readonly FieldGrid _countGrid = new();
     private readonly FieldGrid _startGrid = new();
     private readonly FieldGrid _sequenceGrid = new();
-
-    /// <summary>Whether the fields are showing now - the cards only Advanced shows ask it (SetCustomVisible).</summary>
-    private bool _fieldsShowing = true;
 
     /// <summary>The format at a glance across the top: how long, how it starts, the warm-up (ShowTiles).</summary>
     private readonly StatTile[] _tiles = { new(), new(), new() };
@@ -575,19 +568,6 @@ public sealed class RaceFormatForm : Form
         _chkFinishOnCrossing.Checked = seed.FinishOnNextCrossing;
         _sequenceGrid.AddWide(_chkFinishOnCrossing, stretch: false);
 
-        // Simple mode (1 Nov 2026) keeps the lap and time limits and the
-        // start type; the rest is Advanced - see SimpleMode. Each keeps its
-        // value, and Collect reads it, either way. The two cards with
-        // nothing else in them go as a whole as well (below).
-        SimpleMode.HideRow(_countGrid, _numMinLap);
-        SimpleMode.HideRow(_countGrid, _numStreakWindow);
-        SimpleMode.HideRow(_startGrid, _numStaggerGap);
-        SimpleMode.HideRow(_sequenceGrid, _numWarmUp);
-        SimpleMode.HideRow(_sequenceGrid, _chkAutoAdvance);
-        SimpleMode.HideRow(_sequenceGrid, _numStaging);
-        SimpleMode.HideRow(_sequenceGrid, _numCountdown);
-        SimpleMode.HideRow(_sequenceGrid, _chkFinishOnCrossing);
-
         // THE TOP (18 Nov 2026, dialog jazz-up): the format at a glance,
         // following the fields as they change. The dialog is built at the
         // text size in use, so the tiles take their faces here.
@@ -623,13 +603,7 @@ public sealed class RaceFormatForm : Form
         sequenceCard.Add(CardHint("Warm-up, then Stage, Countdown and Green - and how the race ends."), gapBelow: UiLayout.RowGap);
         sequenceCard.Add(_sequenceGrid, gapBelow: 0);
 
-        // The two cards with nothing Simple mode shows, hidden whole there,
-        // and only ever shown with the fields.
-        SimpleMode.Hide(countCard, () => _fieldsShowing);
-        SimpleMode.Hide(sequenceCard, () => _fieldsShowing);
-
-        _customParts.AddRange(new Control[] { tileStrip, lengthCard, startCard });
-        _advancedCards.AddRange(new Control[] { countCard, sequenceCard });
+        _customParts.AddRange(new Control[] { tileStrip, lengthCard, countCard, startCard, sequenceCard });
 
         // Last in the body whenever they show - the sentence above them is
         // hidden then.
@@ -811,18 +785,9 @@ public sealed class RaceFormatForm : Form
     /// </summary>
     private void SetCustomVisible(bool custom)
     {
-        _fieldsShowing = custom;
-
         foreach (var part in _customParts)
         {
             part.Visible = custom;
-        }
-
-        // Shown only in Advanced as well - asked of SimpleMode, which asks
-        // _fieldsShowing, rather than set here.
-        foreach (var card in _advancedCards)
-        {
-            SimpleMode.Refresh(card);
         }
 
         _followingCard.Visible = _allowUseDefault && !custom;

@@ -43,8 +43,6 @@ The **Practice** page is for open lapping with no staging, flags or finish. Ever
 
 The **This session** table is sorted by best lap, fastest first, and its columns share its width. By default it shows **Driver**, **Laps**, **Last Lap**, **vs Best**, **Best Lap**, **Rolling Avg**, **Std Dev**, **Streak**, **Best Streak**, **Streak Pace**, **Trend** and **PBs**.
 
-**Choose Columns** and **Rolling average over:** are shown in Advanced mode only. In Simple mode the table keeps the columns last chosen and the average stays at 5 laps. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
-
 Practice uses the minimum lap time from the race format that's currently in force on **Race Control**. It always uses a standard start, even if that format has a staggered or qualifying start. Its clean runs use the practice streak threshold, which is set separately from races on **Sounds → Effects**.
 
 **Clear Stats** empties the table and starts the lap counts again. During a running practice, laps keep being counted: the session restarts straight away with a fresh timer. When practice isn't running, it only clears the practice table and doesn't touch **Race Control**.

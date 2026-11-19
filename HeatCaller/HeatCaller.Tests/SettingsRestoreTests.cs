@@ -4,8 +4,8 @@ using System.Text.Json.Nodes;
 namespace HeatCaller.Tests;
 
 /// <summary>
-/// Restore default settings (1 Nov 2026, Simple and Advanced mode, round 4):
-/// what Simple hides goes back to how HeatCaller ships, in the files, with
+/// Restore default settings (1 Nov 2026, round 4):
+/// the tuning settings go back to how HeatCaller ships, in the files, with
 /// everything else carried over as it was - the sealed secrets included -
 /// and a copy saved first that can be put back.
 /// </summary>
@@ -43,8 +43,6 @@ public sealed class SettingsRestoreTests : IDisposable
             RaceLapLimit = shipped.RaceLapLimit + 7,                  // shown
             LastTrackLayoutName = "Hairpin",                          // memory
             HasCompletedFirstRun = true,                              // kept
-            SettingsMode = SettingsMode.Advanced,
-            SettingsModeDecided = true,
         };
 
         var (json, changed) = SettingsRestore.ResetJson(File("App"), Json(settings), alsoShown: false);
@@ -54,14 +52,12 @@ public sealed class SettingsRestoreTests : IDisposable
         Assert.Equal(settings.RaceLapLimit, back.RaceLapLimit);
         Assert.Equal("Hairpin", back.LastTrackLayoutName);
         Assert.True(back.HasCompletedFirstRun);
-        Assert.True(back.SettingsModeDecided);
-        Assert.Equal(SettingsMode.Simple, back.SettingsMode);
         Assert.Contains(nameof(AppSettings.RaceMinLapTimeMs), changed);
         Assert.DoesNotContain(nameof(AppSettings.RaceLapLimit), changed);
     }
 
     [Fact]
-    public void What_simple_shows_goes_back_only_when_asked()
+    public void The_everyday_settings_go_back_only_when_asked()
     {
         var shipped = new AppSettings();
         var json = Json(new AppSettings { RaceLapLimit = shipped.RaceLapLimit + 7 });
@@ -116,7 +112,7 @@ public sealed class SettingsRestoreTests : IDisposable
     [Fact]
     public void The_sidebar_goes_back_only_with_the_shown_settings()
     {
-        // Manage Navigation shows in Simple (6 Nov 2026), so the sidebar is a
+        // Manage Navigation is on every PC (6 Nov 2026), so the sidebar is a
         // shown setting: kept by a tuning-only restore, put back by a full one.
         var json = Json(new AppSettings
         {
@@ -194,7 +190,7 @@ public sealed class SettingsRestoreTests : IDisposable
         {
             var (label, name) = (entry.Split(':')[0], entry.Split(':')[1]);
 
-            Assert.Equal(SettingGroup.HiddenInSimple, File(label).Table[name]);
+            Assert.Equal(SettingGroup.Tuning, File(label).Table[name]);
         }
     }
 

@@ -309,15 +309,13 @@ public sealed partial class RaceControlControl
         // race format in force, and which columns the board shows.
         board.Add(_lblFormat, gapBelow: UiLayout.HintGap);
 
-        // Simple mode (1 Nov 2026) keeps Race Format; Start races On Air is
-        // Advanced - see SimpleMode.
-        // Auto start (11 Nov 2026) shows in Simple mode too: it decides
-        // whether races start themselves, which a volunteer has to see.
+        // Auto start (11 Nov 2026) decides whether races start themselves,
+        // which a volunteer has to see.
         // Warm-up first (14 Nov 2026) beside Start races: both say how a race
-        // starts, and both are Advanced.
+        // starts.
         // Tight (15 Nov 2026, asked for by Asher: "on one level"): each button
         // as wide as its caption, so the row fits on one line beside the clock.
-        var footer = new ButtonBar(tight: true).With(SimpleMode.Hide(_chkStartWithOnAir), SimpleMode.Hide(_swWarmUpFirst), _swAutoStart, _btnFormat, _btnExpandBoard);
+        var footer = new ButtonBar(tight: true).With(_chkStartWithOnAir, _swWarmUpFirst, _swAutoStart, _btnFormat, _btnExpandBoard);
 
         // The switches are shorter than the buttons beside them; the bar lines
         // everything up along the top, so they are brought down to their middle.

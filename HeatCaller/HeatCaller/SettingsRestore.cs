@@ -7,8 +7,8 @@ using System.Text.Json.Serialization;
 namespace HeatCaller;
 
 /// <summary>
-/// RESTORE DEFAULT SETTINGS (1 Nov 2026, Simple and Advanced mode, round 4):
-/// every setting Simple mode hides put back to how HeatCaller ships, with a
+/// RESTORE DEFAULT SETTINGS (1 Nov 2026): every Tuning setting (and, asked,
+/// the Everyday ones too) put back to how HeatCaller ships, with a
 /// copy of the settings saved first - and those copies listed, so any of
 /// them can be put back.
 ///
@@ -47,7 +47,7 @@ internal static class SettingsRestore
     };
 
     /// <summary>
-    /// Hidden in Simple mode, but left as they are by a restore, as "File:Name".
+    /// Tuning settings left as they are by a restore, as "File:Name".
     /// The relay addresses ship blank - put back, the club's website and the
     /// HeatCaller voice would lose their relay. The crowd's layers, its source
     /// and its switch are what the soundscape in use set - put back, the crowd
@@ -62,14 +62,14 @@ internal static class SettingsRestore
         $"Ambience:{nameof(AmbienceSettings.Enabled)}",
     };
 
-    /// <summary>Whether a restore puts a setting back: hidden in Simple (and, asked, shown too), and not left alone.</summary>
+    /// <summary>Whether a restore puts a setting back: Tuning (and, asked, Everyday too), and not left alone.</summary>
     internal static bool Resets(SettingsFile file, string name, SettingGroup group, bool alsoShown) =>
         !LeftAlone.Contains($"{file.Label}:{name}")
-        && (group == SettingGroup.HiddenInSimple || (alsoShown && group == SettingGroup.ShownInSimple));
+        && (group == SettingGroup.Tuning || (alsoShown && group == SettingGroup.Everyday));
 
     /// <summary>
-    /// One file's JSON with what a restore puts back set to its default, and
-    /// settings.json's mode back to Simple. Everything else in the file - the
+    /// One file's JSON with what a restore puts back set to its default.
+    /// Everything else in the file - the
     /// sealed secrets included - is carried over as it was. Hands back the
     /// new JSON and the names it changed.
     /// </summary>
@@ -96,11 +96,6 @@ internal static class SettingsRestore
                 node[property.Name] = fresh;
                 changed.Add(property.Name);
             }
-        }
-
-        if (file.Type == typeof(AppSettings))
-        {
-            node[nameof(AppSettings.SettingsMode)] = JsonSerializer.SerializeToNode(SettingsMode.Simple, file.Json);
         }
 
         return (node.ToJsonString(file.Json), changed);
@@ -369,13 +364,12 @@ internal static class SettingsRestore
 
     /// <summary>
     /// 2026-11-05, Bug hunt 11: a copy is put back the way a restore resets -
-    /// only what a restore would put back (ShownInSimple and HiddenInSimple,
+    /// only what a restore would put back (Everyday and Tuning,
     /// less <see cref="LeftAlone"/>) comes from the copy; the live file's
     /// KeptOnRestore and Memory stay as they are. Written whole, a copy
     /// brought back PINs and racer PINs rotated since (with the sealed
     /// Secrets that still open here), a revoked consent, the relay
-    /// bookkeeping, Advanced mode past the manager-PIN lock (or the lock
-    /// itself off), and - from a copy planted in a restored backup - relay
+    /// bookkeeping, and - from a copy planted in a restored backup - relay
     /// and mail addresses no RestoredSettings check ever saw. Every file is
     /// worked out before any is written.
     /// </summary>
@@ -409,7 +403,7 @@ internal static class SettingsRestore
     /// <summary>
     /// One file as Put Back writes it: the live JSON with what a restore
     /// would reset taken from the copy. A live file that is missing or
-    /// cannot be read leaves the copy as it is, its mode Simple. A copy
+    /// cannot be read leaves the copy as it is. A copy
     /// that comes out the same is handed back word for word.
     /// </summary>
     internal static string MergeJson(SettingsFile file, string? liveJson, string copyJson)
@@ -441,11 +435,6 @@ internal static class SettingsRestore
         if (live is null)
         {
             merged = (JsonObject)copyNode.DeepClone();
-
-            if (file.Type == typeof(AppSettings))
-            {
-                merged[nameof(AppSettings.SettingsMode)] = JsonSerializer.SerializeToNode(SettingsMode.Simple, file.Json);
-            }
         }
         else
         {
@@ -489,7 +478,7 @@ internal static class SettingsRestore
         "Kept: your drivers, classes, tracks, race days and results, sponsors, venues and garage; your keys, the club website's "
         + "club and token and address, PINs and email sign-in; the decoder's connection and port; backups; and the soundscape's crowd.";
 
-    internal const string AlsoShownTick = "Also reset what Simple mode shows (track, lap count, voice, volumes, look, commentary switches)";
+    internal const string AlsoShownTick = "Also reset the everyday settings (track, lap count, voice, volumes, look)";
 
     internal const string CopyLine = "Your current settings are saved first. Put Back Earlier Settings puts them back.";
 

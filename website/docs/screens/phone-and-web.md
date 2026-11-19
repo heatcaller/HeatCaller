@@ -27,8 +27,6 @@ While the server is running, you can't change the port or the PINs. Click **Stop
 
 To start the server every time HeatCaller opens, tick **Start the server automatically when the app opens**. The server then starts once the main window is up. The first time **Start Server** works, HeatCaller ticks it for you, so phones work next week without a visit to this page, and the box then reads "(turned on for you)". It only does this once: if you untick it, it stays unticked. An automatic start doesn't show any dialogs, so if it fails, the status just stays at "Stopped"; start it by hand to see why.
 
-In Simple mode, **Port:**, the **Race-day manager (phone)** card and the **Choose Web Columns** and **Choose Big Screen Columns** buttons are hidden. They keep their settings and go on working; turn on Advanced mode to change them. See [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
-
 ### Set up phone pages
 
 Windows won't let phones on the Wi-Fi reach the laptop until it has two one-off changes: permission for HeatCaller to accept connections on its port, and a firewall rule to let them through. **Set up phone pages**, on the **Server** card, makes both. It works whether or not the server is running.

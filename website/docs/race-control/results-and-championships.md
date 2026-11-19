@@ -193,7 +193,7 @@ The **Championship** page has two tabs, **Standings** and **Calendar**. The **St
 ### Create a championship
 
 1. Under **Championships**, press **+ New Championship** and enter a **Season name:**.
-2. On **Points & Rules**, press **Edit Scoring Rules** and set what counts (see below). The rules in force are listed beside the points, a line each. **Edit Scoring Rules** is only shown in Advanced mode (see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md)); in Simple mode a new championship counts the mains of every class on every race day.
+2. On **Points & Rules**, press **Edit Scoring Rules** and set what counts (see below). The rules in force are listed beside the points, a line each.
 3. Check the points table under **Points scheme**, on **Points & Rules**. The default is 10-9-8-...-1 for positions 1 to 10, and positions below 10 score nothing. Type in the **Points** column to change what a place scores. A value has to be a whole number of 0 or more: a negative one is refused with "Points can't be below 0 - a place scores 0 at the least. Fix it, or press Esc to put back what was there.", so racing a round can only ever add to a driver's total. (A negative value in a file from an older version scores 0.) **Use the Default Points** puts the default table back, and **Undo** puts your own back.
 4. Check the races ticked on **Races**.
 

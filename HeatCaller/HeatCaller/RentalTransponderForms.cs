@@ -232,27 +232,79 @@ public sealed class RentalUnitEditForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        // Every field runs to the right-hand edge, where the buttons end, as
-        // the 270px fields did beside their captions; the tick in the fields'
-        // column under the notes, where it was.
-        var fields = new FieldGrid();
+        // Two cards (18 Nov 2026, dialog jazz-up, as Check Out beside it):
+        // the unit - its ID and tag - and its notes with the Retired tick
+        // under them. Every field runs to the card's right-hand edge; the two
+        // grids share one caption column (LineUp), so the fields line up from
+        // one card to the next.
+        var unitGrid = new FieldGrid();
+        var notesGrid = new FieldGrid();
         var captions = new List<Label>
         {
-            fields.AddRow("Transponder ID:", _txtTransponder, stretch: true),
+            unitGrid.AddRow("Transponder ID:", _txtTransponder, stretch: true),
         };
 
-        fields.AddHint(existing is null
+        unitGrid.AddHint(existing is null
             ? "Exactly as the decoder reports it."
             : "Can't be changed - it ties this unit to its loan history.");
 
-        captions.Add(fields.AddRow("Asset tag:", _txtAssetTag, stretch: true));
-        fields.AddHint("What people call it at the counter.");
+        captions.Add(unitGrid.AddRow("Asset tag:", _txtAssetTag, stretch: true));
+        unitGrid.AddHint("What people call it at the counter.");
 
-        captions.Add(fields.AddRow("Notes:", _txtNotes, stretch: true));
-        fields.AddField(_chkRetired);
+        captions.Add(notesGrid.AddRow("Notes:", _txtNotes, stretch: true));
+        notesGrid.AddField(_chkRetired);
+
+        var unitCard = new Section("The unit");
+        unitCard.Add(unitGrid, gapBelow: 0);
+
+        var notesCard = new Section("Notes");
+        notesCard.Add(CardHint("Its condition, a spare battery, anything the counter should know."), gapBelow: UiLayout.RowGap);
+        notesCard.Add(notesGrid, gapBelow: 0);
+
+        var lblIntro = new Label
+        {
+            Text = existing is null
+                ? "A club transponder to lend out. Save puts it on the shelf."
+                : "A club transponder lent out at the counter.",
+            AutoSize = true,
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+        };
 
         var page = new FillPage();
-        page.Add(fields);
+        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
+
+        // An existing unit at a glance across the top, as Check Out has it:
+        // where it is now, how often it has gone out and when it last came
+        // back. A new one has nothing to show yet.
+        if (existing is not null)
+        {
+            var tiles = new[] { new StatTile(), new StatTile(), new StatTile() };
+
+            foreach (var tile in tiles)
+            {
+                tile.Value.Font = AppTheme.TitleFont;
+                tile.Caption.Font = AppTheme.MicroFont;
+            }
+
+            var lastBack = Result.History.Count == 0
+                ? "Never"
+                : Result.History.Max(loan => loan.InUtc).ToLocalTime().ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture);
+
+            tiles[0].Set(Result.IsOut ? "Out" : Result.Retired ? "Retired" : "In", "Now");
+            tiles[1].Set(Result.History.Count.ToString(System.Globalization.CultureInfo.CurrentCulture), "Times lent");
+            tiles[2].Set(lastBack, "Last back");
+
+            if (Result.IsOut)
+            {
+                tiles[0].Value.ForeColor = AppTheme.Primary;
+            }
+
+            page.Add(new TileStrip(tiles), gapBelow: UiLayout.RowGap);
+        }
+
+        page.Add(unitCard, gapBelow: UiLayout.RowGap);
+        page.Add(notesCard);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to left,
@@ -267,6 +319,11 @@ public sealed class RentalUnitEditForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // Save in the app's colour, as the window's own button.
+        AppTheme.StyleButton(btnOk, AppTheme.ButtonKind.Primary);
+
+        FieldGrid.LineUp(new[] { unitGrid, notesGrid });
 
         // After the theme pass, in the face it leaves the box in: a few
         // lines of it, as the box draws them (Pieces.LineHeight).
@@ -284,12 +341,22 @@ public sealed class RentalUnitEditForm : Form
 
         var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
 
+        // With the cards' own room either side of their fields.
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + captionColumn + fieldColumn + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, widthMeasured: true);
     }
+
+    /// <summary>A card's line on what it is for, in the small muted face.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 
     private void BtnOk_Click(object? sender, EventArgs e)
     {
@@ -331,6 +398,9 @@ internal sealed class RentalPromptForm : Form
     /// <summary>How wide the window is inside its frame at the normal text size.</summary>
     private const int DialogWidth = 440;
 
+    /// <summary>The question's least height at the normal text size - a few lines - below which it scrolls instead (DialogFit's body least).</summary>
+    private const int QuestionLeast = 120;
+
     private readonly TextBox _txt = new();
 
     /// <summary>What was typed in the box, trimmed. Only meaningful after DialogResult.OK.</summary>
@@ -352,18 +422,33 @@ internal sealed class RentalPromptForm : Form
 
         var page = new FillPage();
 
-        // The question, a hint's gap above the box it asks about.
-        var body = DialogFit.Body(page, gapBelow: UiLayout.HintGap);
+        // THE LOOK (18 Nov 2026, dialog jazz-up, as the app's text prompt):
+        // the question and its box in one card, with no caption - the
+        // window's title already says what is asked. The question goes in a
+        // column of its own inside the card, a hint's gap above the box: on
+        // a screen too short for all of it, that column scrolls and the box
+        // and the buttons stay in view. A private copy of DialogFit.Body,
+        // which only goes on a page.
+        var body = new PageStack { Padding = Padding.Empty };
+        ScrollTheming.NoRoomBelow(body);
         body.Add(lbl, gapBelow: 0);
 
-        page.Add(_txt, gapBelow: UiLayout.SectionGap);
+        var card = new Section();
+        card.AddFill(
+            body,
+            () => body.ContentHeight > 0
+                ? Math.Min(body.ContentHeight, UiLayout.AtTextSize(QuestionLeast))
+                : UiLayout.AtTextSize(QuestionLeast),
+            gapBelow: UiLayout.HintGap);
+        card.Add(_txt, gapBelow: 0);
+
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.SectionGap);
 
         // A pixel either side of the box for the ring the theme draws round
         // it, outside it, on what holds it (Pieces.RingRoom): stretched across
-        // the page, the box's sides would be the page's edges, and the ring's
-        // sides would be drawn past them, where nothing shows. The gap under
-        // the box stays as it was.
-        _txt.Margin = new Padding(1, 0, 1, UiLayout.SectionGap);
+        // the card, the box's sides would be the card's inner edges, and the
+        // ring's sides would be drawn past them, where nothing shows.
+        _txt.Margin = new Padding(1, 0, 1, 0);
 
         // Its height is the box's own, and changes when the theme takes its
         // border off - see Pieces.KeepHeightTold.
@@ -382,6 +467,9 @@ internal sealed class RentalPromptForm : Form
         CancelButton = cancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // OK is the window's one button in the app's colour.
+        AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
 
         DialogFit.Keep(this, page, width: DialogWidth, body: body);
     }

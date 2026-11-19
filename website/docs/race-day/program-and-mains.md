@@ -387,7 +387,7 @@ If a race is already running on **Race Control**, HeatCaller asks "Abandon the r
 
 ### Which round a race counts for
 
-A race started from the program is recorded against its round. A race run without a round picked on **Race Control** (a race started by hand, for example) is handled by **Start the next race automatically** on **Race Day → Setup** (on by default): HeatCaller records it against the next round that hasn't run yet, so you work through the program without picking each round by hand. **Next race is:** (in Advanced mode) sets which round it picks:
+A race started from the program is recorded against its round. A race run without a round picked on **Race Control** (a race started by hand, for example) is handled by **Start the next race automatically** on **Race Day → Setup** (on by default): HeatCaller records it against the next round that hasn't run yet, so you work through the program without picking each round by hand. **Next race is:** sets which round it picks:
 
 - **the class that was racing** (the default) — the unrun heat whose drivers were the ones on track: the one that holds the most of them, the earliest in the program on a tie. If no unrun heat has them, the next round for the class most of the drivers on track belong to.
 - **any class, in program order** — the next unrun round overall.
@@ -729,6 +729,6 @@ The time you started from is written back to the race day's **First race at:**, 
 
 ### Countdown calls
 
-The announcer can count down to each race on its own, from the time against it in the grid. Switch it on on **Voice → AI Commentary**: in Simple mode with **Count down to each race by itself, from the Timetable** on the **Countdown** card, or in Advanced mode with **Start the countdown by itself from the run sheet, at** on the **Between races** card, where you also pick which calls it makes (10, 5, 2 or 1 minutes, and time's up). The two are the same setting. It works with commentary off. See [Between races](../announcer/commentary.md#between-races). **Hold Talk** on Race Control holds it too.
+The announcer can count down to each race on its own, from the time against it in the grid. Switch it on on **Voice → AI Commentary** with **Start the countdown by itself from the run sheet, at** on the **Between races** card, where you also pick which calls it makes (10, 5, 2 or 1 minutes, and time's up). It works with commentary off. See [Between races](../announcer/commentary.md#between-races). **Hold Talk** on Race Control holds it too.
 
 The Timetable used to have a **Reminder countdown** card with its own **Start** button. It was taken out on 13 Nov 2026 because it ran alongside the Between races countdown and could call the same race twice.

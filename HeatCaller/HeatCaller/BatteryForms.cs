@@ -519,12 +519,19 @@ internal sealed class PackTransferForm : Form
         var find = new FieldGrid();
         find.AddRow("Find:", _txtFind, stretch: true);
 
+        // Who it goes to in one card (18 Nov 2026, dialog jazz-up, as a car's
+        // Transfer has it): a line on what is listed, the search and the
+        // drivers taking the height, and under them the line saying what
+        // Transfer will do.
+        var whoCard = new Section("Who gets it");
+        whoCard.Add(CardHint("A driver on file, or the club. Type to narrow the list."));
+        whoCard.Add(find, gapBelow: UiLayout.HintGap);
+        whoCard.AddFill(_lstTo, () => LeastRows * _lstTo.ItemHeight + 4);
+        whoCard.Add(_lblOutcome, gapBelow: 0);
+
         var page = new FillPage();
         page.Add(lblWhat, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(new Label { Text = "Who gets it?", AutoSize = true, Font = AppTheme.BoldFont }, stretch: false, gapBelow: UiLayout.HintGap);
-        page.Add(find, gapBelow: UiLayout.HintGap);
-        page.AddFill(_lstTo, _ => LeastRows * _lstTo.ItemHeight + 4, gapBelow: UiLayout.RowGap);
-        page.Add(_lblOutcome, stretch: false);
+        page.AddFill(whoCard, whoCard.LeastHeight);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, _btnTransfer), gapBelow: 0);
 
         Controls.Add(page);
@@ -534,10 +541,30 @@ internal sealed class PackTransferForm : Form
         FillList();
 
         AppTheme.ApplyRecursively(this);
-        _lblOutcome.ForeColor = AppTheme.TextMuted;
 
-        DialogFit.Keep(this, page, width: 480, height: 480);
+        // What Transfer will do, in the body's ink - it is the line to read
+        // before pressing it; the note over the card is muted.
+        _lblOutcome.ForeColor = AppTheme.TextDark;
+        lblWhat.ForeColor = AppTheme.TextMuted;
+
+        // The window's own button in the app's colour - the theme goes by the
+        // caption, and "Transfer to ..." is not one it knows. Kept as its
+        // caption changes with the pick (StyleButton remembers the kind).
+        AppTheme.StyleButton(_btnTransfer, AppTheme.ButtonKind.Primary);
+
+        // 60px taller than it was (480): the card's caption, hint and insets
+        // come out of that, so the drivers keep the height they had.
+        DialogFit.Keep(this, page, width: 480, height: 540);
     }
+
+    /// <summary>A card's line on what it holds, in the small muted type.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 
     /// <summary>One line of the list: a driver, or the club.</summary>
     private sealed record Choice(string Key, string Label)
@@ -704,20 +731,37 @@ public sealed class BatteryPackEditForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
-        var fields = new FieldGrid();
+        // Two cards, each with a line on what it is for (18 Nov 2026, dialog
+        // jazz-up, as Which pack? beside it): the pack itself - its label and
+        // type - and its notes with the Retired tick under them. The two
+        // grids share one caption column (LineUp), so the fields line up from
+        // one card to the next.
+        var packGrid = new FieldGrid();
+        var notesGrid = new FieldGrid();
         var captions = new List<Label>
         {
-            fields.AddRow("Label:", _txtLabel, stretch: true),
+            packGrid.AddRow("Label:", _txtLabel, stretch: true),
         };
 
-        fields.AddHint("Whatever's written on the pack.");
+        packGrid.AddHint("Whatever's written on the pack.");
 
-        captions.Add(fields.AddRow("Type:", _cmbChemistry));
-        captions.Add(fields.AddRow("Notes:", _txtNotes, stretch: true));
-        fields.AddField(_chkRetired);
+        captions.Add(packGrid.AddRow("Type:", _cmbChemistry));
+        captions.Add(notesGrid.AddRow("Notes:", _txtNotes, stretch: true));
+        notesGrid.AddField(_chkRetired);
+
+        var packCard = new Section("The pack");
+        packCard.Add(CardHint(Result.IsClubPack
+            ? "One of the club's packs, for anyone to run on."
+            : "How to tell this pack apart from the rest in the box."), gapBelow: UiLayout.RowGap);
+        packCard.Add(packGrid, gapBelow: 0);
+
+        var notesCard = new Section("Notes");
+        notesCard.Add(CardHint("Anything worth knowing - its age, a weak cell."), gapBelow: UiLayout.RowGap);
+        notesCard.Add(notesGrid, gapBelow: 0);
 
         var page = new FillPage();
-        page.Add(fields);
+        page.Add(packCard, gapBelow: UiLayout.RowGap);
+        page.Add(notesCard);
 
         // Against the right-hand edge, Cancel furthest right - and Tab still
         // reaches Save first: the bar takes them right to left, in the order
@@ -732,6 +776,11 @@ public sealed class BatteryPackEditForm : Form
         CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(this);
+
+        // Save in the app's colour, as the window's own button.
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
+
+        FieldGrid.LineUp(new[] { packGrid, notesGrid });
 
         // After the theme pass, in the faces it leaves them in: the notes a
         // few lines of their font, as the box draws them (Pieces.LineHeight);
@@ -755,10 +804,20 @@ public sealed class BatteryPackEditForm : Form
 
         var captionColumn = captions.Max(caption => caption.GetPreferredSize(Size.Empty).Width + caption.Margin.Horizontal);
 
+        // With the cards' own room either side of their fields.
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + captionColumn + fieldColumn + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + captionColumn + fieldColumn + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, widthMeasured: true);
     }
+
+    /// <summary>A card's line on what it is for, in the small muted face.</summary>
+    private static Label CardHint(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = AppTheme.TextMuted,
+        Font = AppTheme.SmallFont,
+    };
 }

@@ -133,8 +133,6 @@ public sealed partial class RelaySettingsControl : UserControl
     private readonly Label _lblStatus = new();
     private readonly Label _lblDetail = new();
 
-    /// <summary>Whether the Status card is naming a restored backup's relay address, as it does in Simple mode where the address row is hidden.</summary>
-    private bool _restoredAddressNamed;
     private readonly TextBox _txtTagline = new();
     private readonly TextBox _txtClubAlias = new();
     private readonly TextBox _txtShortName = new();
@@ -413,17 +411,13 @@ public sealed partial class RelaySettingsControl : UserControl
         // guide and the updates are two of a kind, side by side when there
         // is the room (CardColumns).
         var relay = BuildRelayCard();
-        var publish = SimpleMode.Hide(BuildPublishCard());
-        var look = SimpleMode.Hide(BuildLookCard());
+        var publish = BuildPublishCard();
+        var look = BuildLookCard();
 
         var writing = new CardColumns();
         writing.AddLeft(BuildGuideCard());
         writing.AddRight(BuildUpdatesCard());
 
-        // Simple mode (1 Nov 2026) keeps the Relay card (club and token),
-        // Online check-in, Share and Status; what gets published, the look,
-        // personal PINs, email, the race-day manager and Room & Web are
-        // Advanced. See SimpleMode.
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
         page.Add(new TileStrip(_tiles), gapBelow: UiLayout.SectionGap);
         page.Add(relay);
@@ -432,17 +426,16 @@ public sealed partial class RelaySettingsControl : UserControl
         page.Add(look);
         page.Add(writing);
         page.Add(BuildCheckInCard());
-        page.Add(SimpleMode.Hide(BuildPinsCard()));
-        page.Add(SimpleMode.Hide(BuildMailCard()));
-        page.Add(SimpleMode.Hide(BuildManagerCard()));
+        page.Add(BuildPinsCard());
+        page.Add(BuildMailCard());
+        page.Add(BuildManagerCard());
         page.Add(BuildVideoCard());
 
         // ROOM & WEB (17 Oct 2026): what the room and the people at home can
         // send in or hear through the club's pages - from the Commentary
         // page.
-        page.Add(SimpleMode.Hide(_roomAndWeb.Card));
+        page.Add(_roomAndWeb.Card);
         page.Add(BuildStatusCard(), gapBelow: 0);
-        page.Add(SimpleMode.MoreLine(), stretch: false, gapBelow: 0);
 
         Controls.Add(page);
 
@@ -634,10 +627,6 @@ public sealed partial class RelaySettingsControl : UserControl
         KeepLines(_lblLastGood);
 
         var card = new Section("Relay");
-
-        // The relay's address is Advanced (1 Nov 2026, Simple mode); the club
-        // and token are not.
-        SimpleMode.HideRow(fields, _txtBaseUrl);
 
         card.Add(HintLabel("Where this laptop sends to: the relay's address, your club and its publish token. Nothing goes until the box below is ticked."));
         card.Add(_chkEnabled, stretch: false);
@@ -1871,8 +1860,8 @@ public sealed partial class RelaySettingsControl : UserControl
         card.Add(_chkCheckIn, stretch: false);
         card.Add(pin, gapBelow: UiLayout.HintGap);
         card.Add(lblHint);
-        card.Add(SimpleMode.Hide(_chkCheckInPhotos), stretch: false);
-        card.Add(SimpleMode.Hide(_chkEmailSignInLink), stretch: false);
+        card.Add(_chkCheckInPhotos, stretch: false);
+        card.Add(_chkEmailSignInLink, stretch: false);
         card.Add(_lblCheckInState, gapBelow: UiLayout.HintGap);
         card.Add(new ButtonBar().With(_btnOpenCheckIn, _btnReissueBadges), gapBelow: 0);
 
@@ -3224,12 +3213,9 @@ public sealed partial class RelaySettingsControl : UserControl
         }
 
         // Whether this save takes a restored backup's address as checked
-        // (RestoredSettings): only with the address in front of whoever
-        // pressed - its box, or in Simple mode, which hides the box, the
-        // Status card naming it (Bug hunt 17).
+        // (RestoredSettings): the address box is in front of whoever pressed.
         var confirming = confirmRestored
-                         && RestoredSettings.IsHeld(RestoredSettings.Part.PublishRelay)
-                         && (SimpleMode.ShowAll || _restoredAddressNamed);
+                         && RestoredSettings.IsHeld(RestoredSettings.Part.PublishRelay);
 
         // Lower case, as the relay keeps it: "Acme-RC" typed here is
         // plainly acme-rc, and the relay answers anything else with a 404.
@@ -3587,20 +3573,10 @@ public sealed partial class RelaySettingsControl : UserControl
             _lblStatus.Text = "Check these settings";
             _lblStatus.ForeColor = AppTheme.Primary;
 
-            // Simple mode hides the address row, so there is no "address
-            // above": the address is named here instead, and Save only
-            // takes it as checked once it has been (SaveFields).
-            var address = RelayPublisher.NormaliseBaseUrl(_txtBaseUrl.Text);
-
-            _lblDetail.Text = SimpleMode.ShowAll
-                ? RestoredSettings.PublishRelayMessage
-                : RestoredSettings.PublishRelayMessageNaming(address);
-
-            _restoredAddressNamed = !SimpleMode.ShowAll;
+            _lblDetail.Text = RestoredSettings.PublishRelayMessage;
             return;
         }
 
-        _restoredAddressNamed = false;
 
         if (!status.Enabled)
         {

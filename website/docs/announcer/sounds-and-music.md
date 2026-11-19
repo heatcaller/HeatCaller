@@ -6,9 +6,6 @@ Every level, and how far each sound drops while the announcer talks, is set in o
 
 None of these sounds use the internet. They play on the laptop, through whatever speaker it's connected to.
 
-!!! note
-    In Simple mode the **Imaging**, **Effects**, **Ambience** and **Lap Beeps** tabs are hidden, and so are some cards on **Mixer**, **Soundscapes** and **Music**. Hidden isn't off: those sounds still play as the soundscape sets them. Turn on Advanced mode to see them; see [Simple and Advanced mode](../getting-started/simple-and-advanced-mode.md).
-
 HeatCaller also records each race as it goes out and saves it as an mp3, with a clip and a highlight video for each driver. That's on the **Recording** tab of the **Club Website** page (it was the last tab here until 26 October 2026); see [Race recordings](#race-recordings).
 
 ## Effects
@@ -186,7 +183,7 @@ The status line under the page counts your ticks, for example "9 of 15 tracks in
 
 ### Behavior settings
 
-The **Behavior** card, under the library, has one setting: **Stop while a race is running** (off by default) stops the music at staging, countdown and racing. It's ignored if the Mixer is set to start music when a session begins, since that's the more specific instruction. The card is shown in Advanced mode.
+The **Behavior** card, under the library, has one setting: **Stop while a race is running** (off by default) stops the music at staging, countdown and racing. It's ignored if the Mixer is set to start music when a session begins, since that's the more specific instruction.
 
 ### After the race
 

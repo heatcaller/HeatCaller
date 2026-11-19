@@ -169,7 +169,7 @@ public sealed class LooksControl : UserControl
         {
             Text = "A look is the set of colors HeatCaller paints with. Choose one for the app itself (it restarts to "
                  + "apply it) and one for the crowd screens - the Big Screen, the Wi-Fi pages and the club's online "
-                 + "pages - or let the screens match the app. In Advanced mode, New Look makes your own from any of them.",
+                 + "pages - or let the screens match the app. New Look makes your own from any of them.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -182,8 +182,7 @@ public sealed class LooksControl : UserControl
         _list.SelectedIndexChanged += List_SelectedIndexChanged;
         _list.DoubleClick += (_, _) =>
         {
-            // Not in Simple mode, which hides Edit (2 Nov 2026).
-            if (SimpleMode.ShowAll && SelectedLook() is { IsBuiltIn: false })
+            if (SelectedLook() is { IsBuiltIn: false })
             {
                 EditSelected();
             }
@@ -333,9 +332,7 @@ public sealed class LooksControl : UserControl
 
         looks.Add(lblIntro, gapBelow: UiLayout.RowGap);
         looks.Add(band);
-        // New Look and Edit (the color editor) are Advanced (1 Nov 2026,
-        // Simple mode) - picking a look is not.
-        looks.Add(new ButtonBar().With(_btnUseApp, _btnUseScreens, SimpleMode.Hide(_btnNew), SimpleMode.Hide(_btnEdit), _btnDelete), gapBelow: 0);
+        looks.Add(new ButtonBar().With(_btnUseApp, _btnUseScreens, _btnNew, _btnEdit, _btnDelete), gapBelow: 0);
 
         // The crowd screens' choice in a card of its own, its line over it.
         var crowd = new Section("Crowd screens");
@@ -372,7 +369,6 @@ public sealed class LooksControl : UserControl
         page.Add(looks);
         page.Add(crowd);
         page.Add(columns, gapBelow: UiLayout.RowGap);
-        page.Add(SimpleMode.MoreLine(), stretch: false);
         page.Add(_lblStatus, gapBelow: 0);
 
         Controls.Add(page);
@@ -605,9 +601,8 @@ public sealed class LooksControl : UserControl
 
         card.Add(lblAppearanceHint, gapBelow: UiLayout.RowGap);
 
-        // The animated header is Advanced (1 Nov 2026, Simple mode); 24-hour time is not.
-        card.Add(SimpleMode.Hide(_chkAnimate), stretch: false, gapBelow: UiLayout.HintGap);
-        card.Add(SimpleMode.Hide(lblAnimateHint));
+        card.Add(_chkAnimate, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblAnimateHint);
         card.Add(_chk24Hour, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(_chkDriverThemes, stretch: false, gapBelow: 0);
 
