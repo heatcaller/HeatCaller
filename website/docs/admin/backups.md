@@ -237,7 +237,7 @@ While the relay is on and **Send HeatCaller anonymous usage totals** is ticked, 
 
 - which pages and tabs were opened, how many times, and for how long;
 - the HeatCaller version;
-- whether a race day was open.
+- whether a race day was open, and whether Desk View was on.
 
 They never include a driver's name or anything else about a driver, anything typed into HeatCaller, results, keys, or the order in which anything was done. They go with your club's relay sign-in, so we can tell which club they came from. The relay keeps them for 13 months.
 
@@ -245,9 +245,9 @@ They never include a driver's name or anything else about a driver, anything typ
 
 To stop them, untick the box on the **Getting help** card; to send them from outside the US, tick it. Once you've changed it, your choice stays, whatever the Windows region, and **Restore Default Settings** never changes it. With the relay off, nothing is sent at all. The privacy notice (**License and Privacy**, Part 2, **Usage totals**) says the same.
 
-**See What's Sent...** under the box shows every total this PC holds, day by day in words and then exactly as the report carries them. A tab named after a driver shows as `unknown_driver`: no driver's name is ever kept. Unticking the box also deletes what was already counted.
+**See What's Sent...** under the box shows every total this PC holds that hasn't gone yet, day by day in words and then exactly as the report carries them. A tab named after a driver shows as `unknown_driver`: no driver's name is ever kept. Unticking the box also deletes what was already counted.
 
-**For now, nothing is sent.** This version only counts, on this PC, the last 31 days. Sending through the relay comes in a later update.
+**When they go.** A day goes once it's over: HeatCaller offers the finished days to the relay when it starts and every six hours while it's open, and deletes each day from this PC once the relay has it. If the relay can't be reached, the days wait (up to 31 days) and go next time. Nothing is sent from the rehearsal copy. **See What's Sent...** says when days last went.
 
 ## Default settings
 

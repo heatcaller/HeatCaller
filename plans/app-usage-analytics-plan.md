@@ -1,6 +1,6 @@
 # App usage analytics: what clubs use, and for how long
 
-19 Nov 2026. Rounds 1 (laptop counting) and 2 (relay) built on `claude/usage-sharing`; nothing is sent yet.
+19 Nov 2026. Rounds 1-3 built on `claude/usage-sharing` (laptop counts and sends, relay keeps); the relay is not deployed yet.
 
 **Goal.** See which parts of HeatCaller clubs actually open, how long they
 spend in each, and what they never touch, on a dashboard in the relay admin
@@ -53,7 +53,7 @@ change in the same PR as the first byte sent.
      (`AppSettings.ShareUsageStats`) on Backup & Restore's **Getting help**
      card, beside Save Support Info and License and Privacy. Kept on Restore
      Default Settings, so a club that said no stays no. Built on
-     `claude/usage-sharing`. A **See what's sent** button joins it in round 3.
+     `claude/usage-sharing`, with **See What's Sent...** beside it.
    - **The notice:** the Terms change itself. Part 2 now has **Usage totals**,
      and the Terms' version is the hash of their text, so every install is
      asked to accept revision 3 before HeatCaller opens again. Release notes,
@@ -197,6 +197,22 @@ ShowPage / SegmentTabs ──► AppUsage   POST /club/<id>/app-usage ──► 
 3. **Laptop sends.** The box is already there (on); the daily report through the
    publisher, and the check that revision 3 of the Terms was accepted. The
    privacy docs were rewritten on 19 Nov 2026 (claude/usage-sharing).
+   **Built 19 Nov 2026** on `claude/usage-sharing` (PR 274):
+   `AppUsageSender.cs`, and `AppUsageTracker` offering the finished days
+   on its first tick and every 6 hours. Differences from the plan above:
+   - **Not through the `RelayPublisher` queue.** A small POST of its own on
+     `UsageMeters.Http` (10 s timeout), like the top-up request, so it can
+     never hold up a race document. 3 days a report, at most 11 reports a
+     try.
+   - **The Terms check is `Terms.IsAccepted()`**: the accepted text must be
+     this build's, which is revision 3 or later. HeatCaller doesn't open
+     without it, so this only matters if that ever changes.
+   - **Sent days are deleted on the PC**; the file keeps `lastSentUtc`
+     (never sent), shown in See What's Sent. A 400 drops the days (the
+     relay will never take them); any other refusal or no answer keeps
+     them for the next try.
+   - The notice now also says **whether Desk View was on** (Terms Part 2,
+     the box's hint, the docs): the report always carried it.
 4. **Admin app: Product page.** Store, fetch, report sums with tests, the page.
 5. **Phone pages (optional).** View and dwell counts, `page-counts --json`.
 

@@ -1,7 +1,7 @@
 namespace HeatCaller;
 
 /// <summary>
-/// See What's Sent (19 Nov 2026, usage totals round 1): every usage total
+/// See What's Sent (19 Nov 2026, usage totals round 1): every usage total not yet sent that
 /// this PC holds, in words and then exactly as the report carries them, from
 /// Backup &amp; Restore's Getting help card. Read-only, with Close.
 ///
@@ -76,19 +76,28 @@ public sealed class UsagePreviewForm : Form
     }
 
     internal const string OnLine =
-        "Everything HeatCaller has counted on this PC, by day. No driver's name or anything typed is ever in it. "
-        + "Nothing has been sent yet: sending comes in a later update, through your club's relay.";
+        "Everything HeatCaller has counted on this PC and not sent yet, by day. No driver's name or anything typed is ever in it. "
+        + "Every few hours, finished days go to HeatCaller through your club's relay and are then deleted from this PC. "
+        + "Without the relay, nothing is sent.";
 
     internal const string OffLine =
         "Send HeatCaller anonymous usage totals is unticked, so nothing is counted or sent, and anything "
         + "counted before it was unticked has been deleted.";
 
-    /// <summary>The words first, then the report exactly as it would go.</summary>
+    /// <summary>When days last went, then the words, then the report exactly as it would go.</summary>
     internal static string ReportFor(AppUsage usage) =>
-        usage.ReportText()
+        LastSent(usage.LastSentUtc)
+        + Environment.NewLine + Environment.NewLine
+        + usage.ReportText()
         + Environment.NewLine + Environment.NewLine
         + "The report itself:" + Environment.NewLine
         + usage.ReportJson().ReplaceLineEndings(Environment.NewLine);
+
+    /// <summary>"Last sent to your club's relay: ..." in the PC's own time, or that nothing has been yet.</summary>
+    internal static string LastSent(DateTime? sentUtc) =>
+        sentUtc is { } sent
+            ? "Last sent to your club's relay: " + sent.ToLocalTime().ToString("f", System.Globalization.CultureInfo.CurrentCulture) + "."
+            : "Nothing has been sent from this PC yet.";
 
     /// <summary>Opens it, owned, so it centres on the page that asked.</summary>
     internal static void ShowFor(IWin32Window? owner, AppUsage usage, bool on)

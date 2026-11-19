@@ -173,7 +173,7 @@ The code is written by the owner with heavy use of AI coding assistants (Claude 
   - Names are removed on a best-effort basis.
   - Names not in the driver list, and free text, may remain.
   - Freeze dumps are excluded.
-- **Usage totals from the laptop (added 19 Nov 2026, Terms revision 3):** while the relay is on, once a day, per club per day: which pages and tabs were opened, how many times, active and on-screen seconds, the app version, and whether a race day was open. No driver data, no typed text, no click order. Sent with the club's relay token, so identified by club. Controlled by **Send HeatCaller anonymous usage totals** on **Backup & Restore**:
+- **Usage totals from the laptop (added 19 Nov 2026, Terms revision 3):** while the relay is on, once a day, per club per day: which pages and tabs were opened, how many times, active and on-screen seconds, the app version, and whether a race day was open or Desk View on. No driver data, no typed text, no click order. Sent with the club's relay token, so identified by club. Controlled by **Send HeatCaller anonymous usage totals** on **Backup & Restore**:
   - **US: opt-out.** Ticked to begin with on a PC whose Windows region is the US or a US territory (PR, GU, VI, AS, MP, UM).
   - **Everywhere else: opt-in.** Unticked to begin with, and nothing is sent unless the club ticks it. HeatCaller asks no country, so the Windows region is the only sign used; a club's own choice, once made, is kept whatever the region.
   - **No clubs yet.** As of 19 Nov 2026 no club is running HeatCaller, so no install has sent or accepted anything under the earlier wording.

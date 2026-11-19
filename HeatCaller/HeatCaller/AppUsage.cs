@@ -202,8 +202,38 @@ internal sealed class AppUsage
         }
     }
 
-    /// <summary>The report as it would go, for See what's sent: exactly the file's days.</summary>
-    internal string ReportJson() => JsonSerializer.Serialize(_store, Json);
+    /// <summary>The report as it would go, for See what's sent: every day held, in the shape the relay takes.</summary>
+    internal string ReportJson() => ReportOf(_store.Days);
+
+    /// <summary>
+    /// The body of POST app-usage for these days: {version, days} - the
+    /// relay's shape (relay/src/appusage.ts), and nothing from the file
+    /// besides the days themselves.
+    /// </summary>
+    internal static string ReportOf(IEnumerable<Day> days) =>
+        JsonSerializer.Serialize(new Report { Days = days.ToList() }, Json);
+
+    /// <summary>When days were last taken by the relay, or null if none ever were (on this PC since the box was last ticked).</summary>
+    internal DateTime? LastSentUtc => _store.LastSentUtc;
+
+    /// <summary>The days before <paramref name="today"/>, oldest first: the ones finished, and ready to go.</summary>
+    internal List<Day> Finished(DateOnly today) =>
+        _store.Days.Where(day => day.Date < today).OrderBy(day => day.Date).ToList();
+
+    /// <summary>
+    /// Forgets these days once the relay has them (<paramref name="sentUtc"/>
+    /// set), or once it has said it never will take them (null). Not saved
+    /// until the next <see cref="Save"/>.
+    /// </summary>
+    internal void Drop(IReadOnlyCollection<DateOnly> dates, DateTime? sentUtc)
+    {
+        _store.Days.RemoveAll(day => dates.Contains(day.Date));
+
+        if (sentUtc is { } sent)
+        {
+            _store.LastSentUtc = sent;
+        }
+    }
 
     /// <summary>The same in words, newest day first, rows by active time.</summary>
     internal string ReportText()
@@ -358,6 +388,16 @@ internal sealed class AppUsage
     internal readonly record struct Context(bool RaceDay, bool DeskView);
 
     internal sealed class Store
+    {
+        public int Version { get; set; } = 1;
+        public List<Day> Days { get; set; } = [];
+
+        /// <summary>When the relay last took days (null when it never has). Kept on this PC only, never sent.</summary>
+        public DateTime? LastSentUtc { get; set; }
+    }
+
+    /// <summary>What goes to the relay: the days and nothing else.</summary>
+    internal sealed class Report
     {
         public int Version { get; set; } = 1;
         public List<Day> Days { get; set; } = [];

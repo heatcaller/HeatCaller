@@ -12,6 +12,10 @@ namespace HeatCaller;
 /// totals kept at all, not merely none sent. Unticking it also forgets what
 /// was already counted. Nothing at all in the rehearsal copy.
 ///
+/// SENDING (round 3). On the first tick and every 6 hours after, the
+/// finished days go to the club's relay (AppUsageSender), and are deleted
+/// here once it has them.
+///
 /// TABS. A page's tab strips (TabControl and SegmentTabs) are found once,
 /// the first time the page is shown, and watched from then on. The tab
 /// counted is the selected one on the first strip that is visible - the
@@ -25,6 +29,9 @@ internal sealed class AppUsageTracker : IDisposable
     /// <summary>How often the totals are written to disk.</summary>
     private static readonly TimeSpan SaveEvery = TimeSpan.FromMinutes(5);
 
+    /// <summary>How often finished days are offered to the relay (the first try is on the first tick).</summary>
+    internal static readonly TimeSpan SendEvery = TimeSpan.FromHours(6);
+
     private readonly AppUsage _usage;
     private readonly AppSettings _settings;
     private readonly Func<AppUsage.Context> _context;
@@ -34,6 +41,8 @@ internal sealed class AppUsageTracker : IDisposable
     private Control? _pageControl;
     private DateTime _lastSave = DateTime.Now;
     private bool _wasOn;
+    private DateTime _lastSendTry = DateTime.MinValue;
+    private bool _sending;
 
     internal AppUsageTracker(AppUsage usage, AppSettings settings, Func<AppUsage.Context> context)
     {
@@ -152,6 +161,49 @@ internal sealed class AppUsageTracker : IDisposable
         {
             _usage.Save(now);
             _lastSave = now;
+        }
+
+        if (!_sending && now - _lastSendTry >= SendEvery)
+        {
+            _lastSendTry = now;
+            _ = SendFinishedDaysAsync(now);
+        }
+    }
+
+    /// <summary>
+    /// Offers the finished days to the relay (AppUsageSender), on this
+    /// thread, and saves when any went. Never throws.
+    /// </summary>
+    private async Task SendFinishedDaysAsync(DateTime now)
+    {
+        var target = AppUsageSender.Target(_settings);
+        var whyNot = AppUsageSender.WhyNot(IsOn, AppPaths.IsRehearsal, Terms.IsAccepted(), target is not null);
+
+        if (whyNot is not null || target is not { } relay)
+        {
+            return;
+        }
+
+        _sending = true;
+
+        try
+        {
+            var (_, days) = await AppUsageSender.SendAsync(_usage, relay, now, UsageMeters.Http);
+
+            if (days > 0)
+            {
+                _usage.Save(DateTime.Now);
+                _lastSave = DateTime.Now;
+                SessionLog.Write($"[usage] Sent {days} day(s) of usage totals to the club's relay.");
+            }
+        }
+        catch (Exception ex)
+        {
+            SessionLog.Write($"[usage] Sending the usage totals failed ({ex.GetType().Name}); they will be tried again.");
+        }
+        finally
+        {
+            _sending = false;
         }
     }
 
