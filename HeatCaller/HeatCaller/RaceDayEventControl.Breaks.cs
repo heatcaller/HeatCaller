@@ -152,7 +152,12 @@ internal sealed class BreaksForm : Form
             }
 
             var minutes = new NumericUpDown { Minimum = 1, Maximum = NightBreaks.MaxMinutes, Value = 10, Width = 70, Margin = new Padding(0, 2, 8, 2) };
-            var what = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 2, 0, 2) };
+
+            // Room on the right for the outline the theme draws a pixel outside
+            // the box (Pieces.RingRoom): flush with the edge, its right side was
+            // cut off by the card.
+            var what = new TextBox { Dock = DockStyle.Fill };
+            what.Margin = new Padding(0, 2, Pieces.RingRoom(what).Right, 2);
 
             when.SelectedIndex = 0;
 
