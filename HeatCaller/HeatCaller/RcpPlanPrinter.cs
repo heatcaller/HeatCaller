@@ -75,6 +75,26 @@ internal static class RcpPlanPrinter
     /// </summary>
     internal static (SizeF PaperMm, string PaperName) DefaultPaper()
     {
+        // Asked of the printer at most every couple of minutes: asking takes
+        // most of a second (the spooler), and was nearly all of the Print
+        // window's opening (a CPU profile, 18 Nov 2026). Short enough that a
+        // new default printer is picked up the next time it is opened.
+        if (_paperAsked is { } asked && DateTime.UtcNow - asked.At < PaperKeptFor)
+        {
+            return asked.Paper;
+        }
+
+        var paper = AskDefaultPaper();
+        _paperAsked = (DateTime.UtcNow, paper);
+        return paper;
+    }
+
+    private static readonly TimeSpan PaperKeptFor = TimeSpan.FromMinutes(2);
+
+    private static (DateTime At, (SizeF PaperMm, string PaperName) Paper)? _paperAsked;
+
+    private static (SizeF PaperMm, string PaperName) AskDefaultPaper()
+    {
         try
         {
             using var document = new PrintDocument();

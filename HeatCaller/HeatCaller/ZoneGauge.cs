@@ -118,8 +118,56 @@ internal sealed class ZoneGauge : Control
         return new Size(width, HeightAt(width));
     }
 
-    /// <summary>Where each part goes at a width - one sum shared by the measuring and the drawing.</summary>
+    /// <summary>
+    /// The sums worked out so far (see Parts), by width, and the fonts and
+    /// scales they were worked out in. Cleared when what the gauge shows
+    /// changes (Changed) or those fonts or scales do.
+    ///
+    /// Why (18 Nov 2026): the page asks every gauge its height at each
+    /// layout pass, at a few widths in turn, and each answer measured three
+    /// strings - 88% of the two-plus seconds of work the Pace window took to
+    /// build, nearly all of it an answer it had already worked out.
+    /// </summary>
+    private readonly Dictionary<int, (Rectangle Caption, Rectangle Figure, Rectangle Bar, Rectangle Labels, Rectangle Reading, int Bottom)> _measured = new();
+
+    private (Font Heading, Font Micro, Font Body, Font Small, int TextScale, int Dpi)? _measuredIn;
+
+    /// <summary>A gauge is asked at a handful of widths; more than this and the oldest are let go, all at once.</summary>
+    private const int MeasuredWidthsKept = 16;
+
+    /// <summary>Where each part goes at a width - one sum shared by the measuring and the drawing, worked out again only when something it depends on has changed.</summary>
     private (Rectangle Caption, Rectangle Figure, Rectangle Bar, Rectangle Labels, Rectangle Reading, int Bottom) Parts(int width)
+    {
+        var now = (AppTheme.HeadingFont, AppTheme.MicroFont, AppTheme.BodyFont, AppTheme.SmallFont, UiLayout.AtTextSize(1000), UiLayout.AtDpi(1000));
+
+        if (_measuredIn is not { } was
+            || !ReferenceEquals(was.Heading, now.Item1)
+            || !ReferenceEquals(was.Micro, now.Item2)
+            || !ReferenceEquals(was.Body, now.Item3)
+            || !ReferenceEquals(was.Small, now.Item4)
+            || was.TextScale != now.Item5
+            || was.Dpi != now.Item6)
+        {
+            _measured.Clear();
+            _measuredIn = now;
+        }
+
+        if (_measured.TryGetValue(width, out var known))
+        {
+            return known;
+        }
+
+        if (_measured.Count >= MeasuredWidthsKept)
+        {
+            _measured.Clear();
+        }
+
+        var parts = MeasureParts(width);
+        _measured[width] = parts;
+        return parts;
+    }
+
+    private (Rectangle Caption, Rectangle Figure, Rectangle Bar, Rectangle Labels, Rectangle Reading, int Bottom) MeasureParts(int width)
     {
         var inset = Inset;
         var inside = Math.Max(1, width - inset.Horizontal);
@@ -264,6 +312,7 @@ internal sealed class ZoneGauge : Control
     /// <summary>What it shows has changed: measured again, and the page told, as a hint that rewraps tells it.</summary>
     private void Changed()
     {
+        _measured.Clear();
         Invalidate();
         (Parent as GaugeRow)?.Remeasure();
     }
