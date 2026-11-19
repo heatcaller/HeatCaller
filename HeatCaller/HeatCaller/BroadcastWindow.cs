@@ -25,7 +25,8 @@ namespace HeatCaller;
 /// here from 25 Oct; they are on Race Control's flag row now (FlagRow), the
 /// one place they are wanted.
 ///
-/// On the layout pieces: what is on air across the top in the heading face,
+/// On the layout pieces: what is on air across the top, on a card of its
+/// own in the title face behind an ON AIR sign (18 Nov 2026),
 /// the controls in a card, what the announcer is doing in a column of
 /// captions and values, and Close at the foot.
 /// </summary>
@@ -52,6 +53,9 @@ internal sealed class BroadcastWindow : Form
     /// <summary>The text size (Ctrl +/-) it was built and laid out for - see BuiltForTextSize.</summary>
     private readonly float _fontScale = AppTheme.FontScale;
     private readonly Label _lblOnAir = new();
+
+    /// <summary>The card across the top that what is on air is shown in - see HeadingRow.</summary>
+    private readonly HeadingRow _onAirRow;
 
     private readonly Label _lblAnnouncer = new();
     private readonly Label _lblLast = new();
@@ -89,7 +93,8 @@ internal sealed class BroadcastWindow : Form
         Text = "Broadcast";
         Font = AppTheme.BodyFont;
 
-        _lblOnAir.Font = AppTheme.HeadingFont;
+        _lblOnAir.Font = AppTheme.TitleFont;
+        _onAirRow = new HeadingRow(_lblOnAir);
 
         // The row's own "On air" label would say the heading again, a line
         // below it.
@@ -102,6 +107,7 @@ internal sealed class BroadcastWindow : Form
                           + "row for each line the announcer didn't say."), gapBelow: 0);
 
         var glance = new Section("At a glance");
+        glance.Add(Hint("What the announcer is doing, in full. A line in colour wants a look."), gapBelow: UiLayout.RowGap);
         var grid = new FieldGrid();
 
         foreach (var (caption, value) in new[]
@@ -141,6 +147,11 @@ internal sealed class BroadcastWindow : Form
             WrapContents = false,
             FlowDirection = FlowDirection.LeftToRight,
             Margin = Padding.Empty,
+
+            // The card's colour, not the page's the theme pass gives a panel:
+            // it showed as a grey band across the card.
+            BackColor = AppTheme.Surface,
+            Tag = AppTheme.KeepBackColor,
         };
         gapRow.Controls.Add(_lblGap);
         gapRow.Controls.Add(_btnSkipGap);
@@ -153,7 +164,7 @@ internal sealed class BroadcastWindow : Form
 
         var page = new FillPage();
         var body = DialogFit.Body(page);
-        body.Add(new HeadingRow(_lblOnAir), gapBelow: UiLayout.RowGap);
+        body.Add(_onAirRow, gapBelow: UiLayout.RowGap);
         body.Add(controls, gapBelow: UiLayout.RowGap);
         body.Add(glance, gapBelow: 0);
         page.Add(new ButtonBar(alignRight: true).With(_btnClose), gapBelow: 0);
@@ -212,7 +223,8 @@ internal sealed class BroadcastWindow : Form
     internal void Restyle()
     {
         AppTheme.ApplyRecursively(this);
-        _lblOnAir.Font = AppTheme.HeadingFont;
+        _lblOnAir.Font = AppTheme.TitleFont;
+        _lblOnAir.BackColor = AppTheme.Surface;
         _strip.Restyle();
     }
 
@@ -261,6 +273,7 @@ internal sealed class BroadcastWindow : Form
         // row lights it.
         Set(_lblOnAir, on ? _strip.Saying : "The announcer is off",
             on && _strip.SayingLit ? AppTheme.Accent : AppTheme.TextDark);
+        _onAirRow.Lit = on && _strip.SayingLit;
 
         Set(_lblAnnouncer, !on
                 ? "Commentary is switched off, so there is no announcer to hold or skip."
@@ -374,10 +387,18 @@ internal sealed class BroadcastWindow : Form
     /// has to be laid out again as the name changes - it changes every few
     /// seconds on a race night. (The level meters beside it went on 26 Oct
     /// 2026 - see the class notes.)
+    ///
+    /// On a card of its own (18 Nov 2026, dialog look), in the title face so
+    /// it reads from across the room, with an ON AIR sign before it - lit in
+    /// the accent, as the heading is, while something is on air, and unlit
+    /// otherwise - and the card's edge lit with it.
     /// </summary>
     private sealed class HeadingRow : Panel
     {
+        private const string Sign = "ON AIR";
+
         private readonly Label _heading;
+        private bool _lit;
 
         public HeadingRow(Label heading)
         {
@@ -388,20 +409,86 @@ internal sealed class BroadcastWindow : Form
             _heading.TextAlign = ContentAlignment.MiddleLeft;
 
             AutoSize = true;
+            BackColor = AppTheme.Surface;
+            Tag = AppTheme.KeepBackColor;
+            DoubleBuffered = true;
+            ResizeRedraw = true;
             Controls.Add(_heading);
+        }
+
+        /// <summary>Whether the sign and the card's edge are lit.</summary>
+        public bool Lit
+        {
+            get => _lit;
+            set
+            {
+                if (_lit != value)
+                {
+                    _lit = value;
+                    Invalidate();
+                }
+            }
+        }
+
+        private static int Pad => UiLayout.AtTextSize(12);
+
+        private int RowHeight => _heading.Font.Height + 6 + Pad * 2;
+
+        private Rectangle SignBounds()
+        {
+            var text = TextRenderer.MeasureText(AppTheme.Spaced(Sign), AppTheme.MicroFont, new Size(int.MaxValue, int.MaxValue),
+                TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            var width = text.Width + UiLayout.AtTextSize(20);
+            var height = AppTheme.MicroFont.Height + UiLayout.AtTextSize(10);
+
+            return new Rectangle(Pad + UiLayout.AtTextSize(4), (RowHeight - height) / 2, width, height);
         }
 
         public override Size GetPreferredSize(Size proposedSize)
         {
             var width = proposedSize.Width is > 0 and < int.MaxValue / 4 ? proposedSize.Width : Width;
-            return new Size(width, _heading.Font.Height + 6);
+            return new Size(width, RowHeight);
         }
 
         protected override void OnLayout(LayoutEventArgs levent)
         {
             base.OnLayout(levent);
 
-            _heading.Bounds = new Rectangle(0, 0, Math.Max(1, Width), _heading.Font.Height + 6);
+            var left = SignBounds().Right + UiLayout.AtTextSize(14);
+            _heading.Bounds = new Rectangle(left, Pad, Math.Max(1, Width - left - Pad), _heading.Font.Height + 6);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+
+            using (var behind = new SolidBrush(Parent?.BackColor ?? AppTheme.Background))
+            {
+                g.FillRectangle(behind, ClientRectangle);
+            }
+
+            AppTheme.DrawCard(g, new RectangleF(0, 0, Width, Height), _lit ? AppTheme.Accent : null);
+
+            var sign = SignBounds();
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            using var path = AppTheme.RoundedRect(RectangleF.Inflate(sign, -0.5f, -0.5f), Math.Max(2, sign.Height / 2));
+
+            if (_lit)
+            {
+                using var fill = new SolidBrush(AppTheme.Accent);
+                g.FillPath(fill, path);
+            }
+            else
+            {
+                using var ring = new Pen(AppTheme.Border, Math.Max(1f, UiLayout.AtTextSize(1.5f)));
+                g.DrawPath(ring, path);
+            }
+
+            TextRenderer.DrawText(g, AppTheme.Spaced(Sign), AppTheme.MicroFont, sign,
+                _lit ? AppTheme.OnAccent : AppTheme.TextMuted,
+                TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.HorizontalCenter
+                | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
         }
     }
 
