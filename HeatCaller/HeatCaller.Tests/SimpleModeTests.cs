@@ -498,6 +498,13 @@ public sealed class SimpleModeTests : IDisposable
         "BackupRestoreControl.cs|Updates", "BackupRestoreControl.cs|Cloud copies",
         "BackupRestoreControl.cs|Existing backups", "BackupRestoreControl.Standby.cs|Standby PC",
 
+        // Windows Backup & Restore opens (AboutForm, AdvancedModeForm,
+        // RestoreDefaultsForm; 18 Nov 2026, dialog pass 6). The glossary's
+        // and the terms' cards have no literal caption.
+        "About.cs|What ships inside HeatCaller",
+        "AdvancedModeForm.cs|Before you turn it on",
+        "RestoreDefaultsForm.cs|What goes back",
+
         // Themes, Sponsors, Local Screens, Club Website.
         "LooksControl.cs|Looks", "LooksControl.cs|Club logo", "LooksControl.cs|Appearance",
         "LooksControl.cs|Crowd screens", "AchievementsControl.cs|Whose achievements", "GarageControl.cs|Which cars", "GarageControl.cs|Garage",

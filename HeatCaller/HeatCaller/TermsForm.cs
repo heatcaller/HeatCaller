@@ -70,10 +70,20 @@ public sealed class TermsForm : Form
             TabStop = asking,
         };
 
+        // 18 Nov 2026, the dialog look: the heading, the line under it and
+        // the text in one card, the ticks under it on the page as before. A
+        // second card round the ticks took two lines of the text at
+        // 1280x720, where the window is as tall as the screen allows, so
+        // there is one; the window is wider by the card's sides so the line
+        // under the heading wraps as it did. Only the window round the text
+        // changed: every word, tick, button and what is recorded is as it was.
+        var card = new Section();
+        card.Add(lblHeading, gapBelow: 2);
+        card.Add(lblWhat, gapBelow: UiLayout.RowGap);
+        card.AddFill(txtTerms, () => LeastLines * Pieces.LineHeight(Font), gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblHeading, gapBelow: 2);
-        page.Add(lblWhat);
-        page.AddFill(txtTerms, _ => LeastLines * Pieces.LineHeight(Font), gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
 
         if (asking)
         {
@@ -146,7 +156,14 @@ public sealed class TermsForm : Form
 
         AppTheme.ApplyRecursively(this);
 
-        DialogFit.Keep(this, page, width: 680, height: 620);
+        if (_btnAccept is not null)
+        {
+            // The way on, in the primary colour; greyed as before until both
+            // are ticked.
+            AppTheme.StyleButton(_btnAccept, AppTheme.ButtonKind.Primary);
+        }
+
+        DialogFit.Keep(this, page, width: 680 + Section.Inset.Horizontal, height: 660);
 
         if (asking)
         {

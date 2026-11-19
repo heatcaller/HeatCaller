@@ -14,8 +14,12 @@ namespace HeatCaller;
 /// </summary>
 public sealed class RestoreDefaultsForm : Form
 {
-    /// <summary>How wide the window is inside its frame at the normal text size.</summary>
-    private const int DialogWidth = 560;
+    /// <summary>
+    /// How wide the window is inside its frame at the normal text size.
+    /// Wider since the 18 Nov 2026 card: narrower, the list wrapped onto so
+    /// many lines that, in a card, the tick went below the fold at 1280x720.
+    /// </summary>
+    private const int DialogWidth = 840;
 
     private readonly CheckBox _chkAlsoShown = new ThemedCheckBox();
 
@@ -37,7 +41,14 @@ public sealed class RestoreDefaultsForm : Form
             Font = AppTheme.HeadingFont,
         }, gapBelow: UiLayout.LabelGap);
 
-        body.Add(new Label
+        // 18 Nov 2026, the dialog look: what goes back, what is kept, the
+        // tick and what happens next in one card under the heading - the
+        // tick is one more thing that can go back. A second card for the
+        // tick put it below the fold at 1280x720. Every word, the tick and
+        // the gating as before.
+        var goesBack = new Section("What goes back");
+
+        goesBack.Add(new Label
         {
             Text = "Every setting Simple mode hides goes back to how HeatCaller ships:",
             AutoSize = true,
@@ -46,29 +57,34 @@ public sealed class RestoreDefaultsForm : Form
 
         foreach (var area in SettingsRestore.WhatGoesBack)
         {
-            body.Add(new Label
+            goesBack.Add(new Label
             {
                 Text = "• " + area,
                 AutoSize = true,
                 Font = AppTheme.BodyFont,
+
+                // "Room & Web", not "Room  Web" with the & taken for a
+                // shortcut key.
+                UseMnemonic = false,
             }, gapBelow: UiLayout.HintGap);
         }
 
-        body.Add(new Label
+        goesBack.Add(new Label
         {
             Text = SettingsRestore.WhatIsKept,
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
             Font = AppTheme.SmallFont,
+            UseMnemonic = false,
         }, gapBelow: UiLayout.SectionGap);
 
         _chkAlsoShown.Text = SettingsRestore.AlsoShownTick;
         _chkAlsoShown.AutoSize = true;
         _chkAlsoShown.Font = AppTheme.BodyFont;
 
-        body.Add(_chkAlsoShown, stretch: false);
+        goesBack.Add(_chkAlsoShown, stretch: false, gapBelow: UiLayout.HintGap);
 
-        body.Add(new Label
+        goesBack.Add(new Label
         {
             Text = SettingsRestore.CopyLine + " " + SettingsRestore.RestartLine,
             AutoSize = true,
@@ -78,7 +94,7 @@ public sealed class RestoreDefaultsForm : Form
 
         if (raceRunning)
         {
-            body.Add(new Label
+            goesBack.Add(new Label
             {
                 Text = SettingsRestore.RaceLine,
                 AutoSize = true,
@@ -86,6 +102,10 @@ public sealed class RestoreDefaultsForm : Form
                 Font = AppTheme.BoldFont,
             }, gapBelow: 0);
         }
+
+        // The last part of the body: nothing under it inside the part that
+        // scrolls - see DialogFit.Body.
+        body.Add(goesBack, gapBelow: 0);
 
         var btnRestore = new Button { Text = "Restore Defaults", Font = AppTheme.BodyFont, DialogResult = DialogResult.OK, Enabled = !raceRunning };
         var btnCancel = new Button { Text = "Cancel", Font = AppTheme.BodyFont, DialogResult = DialogResult.Cancel };
@@ -103,11 +123,14 @@ public sealed class RestoreDefaultsForm : Form
 
         AppTheme.ApplyRecursively(this);
 
+        // The way on, in the primary colour; greyed as before during a race.
+        AppTheme.StyleButton(btnRestore, AppTheme.ButtonKind.Primary);
+
         // As wide as it is at the normal text size, or wider when the tick's
-        // words need more on one line - a tick does not wrap.
+        // words need more on one line inside its card - a tick does not wrap.
         var width = Math.Max(
             UiLayout.AtTextSize(DialogWidth),
-            UiLayout.PageLeft + _chkAlsoShown.GetPreferredSize(Size.Empty).Width + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
+            UiLayout.PageLeft + Section.Inset.Horizontal + _chkAlsoShown.GetPreferredSize(Size.Empty).Width + SystemInformation.VerticalScrollBarWidth + UiLayout.PageRight);
 
         DialogFit.Keep(this, page, width, body: body, widthMeasured: true);
     }
