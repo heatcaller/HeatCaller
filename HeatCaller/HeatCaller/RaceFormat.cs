@@ -273,6 +273,15 @@ public sealed class RaceFormatForm : Form
     /// </summary>
     public RaceFormat? Result { get; private set; }
 
+    /// <summary>
+    /// The window's layout held while it is built, and let go at the end of
+    /// its constructor (18 Nov 2026) - see LayoutFreeze.HoldWhileBuilding.
+    /// The first field, so the grid the fields below make is made inside
+    /// it. Built live, nearly every part had its window before the theme
+    /// pass, which made many of them again.
+    /// </summary>
+    private readonly IDisposable _building = LayoutFreeze.HoldWhileBuilding();
+
     private readonly CheckBox _chkCustom = new ThemedCheckBox();
     private readonly NumericUpDown _numLapLimit = new();
     private readonly NumericUpDown _numTimeLimit = new();
@@ -313,6 +322,9 @@ public sealed class RaceFormatForm : Form
     /// </param>
     public RaceFormatForm(RaceFormat? current, string title, bool allowUseDefault, RaceFormat? fallback = null)
     {
+        // Let go however the constructor ends - see _building.
+        using var building = _building;
+
         _allowUseDefault = allowUseDefault;
         _fallback = fallback;
 

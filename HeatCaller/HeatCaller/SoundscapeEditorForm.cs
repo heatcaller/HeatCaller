@@ -61,6 +61,15 @@ public sealed class SoundscapeEditorForm : Form
     /// <summary>The lines box shows at least this many lines before the window scrolls instead.</summary>
     private const int LeastLines = 3;
 
+    /// <summary>
+    /// The window's layout held while it is built, and let go at the end of
+    /// its constructor (18 Nov 2026) - see LayoutFreeze.HoldWhileBuilding.
+    /// The first field, so the grids the fields below make are made inside
+    /// it. Built live, most of its parts had their windows before the theme
+    /// pass, which made every drop-down again: 5.5 s of its 17 s opening.
+    /// </summary>
+    private readonly IDisposable _building = LayoutFreeze.HoldWhileBuilding();
+
     private readonly Theme _working;
     private readonly ThemeStore _store;
     private readonly Func<Theme, CancellationToken, Task> _preview;
@@ -176,6 +185,9 @@ public sealed class SoundscapeEditorForm : Form
         Func<float> effectsVolume,
         IReadOnlyList<string>? musicLibrary = null)
     {
+        // Let go however the constructor ends - see _building.
+        using var building = _building;
+
         _musicLibrary = musicLibrary ?? Array.Empty<string>();
         _working = working;
         _store = store;
