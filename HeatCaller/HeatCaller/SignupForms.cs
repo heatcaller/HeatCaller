@@ -35,6 +35,11 @@ internal sealed class ApproveSignupForm : Form
 
     public ApproveSignupForm(RelaySignupRequest request, ProfileStore profiles, RaceClassStore classes, RentalTransponderStore rentals)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         _request = request;
         _profiles = profiles;
         _rentals = rentals;

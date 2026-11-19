@@ -28,6 +28,11 @@ public sealed class RestoreDefaultsForm : Form
 
     public RestoreDefaultsForm(bool raceRunning)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         Text = SettingsRestore.ConfirmTitle;
         Font = AppTheme.BodyFont;
 

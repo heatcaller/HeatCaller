@@ -40,6 +40,11 @@ public sealed class ResultsExportForm : Form
 
     public ResultsExportForm(int selectedCount, int totalCount)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         Text = "Export Results";
         Font = AppTheme.BodyFont;
         BackColor = AppTheme.Background;

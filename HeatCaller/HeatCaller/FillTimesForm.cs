@@ -43,6 +43,11 @@ public sealed class FillTimesForm : Form
     /// <param name="minutesEach">What to open on for the gap, remembered from last time.</param>
     public FillTimesForm(TimeSpan startAt, int minutesEach)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         Text = "Fill in the times";
         Font = AppTheme.BodyFont;
 

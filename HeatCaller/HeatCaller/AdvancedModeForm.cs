@@ -23,6 +23,11 @@ public sealed class AdvancedModeForm : Form
 
     public AdvancedModeForm(bool raceRunning)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         Text = SettingsModes.WarningTitle;
         Font = AppTheme.BodyFont;
 
@@ -146,6 +151,11 @@ public sealed class ManagerPinForm : Form
 
     public ManagerPinForm(string expected)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         Text = Title;
         Font = AppTheme.BodyFont;
 

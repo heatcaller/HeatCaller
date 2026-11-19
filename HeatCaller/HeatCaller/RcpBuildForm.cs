@@ -29,6 +29,11 @@ public sealed class RcpBuildForm : Form
     /// <param name="laneWidth">How wide the lanes are, in tiles - the Lane tool's width.</param>
     public RcpBuildForm(RcpTrackDesign plan, RcpStock? stock, int laneWidth)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         Text = "Build me a track";
         Font = AppTheme.BodyFont;
 
