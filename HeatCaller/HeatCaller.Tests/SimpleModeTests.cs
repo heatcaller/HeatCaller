@@ -405,6 +405,9 @@ public sealed class SimpleModeTests : IDisposable
         "CommentaryControl.cs|How it's written", "CommentaryControl.cs|Who writes it", "CommentaryControl.cs|Before the start",
         "CommentaryControl.cs|Through the night", "CommentaryControl.cs|After the flag", "CommentaryControl.cs|Recap show",
         "BetweenRacesCard.cs|Between races",
+
+        // A race format's two cards with nothing Simple keeps (RaceFormatForm, 18 Nov 2026, dialog jazz-up).
+        "RaceFormat.cs|Lap counting", "RaceFormat.cs|Start sequence and finish",
     };
 
     /// <summary>
@@ -593,6 +596,14 @@ public sealed class SimpleModeTests : IDisposable
         "RaceDayEventControl.Templates.cs|Every week", "RaceDayEventControl.Templates.cs|On these dates",
         "RaceDayEventControl.Breaks.cs|Planned breaks", "RaceDayEventControl.ClassOrder.cs|Running order",
         "ScheduleEntryForm.cs|Run sheet line",
+
+        // The rules windows' cards (RaceFormatForm, SeasonRulesForm, SanctioningPresetForm;
+        // 18 Nov 2026, dialog jazz-up). Points carried in and the check-in PINs have tiles, no cards.
+        "RaceFormat.cs|Following the app default", "RaceFormat.cs|Race length", "RaceFormat.cs|Start",
+        "SeasonRulesForm.cs|What counts", "SeasonRulesForm.cs|How it adds up",
+        "SeasonRulesForm.cs|For the announcer",
+        "SanctioningPresetForm.cs|Presets", "SanctioningPresetForm.cs|Where it came from", "SanctioningPresetForm.cs|What it sets",
+        "SanctioningPresetForm.cs|What it does not set",
     };
 
     [Fact]
