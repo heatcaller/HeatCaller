@@ -54,6 +54,11 @@ internal sealed class CarForm : Form
 
     public CarForm(Car car, ChassisTypeStore chassisTypes, ProfileStore profiles, RaceClassStore raceClasses, bool isNew)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         _car = car;
 
         Text = isNew ? "Add a Car" : "Edit Car";

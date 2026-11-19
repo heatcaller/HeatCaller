@@ -88,6 +88,11 @@ public sealed class TrackLayoutEditForm : Form
 
     public TrackLayoutEditForm(TrackLayout? existing, Func<string, bool>? isNameTaken = null)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, nearly every part had its window before
+        // the theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         Result = existing ?? new TrackLayout();
         _isNameTaken = isNameTaken;
         _originalName = existing?.Name ?? string.Empty;

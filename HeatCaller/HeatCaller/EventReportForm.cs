@@ -59,6 +59,11 @@ public sealed class EventReportForm : Form
         HandicapStore? handicaps = null,
         RaceEventStore? events = null)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         _history = history;
         _handicaps = handicaps;
         _events = events;

@@ -87,6 +87,11 @@ internal sealed class BroadcastWindow : Form
     /// </param>
     internal BroadcastWindow(AnnouncerStrip strip, Func<Keys, bool>? raceKey = null)
     {
+        // Built with its layout held - see LayoutFreeze.HoldWhileBuilding
+        // (18 Nov 2026): built live, most parts had their windows before the
+        // theme pass, which made many of them again.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
         _strip = strip;
         _raceKey = raceKey;
 
