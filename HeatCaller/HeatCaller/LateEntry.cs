@@ -124,7 +124,8 @@ internal sealed class PickDriverForm : Form
         {
             Text = prompt,
             AutoSize = true,
-            MaximumSize = new Size(480, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
         };
 
         foreach (var (transponder, name) in drivers)
@@ -140,9 +141,15 @@ internal sealed class PickDriverForm : Form
 
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
 
+        // THE LOOK (18 Nov 2026, dialog jazz-up): the drivers in one card,
+        // the caller's words as its line on what it is for, and the button
+        // that does it in the app's colour.
+        var card = new Section("Drivers");
+        card.Add(lblWhat, gapBelow: UiLayout.RowGap);
+        card.AddFill(_lstDrivers, () => LeastRows * _lstDrivers.ItemHeight + 4, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblWhat, stretch: false, gapBelow: UiLayout.RowGap);
-        page.AddFill(_lstDrivers, _ => LeastRows * _lstDrivers.ItemHeight + 4, gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, _btnAdd), gapBelow: 0);
 
         Controls.Add(page);
@@ -150,7 +157,11 @@ internal sealed class PickDriverForm : Form
         AcceptButton = _btnAdd;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 520, height: 460);
+        AppTheme.StyleButton(_btnAdd, AppTheme.ButtonKind.Primary);
+
+        // Wider and taller than the 520x460 it was made at by the card's
+        // edges and caption, so the list is the size it was.
+        DialogFit.Keep(this, page, width: 552, height: 490);
     }
 
     private void Add()

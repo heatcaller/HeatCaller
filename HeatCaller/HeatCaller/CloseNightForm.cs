@@ -83,13 +83,13 @@ internal sealed class CloseNightForm : Form
         var lblHow = new Label
         {
             Text = ready
-                ? "Before the first race. Ticks itself as the app sees each one done. Sorted something it can't see - "
+                ? "Ticks itself as the app sees each one done. Sorted something it can't see - "
                   + "the meeting held, a car checked on the bench? Tick it off by hand."
                 : "Ticks itself as the app sees each one done. Dealt with something it can't see - a rental handed back, "
                   + "an entry paid another way? Tick it off by hand.",
             AutoSize = true,
-            MaximumSize = new Size(520, 0),
             ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
         };
 
         _rows.AutoSize = true;
@@ -113,18 +113,40 @@ internal sealed class CloseNightForm : Form
         _lblPace.MaximumSize = new Size(520, 0);
         _lblPace.Visible = false;
 
+        // 18 Nov 2026, the dialog version of the Venues look: one card, the
+        // headline its heading (green once everything is done), the night's
+        // pace and the hint line under it, then the list; the club's own
+        // lines on the left at the foot and Close on the right. No caption
+        // over the headline, which says what the card is: at 1280x720, where
+        // the window is as tall as the screen allows, the list keeps the
+        // height it had. The window is 40px taller for a bigger screen.
+        scroller.BackColor = AppTheme.Surface;
+        scroller.Tag = AppTheme.KeepBackColor;
+        _rows.BackColor = AppTheme.Surface;
+        _rows.Tag = AppTheme.KeepBackColor;
+
+        var card = new Section();
+        card.Add(_lblHeadline, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(_lblPace, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblHow, gapBelow: UiLayout.RowGap);
+        card.AddFill(scroller, () => 240, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(_lblHeadline, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(_lblPace, stretch: false, gapBelow: UiLayout.RowGap);
-        page.Add(lblHow, stretch: false, gapBelow: UiLayout.RowGap);
-        page.AddFill(scroller, 240, gapBelow: UiLayout.RowGap);
-        page.Add(new ButtonBar(alignRight: true).With(btnClose, btnOwn), gapBelow: 0);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
+
+        // Tab still goes Close, then Your Own Lines, as it did when the two
+        // shared one bar.
+        var ownBar = new ButtonBar().With(btnOwn);
+        var closeBar = new ButtonBar(alignRight: true).With(btnClose);
+        page.Add(new SplitBar(ownBar, closeBar), gapBelow: 0);
+        closeBar.TabIndex = 0;
+        ownBar.TabIndex = 1;
 
         Controls.Add(page);
         CancelButton = btnClose;
 
         AppTheme.ApplyRecursively(this);
-        DialogFit.Keep(this, page, width: 640, height: 600);
+        DialogFit.Keep(this, page, width: 640, height: 640);
 
         _timer.Tick += (_, _) => Reload();
         Shown += (_, _) => _timer.Start();
@@ -159,6 +181,9 @@ internal sealed class CloseNightForm : Form
         _lblHeadline.Text = _ready
             ? left == 0 ? "All set - ready to race." : $"Before the first race: {Plural.Of(left, "thing")} to do"
             : left == 0 ? "All wrapped up - lights out." : $"Before lights out: {Plural.Of(left, "thing")} to do";
+
+        // Green once there is nothing left, so a glance across the room says so.
+        _lblHeadline.ForeColor = left == 0 ? AppTheme.Success : AppTheme.TextDark;
 
         _rows.SuspendLayout();
 
@@ -287,7 +312,8 @@ internal sealed class CloseNightForm : Form
                 : "Anything else your club does before lights out, one per line - \"Lock the clubhouse\", "
                   + "\"Pack up the timing loop\". They're on the list every night, ticked off by hand.",
             AutoSize = true,
-            MaximumSize = new Size(440, 0),
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
         };
 
         var box = new TextBox
@@ -301,15 +327,20 @@ internal sealed class CloseNightForm : Form
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
         var btnSave = new Button { Text = "Save", DialogResult = DialogResult.OK };
 
+        // The box in a card, its hint line under the caption, as the list
+        // that opens it is.
+        var card = new Section("Your own lines");
+        card.Add(lbl, gapBelow: UiLayout.RowGap);
+        card.AddFill(box, () => 160, gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lbl, stretch: false, gapBelow: UiLayout.RowGap);
-        page.AddFill(box, 160, gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(new ButtonBar(alignRight: true).With(btnCancel, btnSave), gapBelow: 0);
         form.Controls.Add(page);
         form.CancelButton = btnCancel;
 
         AppTheme.ApplyRecursively(form);
-        DialogFit.Keep(form, page, width: 500, height: 380);
+        DialogFit.Keep(form, page, width: 500, height: 420);
 
         if (form.ShowDialog(this) == DialogResult.OK)
         {

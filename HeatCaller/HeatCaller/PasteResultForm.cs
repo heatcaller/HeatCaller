@@ -16,8 +16,8 @@ namespace HeatCaller;
 ///
 /// On the layout pieces (DialogFit): the note across the top, the class,
 /// round and day under it, the drivers as they will come in taking the
-/// height, two lines for what couldn't be read, and Import and Cancel
-/// against the right-hand edge.
+/// height, and at the foot two lines for what couldn't be read beside
+/// Import and Cancel against the right-hand edge.
 /// </summary>
 internal sealed class PasteResultForm : Form
 {
@@ -69,7 +69,7 @@ internal sealed class PasteResultForm : Form
 
         _lblProblems.MinimumSize = new Size(0, ProblemLines * Pieces.LineHeight(_lblProblems.Font) + _lblProblems.Padding.Vertical);
 
-        DialogFit.Keep(this, page, width: 640, height: 560);
+        DialogFit.Keep(this, page, width: 720, height: 620);
     }
 
     private FillPage BuildLayout(string? title, IReadOnlyList<string> classNames, DateTime runLocal)
@@ -80,7 +80,8 @@ internal sealed class PasteResultForm : Form
                    + "scores: no personal bests, records, badges, points or commentary. Drivers are matched to your "
                    + "profiles by name, and one that isn't matched comes in by name alone.",
             AutoSize = true,
-            Font = AppTheme.BodyFont,
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
         };
 
         var (className, round) = PastedResult.SplitTitle(title, classNames);
@@ -116,10 +117,10 @@ internal sealed class PasteResultForm : Form
             _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = name, HeaderText = heading, FillWeight = weight, SortMode = DataGridViewColumnSortMode.NotSortable });
 
         Column("pos", "Pos", 10);
-        Column("driver", "Driver", 34);
-        Column("profile", "Profile", 22);
+        Column("driver", "Driver", 30);
+        Column("profile", "Profile", 23);
         Column("laps", "Laps", 10);
-        Column("time", "Time", 14);
+        Column("time", "Time", 17);
         Column("fast", "Fast lap", 14);
 
         var unmatched = 0;
@@ -143,7 +144,7 @@ internal sealed class PasteResultForm : Form
         }
 
         _lblProblems.AutoSize = true;
-        _lblProblems.Font = AppTheme.BodyFont;
+        _lblProblems.Font = AppTheme.SmallFont;
         _lblProblems.ForeColor = AppTheme.TextMuted;
         _lblProblems.Text = ProblemsText(_race, unmatched);
 
@@ -155,12 +156,31 @@ internal sealed class PasteResultForm : Form
 
         var footer = new ButtonBar(alignRight: true).With(btnCancel, btnImport);
 
+        // Two cards (18 Nov 2026, dialog look): the race - its class, round
+        // and day - and the drivers as they will come in. What couldn't be
+        // read goes at the foot beside Import, where it is read just before
+        // pressing it - and where it takes no height from the list. The
+        // window opens wider and taller than it did, so the list shows as
+        // many drivers as before and the times are not cut short.
+        var raceCard = new Section("The race");
+        raceCard.Add(fields, gapBelow: 0);
+
+        var driversCard = new Section("Drivers");
+        driversCard.AddFill(_grid, () => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: 0);
+
+        var foot = new Beside(() => footer.GetPreferredSize(Size.Empty).Width)
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        };
+        foot.Add(_lblProblems, gapBelow: 0);
+        foot.AddSideMeasured(footer, gapBelow: 0);
+
         var page = new FillPage();
         page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.Add(fields, gapBelow: UiLayout.RowGap);
-        page.AddFill(_grid, _ => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
-        page.Add(_lblProblems, gapBelow: UiLayout.RowGap);
-        page.Add(footer, gapBelow: 0);
+        page.Add(raceCard, gapBelow: UiLayout.RowGap);
+        page.AddFill(driversCard, driversCard.LeastHeight, gapBelow: UiLayout.RowGap);
+        page.Add(foot, gapBelow: 0);
 
         Controls.Add(page);
 

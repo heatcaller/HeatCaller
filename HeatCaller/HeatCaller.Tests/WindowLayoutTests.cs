@@ -165,10 +165,15 @@ internal static partial class WindowCatalog
         all.AddRange(SeasonWindows());
         all.AddRange(GhostWindows());
         all.AddRange(PickerWindows());
+
+        // Pick a driver, and which car a setup was for (18 Nov 2026, dialog jazz-up).
+        all.AddRange(PickOneWindows());
+
         all.AddRange(ClubToolWindows());
         all.AddRange(CsvImportWindows());
         all.AddRange(EntryImportWindows());
         all.AddRange(CloseNightWindows());
+        all.AddRange(DeskAndMeetingWindows());
         all.AddRange(PasteResultWindows());
 
         // The big editors, and the pages shown in windows of their own (30 Sep).

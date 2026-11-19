@@ -35,7 +35,7 @@ public sealed class QualifyingProjectionForm : Form
 
     private readonly Label _lblHeading = new();
     private readonly Label _lblRule = new();
-    private readonly Label _lblEmpty = new();
+    private readonly ListEmptyNote _lblEmpty = new();
     private readonly DataGridView _grid = new();
     private readonly CheckBox _chkOnTop = new ThemedCheckBox();
 
@@ -62,12 +62,13 @@ public sealed class QualifyingProjectionForm : Form
         _chkOnTop.Font = AppTheme.BodyFont;
         _chkOnTop.CheckedChanged += (_, _) => TopMost = _chkOnTop.Checked;
 
+        // On a soft panel where the order goes, with a heading (18 Nov 2026,
+        // dialog jazz-up, third batch) - see ListEmptyNote.
         _lblEmpty.Dock = DockStyle.Fill;
         _lblEmpty.Font = AppTheme.BodyFont;
         _lblEmpty.ForeColor = AppTheme.TextMuted;
-        _lblEmpty.TextAlign = ContentAlignment.MiddleCenter;
-        _lblEmpty.Text = "No qualifier is running.\r\n\r\n"
-                       + "Start a round marked as a qualifier from the program on Race Day > Next Steps and the order appears here, "
+        _lblEmpty.Heading = "No qualifier is running";
+        _lblEmpty.Text = "Start a round marked as a qualifier from the program on Race Day > Next Steps and the order appears here, "
                        + "updating as the laps come in.";
 
         BuildGrid();
@@ -133,18 +134,10 @@ public sealed class QualifyingProjectionForm : Form
     /// the order's headings and a few drivers, or the whole of the note that
     /// nothing is running, wrapped to that width - whichever is taller, so
     /// the window's least does not change when a qualifier starts or ends.
-    /// The note is measured as the label draws it, wrapped in its own box.
+    /// The note is measured as it draws itself, heading and all (ListEmptyNote).
     /// </summary>
-    private int OrderLeastHeight(int width)
-    {
-        var note = TextRenderer.MeasureText(
-            _lblEmpty.Text,
-            _lblEmpty.Font,
-            new Size(Math.Max(1, width - _lblEmpty.Padding.Horizontal), int.MaxValue),
-            TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height + _lblEmpty.Padding.Vertical;
-
-        return Math.Max(_grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, note);
-    }
+    private int OrderLeastHeight(int width) =>
+        Math.Max(_grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, _lblEmpty.LeastHeight(width));
 
     private void BuildGrid()
     {
@@ -164,7 +157,21 @@ public sealed class QualifyingProjectionForm : Form
             new DataGridViewTextBoxColumn { Name = "change", HeaderText = "", FillWeight = 30 },
             new DataGridViewTextBoxColumn { Name = "score", HeaderText = "Score", FillWeight = 85 },
             new DataGridViewTextBoxColumn { Name = "heats", HeaderText = "Heats", FillWeight = 45 });
+
+        // The lines still moving get a bar of the app's colour down their
+        // left edge as well as their tint (18 Nov 2026, dialog jazz-up), so
+        // they stand out from across the pits on a washed-out projector.
+        _grid.RowPostPaint += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.RowIndex < _grid.Rows.Count && _grid.Rows[e.RowIndex].Tag is string transponder && _live.Contains(transponder))
+            {
+                RaceNightTiles.MarkRow(e.Graphics, e.RowBounds, AppTheme.Primary);
+            }
+        };
     }
+
+    /// <summary>The transponders on track in the order last drawn - the lines RowPostPaint marks.</summary>
+    private readonly HashSet<string> _live = new(StringComparer.Ordinal);
 
     /// <summary>The projection last drawn - the projector hands back the same object until something changes.</summary>
     private QualifyingProjector.Projection? _shown;
@@ -218,6 +225,7 @@ public sealed class QualifyingProjectionForm : Form
         var scroll = _grid.FirstDisplayedScrollingRowIndex;
 
         _grid.Rows.Clear();
+        _live.Clear();
 
         foreach (var row in projection.Rows)
         {
@@ -245,6 +253,11 @@ public sealed class QualifyingProjectionForm : Form
             if (row.InLiveHeat)
             {
                 // On track right now: this line is still moving.
+                if (row.Transponder is { } live)
+                {
+                    _live.Add(live);
+                }
+
                 line.DefaultCellStyle.BackColor = AppTheme.PrimaryTint;
                 line.DefaultCellStyle.ForeColor = AppTheme.TextDark;
                 line.DefaultCellStyle.Font = AppTheme.BoldFont;

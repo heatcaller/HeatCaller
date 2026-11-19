@@ -264,9 +264,10 @@ public sealed partial class RaceControlControl
     /// AskForReason, and internal, so the layout test can build it
     /// (WindowCatalog) without a race on the board.
     ///
-    /// On the layout pieces (DialogFit): the caption and the box on one line
-    /// (FieldRow), the box running to the right-hand edge, and Warn and
-    /// Cancel at the foot; as tall as that. It used to be placed in pixels in
+    /// On the layout pieces (DialogFit): a card holding the caption and the
+    /// box on one line (FieldRow), the box running to the right-hand edge,
+    /// and a line on what Warn does; Warn and Cancel at the foot; as tall as
+    /// that. It used to be placed in pixels in
     /// a 380x116 window: the box at a fixed 80px from the left and 288px
     /// wide beside a caption that a larger text size ran into, and the
     /// buttons a fixed 80px wide at fixed places.
@@ -274,7 +275,7 @@ public sealed partial class RaceControlControl
     internal sealed class WarningReasonForm : Form
     {
         /// <summary>How wide the window is inside its frame at the normal text size.</summary>
-        private const int DialogWidth = 380;
+        private const int DialogWidth = 420;
 
         private readonly TextBox _txt = new() { MaxLength = 80 };
 
@@ -301,8 +302,22 @@ public sealed partial class RaceControlControl
             var row = new FieldRow();
             row.AddLast(new Label { Text = "Reason:" }, _txt, () => UiLayout.AtTextSize(UiLayout.FieldWidth));
 
+            // In a card with one line under it saying what Warn does (18 Nov
+            // 2026, the dialog version of the Venues look, as the Penalty...
+            // window beside it has) - and no more: this is opened mid-race,
+            // so the box is the first thing read and Enter warns.
+            var card = new Section("Other reason");
+            card.Add(row, gapBelow: UiLayout.HintGap);
+            card.Add(new Label
+            {
+                Text = "The next step on the class's warning ladder applies. Undo takes it back.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+                Font = AppTheme.SmallFont,
+            }, gapBelow: 0);
+
             var page = new FillPage();
-            page.Add(row);
+            page.Add(card);
 
             // Against the right-hand edge, Cancel furthest right, as they
             // were - and Tab still reaches Warn first: the bar takes them

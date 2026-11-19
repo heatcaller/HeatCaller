@@ -101,17 +101,50 @@ public sealed class QualifyingStandingsForm : Form
             grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "rounds", HeaderText = "Each Round", FillWeight = 170 });
         }
 
-        page.AddFill(grid, _ => grid.ColumnHeadersHeight + LeastRows * grid.RowTemplate.Height + 2);
-
-        if (entries.Count == 0)
+        // The order at a glance across the top (18 Nov 2026, dialog jazz-up,
+        // third batch): how many are ranked, who leads and on what, and the
+        // quickest lap anyone has done. Only when there is an order: with
+        // none yet, four dashes would say nothing.
+        if (entries.Count > 0)
         {
-            page.Add(new Label
-            {
-                Text = "No recorded qualifying heats yet for this class.",
-                AutoSize = true,
-                ForeColor = AppTheme.TextMuted,
-            }, gapBelow: UiLayout.RowGap);
+            var tiles = RaceNightTiles.Make(4);
+            var leader = entries[0];
+            var fastest = entries.Where(e => e.BestFastLapMs > 0).Select(e => e.BestFastLapMs).DefaultIfEmpty(0).Min();
+
+            tiles[0].Set(entries.Count.ToString(System.Globalization.CultureInfo.CurrentCulture), "Ranked");
+            tiles[1].Set(string.IsNullOrWhiteSpace(leader.DriverName) ? "-" : leader.DriverName, "Leading");
+            tiles[2].Set(
+                points ? leader.PointsWords()
+                    : method == QualifyingMethod.BestConsecutiveLaps
+                    ? leader.BestConsecutiveMs > 0 ? $"{leader.BestConsecutiveMs / 1000.0:0.000}s" : "-"
+                    : Plural.Of(leader.BestLaps, "lap"),
+                "Top score");
+            tiles[3].Set(fastest > 0 ? $"{fastest / 1000.0:0.000}s" : "-", "Fastest lap");
+
+            page.Add(new TileStrip(tiles), gapBelow: UiLayout.RowGap);
         }
+
+        // The standings and the note that there are none yet take turns in
+        // one place, as the live projection's order and its note do: the
+        // note on a soft panel where the drivers would be, saying what fills
+        // it. Exactly one of them is shown.
+        var empty = new ListEmptyNote
+        {
+            Heading = "No qualifying results yet",
+            Text = "No recorded qualifying heats yet for this class. The standings fill in as each qualifier is recorded.",
+            Font = AppTheme.SmallFont,
+            Dock = DockStyle.Fill,
+            Visible = entries.Count == 0,
+        };
+
+        grid.Dock = DockStyle.Fill;
+        grid.Visible = entries.Count > 0;
+
+        var order = new Panel { Tag = AppTheme.KeepBackColor };
+        order.Controls.Add(grid);
+        order.Controls.Add(empty);
+
+        page.AddFill(order, width => Math.Max(grid.ColumnHeadersHeight + LeastRows * grid.RowTemplate.Height + 2, empty.LeastHeight(width)));
 
         for (var i = 0; i < entries.Count; i++)
         {
@@ -353,7 +386,14 @@ public sealed class QualifyingStandingsForm : Form
         // Every heading whole, the rest shared by weight - see Pieces.KeepHeadingsWhole.
         Pieces.KeepHeadingsWhole(grid);
 
-        DialogFit.Keep(this, page, width: (wide ? 980 : 660) + (dropping ? 160 : 0) + (points ? 320 : 0), height: 448);
+        // The note in the hint's face, whatever the theme pass gave it.
+        empty.Font = AppTheme.SmallFont;
+
+        // Taller by the tiles (18 Nov 2026), so the standings keep the rows
+        // they had before the tiles went in; as it was with none yet, which
+        // has no tiles.
+        DialogFit.Keep(this, page, width: (wide ? 980 : 660) + (dropping ? 160 : 0) + (points ? 320 : 0),
+            height: entries.Count > 0 ? 528 : 448);
     }
 
     /// <summary>

@@ -74,8 +74,15 @@ public sealed class FillTimesForm : Form
 
         var lblHint = new Label
         {
-            Text = "Start to start, so allow for the changeover as well as the race.\r\n\r\n"
-                 + "Your own lines (doors, lunch, presentation) are filled in too. One that already has a time "
+            Text = "Start to start, so allow for the changeover as well as the race.",
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+            Font = AppTheme.SmallFont,
+        };
+
+        var lblOwnLines = new Label
+        {
+            Text = "Your own lines (doors, lunch, presentation) are filled in too. One that already has a time "
                  + "keeps it and the day is worked on from there, so \"lunch 13:00\" moves the afternoon.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
@@ -90,9 +97,16 @@ public sealed class FillTimesForm : Form
         // Everything but the buttons: on a screen too short for all of it at
         // a large text size, it scrolls and the buttons stay in view.
         var body = DialogFit.Body(page);
+        // The two numbers in one card with the line on what the gap covers
+        // (18 Nov 2026, dialog look), and what happens to the club's own
+        // lines under it as a note.
+        var timesCard = new Section("The times");
+        timesCard.Add(fields, gapBelow: UiLayout.HintGap);
+        timesCard.Add(lblHint, gapBelow: 0);
+
         body.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        body.Add(fields, gapBelow: UiLayout.RowGap);
-        body.Add(lblHint, gapBelow: 0);
+        body.Add(timesCard, gapBelow: UiLayout.RowGap);
+        body.Add(lblOwnLines, gapBelow: 0);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Fill In the Times first: the bar takes them

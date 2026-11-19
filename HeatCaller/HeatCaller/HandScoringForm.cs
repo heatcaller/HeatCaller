@@ -73,14 +73,31 @@ public sealed class HandScoringForm : Form
         WindowState = FormWindowState.Maximized;
         KeyPreview = true;
 
+        // The top as a header card (18 Nov 2026, dialog look): what this is
+        // in the heading face with how to use it under it, the buttons on
+        // the right beside the two, and the status line under it all - about
+        // as tall as the top was, so the grid keeps its height.
         var title = new Label
         {
-            Text = "SCORING BY HAND  ·  tap a car each time it crosses the line  ·  right-click takes a lap off",
+            Text = "Scoring by hand",
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Font = AppTheme.HeadingFont,
+            Margin = Padding.Empty,
+        };
+
+        var howTo = new Label
+        {
+            Text = "Tap a car each time it crosses the line  ·  right-click takes a lap off",
             AutoSize = false,
+            AutoEllipsis = true,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
-            Font = AppTheme.BoldFont,
+            Font = AppTheme.SmallFont,
+            ForeColor = AppTheme.TextMuted,
+            Margin = new Padding(3, 0, 3, 0),
         };
+        howTo.Height = Pieces.LineHeight(AppTheme.SmallFont) + 2;
 
         _btnUndo.Click += (_, _) => UndoLastTap();
 
@@ -105,13 +122,12 @@ public sealed class HandScoringForm : Form
         var btnAdd = new Button { Text = HandScoring.AddCarCaption, AutoSize = true, Visible = _addable is not null && _add is not null };
         btnAdd.Click += (_, _) => AddCar();
 
-        var top = new TableLayoutPanel
+        var top = new HeaderCard
         {
             Dock = DockStyle.Top,
             AutoSize = true,
             ColumnCount = 5,
-            RowCount = 2,
-            Padding = new Padding(UiLayout.RowGap),
+            RowCount = 3,
         };
         top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -119,11 +135,20 @@ public sealed class HandScoringForm : Form
         top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         top.Controls.Add(title, 0, 0);
+        top.Controls.Add(howTo, 0, 1);
         top.Controls.Add(btnAdd, 1, 0);
         top.Controls.Add(_btnUndo, 2, 0);
         top.Controls.Add(btnStop, 3, 0);
         top.Controls.Add(btnClose, 4, 0);
-        top.Controls.Add(_lblStatus, 0, 1);
+
+        // The buttons beside the title and the line under it, centred on the two.
+        foreach (var button in new[] { btnAdd, _btnUndo, btnStop, btnClose })
+        {
+            top.SetRowSpan(button, 2);
+            button.Anchor = AnchorStyles.None;
+        }
+
+        top.Controls.Add(_lblStatus, 0, 2);
         top.SetColumnSpan(_lblStatus, 5);
         _lblStatus.Height = Pieces.LineHeight(AppTheme.SmallFont) + 4;
         _lblStatus.Font = AppTheme.SmallFont;
@@ -132,7 +157,12 @@ public sealed class HandScoringForm : Form
         Controls.Add(_grid);
         Controls.Add(top);
 
-        _grid.Resize += (_, _) => LayOutButtons();
+        _grid.Resize += (_, _) =>
+        {
+            LayOutButtons();
+            _grid.Invalidate();
+        };
+        _grid.Paint += (_, e) => PaintEmptyGrid(e.Graphics);
         _refresh.Tick += (_, _) => RefreshCars();
 
         AppTheme.ApplyRecursively(this);
@@ -163,6 +193,35 @@ public sealed class HandScoringForm : Form
     }
 
     private void Say(string text) => _lblStatus.Text = text;
+
+    /// <summary>
+    /// With no car on the board, what fills the grid, in its middle - so the
+    /// big empty space reads as waiting rather than broken (18 Nov 2026,
+    /// dialog look).
+    /// </summary>
+    private void PaintEmptyGrid(Graphics g)
+    {
+        if (_buttons.Count > 0)
+        {
+            return;
+        }
+
+        var area = _grid.ClientRectangle;
+        var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPadding;
+        var heading = "No car on the board yet";
+        var line = _addable is not null && _add is not null
+            ? $"Each car gets a button here once it crosses the line. One that hasn't can go on with {HandScoring.AddCarCaption.TrimEnd('.')}."
+            : "Each car gets a button here once it crosses the line.";
+
+        var room = new Size(Math.Max(40, Math.Min(area.Width - 32, UiLayout.AtTextSize(560))), int.MaxValue);
+        var headingSize = TextRenderer.MeasureText(g, heading, AppTheme.HeadingFont, room, flags);
+        var lineSize = TextRenderer.MeasureText(g, line, AppTheme.BodyFont, room, flags);
+        var top = area.Top + Math.Max(0, (area.Height - headingSize.Height - UiLayout.HintGap - lineSize.Height) / 2);
+        var left = area.Left + (area.Width - room.Width) / 2;
+
+        TextRenderer.DrawText(g, heading, AppTheme.HeadingFont, new Rectangle(left, top, room.Width, headingSize.Height), AppTheme.TextDark, flags);
+        TextRenderer.DrawText(g, line, AppTheme.BodyFont, new Rectangle(left, top + headingSize.Height + UiLayout.HintGap, room.Width, lineSize.Height), AppTheme.TextMuted, flags);
+    }
 
     /// <summary>
     /// Add a Car...: pick a car the decoder never saw - this heat's roster
@@ -227,6 +286,11 @@ public sealed class HandScoringForm : Form
         picker.AcceptButton = ok;
         picker.CancelButton = cancel;
         AppTheme.ApplyRecursively(picker);
+
+        // The hint in the muted type a hint wears, and Add in the app's
+        // colour as the window's own button (18 Nov 2026, dialog look).
+        hint.ForeColor = AppTheme.TextMuted;
+        AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
 
         if (picker.ShowDialog(this) != DialogResult.OK || list.SelectedIndex < 0)
         {
@@ -331,6 +395,7 @@ public sealed class HandScoringForm : Form
 
         _layoutKey = string.Join("|", cars.Select(c => c.Transponder));
         _grid.ResumeLayout();
+        _grid.Invalidate();
 
         LayOutButtons();
 
@@ -419,6 +484,37 @@ public sealed class HandScoringForm : Form
         Tap(last, -1, undo: true);
     }
 
+    /// <summary>
+    /// The top: the theme's rounded card (as Section paints itself), a gap of
+    /// the window's colour round it the same as between the car buttons, and
+    /// the card's own room inside it.
+    /// </summary>
+    private sealed class HeaderCard : TableLayoutPanel
+    {
+        /// <summary>The gap round the card - the grid's gap between buttons, so the card lines up with them.</summary>
+        private const int Gap = 8;
+
+        public HeaderCard()
+        {
+            BackColor = AppTheme.Surface;
+            Tag = AppTheme.KeepBackColor;
+            DoubleBuffered = true;
+            ResizeRedraw = true;
+            Margin = Padding.Empty;
+            Padding = new Padding(Gap + 12, Gap + 6, Gap + 12, 6);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            using (var behind = new SolidBrush(Parent?.BackColor ?? AppTheme.Background))
+            {
+                e.Graphics.FillRectangle(behind, ClientRectangle);
+            }
+
+            AppTheme.DrawCard(e.Graphics, new RectangleF(Gap, Gap, Width - Gap * 2, Height - Gap));
+        }
+    }
+
     /// <summary>One car: its name big, its laps under it, drawn to fill the button.</summary>
     private sealed class CarButton : Control
     {
@@ -486,9 +582,17 @@ public sealed class HandScoringForm : Form
                 : flashing ? (_flashAdded ? AppTheme.OnSuccess : AppTheme.OnWarning)
                 : AppTheme.OnPrimary;
 
-            using (var brush = new SolidBrush(back))
+            // Rounded, as the theme's cards and buttons are, with the grid's
+            // colour in the corners.
+            using (var behind = new SolidBrush(Parent?.BackColor ?? AppTheme.Background))
             {
-                g.FillRectangle(brush, ClientRectangle);
+                g.FillRectangle(behind, ClientRectangle);
+            }
+
+            using (var brush = new SolidBrush(back))
+            using (var shape = AppTheme.RoundedRect(new RectangleF(0, 0, Width - 1, Height - 1), AppTheme.CornerRadius))
+            {
+                g.FillPath(brush, shape);
             }
 
             if (_car is not { } car)

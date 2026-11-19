@@ -12,9 +12,9 @@ namespace HeatCaller;
 /// up to run a class they're not registered in is common enough that
 /// hiding them entirely just raises the question of where they went.
 ///
-/// On the layout pieces (DialogFit): the hint across the top, the drivers
-/// taking the height with their buttons in a column beside them (Beside),
-/// and the count, Save and Cancel at the foot. It used to be placed in
+/// On the layout pieces (DialogFit): one card (18 Nov 2026) with the hint
+/// as its line, the drivers taking the height with their buttons in a
+/// column beside them (Beside), and the count, Save and Cancel at the foot. It used to be placed in
 /// pixels in a 520x540 window whatever the text size: the buttons stepped
 /// down a standard button's height apart, which the theme draws taller at a
 /// larger text size, and the footer at a fixed height from the bottom.
@@ -152,9 +152,22 @@ public sealed class RoundRosterForm : Form
         btnSave.TabIndex = 0;
         btnCancel.TabIndex = 1;
 
+        // THE LOOK (18 Nov 2026, dialog jazz-up): the list and its buttons in
+        // one card, the hint as its line on what it is for, taking the
+        // height down to the footer - the same parts, as the other dialogs
+        // have them.
+        // An empty list says what fills it, in the hint over it.
+        if (_list.Items.Count == 0)
+        {
+            lblHint.Text = $"Nobody is in {round.ClassName} yet. Add Driver picks any saved driver to put in this round.";
+        }
+
+        var card = new Section("Running order");
+        card.Add(lblHint, gapBelow: UiLayout.RowGap);
+        card.AddFill(roster, () => roster.LeastHeight(Math.Max(1, roster.Width)), gapBelow: 0);
+
         var page = new FillPage();
-        page.Add(lblHint, gapBelow: UiLayout.RowGap);
-        page.AddFill(roster, roster.LeastHeight);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(footer, gapBelow: 0);
 
         Controls.Add(page);
@@ -169,11 +182,18 @@ public sealed class RoundRosterForm : Form
         // "Clear" as destructive and painted it red, which it is not.
         AppTheme.StyleButton(btnNone, AppTheme.ButtonKind.Secondary);
 
+        // Save is the window's one button in the app's colour: the theme
+        // reads "Add" as a main action too, and painted Add Driver... the
+        // same orange beside the list.
+        AppTheme.StyleButton(btnSave, AppTheme.ButtonKind.Primary);
+        AppTheme.StyleButton(btnAddOther, AppTheme.ButtonKind.Secondary);
+
         // Wider than the 520 it was made at: at 520 the count, Save and
         // Cancel came to about 502px in a line of 488 at the normal text
-        // size, and Save and Cancel went onto a line of their own. The
-        // height it had.
-        DialogFit.Keep(this, page, width: 560, height: 540);
+        // size, and Save and Cancel went onto a line of their own. Since the
+        // card (18 Nov 2026), wider and taller by its edges and caption, so
+        // the list is as wide and as tall as it was at 560x540.
+        DialogFit.Keep(this, page, width: 592, height: 580);
     }
 
     private string LookupName(string transponder, IReadOnlyList<DriverProfile> roster)

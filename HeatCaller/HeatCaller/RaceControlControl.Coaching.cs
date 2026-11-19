@@ -435,7 +435,9 @@ public partial class RaceControlControl
     /// The window Coach (name) &gt; Target lap... opens: the lap time to
     /// coach a driver to, in seconds to the hundredth. A class of its own,
     /// and internal, so the layout test can build it (WindowCatalog) - laid
-    /// out as the Penalty... window beside it is (TimePenaltyForm).
+    /// out as the Penalty... window beside it is (TimePenaltyForm): a card
+    /// with the seconds and a line on what Coach does, Coach in the primary
+    /// colour.
     /// </summary>
     internal sealed class TargetLapForm : Form
     {
@@ -470,8 +472,22 @@ public partial class RaceControlControl
             var row = new FieldRow();
             row.Add(new Label { Text = "Target lap (seconds):" }, _seconds);
 
+            // In a card with one line under it saying what Coach does (18 Nov
+            // 2026), as the Penalty... window has - and no more: this is
+            // opened mid-race, so the box is the first thing read and Enter
+            // coaches.
+            var card = new Section("Coaching");
+            card.Add(row, gapBelow: UiLayout.HintGap);
+            card.Add(new Label
+            {
+                Text = "Each lap is called against it at the line.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+                Font = AppTheme.SmallFont,
+            }, gapBelow: 0);
+
             var page = new FillPage();
-            page.Add(row);
+            page.Add(card);
             page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
             ok.TabIndex = 0;
             cancel.TabIndex = 1;
@@ -482,6 +498,10 @@ public partial class RaceControlControl
             CancelButton = cancel;
 
             AppTheme.ApplyRecursively(this);
+
+            // The window's own button in the app's colour: the theme goes by
+            // the caption, and "Coach" is not one it knows.
+            AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
 
             // After the theme pass, in the face it leaves the box in - as the
             // penalty window sizes its own.

@@ -503,6 +503,12 @@ public sealed class SimpleModeTests : IDisposable
         // breakdown window (LapDetailWindow) is painted, with no Section.
         "RaceProgramControl.LateArrivals.cs|Add to the heats",
 
+        // Check How Names Are Read, Drivers in Round, Other Classes, the driver
+        // picker (PickDriverForm) and the car picker (PickCarForm), one card each
+        // (18 Nov 2026, dialog jazz-up, third batch).
+        "NameCheckForm.cs|Names to hear", "RoundRosterForm.cs|Running order", "OtherClassesForm.cs|Also races",
+        "LateEntry.cs|Drivers", "SetupLinking.cs|Cars in the garage",
+
         // A driver's profile and a driver's handicap, in cards (18 Nov 2026, dialog jazz-up).
         "ProfileForm.cs|Who they are", "ProfileForm.cs|Car and class", "ProfileForm.cs|On the PA",
         "ProfileForm.cs|Their crew", "ProfileForm.cs|Junior", "ProfileForm.cs|Privacy", "ProfileForm.cs|Contact",
@@ -536,6 +542,14 @@ public sealed class SimpleModeTests : IDisposable
         "RaceClassForms.cs|On the track", "RaceClassForms.cs|Fees",
         "RaceControlControl.Leaderboard.cs|Penalty",
 
+        // Third dialog batch, D (18 Nov 2026): Close the Night / Ready to Race
+        // and its own lines, Warning for, Warnings, Driver Paid, Drivers'
+        // Meeting and Target lap for.
+        "CloseNightForm.cs|Your own lines",
+        "RaceControlWarnings.cs|Other reason", "WarningLadderForm.cs|Warning ladder",
+        "DriverPaidForm.cs|On the slip", "MainForm.ReadyToRace.cs|Tonight's meeting",
+        "RaceControlControl.Coaching.cs|Coaching",
+
         // Post the Heats' cards (PostHeatsForm, 18 Nov 2026, dialog jazz-up).
         "RaceProgramControl.Posting.cs|Before you post", "RaceProgramControl.Posting.cs|Print and tell",
         "RaceProgramControl.Posting.cs|Once they're posted",
@@ -543,6 +557,20 @@ public sealed class SimpleModeTests : IDisposable
         // The Setup Sheet's and Edit Result's cards (SetupEntryForm, ResultEditForm; 18 Nov 2026).
         "SetupEntryForm.cs|This setup",
         "ResultEditForm.cs|Corrections", "ResultEditForm.cs|New order",
+
+        // Add Main's, Line Up the Split Loop's and Photo Finish's cards (MainRoundForm, SplitLineUpForm,
+        // PhotoFinishForm; 18 Nov 2026, dialog jazz-up, third batch). Line Up opens only from the split
+        // loop card Simple hides, so its cards need no tag of their own.
+        "MainRoundForm.cs|The main", "MainRoundForm.cs|Drivers in this main",
+        "SplitLineUpForm.cs|Line it up", "SplitLineUpForm.cs|Crossings",
+        "PhotoFinishForm.cs|Shots",
+
+        // Paste a Result's, Fill in the Times', Export Results' and Event Report's cards
+        // (PasteResultForm, FillTimesForm, ResultsExportForm, EventReportForm; 18 Nov 2026).
+        "PasteResultForm.cs|The race", "PasteResultForm.cs|Drivers",
+        "FillTimesForm.cs|The times",
+        "ResultsExportForm.cs|The file", "ResultsExportForm.cs|Sessions",
+        "EventReportForm.cs|The report", "EventReportForm.cs|Include",
     };
 
     [Fact]

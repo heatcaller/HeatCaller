@@ -24,6 +24,9 @@ internal sealed class DriverPaidForm : Form
     private readonly Button _btnComp = new() { Text = "Comp..." };
     private readonly Button _btnRemove = new() { Text = "Remove" };
 
+    /// <summary>What there is to take, how many are on the slip and how many have settled already - see RefreshRows.</summary>
+    private readonly StatTile[] _tiles = { new(), new(), new() };
+
     /// <summary>The drivers on the slip, in the order they were added.</summary>
     private readonly List<DriverProfile> _drivers = new();
 
@@ -118,14 +121,30 @@ internal sealed class DriverPaidForm : Form
         var close = new Button { Text = "Close", DialogResult = DialogResult.Cancel };
         close.Click += (_, _) => Close();
 
-        var footer = new SplitBar(
-            new ButtonBar().With(_btnRemove),
-            new ButtonBar(alignRight: true).With(close, _btnComp, _btnCard, _btnCash));
+        // 18 Nov 2026, the dialog version of the Venues look: what there is
+        // to take in tiles across the top, read at a glance by whoever is at
+        // the window; the slip in a card, its hint under the caption, the
+        // total and Remove on one line under the list; and Paid Cash, Paid
+        // Card, Comp and Close on one line at the foot. The window is wider
+        // and taller than it was so the four share a line and the list
+        // keeps its height. Tab goes the list, Remove, then the foot, as it
+        // did.
+        foreach (var tile in _tiles)
+        {
+            tile.Value.Font = AppTheme.TitleFont;
+            tile.Caption.Font = AppTheme.MicroFont;
+        }
+
+        var card = new Section("On the slip");
+        card.Add(lblIntro, gapBelow: UiLayout.RowGap);
+        card.AddFill(_grid, () => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
+        card.Add(new TotalRow(_lblTotal, new ButtonBar(alignRight: true).With(_btnRemove)), gapBelow: 0);
+
+        var footer = new ButtonBar(alignRight: true).With(close, _btnComp, _btnCard, _btnCash);
 
         var page = new FillPage();
-        page.Add(lblIntro, gapBelow: UiLayout.RowGap);
-        page.AddFill(_grid, _ => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2, gapBelow: UiLayout.RowGap);
-        page.Add(_lblTotal, gapBelow: UiLayout.RowGap);
+        page.Add(new TileStrip(_tiles), gapBelow: UiLayout.RowGap);
+        page.AddFill(card, card.LeastHeight, gapBelow: UiLayout.RowGap);
         page.Add(footer, gapBelow: 0);
         Controls.Add(page);
 
@@ -139,7 +158,14 @@ internal sealed class DriverPaidForm : Form
         AppTheme.StyleButton(close, AppTheme.ButtonKind.Secondary);
         Pieces.KeepHeadingsWhole(_grid);
 
-        DialogFit.Keep(this, page, width: 560, height: 340);
+        // As wide as it was made, at the text size in use - or wider, so the
+        // four buttons at the foot share one line (at 560 Paid Cash went onto
+        // a line of its own). Measured after the theme pass sizes them.
+        var width = Math.Max(
+            UiLayout.AtTextSize(560),
+            UiLayout.PageLeft + footer.OneLineWidth + UiLayout.PageRight);
+
+        DialogFit.Keep(this, page, width, height: 430, widthMeasured: true);
 
         RefreshRows();
     }
@@ -190,6 +216,14 @@ internal sealed class DriverPaidForm : Form
         }
 
         _lblTotal.Text = TotalWords(_drivers.Count, settled, total);
+
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        _tiles[0].Set(DeskMoney.Money(total), "To take");
+        _tiles[1].Set(_drivers.Count.ToString(culture), _drivers.Count == 1 ? "Driver" : "Drivers");
+        _tiles[2].Set(settled.ToString(culture), "Settled already");
+
+        // The money in the primary colour while there is some to take.
+        _tiles[0].Value.ForeColor = total > 0 ? AppTheme.Primary : AppTheme.TextDark;
 
         var any = _drivers.Count > 0;
         _btnCash.Enabled = any;
@@ -275,5 +309,69 @@ internal sealed class DriverPaidForm : Form
         return settled >= drivers
             ? $"{Plural.Of(drivers, "driver")} - nothing to take, already settled. Paid or Comp changes how."
             : $"{Plural.Of(drivers, "driver")} - {DeskMoney.Money(toTake)} to take ({settled} already settled, left as {(settled == 1 ? "it is" : "they are")})";
+    }
+
+    /// <summary>
+    /// The line under the slip (18 Nov 2026): the total on the left, wrapping
+    /// when it has to, and Remove against the right-hand edge, the two
+    /// centred on each other. A piece of this window's own rather than a
+    /// SplitBar, which holds only buttons, and whose left side would put the
+    /// total at the top of the line beside a taller button.
+    /// </summary>
+    private sealed class TotalRow : Panel
+    {
+        private readonly Label _label;
+        private readonly ButtonBar _bar;
+
+        public TotalRow(Label label, ButtonBar bar)
+        {
+            LayoutFreeze.Adopt(this);
+
+            _label = label;
+            _bar = bar;
+
+            AutoSize = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            Margin = Padding.Empty;
+            Padding = Padding.Empty;
+            Tag = AppTheme.KeepBackColor;
+
+            _label.AutoSize = false;
+            _label.Margin = Padding.Empty;
+            _label.TextAlign = ContentAlignment.MiddleLeft;
+
+            Controls.Add(_label);
+            Controls.Add(_bar);
+
+            _label.TextChanged += (_, _) => Parent?.PerformLayout();
+        }
+
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            var bar = _bar.GetPreferredSize(Size.Empty);
+            var width = proposedSize.Width is > 0 and < int.MaxValue / 4
+                ? proposedSize.Width
+                : _label.GetPreferredSize(Size.Empty).Width + UiLayout.SectionGap + bar.Width;
+
+            return new Size(width, Math.Max(LabelHeight(width, bar.Width), bar.Height));
+        }
+
+        protected override void OnLayout(LayoutEventArgs levent)
+        {
+            base.OnLayout(levent);
+
+            var bar = _bar.GetPreferredSize(Size.Empty);
+            var width = Math.Max(1, ClientSize.Width);
+            var labelWidth = Math.Max(1, width - bar.Width - UiLayout.SectionGap);
+            var labelHeight = LabelHeight(width, bar.Width);
+            var height = Math.Max(labelHeight, bar.Height);
+
+            _bar.Bounds = new Rectangle(width - bar.Width, (height - bar.Height) / 2, bar.Width, bar.Height);
+            _label.Bounds = new Rectangle(0, (height - labelHeight) / 2, labelWidth, labelHeight);
+        }
+
+        /// <summary>How tall the total is, wrapped to what Remove leaves of <paramref name="width"/>.</summary>
+        private int LabelHeight(int width, int barWidth) =>
+            _label.GetPreferredSize(new Size(Math.Max(1, width - barWidth - UiLayout.SectionGap), 0)).Height;
     }
 }

@@ -24,7 +24,7 @@ public sealed class PhotoFinishForm : Form
     private readonly PictureBox _picture = new() { SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.Black };
     private readonly TrackBar _slider = new() { Minimum = 0, Maximum = 0, TickStyle = TickStyle.BottomRight };
     private readonly Label _lblFrame = new() { AutoSize = true };
-    private readonly Label _lblEmpty = new() { AutoSize = true };
+    private readonly ListEmptyNote _lblEmpty = new() { Dock = DockStyle.Fill };
     private readonly System.Windows.Forms.Timer _refresh = new() { Interval = 2000 };
 
     private IReadOnlyList<PhotoFinish.SavedShot> _shots = Array.Empty<PhotoFinish.SavedShot>();
@@ -35,14 +35,24 @@ public sealed class PhotoFinishForm : Form
         Text = "Photo Finish";
         KeyPreview = true;
 
+        // In the app's body face, as the other windows are (18 Nov 2026): it
+        // was left in the system's, which stayed small at a larger text size.
+        Font = AppTheme.BodyFont;
+        _lblFrame.Font = AppTheme.SmallFont;
+
         var btnOpenFolder = new Button { Text = "Open Folder" };
         btnOpenFolder.Click += (_, _) => OpenFolder();
 
         var btnClose = new Button { Text = "Close" };
         btnClose.Click += (_, _) => Close();
 
+        // On a soft panel in the list's place, with a heading (18 Nov 2026,
+        // dialog jazz-up, third batch) - see ListEmptyNote. It used to be a line
+        // over the picture, which took the picture's height.
+        _lblEmpty.Heading = "No shots yet";
         _lblEmpty.Text = "Nothing kept yet. Open the finish camera from Connection → Open Camera Page and leave it running.";
         _lblEmpty.ForeColor = AppTheme.TextMuted;
+        _lblEmpty.Font = AppTheme.SmallFont;
 
         var top = new FieldGrid();
         top.AddRow("Night:", FieldGrid.Inline(_cmbNight, btnOpenFolder));
@@ -51,9 +61,24 @@ public sealed class PhotoFinishForm : Form
         // Sized at the text size in use: the list as wide as its longest
         // shot (FitSide), the strip under the picture as tall as the slider
         // and a line of text (FitUnder).
+        //
+        // The shots in a card of their own (18 Nov 2026), each drawn on two
+        // lines - its place and the driver, then whether it was the finish,
+        // the lap and the time (DrawShot) - with the note that there are
+        // none yet taking the list's place in the card when there aren't.
         _side.Padding = new Padding(0, 0, UiLayout.AtTextSize(10), 0);
+        _lstShots.DrawMode = DrawMode.OwnerDrawFixed;
+        _lstShots.BorderStyle = BorderStyle.None;
+        _lstShots.DrawItem += DrawShot;
+
+        var shotsHolder = new Panel { Tag = AppTheme.KeepBackColor };
         _lstShots.Dock = DockStyle.Fill;
-        _side.Controls.Add(_lstShots);
+        shotsHolder.Controls.Add(_lstShots);
+        shotsHolder.Controls.Add(_lblEmpty);
+
+        var shotsCard = new Section("Shots") { Dock = DockStyle.Fill };
+        shotsCard.AddFill(shotsHolder, () => UiLayout.AtTextSize(120), gapBelow: 0);
+        _side.Controls.Add(shotsCard);
 
         _slider.Dock = DockStyle.Top;
         _lblFrame.AutoSize = false;
@@ -71,7 +96,6 @@ public sealed class PhotoFinishForm : Form
 
         var page = new FillPage();
         page.Add(top, gapBelow: UiLayout.RowGap);
-        page.Add(_lblEmpty, gapBelow: UiLayout.RowGap);
         page.AddFill(viewer, UiLayout.AtTextSize(320));
         page.Add(new ButtonBar(alignRight: true).With(btnClose), gapBelow: 0);
 
@@ -84,8 +108,13 @@ public sealed class PhotoFinishForm : Form
 
         AppTheme.ApplyRecursively(this);
 
-        // The picture stays black whatever the theme pass gave it.
+        // The picture stays black whatever the theme pass gave it; the list
+        // on its card, the note and the frame line in their own faces.
         _picture.BackColor = Color.Black;
+        _lstShots.BackColor = AppTheme.Surface;
+        _lstShots.ItemHeight = ShotHeight;
+        _lblEmpty.Font = AppTheme.SmallFont;
+        _lblFrame.ForeColor = AppTheme.TextMuted;
 
         FitUnder();
         FitSide();
@@ -154,11 +183,93 @@ public sealed class PhotoFinishForm : Form
 
         for (var i = from; i < _lstShots.Items.Count; i++)
         {
-            _widestTitle = Math.Max(_widestTitle, TextRenderer.MeasureText(_lstShots.Items[i].ToString(), _lstShots.Font).Width);
+            _widestTitle = Math.Max(_widestTitle, ShotWidth(i));
         }
 
-        _side.Width = Math.Clamp(_widestTitle + SystemInformation.VerticalScrollBarWidth + UiLayout.AtTextSize(24),
+        // Drawn by DrawShot, so the list is told how far it scrolls sideways.
+        _lstShots.HorizontalExtent = _widestTitle;
+
+        // With the card's own room either side of the list.
+        _side.Width = Math.Clamp(_widestTitle + SystemInformation.VerticalScrollBarWidth + UiLayout.AtTextSize(24) + Section.Inset.Horizontal,
             UiLayout.AtTextSize(240), UiLayout.AtTextSize(420));
+    }
+
+    /// <summary>A shot's two lines: the bold one with its place and driver, and the smaller one under it.</summary>
+    private static int ShotHeight =>
+        Pieces.LineHeight(AppTheme.BoldFont) + Pieces.LineHeight(AppTheme.SmallFont) + UiLayout.AtTextSize(10);
+
+    /// <summary>Room for the place, "P12", at the left of a shot.</summary>
+    private static int PlaceWidth => TextRenderer.MeasureText("P99", AppTheme.BoldFont).Width + UiLayout.AtTextSize(8);
+
+    /// <summary>The driver's line of a shot.</summary>
+    private string NameLine(int index) => index < _shots.Count ? _shots[index].Name : _lstShots.Items[index].ToString() ?? string.Empty;
+
+    /// <summary>The line under the driver: the finish or a lap crossing, the lap, and when.</summary>
+    private string WhenLine(int index)
+    {
+        if (index >= _shots.Count)
+        {
+            return string.Empty;
+        }
+
+        var shot = _shots[index];
+
+        return $"{(shot.Finish ? "Finish" : "Lap crossing")}, lap {shot.Lap}  ·  {AppTime.LogStamp(shot.AtUtc.ToLocalTime())}";
+    }
+
+    /// <summary>How wide shot <paramref name="index"/> is drawn, from the list's left edge.</summary>
+    private int ShotWidth(int index) =>
+        UiLayout.AtTextSize(10) + PlaceWidth + Math.Max(
+            TextRenderer.MeasureText(NameLine(index), AppTheme.BoldFont).Width,
+            TextRenderer.MeasureText(WhenLine(index), AppTheme.SmallFont).Width);
+
+    /// <summary>
+    /// A shot on two lines: its place in the app's colour, the driver in
+    /// bold beside it, and under the driver whether it was the finish, the
+    /// lap and the time. The one picked on the theme's tint with a bar of
+    /// the app's colour down its left edge, as the lap breakdown marks its
+    /// best lap; a faint line between one shot and the next.
+    /// </summary>
+    private void DrawShot(object? sender, DrawItemEventArgs e)
+    {
+        if (e.Index < 0 || e.Index >= _lstShots.Items.Count)
+        {
+            return;
+        }
+
+        var g = e.Graphics;
+        var row = e.Bounds;
+        var picked = (e.State & DrawItemState.Selected) != 0;
+
+        using (var back = new SolidBrush(picked ? AppTheme.PrimaryTint : AppTheme.Surface))
+        {
+            g.FillRectangle(back, row);
+        }
+
+        if (picked)
+        {
+            RaceNightTiles.MarkRow(g, row, AppTheme.Primary);
+        }
+
+        using (var rule = new Pen(AppTheme.Border))
+        {
+            g.DrawLine(rule, row.Left, row.Bottom - 1, row.Right, row.Bottom - 1);
+        }
+
+        var left = row.Left + UiLayout.AtTextSize(10);
+        var nameHeight = Pieces.LineHeight(AppTheme.BoldFont);
+        var top = row.Top + (row.Height - nameHeight - Pieces.LineHeight(AppTheme.SmallFont)) / 2;
+        var place = e.Index < _shots.Count && _shots[e.Index].Position > 0 ? $"P{_shots[e.Index].Position}" : "-";
+        const TextFormatFlags flags = TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine;
+
+        TextRenderer.DrawText(g, place, AppTheme.BoldFont, new Rectangle(left, top, PlaceWidth, nameHeight), AppTheme.Primary, flags);
+
+        var textLeft = left + PlaceWidth;
+        var room = Math.Max(1, row.Right - textLeft - UiLayout.AtTextSize(4));
+
+        TextRenderer.DrawText(g, NameLine(e.Index), AppTheme.BoldFont, new Rectangle(textLeft, top, room, nameHeight), AppTheme.TextDark, flags);
+        TextRenderer.DrawText(g, WhenLine(e.Index), AppTheme.SmallFont,
+            new Rectangle(textLeft, top + nameHeight, room, Pieces.LineHeight(AppTheme.SmallFont)), AppTheme.TextMuted, flags);
     }
 
     /// <summary>The widest shot title in the list, in pixels - see FitSide.</summary>
@@ -350,6 +461,7 @@ public sealed class PhotoFinishForm : Form
         FitSide();
 
         _lblEmpty.Visible = _shots.Count == 0;
+        _lstShots.Visible = _shots.Count > 0;
 
         if (_shots.Count > 0)
         {
