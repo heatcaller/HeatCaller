@@ -283,13 +283,6 @@ internal static class ToggleCaption
     }
 
     /// <summary>
-    /// The size the control asks for (see the class notes).
-    /// <paramref name="flags"/> are the caption's (Flags), and go unused when
-    /// there is no caption. <paramref name="windows"/> is what Windows' own
-    /// control asks for at the same proposed size (base.GetPreferredSize,
-    /// which only the control can call).
-    /// </summary>
-    /// <summary>
     /// What a control measured to, by the size it was asked at, and what the
     /// measuring depended on - see Measured.
     /// </summary>
@@ -339,6 +332,13 @@ internal static class ToggleCaption
         return size;
     }
 
+    /// <summary>
+    /// The size the control asks for (see the class notes).
+    /// <paramref name="flags"/> are the caption's (Flags), and go unused when
+    /// there is no caption. <paramref name="windows"/> is what Windows' own
+    /// control asks for at the same proposed size (base.GetPreferredSize,
+    /// which only the control can call).
+    /// </summary>
     public static Size PreferredSize(ButtonBase control, Size proposedSize, TextFormatFlags flags, Size windows)
     {
         var hasCaption = !string.IsNullOrEmpty(control.Text);
@@ -361,7 +361,11 @@ internal static class ToggleCaption
         {
             var room = limit is { } width ? Math.Max(1, width - chrome) : int.MaxValue;
 
-            caption = TextRenderer.MeasureText(control.Text, control.Font, new Size(room, int.MaxValue), flags);
+            // Shared with every other box (19 Nov 2026): Measured remembers
+            // one box's sizes, but a new window's boxes were each measured
+            // afresh - a seventh of Driver Profile's opening (a CPU profile),
+            // the same captions every time.
+            caption = AppTheme.WrappedSize(control.Text, control.Font, new Size(room, int.MaxValue), flags);
 
             // A pixel of slack: the caption is drawn in exactly this width,
             // and a rounding pixel short of it would put its last word on a

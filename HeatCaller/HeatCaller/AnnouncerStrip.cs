@@ -1,4 +1,4 @@
-﻿namespace HeatCaller;
+namespace HeatCaller;
 
 /// <summary>
 /// What the announcer is about to do, on Race Control, where the race
@@ -54,10 +54,10 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// typed: see <see cref="EverySaying"/>.
     /// </summary>
     private readonly SteadyLabel _said = new();
-    private readonly Button _hold = new();
+    private readonly Button _hold = new MeasuredButton();
 
     /// <summary>Plays the last segment again - see <see cref="ReplayWanted"/>.</summary>
-    private readonly Button _replay = new();
+    private readonly Button _replay = new MeasuredButton();
 
     /// <summary>
     /// Plays the last twenty seconds of race audio again - see
@@ -67,10 +67,10 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// race recording is on: on a night without it the button could do
     /// nothing but explain itself, and this row is the busiest on the page.
     /// </summary>
-    private readonly Button _replayMoment = new();
+    private readonly Button _replayMoment = new MeasuredButton();
 
     /// <summary>Stops whatever is on air now - see <see cref="SkipWanted"/>.</summary>
-    private readonly Button _skip = new();
+    private readonly Button _skip = new MeasuredButton();
 
     /// <summary>
     /// Opens tonight's club notes - see <see cref="NotesWanted"/>.
@@ -82,7 +82,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// notices anything came in, and nobody has the developer console
     /// open on a race night.
     /// </summary>
-    private readonly Button _notes = new();
+    private readonly Button _notes = new MeasuredButton();
 
     /// <summary>
     /// Opens tonight's room vote: who the room reckons wins the next one,
@@ -94,7 +94,7 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// carries a number for the same reason too: a vote nobody can see
     /// filling up is a vote the race director forgets to close.
     /// </summary>
-    private readonly Button _votes = new();
+    private readonly Button _votes = new MeasuredButton();
 
     /// <summary>
     /// How many of the announcer's own timing calls did not get said this
@@ -479,6 +479,25 @@ internal sealed class AnnouncerStrip : FlowLayoutPanel
     /// something to stop even in the quiet while the model writes it.
     /// </param>
     public void Show(CommentaryDirector? director, bool enabled, bool speaking, string? onAir = null, bool muted = false, int notesWaiting = 0, int votesIn = 0, AnnouncerLoad? load = null, bool programmeRunning = false, bool replaying = false)
+    {
+        // The row held while it is set (19 Nov 2026): each button shown,
+        // hidden or recaptioned laid the row - and the Broadcast window
+        // round it - out again, and several are set every time, changed or
+        // not (see below). A quarter of opening Broadcast (a CPU profile),
+        // and again on every tick. Now once.
+        SuspendLayout();
+
+        try
+        {
+            ShowNow(director, enabled, speaking, onAir, muted, notesWaiting, votesIn, load, programmeRunning, replaying);
+        }
+        finally
+        {
+            ResumeLayout(true);
+        }
+    }
+
+    private void ShowNow(CommentaryDirector? director, bool enabled, bool speaking, string? onAir, bool muted, int notesWaiting, int votesIn, AnnouncerLoad? load, bool programmeRunning, bool replaying)
     {
         // Not tied to the announcer's mute: this is the room's audio, not
         // the announcer's words. Shown once there is a moment to replay.
