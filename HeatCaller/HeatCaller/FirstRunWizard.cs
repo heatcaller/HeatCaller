@@ -101,6 +101,21 @@ public sealed partial class FirstRunWizard : Form
 
     private static readonly string[] SuggestedClasses = { "Stock", "Modified", "Open", "Novice", "Spec" };
 
+    /// <summary>
+    /// The wizard's layout held while it is built, and let go at the end of
+    /// its constructor - see LayoutFreeze.HoldWhileBuilding, and the Driver
+    /// Profile, the Setup Sheet and the template editor, which do the same.
+    /// The first field, so the step pages made by the fields below are made
+    /// inside it.
+    ///
+    /// Why (18 Nov 2026): built live, each step page made its window as it
+    /// was made (Pieces.ScrollDownOnly), so every field put in it made one
+    /// too - 156 before the wizard had its own - and the theme pass made
+    /// many of them again. It took 1.6 to 2.7 seconds of work to build, 5 to
+    /// 9 seconds on a busy PC; held, about 0.3 of work and under a second.
+    /// </summary>
+    private readonly IDisposable _building = LayoutFreeze.HoldWhileBuilding();
+
     private readonly AppSettings _settings;
     private readonly TrackLayoutStore _trackLayouts;
     private readonly RaceClassStore _raceClasses;
@@ -242,22 +257,39 @@ public sealed partial class FirstRunWizard : Form
     /// </summary>
     internal FirstRunWizard(AppSettings settings, TrackLayoutStore trackLayouts, RaceClassStore raceClasses, ProfileStore profiles, int startStep, SoundOfferHost? sound = null)
     {
-        _settings = settings;
-        _trackLayouts = trackLayouts;
-        _raceClasses = raceClasses;
-        _profiles = profiles;
-        _startingLookKey = Looks.ForApp(settings).Key;
-        _sound = sound is not null && settings.AskAboutSoundInWizards ? new SoundOffer(settings, sound) : null;
-        _classLength = new ClassLengthPicker(raceClasses.AppDefaultFormat?.Invoke());
+        FillPage page;
 
-        Text = "Welcome to HeatCaller";
-        Font = AppTheme.BodyFont;
-        BackColor = AppTheme.Background;
+        try
+        {
+            _settings = settings;
+            _trackLayouts = trackLayouts;
+            _raceClasses = raceClasses;
+            _profiles = profiles;
+            _startingLookKey = Looks.ForApp(settings).Key;
+            _sound = sound is not null && settings.AskAboutSoundInWizards ? new SoundOffer(settings, sound) : null;
+            _classLength = new ClassLengthPicker(raceClasses.AppDefaultFormat?.Invoke());
 
-        var page = BuildLayout();
-        AppTheme.ApplyRecursively(this);
-        SizeFields();
-        ShowStep(startStep);
+            Text = "Welcome to HeatCaller";
+            Font = AppTheme.BodyFont;
+            BackColor = AppTheme.Background;
+
+            page = BuildLayout();
+            WhereTimeGoes.Mark("the page round the steps");
+            AppTheme.ApplyRecursively(this);
+            WhereTimeGoes.Mark("theme pass");
+            SizeFields();
+            WhereTimeGoes.Mark("sizing the fields");
+            ShowStep(startStep);
+            WhereTimeGoes.Mark("showing the step");
+        }
+        finally
+        {
+            // Always ended, or every window built on this thread after a
+            // wizard that failed would think it was still being built.
+            _building.Dispose();
+        }
+
+        WhereTimeGoes.Mark("letting the hold go");
 
         // The size it always opened at; it can be made bigger, or smaller
         // down to what the rail, the step's title, the footer and a few
@@ -315,13 +347,21 @@ public sealed partial class FirstRunWizard : Form
         _btnNext.Text = "Next";
         _btnNext.Click += (_, _) => NextClicked();
 
+        WhereTimeGoes.Mark("rail and footer");
         BuildWelcome();
+        WhereTimeGoes.Mark("welcome step");
         BuildLook();
+        WhereTimeGoes.Mark("look step");
         BuildTiming();
+        WhereTimeGoes.Mark("timing step");
         BuildTrack();
+        WhereTimeGoes.Mark("track step");
         BuildClasses();
+        WhereTimeGoes.Mark("classes step");
         BuildDrivers();
+        WhereTimeGoes.Mark("drivers step");
         BuildDone();
+        WhereTimeGoes.Mark("all set step");
 
         // Every step's page fills the holder; only the one on show is
         // visible, so only it takes the room. None has margins of its own -
