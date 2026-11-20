@@ -29,6 +29,15 @@ internal sealed partial class DeskInboxForm : Form
     /// <summary>The list shows its headings and at least this many rows before the window scrolls instead.</summary>
     private const int LeastRows = 5;
 
+    /// <summary>
+    /// Holds the layout pieces' layouts while the window is built, let go
+    /// at the end of the constructor (LayoutFreeze.HoldWhileBuilding) -
+    /// first among the fields, so the pages, the rail and the bars made
+    /// below are made under it too. Why (19 Nov 2026): built without one,
+    /// the window was laid out again for every part put in it.
+    /// </summary>
+    private readonly IDisposable _building = LayoutFreeze.HoldWhileBuilding();
+
     private readonly DriverRequestDesk? _requests;
     private readonly ProfileStore _profiles;
     private readonly Action<string>? _speakName;
@@ -122,6 +131,8 @@ internal sealed partial class DeskInboxForm : Form
         RentalTransponderStore? rentals,
         UndoService? undo)
     {
+        using var building = _building;
+
         _requests = requests;
         _profiles = profiles;
         _speakName = speakName;

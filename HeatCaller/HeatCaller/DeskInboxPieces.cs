@@ -975,26 +975,57 @@ internal sealed class KeyStrip : Control
 
     private int Gap => UiLayout.AtDpi(16);
 
-    private int PartWidth((string[] Keys, string Words) part) =>
-        part.Keys.Sum(k => InboxInk.KeyWidth(k, KeyFont) + UiLayout.AtDpi(3))
-        + UiLayout.AtDpi(3)
-        + TextRenderer.MeasureText(part.Words, Font, Size.Empty, TextFormatFlags.NoPadding).Width;
+    /// <summary>
+    /// Each part's width and the line height, as last measured, in the
+    /// faces and at the DPI they were measured at - see Measured.
+    /// </summary>
+    private (Font Font, Font KeyFont, int Dpi, int[] Widths, int LineHeight)? _measured;
 
-    private int LineHeight => Math.Max(Font.Height, KeyFont.Height) + UiLayout.AtDpi(6);
+    /// <summary>
+    /// The parts' widths and the line height, measured once for the faces
+    /// in use and kept until they change. WHY (19 Nov 2026): the strip
+    /// measured every key and every word again each time it was asked its
+    /// size - and the bars round it ask on every layout pass - with
+    /// Font.Height read twice a line on top: most of a fifth of a second
+    /// opening the Inbox.
+    /// </summary>
+    private (int[] Widths, int LineHeight) Measured()
+    {
+        var keyFont = KeyFont;
+        var dpi = UiLayout.AtDpi(100);
+
+        if (_measured is { } m && ReferenceEquals(m.Font, Font) && ReferenceEquals(m.KeyFont, keyFont) && m.Dpi == dpi)
+        {
+            return (m.Widths, m.LineHeight);
+        }
+
+        var widths = _parts.Select(part =>
+            part.Keys.Sum(k => InboxInk.KeyWidth(k, keyFont) + UiLayout.AtDpi(3))
+            + UiLayout.AtDpi(3)
+            + TextRenderer.MeasureText(part.Words, Font, Size.Empty, TextFormatFlags.NoPadding).Width).ToArray();
+
+        var lineHeight = Math.Max(Font.Height, keyFont.Height) + UiLayout.AtDpi(6);
+
+        _measured = (Font, keyFont, dpi, widths, lineHeight);
+        return (widths, lineHeight);
+    }
+
+    private int LineHeight => Measured().LineHeight;
 
     private List<(int Part, Point At)> Arrange(int width)
     {
         var list = new List<(int, Point)>();
         int x = 0, y = 0;
+        var (widths, lineHeight) = Measured();
 
         for (var i = 0; i < _parts.Length; i++)
         {
-            var w = PartWidth(_parts[i]);
+            var w = widths[i];
 
             if (x > 0 && x + w > width)
             {
                 x = 0;
-                y += LineHeight;
+                y += lineHeight;
             }
 
             list.Add((i, new Point(x, y)));
@@ -1008,7 +1039,7 @@ internal sealed class KeyStrip : Control
     {
         var width = proposedSize.Width is > 0 and < int.MaxValue / 4
             ? proposedSize.Width
-            : _parts.Sum(PartWidth) + Gap * Math.Max(0, _parts.Length - 1);
+            : Measured().Widths.Sum() + Gap * Math.Max(0, _parts.Length - 1);
         var arranged = Arrange(width);
         return new Size(width, (arranged.Count == 0 ? 0 : arranged.Max(a => a.At.Y)) + LineHeight);
     }

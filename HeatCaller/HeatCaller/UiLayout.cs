@@ -444,13 +444,11 @@ public static class UiLayout
     /// </summary>
     public static int WidthFor(string caption)
     {
-        var text = TextRenderer.MeasureText(
-            caption,
-            ButtonFont,
-            new Size(int.MaxValue, int.MaxValue),
-            TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
+        // Through the theme's cache (19 Nov 2026), as TightButtonWidthFor
+        // and HeightFor are: the same measure, kept.
+        var width = AppTheme.LineWidth(caption, ButtonFont, TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
 
-        return Math.Max(ButtonWidth, text.Width + ButtonPaddingX * 2);
+        return Math.Max(ButtonWidth, width + ButtonPaddingX * 2);
     }
 
     /// <summary>
@@ -495,27 +493,36 @@ public static class UiLayout
     /// <paramref name="caption"/> - for a button that has to be held at the
     /// width of a caption it is not showing yet (On Air, 21 Oct 2026).
     /// </summary>
-    public static int TightButtonWidthFor(string caption)
-    {
-        var text = TextRenderer.MeasureText(
-            AppTheme.Caption(caption),
-            ButtonFont,
-            new Size(int.MaxValue, int.MaxValue),
-            TextFormatFlags.SingleLine);
+    public static int TightButtonWidthFor(string caption) =>
+        AppTheme.LineWidth(AppTheme.Caption(caption), ButtonFont, TextFormatFlags.SingleLine) + TightButtonPaddingX * 2;
 
-        return text.Width + TightButtonPaddingX * 2;
-    }
+    /// <summary>Caption heights already measured, by caption and face - see HeightFor.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string Caption, Font Font), int> CaptionHeights = new();
 
     /// <summary>
     /// The theme's rule for a button's height: its caption's plus twelve,
     /// never under a standard button. An empty caption still needs room for
     /// a line, so it is measured as if it had ascenders and descenders.
+    ///
+    /// Kept by caption and face (19 Nov 2026): a row of answer buttons sized
+    /// itself again on every layout pass, each one measured twice - about a
+    /// fifth of the Inbox's opening.
     /// </summary>
     private static int HeightFor(string caption)
     {
-        var height = TextRenderer.MeasureText(
-            string.IsNullOrEmpty(caption) ? "Xg" : caption,
-            ButtonFont).Height;
+        var text = string.IsNullOrEmpty(caption) ? "Xg" : caption;
+        var key = (text, ButtonFont);
+
+        if (!CaptionHeights.TryGetValue(key, out var height))
+        {
+            if (CaptionHeights.Count > 4096)
+            {
+                CaptionHeights.Clear();
+            }
+
+            height = TextRenderer.MeasureText(text, ButtonFont).Height;
+            CaptionHeights[key] = height;
+        }
 
         return Math.Max(ButtonHeight, height + 12);
     }
