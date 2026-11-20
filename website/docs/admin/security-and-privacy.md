@@ -39,6 +39,8 @@ This held before the race-day manager could be reached through the relay, and it
 - The online staff PIN and every racer's personal PIN
 - The email app password
 - The backup password
+- The **Standby PIN** on the **Standby PC** card of **Backup & Restore**
+- The **OBS password:** on the **Race video (YouTube)** card of **Club Website** (the password of OBS's WebSocket server on the streaming PC)
 - The invite codes for online driver sign-up
 
 ### How they're stored
@@ -171,6 +173,8 @@ HeatCaller's defaults assume some of your drivers are children.
 | A driver's garage (their battery packs, races, cars with photos, setup sheets) | Only while the club takes drivers' requests online. Each driver's garage is private: it opens only with that driver's own badge code, and the car photos in it are small (240 pixels on the longest side). A driver changes their packs, cars and setups with the badge code alone; their personal PIN isn't asked for. A car photo sent from a phone waits on the relay until the laptop collects it, which checks the whole picture before keeping it. Turning driver requests off deletes every garage and every photo still waiting. |
 | Push alerts | Only for a driver who turns them on, on their own phone. The relay keeps each phone's push address and keys under the driver's badge code, no name, until the phone turns alerts off, its push service says it has gone, or the club uses **Delete Everything Published**. Each alert (for example "Your race is next" and the race) is encrypted for that one phone, so the push service (Google's, Apple's, Mozilla's or Microsoft's) carries words it can't read, and it never holds a badge code. |
 | Sponsor views and taps | Counts only: how many phones saw each sponsor on the club's pages (once per phone per half hour) and how many tapped through, by the hour, kept 45 days for the laptop's sponsor report. Nothing about the phone or its owner is sent; the phone itself remembers which sponsors it has counted lately. |
+| Cookies and the phone's own storage | One small cookie, for the look a visitor picks with **Look**, and nothing else: no advertising, no tracking across other websites, no third-party cookie. Everything else a phone remembers (who's signed in, text size, who it follows) stays in that phone's browser storage. The relay counts a few anonymous events per club per day, with no driver, device or internet address, for 90 days. Every club page links to its cookie policy; see [Cookies](../online/index.md#cookies). |
+| Juniors | A junior's name is always shortened online, nobody can follow a junior by name, a junior's phone signs out by itself 30 days after signing in, and alerts or follows unused for 180 days are forgotten by the relay. With **Offline voices for juniors** ticked, lines naming a junior are spoken on the laptop only: see [Offline voices for juniors](../announcer/voice.md#offline-voices-for-juniors). |
 | Ghost cars | Left out of the schedule, badges, tracks and check-in documents. <!-- TODO: confirm whether ghosts appear in the published live race and results --> |
 
 On the public pages, a visitor can tap a driver's name to follow them. That choice is kept in that phone's own browser storage only.

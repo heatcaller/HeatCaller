@@ -4,6 +4,8 @@ Besides the spoken announcer, HeatCaller can play short sound effects for laps a
 
 Every level, and how far each sound drops while the announcer talks, is set in one place: the [Mixer](#mixer).
 
+Every tab but the Mixer opens with a row of tiles that sum it up at a glance, such as whether it's on and how much of it is set up. They're listed under each tab below.
+
 None of these sounds use the internet. They play on the laptop, through whatever speaker it's connected to.
 
 HeatCaller also records each race as it goes out and saves it as an mp3, with a clip and a highlight video for each driver. That's on the **Recording** tab of the **Club Website** page (it was the last tab here until 26 October 2026); see [Race recordings](#race-recordings).
@@ -12,7 +14,9 @@ HeatCaller also records each race as it goes out and saves it as an mp3, with a 
 
 **Sounds → Effects** plays short cues like Next Level Timing's own: a chime per lap plus sounds for race moments. Each sound plays **Generated tones** (tones HeatCaller makes itself, called **Classic tones** before 17 October) or one of the built-in sound packs: **Podium**, **Arcade**, **Broadcast**, **Classic** or **Pit Lane**. The **Classic** pack is the one called **Synthwave** before 16 October. You can point any of them at your own audio file instead, and your file wins over both.
 
-![Sounds, Effects tab: each sound with its Race and Practice ticks, Pack, Your own file (optional), Browse, Remove, Test and Weight](../assets/images/sounds-effects.png)
+![Sounds, Effects tab: 18 of 18 sounds on for races and for practice, the Every sound at once card, and each sound with its Race and Practice ticks, Pack, Your own file (optional), Browse and Remove](../assets/images/sounds-effects.png)
+
+The tiles at the top are **On for races** and **On for practice** (for example "12 of 18"), **Your own files** and **Most per lap**. Under them, the **Every sound at once** card holds the buttons that change every row together (see below), then comes the list of sounds, then the **Per lap** card.
 
 The list has a heading over each column: **Race**, **Practice**, **Sound**, **Pack**, **Your own file (optional)** and **Weight**. Hover over most things on a row for a tip saying what they do. Each row has:
 
@@ -60,11 +64,11 @@ A flag call cuts off a sound effect that's still playing. Crowd surges (for a fa
 
 On a busy track, per-lap sounds are kept close to the action: a lap chime that's fallen more than about 3 seconds behind the crossing is skipped, and no more than 3 wait to play at a time.
 
-Under the list, **Max sounds per lap (good / invalid / fast / streak / leader change):** (1 to 5, default 3) sets how many per-lap sounds can play on one lap; when more fire, only the highest-weight ones play.
+On the **Per lap** card under the list, **Max sounds per lap (good / invalid / fast / streak / leader change):** (1 to 5, default 3) sets how many per-lap sounds can play on one lap; when more fire, only the highest-weight ones play.
 
 How loud the effects and lap beeps play is the **Sound effects** fader on the [Mixer](#mixer). How many clean laps make a streak, for the streak sound and the spoken streak call alike, is set on the **How often** card of **Voice → Race Calls**; see [How often](voice.md#how-often). Both were on this tab before 17 October.
 
-Buttons: **Enable All** and **Enable None** tick or clear every sound for both races and practice (files and volumes are left alone). **Test All Enabled** plays each ticked sound in turn.
+On the **Every sound at once** card above the list, **Enable All** and **Enable None** tick or clear every sound for both races and practice (files and volumes are left alone). **Test All Enabled** plays each ticked sound in turn.
 
 **Set every sound to:** puts the same pack on every row at once, the quickest way to hear a whole style. It shows the pack every row shares, or **Mixed - pick one** when the rows use different packs. Choose a pack and the page says "Every sound set to *pack*. Your own files, where set, still play instead."
 
@@ -77,6 +81,8 @@ Changes save themselves as you make them; there's no Save button. The status lin
 
 **Sounds → Ambience** plays continuous crowd and track noise underneath the announcer. It's mixed under the voice rather than queued with it, so the ambience keeps running while the announcer talks. The level follows the race: quiet between races, building through staging, lifting for a lead change and peaking at the finish.
 
+The tiles at the top are **Ambience** (On or Off), **Plays** (**Soundscape**, **My ambience** or **Both**), **Layers heard** (for example "3 of 4") and **Reactions**. Under them, the **Live** card has **Enable ambience**, the switch for the whole crowd, and a panel showing which state the ambience is in right now and any surge in progress. Then come the **Layers** and **Reactions** cards.
+
 Applying a soundscape adds its own crowd here (see [Soundscape crowd and music](#soundscape-crowd-and-music)). For anything else, such as engine noise or your own crowd, you supply the recordings. Short clips of 10 to 30 seconds that loop cleanly work best.
 
 ### Add a layer
@@ -88,7 +94,7 @@ A layer is one looping sound, such as a crowd or engine noise. You can run sever
 3. Press **Browse** next to **Audio file:** and choose a `.wav` or `.mp3` file.
 4. Set the **Volume at each race state** sliders. This is what makes a layer react: a crowd might be quiet at idle and loud at peak, while track noise might be loud while racing and silent between. Tick **Play while I drag** to hear the level as you move a slider.
 5. Press **Save**. **Cancel** throws away your changes to the layer, and closing the editor doesn't stop ambience that was already playing. Layer changes can be undone.
-6. Tick **Enable ambience** at the top of the page. Ambience starts playing.
+6. Tick **Enable ambience** on the **Live** card. Ambience starts playing.
 
 | Race state | Used when | Layer default |
 |---|---|---|
@@ -100,7 +106,7 @@ A layer is one looping sound, such as a crowd or engine noise. You can run sever
 
 **Always on - ignore race state** makes a layer play at one fixed **Level:** (default 35%) all the time, including between races. Use it for a background theme or your own track. **Layer enabled** switches a single layer off without deleting it.
 
-The list on the **Layers** card shows each **Layer**, its **Source** (**Soundscape** for a layer a soundscape added, **Yours** for one you added), its **File** and its level at each race state. A file that can't be found shows as "MISSING:". A layer you've switched off has "(off)" after its name. Use **Edit**, **Delete** and **Preview** (plays your layers at the Racing level; press **Stop Preview** to end it). In the layer editor, the preview plays a newly picked file straight away. The panel above the list shows which state the ambience is in right now, and any surge in progress.
+The list on the **Layers** card shows each **Layer**, its **Source** (**Soundscape** for a layer a soundscape added, **Yours** for one you added), its **File** and its level at each race state. A file that can't be found shows as "MISSING:". A layer you've switched off has "(off)" after its name. Use **Edit**, **Delete** and **Preview** (plays your layers at the Racing level; press **Stop Preview** to end it). In the layer editor, the preview plays a newly picked file straight away.
 
 ### Which layers play
 
@@ -114,7 +120,7 @@ The list on the **Layers** card shows each **Layer**, its **Source** (**Soundsca
 
 The layers on the other side stay in the list and keep their settings; they show "(not playing)" after their name. The sentence under the choice says what it means for what you have set up, for example "Only the layers you added. A soundscape's crowd beds stay listed, and applying another soundscape still replaces them - they are just not playing." The line under the list counts what will actually be heard, for example "3 of 4 layers ready to play."
 
-![Sounds, Ambience tab: the state panel, and four layers - two from the soundscape and two of the club's own - with their levels from Idle to Peak](../assets/images/sounds-ambience.png)
+![Sounds, Ambience tab: Enable ambience ticked with ambience not playing yet, and four layers - two from the soundscape and two of the club's own, with Soundscape ambience picked to play - with their levels from Idle to Peak](../assets/images/sounds-ambience.png)
 
 ### Reactions
 
@@ -132,12 +138,14 @@ These are on the **Reactions** card, under the layers. How loud the ambience is 
 
 **Sounds → Music** is a soundtrack for between races. Eleven tracks are included: Horizon Line, Chasing Sunset, Grid Runner, Afterglow, Cooldown Lap, Vanishing Point, Last Lap Lights, Redline Memory, One More Run, Back to the Grid and Long Way Home. The soundscapes' own music is included too; see [Theme music](#theme-music).
 
-![Sounds, Music tab: Enable music and Shuffle ticked, Theme music picked, the player stopped and the library of included and the club's own tracks, with Add Track, Include / Exclude, Remove, Open Music Folder and Restore Included Tracks](../assets/images/sounds-music.png)
+![Sounds, Music tab: Enable music and Shuffle ticked, Theme music picked, the player not playing, and the top of the library of included tracks](../assets/images/sounds-music.png)
 
-1. Tick **Enable music**.
+The tiles at the top are **Music** (**Playing**, **Paused**, **On** or **Off**), **Plays** (**Theme music** or **My music**), **My music** (how many tracks are ticked for it, for example "9 of 15") and **Level** (the Music fader on the Mixer). Under them come the **What plays**, **Player**, **Library** and **Behavior** cards.
+
+1. On the **What plays** card, tick **Enable music**.
 2. Leave **Shuffle** ticked (the default) to play every track once before repeating any.
 3. Choose what plays, next to **Play:**: **Theme music** or **My music**. See [Theme music or my music](#theme-music-or-my-music).
-4. Use the **Player** buttons: **Previous**, **Play** (which becomes **Pause** and **Resume**), **Stop** and **Next**. The player shows what's playing and the time. When a theme track is playing it says so, for example "Now playing:  Top Step  (theme music, Podium)".
+4. Use the buttons on the **Player** card: **Previous**, **Play** (which becomes **Pause** and **Resume**), **Stop** and **Next**. The player shows what's playing and the time. When a theme track is playing it says so, for example "Now playing:  Top Step  (theme music, Podium)".
 
 How loud the music plays is the **Music** fader on the [Mixer](#mixer) (default 40%), and how far it drops under the announcer is on the Mixer's [Ducking](#ducking) card; both were on this tab before 17 October.
 
@@ -195,7 +203,7 @@ The recap can still be speaking when the next heat is staged. If that heat has b
 
 **Sounds → Soundscapes** sets up how a race night sounds in one go: a sound for every moment, and the announcer's words and delivery to match. As the tab puts it, "A soundscape is the whole sound of race day". Until 0.56 this was the **Announcer Style** tab on the **Themes** page. Soundscapes were called announcer styles before 0.54, and themes before 0.48. Searching for "announcer style" in the **Search pages...** box still finds it.
 
-![Sounds, Soundscapes tab: the soundscape cards with Preview, Apply, Customize and Voice Lines, Classic marked LAST APPLIED](../assets/images/sounds-soundscapes.png)
+![Sounds, Soundscapes tab: 6 soundscapes, 5 built in and 1 your own, with the Arcade, Broadcast, Classic and Pit Lane cards and their Preview, Apply, Customize and Voice Lines buttons, Classic marked LAST APPLIED](../assets/images/sounds-soundscapes.png)
 
 ### What a soundscape holds
 
@@ -213,6 +221,8 @@ The recap can still be speaking when the next heat is staged. If that heat has b
 A soundscape doesn't hold lap beeps, rivalries, commentary settings, your own ambience layers or your **My music** ticks.
 
 ### The cards
+
+Above the cards, the tiles at the top of the tab are **Last applied** (the soundscape's name), **Soundscapes** (how many there are), **Built in** and **Your own**.
 
 Each soundscape has a card. At the top is its name, with **LAST APPLIED** against the right-hand edge (and an outline round the card) on the one you applied last. Under the name, a line says whether it's **Built-in** or **Custom**, which packs its sounds use ("own files" where a row plays a file of yours), "crowd" and "music" when it brings them, and, once you've recorded some, how many of its voice lines are recorded (for example "3 of 8 voice lines recorded"). Then comes its description, and its buttons along the bottom. A colored strip down the left edge marks a built-in soundscape's pack.
 
@@ -409,11 +419,13 @@ When you customize a soundscape, **No music of its own** gives it no theme music
 
 **Sounds → Imaging** is the soundscape's broadcast imaging: the jingles, sweepers, bumpers, stingers and music beds that make race night sound like a radio station. Each soundscape has its own, and where it has several of one kind they take turns at random. Race night plays the imaging of the soundscape in use on the **Soundscapes** tab.
 
-![Sounds, Imaging tab: Broadcast imaging on, the Classic soundscape picked, and its pieces - jingles, sweepers and a bumper - with their files, post and out times, and Add Files, Play, Stop and Remove below](../assets/images/sounds-imaging.png)
+![Sounds, Imaging tab: Broadcast imaging ON, the Classic soundscape picked, and its 17 pieces, jingles and sweepers first, with their files, post and out times](../assets/images/sounds-imaging.png)
 
-**Broadcast imaging ON** (it reads **Broadcast imaging OFF** while off) is the switch for all of it, and it's on to begin with. With it off, no imaging plays, and your club's own show music plays where it's set up. With it on, **On Air** on **Race Control** starts the show and the rest follows the race by itself.
+The tiles at the top are **Imaging** (On or Off), **Setting up** (the soundscape the page shows), **Pieces** (how many it has) and **Files missing** (red when any are).
 
-The page has these cards:
+**Broadcast imaging ON** (it reads **Broadcast imaging OFF** while off), on the **On air** card under the tiles, is the switch for all of it, and it's on to begin with. With it off, no imaging plays, and your club's own show music plays where it's set up. With it on, **On Air** on **Race Control** starts the show and the rest follows the race by itself.
+
+Under **On air**, the page has these cards:
 
 | Card | What's on it |
 |---|---|
@@ -436,7 +448,7 @@ How loud the pieces and beds play is set on the Mixer's [Imaging levels](#imagin
 
 The **Ambience** fader changes how loud the ambience is, not what mood it's in: moving it doesn't change the crowd's race state.
 
-![Sounds, Mixer tab: the Announcements, Sound effects, Ambience and Music faders, with Imaging levels and Ducking below](../assets/images/sounds-mixer.png)
+![Sounds, Mixer tab: the Announcements, Sound effects, Ambience and Music faders at 100, 100, 83 and 30%, with Imaging levels and Ducking below](../assets/images/sounds-mixer.png)
 
 ### Channels
 
@@ -527,10 +539,12 @@ If a session that brings the music up starts while the last one's **Fade out** i
 
 **Sounds → Lap Beeps** gives each driver their own short cue when they cross the line, so they can hear their lap without watching the screen. Cues differ in shape as well as pitch, because pitch alone is hard to pick out over track noise. It's off by default: a cue per lap per driver is a lot of noise if you didn't ask for it.
 
-![Sounds, Lap Beeps tab: Per-driver lap cues off, and the drivers list with each transponder, class and cue, with Change Cue, Test Cue, Turn On / Off, Auto-Assign All and Clear All below](../assets/images/sounds-lap-beeps.png)
+![Sounds, Lap Beeps tab: Per-driver lap cues OFF, 0 of 13 drivers with a cue, and the drivers list with each transponder, class and cue, with Test Cue, Change Cue and Turn On / Off below](../assets/images/sounds-lap-beeps.png)
 
-1. Tick **Per-driver lap cues ON** (it reads **Per-driver lap cues OFF** while off).
-2. Press **Auto-Assign All** to give every driver a different cue, or select a driver and press **Change Cue** to choose one.
+The tiles at the top are **Lap cues** (On or Off), **Drivers**, **With a cue** (for example "6 of 8") and **Sharing a cue** (amber when any drivers share one). Under them are three cards: **Lap cues**, with the switch; **Drivers**, with the list; and **Everyone at once**, with **Auto-Assign All** and **Clear All**.
+
+1. On the **Lap cues** card, tick **Per-driver lap cues ON** (it reads **Per-driver lap cues OFF** while off).
+2. Press **Auto-Assign All** on the **Everyone at once** card to give every driver a different cue, or select a driver and press **Change Cue** to choose one (double-clicking the driver does the same). Each press steps to the next cue and plays it, so you choose by ear.
 3. Press **Test Cue** to hear the selected driver's cue.
 
 There are eight cues: High blip, Low blip, Double high, Double low, Rising, Falling, Triple tick and Warble. With more than eight drivers some will share; that's usually fine if they aren't on track together. The status line warns you when drivers share a cue.
@@ -543,9 +557,9 @@ Lap beeps play the instant the car crosses, ahead of any spoken line, at the **S
 
 HeatCaller records every race as it goes out and, once the broadcast has finished, saves the whole thing as an mp3 - with a short clip for each driver beside it, covering just the moments they were named. You don't set anything up: it's on, and the race log says where each file went. A club can keep the broadcast of a title race, or hand a driver the part of the night where they were called - as an mp3, or as a [highlight video](#highlight-videos) for their phone.
 
-![Club Website, Recording tab: the Recording the night card with Record each race and its clip, highlight video, folder and keep options, and the Written from the night card below](../assets/images/club-website-recording.png)
+![Club Website, Recording tab: recording, driver clips and highlight videos all Off, the Recording the night card with Record each race unticked and its clip, highlight video and club handle options, and Where recordings are kept with 6 nights on disk](../assets/images/club-website-recording.png)
 
-The settings are on **Club Website → Recording**, on the **Recording the night** card - the **Club Website** page has two tabs, **Website** and **Recording**. Searching the sidebar for "recording", "clips" or "highlights" goes straight there. See [Turning it off](#turning-it-off) if you don't want it.
+The settings are on **Club Website → Recording**, on the **Recording the night** card, with the folder and how many nights are kept on the **Where recordings are kept** card under it - the **Club Website** page has two tabs, **Website** and **Recording**. Searching the sidebar for "recording", "clips" or "highlights" goes straight there. See [Turning it off](#turning-it-off) if you don't want it.
 
 ### What's in the recording
 

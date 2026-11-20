@@ -18,7 +18,7 @@ HeatCaller also uses these folders in your **Documents** folder:
 
 | Folder | What's in it |
 |---|---|
-| `Documents\HeatCaller Backups` | Backups, unless you choose another folder on the **Backup & Restore** page. Includes a `Pre-Restore Safety Backups` subfolder. See [Backups](backups.md). |
+| `Documents\HeatCaller Backups` | Backups, unless you choose another folder on the **Backup & Restore** page. Includes a `Pre-Restore Safety Backups` subfolder, and on a standby PC a `Standby Copies` subfolder (`standby-latest.zip` and `standby-previous.zip`, the newest copy of the timing laptop's data and the one before it; see [Standby PC](standby-pc.md)). See [Backups](backups.md). |
 | `Documents\HeatCaller Results` | The shareable results card image HeatCaller saves automatically each time a race from the **Race Control** page is saved to **Race History**. |
 | `Documents\HeatCaller Race Audio` | An mp3 of each race, in a folder per night, with a clip for each driver in a `Highlights` subfolder, and each driver's highlight video (`.mp4`) beside their clip. While a race is on, its working `.recording.wav` sits in the night folder, with a `.bed.wav` beside it (the music and crowd for the videos) when it gets videos; both are removed once the mp3 and the videos are made. Not part of backups. Only the last 6 nights are kept unless **Keep the last:** on **Club Website → Recording** says otherwise; older nights' folders, videos and all, are removed after a race. **Folder:** on the same tab can point it somewhere else. See [Race recordings](../announcer/sounds-and-music.md#race-recordings). |
 | `Documents\HeatCaller Previews` | The race-day previews written with **Write The Preview** on **Club Website → Recording**, one text file each, named like `2026-11-06 - Friday Club Night - preview.txt`. Not part of backups. |
@@ -47,7 +47,7 @@ And the console logs:
 %LocalAppData%\HeatCaller\Logs
 ```
 
-HeatCaller writes the **Developer Console** to a file here as it goes, one file per run (`console-YYYY-MM-DD_HH-MM-SS.log`), and keeps the last 20. If HeatCaller stops responding for 10 seconds, the log says so, and a freeze dump (`freeze-YYYY-MM-DD_HH-MM-SS.dmp`, a copy of the app's memory at that moment) is saved here too: at most one per run, the last 2 kept. Neither is part of backups. In a rehearsal they go to the `Logs` folder in `%LocalAppData%\HeatCaller Rehearsal` instead. To send them for help, use [Save Support Info](backups.md#save-support-info).
+HeatCaller writes the **Developer Console** to a file here as it goes, one file per run (`console-YYYY-MM-DD_HH-MM-SS.log`), and keeps the last 20. If HeatCaller stops responding for 10 seconds, the log says so, and a freeze dump (`freeze-YYYY-MM-DD_HH-MM-SS.dmp`, a copy of the app's memory at that moment) is saved here too: at most one per run, the last 2 kept, and each deleted after 14 days because it holds drivers' details. No dump is saved with less than about 3 GB free on the drive. Neither is part of backups. In a rehearsal they go to the `Logs` folder in `%LocalAppData%\HeatCaller Rehearsal` instead. To send the logs for help, use [Save Support Info](backups.md#save-support-info). It leaves freeze dumps out, since a dump holds everything the app had open, names and keys included; send one only if you're asked for it.
 
 Three more folders sit beside these, none of them part of backups:
 
@@ -71,6 +71,8 @@ All data files are plain JSON text, except where noted.
 | `race-in-progress.json` | A running copy of the race in progress, for crash recovery. See [The race journal](#the-race-journal). |
 | `events.json` | Race days (events), set up on **Race Day → Setup**. |
 | `checkin.json` | Who is checked in at each event. |
+| `entry-payments.json` | Who paid what at the desk, race day by race day: the **Paid** column on **Race Day → Who's Racing**. |
+| `pre-entries.json` | Who said they're coming to a race night, from the **I'm coming** card on their phone's **Me** page. See [Who said they're coming](../race-day/events-and-entries.md#who-said-theyre-coming). |
 | `race-rounds.json` | The race program: rounds, heats and mains (on **Race Day → Next Steps**). |
 | `day-schedule.json` | The race day's timetable, shown in the **Timetable** window (opened with **Timetable** under the race program), used for the "ON DECK" line on the live pages and the Announcer screen. |
 | `race-classes.json` | Classes and their race formats (**Classes** page). |
@@ -90,6 +92,7 @@ All data files are plain JSON text, except where noted.
 | `rivalries.json` | Rivalries for the announcer (**Voice → Race Calls**). |
 | `signups.json` | Online driver sign-up: whether it's on, and the invites made. The invite codes are sealed; see [Secrets](#secrets). See [Driver sign-up](../online/sign-up.md). |
 | `driver-requests.json` | What drivers have asked the desk for from their phones (a change to their details, their battery pack, a query about a result) and what the desk answered, and the changes drivers made to their own garage from their phones (packs, cars, car photos and setups), which HeatCaller applies by itself. See [A driver's garage from their phone](../race-day/drivers-and-classes.md#a-drivers-garage-from-their-phone). See [Driver requests](../online/driver-requests.md). |
+| `PhonePhotos\` | Car photos sent from drivers' phones, waiting here until HeatCaller has added each one to the driver's car. See [A driver's garage from their phone](../race-day/drivers-and-classes.md#a-drivers-garage-from-their-phone). |
 
 ### Tracks and venues
 
@@ -126,6 +129,8 @@ All data files are plain JSON text, except where noted.
 | `DriverPhotos\` | Driver photos, resized when you added them. Replaced or removed photos wait in its `Retired` subfolder so **Undo** can put them back: the last 60, for up to 7 days. |
 | `photo-finish\` | The finish camera's pictures: a folder for each night, and in it one for each shot, with its frames as JPEG files named by how long before (-) or after (+) the line counted the car, in milliseconds. Not part of backups, so they don't come across to a new laptop. Safe to delete. See [Photo finish](../race-control/running-a-race.md#photo-finish). |
 | `club-logo-*.png` | The club logo (**Themes** page), used in the app, on the Big Screen, the Wi-Fi pages and the online pages. Only a logo file HeatCaller made itself is used. |
+| `overlays.json` | Your own stream overlay layouts: the copies of the presets you've changed in the **Stream overlays** window. The presets aren't stored here. See [Make your own layout](../screens/stream-overlays.md#make-your-own-layout). |
+| `stream-tonight.json` | Tonight's stream: when each piece of it started and stopped (by this laptop's clock), each piece's YouTube link, any nudge to line it up, and the races taken down from video. A piece from an earlier day is let go by itself. See [Race video on YouTube](../online/race-video.md). |
 
 #### After the Windows voice was retired
 
@@ -162,6 +167,7 @@ There is nothing underneath Kokoro: it is both the free voice a club can choose 
 | `race-in-progress-unread-YYYYMMDD-HHMMSS.json` | A race journal that couldn't be read at start-up, kept before the next race wrote over it. To be offered that race again, close HeatCaller and rename it back to `race-in-progress.json`. |
 | `secrets.hgk` | Appears only after restoring a backup that carries password-locked secrets, until HeatCaller has unlocked them. See [Backups](backups.md). |
 | `restored-settings.json` | Appears after restoring a backup that sends to a relay, voice relay or mail server this laptop wasn't using. It holds those addresses back until you confirm them. Never taken from a backup. See [Addresses in a restored backup](security-and-privacy.md#addresses-in-a-restored-backup). |
+| `standby-taken-over.json` | Left by **Take Over** on a standby PC. While it's there, this PC is the timing PC and is never copied into again. See [Standby PC](standby-pc.md). |
 
 ## Secrets
 
@@ -173,6 +179,7 @@ Some settings are secrets: anyone who has them could act as your club. HeatCalle
 - Each racer's personal check-in PIN.
 - The email password used to send racer PINs.
 - The backup password.
+- The **Standby PIN** (on the **Standby PC** card of **Backup & Restore**) and the **OBS password:** for race video (on the **Race video (YouTube)** card of **Club Website**).
 - The ElevenLabs API key (in `voice-settings.json`).
 - The invite codes for online driver sign-up (in `signups.json`).
 

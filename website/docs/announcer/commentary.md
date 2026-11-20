@@ -205,7 +205,7 @@ The portable copy of HeatCaller has no model beside it. It also looks in `%LOCAL
 
 Changes save as you make them and take effect straight away.
 
-![Voice, AI Commentary tab with Enable AI commentary not yet ticked: the Who writes it card with Write through the club relay when it can and the model on this PC as the fallback, and How it's written with the Writing tone below](../assets/images/voice-ai-commentary.png)
+![Voice, AI Commentary tab with Enable AI commentary ticked: the On, Written by, Ready and Enthusiastic tiles across the top, and the Who writes it card with Write through the club relay when it can, the model on this PC as the fallback, and this month's AI commentary at 72% used](../assets/images/voice-ai-commentary.png)
 
 ### Warm-up
 
@@ -213,7 +213,9 @@ The model takes a few seconds to load into memory the first time it's used. Heat
 
 ## Settings
 
-The settings are on cards down the **Voice → AI Commentary** tab: **Who writes it** first, then **How it's written**, since it covers every line, then the rest in the order the night happens: **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Between races**. Above them is the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
+The top of the **Voice → AI Commentary** tab sums it up in four tiles: **AI commentary** (On or Off), **Written by** (**Relay, then this PC**, **Club relay**, **This PC** or **Nothing**), **Model on this PC** (**Ready** or **Not here**) and **Writing tone** (the tone's name). Under them, the **On air** card holds the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
+
+The settings are on cards down the tab: **Who writes it** first, then **How it's written**, since it covers every line, then the rest in the order the night happens: **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Between races**. On a wide window, **Who writes it** and **How it's written** sit side by side, and so do **After the flag** and **Recap show**.
 
 Who speaks - the announcer's and the recap host's names, the co-host, the Technical Lead, the Team Principal and the achievements reader, with their voices - is on **Voice → Cast**. One **Load Voices**, on the **Voices** card at the top, fills every voice list on the tab. Under it, every speaker has a card laid out the same way: what the speaker does under the card's title, then **Name:**, **Voice:** with **Test Voice**, and **If ElevenLabs runs out:** (the Kokoro voice they switch to, with its own **Test Voice**; see [Each of the cast when ElevenLabs runs out](voice.md#each-of-the-cast-when-elevenlabs-runs-out)), then the switches and settings for what they do - the **Announcer** card first. The show's music is on **Sounds → Imaging**, and recording the night is on **Club Website → Recording**. The sections below still describe those settings here, where they're explained.
 
@@ -234,15 +236,31 @@ With **Give the lines their tone's delivery when they're spoken** ticked, the **
 
 #### Character tones
 
-Three more tones put the whole night in character: every line, the recap, the segments between races and the pit-lane interviews. Each one is told to keep every name, position and number exactly as given, so the call underneath can still be trusted. Villain is a cartoon villain, not a nasty one. Nothing gory, nobody really gets hurt, and no driver is ever mocked.
+Four more tones put the whole night in character: every line, the recap, the segments between races and the pit-lane interviews. Each one is told to keep every name, position and number exactly as given, so the call underneath can still be trusted. Villain is a cartoon villain, not a nasty one. Apart from Sailor-mouth, nothing is crude or gory, nobody really gets hurt, and no driver is ever mocked.
+
+In the **Writing tone:** list each one is named with its group first and marked "(Premium)", for example **Silly: Pirate - arr (Premium)**. The mark is only a label for now: every tone works for every club.
 
 | Tone | Sounds like | Audio tags (v3) |
 |---|---|---|
 | **Dark: Villain** | Backs whoever leads, like a cartoon tyrant. "Yes... yes. Four tenths, Sam. Let them watch it shrink in the mirror." | A laugh, then mischievous |
 | **Silly: Pirate** | Arr. "Arr, Sam be four tenths clear o' Bill on lap twelve, and the sea be angry!" | A laugh, then excited |
 | **Silly: Town crier** | Hear ye, hear ye. "Hear ye! Upon the twelfth lap, Sam doth lead Bill by four tenths of a second!" | Shouted throughout |
+| **Adult: Sailor-mouth** | A foul-mouthed pit crew chief at the end of a long night: swears and is crude, but stays clear about who is where. See [Sailor-mouth](#sailor-mouth). | A laugh to open |
 
 A character tone is the model's to play, so a small local model can drift out of character. The truth rules and the number check still apply to every line, whichever tone is on.
+
+#### Sailor-mouth
+
+**Adult: Sailor-mouth - swears, crude, 18+** is the one tone that swears. Its jokes are aimed at the race, the luck, the track and the gap, never at a driver as a person. Picking it asks first, every time, with a **Sailor-mouth commentary** message that says what you're switching on: the swearing is heard out loud, on the speakers and in the recap show's recording. Press **Yes** to switch; **No** puts the list back where it was.
+
+- **Screens stay starred.** The Announcer screen, phones and the overlay show the swear words with stars in them. Names the club typed (drivers, teams, sponsors, classes, the cast) are never starred.
+- **Clean around juniors.** Whenever a junior is around, the line is written **Enthusiastic** instead: in a race a junior is driving, in a junior's interview or intro, and in the recap of a night a junior raced. There's no switch for this.
+- **What gets posted stays clean.** A driver's own night, the season piece and the night before are written Enthusiastic instead, since they're shared and sent around. The recap show keeps the tone, because it's read to the room.
+- **Never hateful, in any tone.** Every line the model writes, whichever tone is on, is checked for hate terms before it's used. A line with one is dropped whole, and the console says "Commentary line dropped - it had a hate term in it". A word that came in with the facts, such as a driver's name the club typed, doesn't count.
+
+**Swearing:** appears beside **Writing tone:** while Sailor-mouth is the tone. It's a dial from 0 to 6: how many swear words a line may have - "up to 2 a line" (the default), "1 a line", or "none, just crude" at 0. A longer piece (the recap show, an interview, two voices trading turns) gets that many for every forty words. A line over the dial has the spare swear words taken out, and the console says "Sailor-mouth: took some swearing out of a line to keep to the dial (2 a line)."; if that isn't enough, the line is dropped. A driver's name is never counted as a swear word.
+
+**A club can switch it off.** On **Race Day → Setup**, the **Club rules** tab has **Allow Sailor-mouth commentary** under **Commentary** (ticked to start with). Unticked, the **Writing tone:** list doesn't offer Sailor-mouth, and a club that had picked it hears **Enthusiastic** instead. The saved choice is kept, so ticking the rule again brings it back. It's a club rule rather than a commentary setting so that a club that runs junior nights decides it once, for every night.
 
 ### Who writes it
 
@@ -555,7 +573,7 @@ A voice is kept for each engine, so if you switch engine on **Voice → Voice**,
 
 Each driver can have their own Team Principal and Technical Lead: a name and a voice for each, picked from their phone. They can also share a few words the interviews use. Turn it on with **Drivers can pick their own crew** on the **Drivers' own crew** card on **Voice → Cast**. It's off by default.
 
-- **A voice** comes from every voice on the engine in use, less any you hide. The list is refreshed every 10 minutes (a minute after a failed try), so a voice added to your ElevenLabs account reaches the phones, and one you delete stops being used: a driver whose voice has gone hears the club's voice instead. Click **Voices drivers can pick...** and untick a voice to hide it, such as a cloned voice of a real person. The announcer's voice and the co-hosts' voices are never offered. A voice a driver picks is used straight away. If you switch engine, their pick is left behind and they hear the club's voice until they pick again; their phone asks them to.
+- **A voice** comes from every voice on the engine in use, less any you hide. The list is refreshed every 10 minutes (a minute after a failed try), so a voice added to your ElevenLabs account reaches the phones, and one you delete stops being used: a driver whose voice has gone hears the club's voice instead. Click **Voices drivers can pick** (beside **Voices:** on the card), untick a voice to hide it, such as a cloned voice of a real person, and press **Save**. **Tick all** offers every voice again. The announcer's voice and the co-hosts' voices are never offered. A voice a driver picks is used straight away. If you switch engine, their pick is left behind and they hear the club's voice until they pick again; their phone asks them to.
 - **A name** for each, which they make up. Blank, they get the club's name from the card above.
 - **Their notes**: **Tonight's goal** (for the principal before their race, or the race intro), **Thanks** (for the principal after a race they win, or the recap when the principal isn't on) and **Their car's story** (for the Technical Lead). A note is said as something the driver told the team, never as a result, and each note is used **once a night** at most. A goal sent after the night's last race is kept for the next night.
 
@@ -596,7 +614,7 @@ How the recap sounds is set on other pages:
 | **Give the recap its own stability and style** | On the **Recap host** card on **Voice → Cast**, with the two below. Uses the **Stability:** and **Style:** below for the recap only, instead of the values on **Voice → Voice**. Leave it off to use the Voice tab's values for everything. If you tuned the Voice tab and heard no change in the recap, this was why. Stability and Style belong to your own ElevenLabs account, so this makes no difference to the Kokoro voice or to the HeatCaller voice, where the relay sets them. | Off |
 | **Stability:** | Lower means more emotional range. | 0.60 |
 | **Style:** | Higher is more dramatic; past about 0.6 it can distort. | 0.15 |
-| **Duck music and crowd further during the recap, down to** _n_ **%** | While the recap plays, music and ambience drop to this level instead of the normal announcement duck. It stays down through the interview and the sign-off. | On, 20% |
+| **Race recap:** **Duck music and crowd further, down to** _n_ **%** (on the **Ducking** card of **Sounds → Mixer**) | While the recap plays, music and ambience drop to this level instead of the normal announcement duck. It stays down through the interview and the sign-off. | On, 20% |
 
 **The color is inside the program.** The form guide, the grid history and anything else the segment list has due after a race are spoken as part of the recap's own show — straight after the honors, with the same mark between them that a show puts between its own parts. Before 11 Oct 2026 they arrived *after* the program had signed off, each opening a show of its own with its own opener and bed, so a club heard one recap and then two more short broadcasts. At most two per program: past that, a show about a ninety-second heat is what makes the next one late. They are written while the recap is being spoken, so they add no silence, and a race called to the grid drops them.
 
@@ -653,7 +671,7 @@ A race day can use a different preset for that day only: **Between-race talk:** 
 
 **The console says why a call-up didn't go**, once a gap per reason, on a line starting `[gap]`: "Call-up for Heat 3 held - inside the quiet before the call".
 
-**Start the countdown by itself from the run sheet, at** _5 min, 1 min_ calls the countdown by itself, from the time against the next race on **Race Day → Timetable**. Pick any of 10, 5, 2 and 1 minutes, and **time's up**. (The Timetable's **Reminder countdown** card was taken out on 13 Nov 2026.) Off until you tick it.
+**Start the countdown by itself from the run sheet, at** _5 min, 1 min_ calls the countdown by itself, from the time against the next race on the run sheet (**Race Day → Next Steps**). Pick any of 10, 5, 2 and 1 minutes, and **time's up**. (The Timetable's **Reminder countdown** card was taken out on 13 Nov 2026.) Off until you tick it.
 
 #### Your own lines
 
@@ -704,7 +722,7 @@ Pick them from the drop-down on each row. They play from beside HeatCaller itsel
 
 #### Choose the pieces
 
-Tick **Play an opener and a music bed under the show**, then pick a shipped piece from the drop-down, or press **Choose...**, beside **Opener:**, **Music bed:** and **Club's sting:**. Under them are **Opener level:**, **Sting level:**, **Bed level:**, **and drops to:** (how far the bed dips while the announcer speaks) and **Voice comes in:** (how far into the opener the first words arrive - 0 finds where it starts ringing out). **Shorten the opener on later shows** is the shortening described under [The running order](#the-running-order), and **Play It** beside **Hear it:** plays a short show with what you've chosen.
+Tick **Play an opener and a music bed under the show**, then pick a shipped piece from the drop-down, or press **Choose**, beside **Opener:**, **Music bed:** and **Club's sting:**. Under them are **Opener level:**, **Sting level:**, **Bed level:**, **and drops to:** (how far the bed dips while the announcer speaks) and **Voice comes in:** (how far into the opener the first words arrive - 0 finds where it starts ringing out). **Shorten the opener on later shows** is the shortening described under [The running order](#the-running-order), and **Play It** beside **Hear it:** plays a short show with what you've chosen.
 
 Each file is checked when you choose it and then **copied into your club's data**, so a backup carries it to the next laptop and tidying your Downloads folder can't break it. Any of them works without the others: an opener with no bed, a bed with no opener, and a bed with no sting are all fine.
 
@@ -722,7 +740,7 @@ Beside each one HeatCaller says what it made of the file — how long it is, how
 !!! tip
     You can also just drop the files in yourself. They live in `%AppData%\HeatCaller\ShowMusic` as `opener.mp3`, `bed.mp3` and `sting.mp3` — any of `.mp3`, `.wav`, `.m4a`, `.aac`, `.wma`, `.flac` or `.ogg` works.
 
-**Your own file always wins.** Press **Choose...** on a row and that file is what plays for that part, whatever the drop-down says — the drop-down grays out to show you it is not in use. **Remove** takes your file away and puts you back on the shipped piece rather than on silence, so trying one of your own costs nothing. A club who had already dropped their own `opener.*` or `bed.*` into `%AppData%\HeatCaller\ShowMusic` before the library existed is left exactly as they were, and told so in the console on the first start.
+**Your own file always wins.** Press **Choose** on a row and that file is what plays for that part, whatever the drop-down says — the drop-down grays out to show you it is not in use. **Remove** takes your file away and puts you back on the shipped piece rather than on silence, so trying one of your own costs nothing. A club who had already dropped their own `opener.*` or `bed.*` into `%AppData%\HeatCaller\ShowMusic` before the library existed is left exactly as they were, and told so in the console on the first start.
 
 If a shipped piece you had chosen disappears — an update that renamed it, a damaged install — the row says so and nothing plays for that part. It does **not** quietly fall back to a different piece: you chose that one, and a different bed appearing under your broadcast without being asked for would be worse than a quiet one.
 
@@ -853,10 +871,16 @@ The clips are the half worth having. A driver who posts the forty seconds where 
 | **Club handle:** | Your club's social handle, shown at the end of each video. | Blank |
 | **Put the music and crowd under the highlight videos** | The music and crowd the room heard go under the call in every video. Untick it if your music isn't licensed for posting online. | On |
 | **Put each driver's clip on their own night on the club's page** | Each driver's mp3 clip goes on their own private night page, which only their badge code opens. Videos never go online: they stay on this PC, in the night's **Highlights** folder, and **Share video** in a driver's drawer on **Race Control** finds them. | Off |
-| **Keep the last:** | How many race nights are kept. After a race, the oldest night's folder beyond this is removed. | 6 nights |
-| **Folder:** | Where it all goes. **Open folder** works whatever the switches say. | `Documents\HeatCaller Race Audio` |
+The tiles at the top of the **Recording** tab sum it up: **Recording** (On or Off), **Driver clips**, **Highlight videos** (who gets one) and **On disk** (for example "4 nights, 820 MB").
 
-Under the settings, a line says how many nights and roughly how many megabytes are on disk now — you can't sensibly choose a count without knowing what a night costs.
+Under **Recording the night**, the **Where recordings are kept** card has the rest. As it says, "Recordings are NOT in backups (a night is a few hundred MB). Copy a night's folder elsewhere to keep it."
+
+| Setting | What it does | Default |
+|---|---|---|
+| **Keep the last:** | How many race nights are kept. After a race, the oldest night's folder beyond this is removed. | 6 nights |
+| **Folder:** | Where it all goes. **Choose** picks another folder, and **Open folder** works whatever the switches say. | `Documents\HeatCaller Race Audio` |
+
+Under them, a line says how many nights and roughly how many megabytes are on disk now — you can't sensibly choose a count without knowing what a night costs.
 
 #### Where the files are
 
@@ -897,7 +921,7 @@ If something is already recording when a bookend starts, it isn't recorded separ
 
 #### Written from the night
 
-Under **Recording the night**, the **Written from the night** card has five things the commentary writes from the evening. They need AI commentary on (**Voice → AI Commentary**).
+Under **Where recordings are kept**, three cards have five things the commentary writes from the evening: **Written from the night** (**Tonight's recap:**, **A driver's night:** and **A season:**), then **The night before** and **Why it said that** (**Check a line:**), each a card of its own. They all need AI commentary on (**Voice → AI Commentary**).
 
 | Row | Button | What it does |
 |---|---|---|
@@ -1122,7 +1146,7 @@ The two bookends read your club's own figures.
 
 > "Tonight at Brighton Indoor: 41 drivers across 6 classes, 7 of them visiting, 30 races to run. Two rounds left and four points covering the top three."
 
-"7 of them visiting" counts the drivers in tonight's program with **Visiting from another club** ticked on their profile (see [Drivers](../race-day/drivers-and-classes.md)), and nothing else; with nobody ticked the clause is left out. The last sentence is the championship's **Announcer's note**, typed on its **Scoring Rules** window (see [Championships](../race-control/results-and-championships.md)), read out as typed on a night that championship counts; with no note it is left out. Both are your club's own words: HeatCaller never works either one out.
+"7 of them visiting" counts the drivers in tonight's program with **Visiting from another club** ticked on their profile (see [Drivers](../race-day/drivers-and-classes.md)), and nothing else; with nobody ticked the clause is left out. The last sentence is the championship's **Announcer's note**, typed in its scoring rules (**Edit Scoring Rules** on **Points & Rules**) (see [Championships](../race-control/results-and-championships.md)), read out as typed on a night that championship counts; with no note it is left out. Both are your club's own words: HeatCaller never works either one out.
 
 With no venue typed on the day it opens with "Tonight:" instead, which is what most clubs want. **It never fires by itself.** **On Air** plays it (see [On Air](../race-control/running-a-race.md#on-air)). The first time you press <kbd>F1</kbd>, **Start Next** or the program's **Start** in an evening, it's written while the race's opening is. It then plays with its own music and recording and hands straight on to the show open: the jingle, the race intro and the rest. It's said once a night. If one is skipped before a word of it goes out, the next On Air tries again, which is why the classes and drivers describe the whole evening while the races are counted over what's **left** to run. A race started with **Stage**, or a demo, doesn't play it.
 
@@ -1522,9 +1546,9 @@ Everything else in the commentary layer reports to the developer console, which 
 
 The window stays open beside Race Control while you work, and closing it only hides it: a hold you put on stays on. While a hold is on, the **Broadcast** button on Race Control reads **Broadcast · HELD** in amber, and when notes from the room are waiting it reads **Broadcast · 3 notes**, so neither is missed with the window shut. The flag keys, <kbd>F1</kbd> to <kbd>F10</kbd> and <kbd>F12</kbd>, still work while the window has the focus.
 
-Across the top is what's on air now, or the last segment that went out. The level meters are on **Race Control**, under the **Broadcast** button, not here (see [Level meters](../race-control/running-a-race.md#level-meters)).
+Across the top, beside an **ON AIR** sign, is what's on air now, or the last segment that went out. While something is going out (the announcer speaking, an imaging piece playing) or a line is being written, the sign lights up and the row is outlined in the accent color. The level meters are on **Race Control**, under the **Broadcast** button, not here (see [Level meters](../race-control/running-a-race.md#level-meters)).
 
-Under that, **Controls** has the buttons in the table below, and **At a glance** says:
+Under that, the **Controls** card has the buttons in the table below, and the **At a glance** card says what the announcer is doing, in full. As its hint puts it, "A line in colour wants a look."
 
 | Line | What it says |
 |---|---|
@@ -1533,6 +1557,7 @@ Under that, **Controls** has the buttons in the table below, and **At a glance**
 | **Tonight** | How many lines the announcer has written tonight, and what the budget is letting through. |
 | **This race** | How many of its timing calls the announcer made this race, and how many it lost or held back. |
 | **Club notes** | How many notes are waiting for you to approve. |
+| **Drivers' notes** | Drivers' own notes in the segment being written - see [Drivers' own crew](#drivers-own-crew). |
 | **Room vote** | How many votes are in so far. |
 | **Recap show** | Whether the recap show is running. |
 | **Replay Moment** | Whether there's a moment ready to play again. |
@@ -1594,6 +1619,8 @@ Where the writing happens decides this. With **Write through the club relay when
 
 The continuity lines are not part of this: they're built on the laptop from the program and the results, and never go to the model at all. What the model is given: driver names, teams and sponsors from profiles, results and lap times, rivalries, round and class names, the drivers' records at this club, the layout's lap record and its holder, how many cars are out, how a driver's pace has moved tonight, the car they raced, tonight's class and driver counts and the venue typed on the race day, the night's totals, the night's storyline, championship positions and the one conditional worked out from them, the show name, and, for the Technical Lead, the setup changes logged for the winning car in the **Garage**. Names and other typed text are cleaned before they go to the model (one line, no brackets, kept short), so something typed into a profile can't turn into instructions to the model.
 
+**Juniors.** With **Offline voices for juniors** ticked on **Voice → Voice** (the **Juniors** card), a line about a junior - their interview or intro, or facts that include one - is written by the model on this PC and never sent to the relay, even with the relay box ticked. It's said by the Kokoro voice on this PC too. See [Offline voices for juniors](voice.md#offline-voices-for-juniors).
+
 !!! note
     With ElevenLabs chosen on **Voice → Voice**, the spoken intros and recaps also go to ElevenLabs to be turned into speech, like every other announcement. With the HeatCaller voice chosen, they go to your club's relay, and on to ElevenLabs from there. With the Kokoro voice chosen, they're spoken on the laptop and go nowhere.
 
@@ -1634,6 +1661,9 @@ See [Security and privacy](../admin/security-and-privacy.md).
 | The recap's music stops before the sign-off | The next race was called to the grid, which ends the whole sequence — interview and sign-off included. | Normal. Stage the next race after the broadcast finishes if you want all of it. |
 | The intro's music cuts off rather than fading | The countdown started, which takes the bed away in about a second so it isn't playing over the start. | Normal, and deliberate. |
 | The opener plays in full before every heat | **Shorten the opener on later shows** is unticked, or your opener has too little ring-out to come in on. | Tick it, and read the line underneath - it says what your own file will do. To drop intros for heats altogether, tick **Only for a main, or a race with a known rivalry on the grid**, under **Race intros** on the **Before the start** card. |
+| Sailor-mouth isn't in the **Writing tone:** list, or the commentary sounds Enthusiastic with it picked | **Allow Sailor-mouth commentary** is unticked on **Race Day → Setup → Club rules**. | Tick it there if the club allows it. See [Sailor-mouth](#sailor-mouth). |
+| Sailor-mouth doesn't swear in some races | A junior is in the race, or the line is about one, so it's written Enthusiastic. Or **Swearing:** is at 0. | Normal. |
+| "Commentary line dropped - it had a hate term in it" in the console | The model wrote a line with a slur in it, so it wasn't used. | Nothing to do. The line is treated as if the model gave no answer, and "Nothing was said." |
 | Nothing is said between two races | No program is entered, or the last result hasn't been filed, or commentary is off. | Enter the program on **Race Day → Next Steps** and file each result. Continuity needs to know both what has just run and what's next. |
 
 For more, see [Troubleshooting](../admin/troubleshooting.md).

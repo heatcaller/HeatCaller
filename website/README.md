@@ -19,6 +19,6 @@ The pages are plain Markdown, so they also move to other builders. The only MkDo
 ## Writing and updating
 
 - `STYLE.md` is the writing guide: voice, structure, exact UI wording, and the site map. Read it before adding a page.
-- Every statement was checked against the app and relay code at version 0.44.2, and the pages have been updated with every change since, through 0.60.0 and the Unreleased work to 1 Nov 2026 (the version is in `../HeatCaller/HeatCaller/HeatCaller.csproj`). When the app changes, update the matching page in the same change.
+- Every statement was checked against the app and relay code at version 0.44.2, and the pages have been updated with every change since, through 0.63.0 and the Unreleased work merged to 19 Nov 2026 (the version is in `../HeatCaller/HeatCaller/HeatCaller.csproj`). When the app changes, update the matching page in the same change.
 - `<!-- TODO: ... -->` comments mark facts that still need confirming; `<!-- screenshot: ... -->` comments mark where a screenshot should go. Both are invisible on the site. Find them with a search for `TODO` and `screenshot:`.
 - Images live in `docs/assets/images/`.

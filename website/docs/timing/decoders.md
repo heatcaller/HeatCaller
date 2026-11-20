@@ -18,7 +18,17 @@ The five marked **(Beta)** were written from each decoder's published format and
 
 The line at the top of the page says the same: "Choose your timing decoder and connect to it. Its laps feed the Race Control page, which runs the race. With two decoders, the other one can be a split loop partway round the track."
 
-![The Connection page with Direct EasyLap Decoder (USB) chosen and not yet connected, the Mission Control and finish camera buttons, and the Developer Console below](../assets/images/connection.png)
+Four tiles under that line show the state of things at a glance: **Decoder** (the one chosen), **Status** (**Connected**, **Connecting** or **Error**, in a colored chip), **Split loop** (**Off**, or the other decoder and how it's doing) and **Passes heard** (how many passes the line decoder has sent since HeatCaller opened). Under them come the cards:
+
+| Card | What's on it |
+|---|---|
+| **Timing decoder** | **Connect via:**, **Connect** and **Disconnect**, the port or address for the decoder chosen, and **Status:**. |
+| **Start-up options** | **Connect when HeatCaller starts**, **Auto-connect** (EasyLap only), **Run timing on its own thread** and **Record every pass to a file**. |
+| **Race tools** | **Mission Control** (**Before a race:**), and **Open Camera Page** and **Photo Finish** (**Finish camera:**). See [Mission Control](../race-control/running-a-race.md#mission-control) and [Photo finish](../race-control/running-a-race.md#photo-finish). |
+| **Split loop** | **Split loop:**, **Connect Split**, **Line Up** and **Split status:**. See [A split loop](#a-split-loop). |
+| **Developer console** | Everything HeatCaller logs. See [The Developer Console](#the-developer-console). |
+
+![The Connection page with Direct EasyLap Decoder (USB) chosen and Disconnected, the Decoder, Status, Split loop and Passes heard tiles across the top, the Start-up options card, and the Race tools card with Mission Control, Open Camera Page and Photo Finish](../assets/images/connection.png)
 
 ## Choosing a connection type
 
@@ -36,7 +46,7 @@ The decoder you choose here is the start/finish line, where laps are counted. If
 
 ## Connect when HeatCaller starts
 
-**Connect when HeatCaller starts**, on the **Connection** page, connects the decoder in **Connect via:** (and the split loop with it, when one is set) as soon as HeatCaller opens, so nobody has to remember to press **Connect** on race night. It's ticked to begin with.
+**Connect when HeatCaller starts**, on the **Start-up options** card of the **Connection** page, connects the decoder in **Connect via:** (and the split loop with it, when one is set) as soon as HeatCaller opens, so nobody has to remember to press **Connect** on race night. It's ticked to begin with.
 
 - **I-Lap:** it connects on the COM port it was last connected on, and no other. If that port isn't there yet, for example a USB adapter plugged in after HeatCaller opened, the console says "Waiting for the I-Lap on COM*n*" and it connects as soon as the port appears. Until you've connected once by hand there's no port to remember, and the console says to pick it and press **Connect** once.
 - **EasyLap:** it's tried once as HeatCaller opens. To keep trying until the decoder is found, and after a dropped connection, tick [Auto-connect](#auto-connect) as well.
@@ -45,7 +55,7 @@ The decoder you choose here is the start/finish line, where laps are counted. If
 
 ## Run timing on its own thread
 
-**Run timing on its own thread**, on the **Connection** page, keeps lap counting going even when the HeatCaller window is busy or stops responding for a few seconds. It's off to begin with. Changing it takes effect the next time HeatCaller starts.
+**Run timing on its own thread**, on the **Start-up options** card of the **Connection** page, keeps lap counting going even when the HeatCaller window is busy or stops responding for a few seconds. It's off to begin with. Changing it takes effect the next time HeatCaller starts.
 
 With it ticked, every pass from the line decoder and the split loop goes straight to timing instead of waiting for the window, whether or not a race is running, so a freeze doesn't lose sector times either. Practice still starts by itself when a car crosses the gate (with **Start automatically when a car crosses the gate** ticked on the Practice page); the Practice page catches up when the window does, and starting a race at that same moment wins over the practice. The race clock, the time limit, the checkered flag and the crash-recovery file keep up on their own, and the start still waits for the countdown audio (up to 10 seconds) without needing the window. An automatic start's green is dropped by timing too, as soon as the countdown audio ends, so cars crossing the line after the countdown are never booked as jump starts because the window was late; the horn may sound late, but the race clock starts on time. Phones on the club's Wi-Fi pages and the club's live page keep the board, flag, countdown and standings live; parts the window works out (the track map, call-ups, championship and race in hand) catch up when it does. When the window catches up, the board jumps to the present, and lap calls that are more than a few seconds old aren't spoken, so the room hears what's happening now. The results still get every lap.
 
@@ -56,7 +66,7 @@ With it off, everything works as it always has, except that practice no longer s
 
 ## Record every pass to a file
 
-**Record every pass to a file**, on the **Connection** page, writes down every pass the race is given and every race command (Stage, the green, flags, laps added by hand, warnings, penalties, releases, undo), with the moment each one arrived. It's off to begin with, and ticking or unticking it takes effect straight away. A night recorded this way can be played back through HeatCaller's race timing to check a result afterwards, or to show exactly what the decoder sent and when.
+**Record every pass to a file**, on the **Start-up options** card of the **Connection** page, writes down every pass the race is given and every race command (Stage, the green, flags, laps added by hand, warnings, penalties, releases, undo), with the moment each one arrived. It's off to begin with, and ticking or unticking it takes effect straight away. A night recorded this way can be played back through HeatCaller's race timing to check a result afterwards, or to show exactly what the decoder sent and when.
 
 - One file per run of HeatCaller, in `%LocalAppData%\HeatCaller\timing-recordings`, named like `passes-20261024-191500.jsonl`. A rehearsal adds `-rehearsal` to the name.
 - Files are kept for 30 days, then deleted. One file stops at 64 MB; the console says so, and timing is never affected.
@@ -217,11 +227,11 @@ Choose **Simulated - rehearse without a decoder** in **Source:** and click **Con
 
 The console says "A simulated ... decoder - its cars are made up, laps from it are not real. Disconnect it before racing."
 
-![A simulated MyLaps P3 decoder connected: the status is green and the Developer Console shows its cars' passes as LAP EVENT lines](../assets/images/connection-beta-decoder-simulated.png)
+![A simulated MyLaps P3 decoder connected: Source set to Simulated - rehearse without a decoder, the Status tile green at Connected with 6 passes heard, and the status line saying every byte it sends is also captured to a log file](../assets/images/connection-beta-decoder-simulated.png)
 
 ## A split loop
 
-With both an EasyLap and an I-Lap, the one in **Connect via:** is the start/finish line, and the other can read cars partway round the track. Choose it in **Split loop:** (it lists the decoder that isn't the line).
+With both an EasyLap and an I-Lap, the one in **Connect via:** is the start/finish line, and the other can read cars partway round the track. Choose it in **Split loop:**, on the **Split loop** card (it lists the decoder that isn't the line).
 
 - **Connect** connects both. **Connect Split** connects the split loop on its own, for example after it was unplugged. **Disconnect** disconnects both.
 - When the line connects by itself (with **Connect when HeatCaller starts**, or the EasyLap's auto-connect), an I-Lap split loop uses the COM port it was last connected on. If that port isn't there yet, **Split status:** says "Waiting for the I-Lap on COM*n*" and it connects as soon as the port appears.
@@ -236,7 +246,7 @@ With both an EasyLap and an I-Lap, the one in **Connect via:** is the start/fini
 Each decoder takes a moment to report a car, and the I-Lap's serial line adds a little more, so the split loop reads a car slightly late. **Line Up** measures how late, once:
 
 1. Lay the split loop right beside the start/finish line, at the same spot.
-2. Click **Line Up**, then drive a car with both its transponders across them five or six times. Each crossing both loops read is listed.
+2. Click **Line Up**, then drive a car with both its transponders across them five or six times. Each crossing both loops read is listed. Tiles at the top of the **Line Up the Split Loop** window show **Saved now** (the gap saved before, or **None**), **Crossings** (how many it has, out of the three it needs) and **New gap** (what it would save).
 3. Click **Save**. The middle reading is kept and taken off every split time. **Set to Zero** clears it.
 4. Put the split loop back in its place round the track.
 
@@ -299,7 +309,7 @@ You won't miss it: the Next Up bar on **Race Control** turns into a pulsing red 
 
 ## The Developer Console
 
-The **Developer console** card, under the **Timing decoder** card, shows everything HeatCaller logs: decoder traffic from whichever connection you use, race events, voice, sound, storage messages and more.
+The **Developer console** card, at the foot of the **Connection** page, shows everything HeatCaller logs: decoder traffic from whichever connection you use, race events, voice, sound, storage messages and more.
 
 | Control | What it does |
 |---|---|

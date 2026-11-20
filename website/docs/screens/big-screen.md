@@ -14,18 +14,18 @@ This page also covers choosing which columns each leaderboard shows, and the **S
 
 A small reminder of the keys, "F11: toggle fullscreen     M: track map     O: on air     C: captions     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Pressing **Big Screen** (or <kbd>B</kbd>, or **Open Big Screen** on **Local Screens**) while it's already open brings that window to the front rather than opening a second one. The **Practice** page's **Open Big Screen** opens a window of its own each time, so you can run more than one if you have the screens.
 
-![The Big Screen in a window during a demo race: RACING - GREEN FLAG, the announcer's latest line, the race clock with 3 LAPS TO GO, the leaderboard with laps, best laps and gaps, and ON DECK along the bottom](../assets/images/big-screen-racing.png)
+![The Big Screen in a window during a demo race: RACING — GREEN FLAG and RACE IN PROGRESS, the race clock at 01:06 with 4 LAPS TO GO, the leaderboard of eight drivers with laps, best laps and gaps, and ON DECK along the bottom](../assets/images/big-screen-racing.png)
 
 ## What it shows
 
 From top to bottom:
 
-- **Race state and flag**, for example "RACING — GREEN FLAG" or "RACING — YELLOW FLAG". During a warm-up it reads "WARM-UP".
+- **Race state and flag**, for example "RACING — GREEN FLAG" or "RACING — YELLOW FLAG", in a pill the color of the flag that's out: green, yellow (with black type) or red, and black or white with a strip of checkers at each end for the checkered flag. Staging and the countdown fill it in the look's accent color; with nothing running it's quiet. During a warm-up it reads "WARM-UP", in the look's highlight color.
 - **Announcement banner.** Each line the announcer picks is shown here for about six seconds. The line appears even when the announcer can't speak or is muted, as long as the announcement is switched on. The rest of the time the banner describes the race: "RACE IN PROGRESS", "YELLOW FLAG — CAUTION", "RED FLAG — RACE STOPPED", "STAGING — GET READY", "COUNTDOWN — STAND BY", "RACE COMPLETE", "WARM-UP — FREE LAPS, NOT COUNTED" during a warm-up, or "Waiting for the race to start..." when nothing is running.
 - **Banner across the screen**, under the announcement banner, for eight seconds when race control warns a driver or somebody sets the quickest sector of the session. Nothing is there the rest of the time. See [The banner across the screen](#the-banner-across-the-screen).
-- **Elapsed race time** on the left, counting from the green flag. Under a red flag it shows "(PAUSED)" after the time.
+- **Elapsed race time** on the left, counting from the green flag. Under a red flag it shows "(PAUSED)" after the time. The clocks sit on a rounded plate, ringed in the color of the flag that's out, so the flag reads from the back of the room. A clock line too long for its space, such as the time with "(PAUSED)", is set in smaller type so it stays on one line.
 - **Countdown** in the middle of the band, when the race has a limit: "5 LAPS TO GO" (counted on the leader's laps) for a lap race, or "03:12 REMAINING" for a timed race. It's blank when there's no limit. HeatCaller's mark, a small sun and HEATCALLER in the look's colors, sits in the bottom right of the same band (see [HeatCaller's mark](looks-and-logo.md#heatcallers-mark)).
-- **Leaderboard**, with the columns you've chosen for the Big Screen (see below). Good news is in color: the quickest of anyone, such as the session's fastest lap or sector, in the look's accent color, and a driver's own good news, such as their own best sector, in its green, the same as on Race Control. A driver's warnings are never picked out in color on the leaderboard rows, where Race Control shows them in red, so the board stays readable from across the room. A warning gets a banner of its own instead. See [The banner across the screen](#the-banner-across-the-screen).
+- **Leaderboard**, with the columns you've chosen for the Big Screen (see below). The leader's row is tinted, with a bar down its left edge in the race state's color. Every driver fits on the board, however big the field; see [Big fields](#big-fields). Good news is in color: the quickest of anyone, such as the session's fastest lap or sector, in the look's accent color, and a driver's own good news, such as their own best sector, in its green, the same as on Race Control. A driver's warnings are never picked out in color on the leaderboard rows, where Race Control shows them in red, so the board stays readable from across the room. A warning gets a banner of its own instead. See [The banner across the screen](#the-banner-across-the-screen).
 - **ON DECK:** bar at the bottom: the next unfinished line on the day's timetable, with its time, class and description. See [The Timetable](../race-day/program-and-mains.md#the-timetable). During a race that counts towards a championship, the bar shows the championship instead. See [If it ended now](#if-it-ended-now).
 - **UP NEXT:** in the same bar between races, when the Big Screen was opened from Race Control and tonight's program has races still to run. It lists the next three with their estimated starts, the same times the phones show, for example "UP NEXT: Stock Q2 Heat 3 about 20:42 • Stock Q2 Heat 4 about 20:49 • Mod Q2 Heat 1 about 20:56". While the night is running early, a race shows the time drivers were given (see [Never more than 2 minutes early](../race-control/running-a-race.md#auto-start-between-races)). The bar goes back to **ON DECK:** when the next race starts.
 - **Between races**, with Auto start on, the countdown band says "NEXT RACE IN 1:42", or "NEXT RACE AT 20:40" while the next race waits for the time drivers were given.
@@ -36,6 +36,20 @@ From top to bottom:
 Before the green, the leaderboard gives way to the [grid roll call](#grid-roll-call). Between races, it gives way to the [between-races cards](#between-races).
 
 If you've set a club logo, it sits in the top-left corner. Untick **Show the logo on the Big Screen and Wi-Fi pages** on the **Themes** page to hide it. A logo that would vanish on the background, such as a black logo on a black screen, is put on a plate.
+
+The ON DECK bar, the warning banner and the captions strip sit on rounded plates too.
+
+### Big fields
+
+The board always shows every driver in the race. Nothing needs setting.
+
+- **A field that nearly fits** gets shorter rows and smaller writing, down to three quarters of the normal size, so an eight-car heat fits a 720p screen without anything moving.
+- **A field too big even for that** keeps the top three where they are, with a heavier line under P3, and rolls the rest past underneath them: a pause at the top, a row at a time down to the bottom, a pause there, then back to the top. A pass takes about the same time however many rows are hidden, so a bigger field rolls quicker. A slim scroll bar down the right edge shows where it's got to.
+- **Under a red flag** the board stays at the top, because the race is stopped and the order is what people look for. After the checkered flag it keeps rolling, so every driver gets to see where they finished.
+
+The board stays where it is between laps rather than jumping back to the top each time a car crosses the line.
+
+<!-- screenshot: Big Screen in a 1280x720 window with a twelve-car race, the top three held and the rest rolling under them -->
 
 ### Colors
 
@@ -333,6 +347,7 @@ Race Control and Practice update as soon as you press **OK**. The web page updat
 | **By Hand** | Laps race control added by hand this race (**+1 Lap**), for a transponder that stopped being read. |
 | **Warnings** | Warnings from race control this race, and a black flag once the class's ladder reaches one. See [Warnings on the leaderboard itself](#warnings-on-the-leaderboard-itself). |
 | **Total Time** | Elapsed race time for this driver. |
+| **Result** | Laps and total time the RC way, for example "23/5:02.341": more laps wins, and on the same laps the quicker time. A * means some laps were counted by hand. |
 
 The Streak column is highlighted from the same streak threshold the announcer uses (set on **Sounds → Effects**). Best Streak and PBs start again for each new race. Gaps are measured at the line, the way timing systems do it.
 
@@ -343,12 +358,14 @@ The Streak column is highlighted from the same streak threshold the announcer us
 
 The **Sponsors** page shows sponsor or promo images and videos on the Big Screen in rotation with the leaderboard, and holds the sponsors you've sold airtime to along with the words the announcer reads for them. It's meant for a shop or club venue with sponsors to display. Leave it off for a home setup.
 
+Four tiles across the top sum the page up: **Big Screen slides** (whether **Show sponsor slides on the Big Screen** is on), **Slides** (how many), **In rotation** (the sponsors in tonight's reads) and **Reads tonight**.
+
 ### Add slides
 
 1. Open the **Sponsors** page.
 2. Tick **Show sponsor slides on the Big Screen**.
 3. Press **Add Image** and choose one or more pictures: PNG, JPEG, GIF or BMP. For a video, press **Add Video** and choose one or more MP4, M4V, MOV, WEBM, MKV, AVI or WMV files.
-4. Put the slides in order with **Move Up** and **Move Down**. They're shown in the order listed on the **Slides (shown in this order)** card, with the selected slide's preview beside the list. Pictures and videos share one list and one rotation.
+4. Put the slides in order with **Move Up** and **Move Down**. They're shown in the order listed on the **Slides (shown in this order)** card, with the selected slide's preview beside the list. Pictures and videos share one list and one rotation. Each slide in the list shows its place in the order, its file name, **IMAGE** or **VIDEO**, and a line: how long a picture holds the screen ("Holds the screen 8 sec"), "Plays to its own end" for a video, or whose read a picture is for.
 5. Set the timing (below).
 6. Open the Big Screen. One that's already open picks the slides up without being reopened: the first slide comes up once the leaderboard has had its turn.
 
@@ -377,7 +394,7 @@ Each picture is checked before it's added. A file over 50 MB, a picture over 200
 
 Images are scaled to fit the leaderboard area without stretching. Only the leaderboard area is replaced: the banner, clock, countdown and ON DECK bar stay on screen. An animated GIF shows its first frame. A missing or unreadable image is skipped, and so is a slide over the size limits, for example one added by an older version or brought in with a backup: the Big Screen stays on the leaderboard for that turn, and its preview on the **Sponsors** page stays blank. Nothing is deleted.
 
-![The Sponsors page with three slides listed and the first, a Corner Hobbies picture, in the preview, the Add Image, Add Video, Remove and Move buttons under it, and the Rotation timing card below: the leaderboard shows for 10 seconds, each slide for 8, and the leaderboard is never interrupted while a race is running](../assets/images/sponsors.png)
+![The Sponsors page with three slides listed, two videos and a picture, and the first video in the preview, the Add Image, Add Video, Preview Video, Remove and Move buttons under it, and the Rotation timing card below: the leaderboard shows for 10 seconds, each slide for 8, and the leaderboard is never interrupted while a race is running](../assets/images/sponsors.png)
 
 ### Rotation timing
 
@@ -419,17 +436,19 @@ The timings and the rest of the after-race running order are on the Commentary p
 
 A sponsor can also have a read: a few sentences somebody paid to have spoken aloud. The announcer reads them exactly as typed. Nothing rewords them, shortens them or adds to them, so a read costs nothing to run and comes out the same every time. Reads are separate from the slides, and you can have either without the other.
 
-These are on the **Sponsor reads** card, at the foot of the page.
+The **Sponsor reads** card, near the foot of the page, has the two tick boxes for where reads are heard. Under it come three more cards: **Sponsors** (the list), **The selected sponsor** (their fields) and **Tonight's report**.
 
-1. Press **Add Sponsor**. A sponsor called "New sponsor" is added and the cursor goes to the name box.
-2. Fill in the fields below for them.
-3. Choose where their reads are heard, with the two tick boxes at the top of the card.
+1. On the **Sponsors** card, press **Add Sponsor**. A sponsor called "New sponsor" is added and the cursor goes to the name box.
+2. Fill in their fields on **The selected sponsor** card (below).
+3. Choose where their reads are heard, with the two tick boxes on the **Sponsor reads** card.
 4. Repeat for each sponsor, and put them in order with **Move Up** and **Move Down**.
 
 | Field | What it's for |
 |---|---|
 | **Name, as it's said:** | The name as the voice should say it, which isn't always what's on their banner: "and co" rather than the ampersand. |
 | **One-line tagline:** | One short line, said after every credit for a moment they present (see **Presents:**), and once on their first read of the night. Leave it empty if they only bought the full read. |
+| **Name on the web page:** | How their name is written on their card on the club's Live page, if it differs from how it's said. Leave it empty to use the name above. |
+| **Their website:** | Their card on the club's Live page links here, and each tap is counted in the sponsor report. |
 | **Their read:** | The sentences to read out, up to 600 characters. Leave it empty and the sponsor gets a one-line mention instead. |
 | **Picture for their read:** | What the Big Screen shows for the length of their read. Choose a picture the club has already uploaded, or **Upload** one for the read. With **None - show their name** chosen the screen shows their name instead — see below. |
 | **Logo:** | The sponsor's own logo, separate from the picture for their read. **Upload** one (a transparent PNG works best; a wide logo stays wide) or **Remove** it. It goes on their card on the club's Live page, and on the [stream overlays](stream-overlays.md). |
@@ -439,7 +458,7 @@ These are on the **Sponsor reads** card, at the foot of the page.
 
 Under **Their read:**, HeatCaller says how long the copy takes to say and over how many gaps, for example "About 37 seconds to read, read over 2 gaps. 550 of 600 characters used." It's worth a look, because it's the one thing about a read you can't judge by looking at it: four lines of text is nearly a minute out loud.
 
-The list shows each sponsor's name, with "read" where they have copy, "share" and the number where their share is more than one, and "off tonight" where they're out of the rotation. **Remove** asks first, says that their slides and videos stay where they are, and can be undone.
+The list shows each sponsor's initials and name, with "Read written" or "No read yet", "share" and the number where their share is more than one, how many moments they present, "logo" when they have one, and **OFF TONIGHT** where they're out of the rotation. **Remove** asks first, says that their slides and videos stay where they are, and can be undone.
 
 #### What the crowd screen shows during a read
 
@@ -478,7 +497,7 @@ The announcer puts a short credit on the end of that call, then the sponsor's ta
 
 #### Telling a sponsor what they got
 
-**Copy report for tonight**, on the **Sponsor reads** card, puts a plain-text report on the clipboard ready to paste into an email:
+**Copy report for tonight**, on the **Tonight's report** card, puts a plain-text report on the clipboard ready to paste into an email:
 
 ```
 Club Night 14 - sponsor reads
@@ -495,11 +514,16 @@ Last Season Motors: no reads - switched off for this night
 This report covers the reads the announcer gave. It does not count the slides on the big screen: the slide rotation is a list of pictures and the app does not know which sponsor each one belongs to, so a figure for those would not be one anybody could stand behind.
 ```
 
+Under a sponsor's reads, the report can add more lines for them:
+
+- **Their card on the club's Live page**, when the club publishes online: "plus their card on the club's Live page: seen 14 times on phones, 3 taps through to their website" (the taps only when they have **Their website:** filled in, or had taps). A view is counted once their card is on a phone's screen, at most once per phone every half hour, and a note at the foot of the report says so.
+- **Their logo on the stream**: "Their logo was on the stream for about 41 minutes, and their name on 2 "presented by" graphics." It's counted only while a [stream overlay](stream-overlays.md) really had their logo on screen.
+
 This is the thing that renews a sponsor, and no other timing software in this sport does it at all. Three deliberate choices in it are worth knowing about, because each one is the difference between a report a sponsor trusts and one they can argue with:
 
 - **Both numbers, always.** The share they *got* beside the share they *bought*. The rotation's promise is that everyone ends within one read of their share — and a report with only the count would have the sponsor on share 2 comparing their four reads with somebody else's three and ringing you about it.
 - **A sponsor who got nothing is still in it**, with the reason: switched off for the night, or their turn hadn't come round when the report was made. (A sponsor with nothing typed still gets their turn, as a one-line mention.) Leaving them out is the one thing you must not do with a figure you're sending to somebody who paid.
-- **It makes no claim about the slides.** The slide rotation is a flat list of pictures and HeatCaller doesn't know which sponsor any one of them belongs to, so "your logo was on screen fourteen times" is not a number it has. The report says so itself, so you're never the one who has to explain the gap.
+- **It makes no claim about the slides.** The slide rotation is a flat list of pictures and HeatCaller doesn't know which sponsor any one of them belongs to, so "your slide was on the Big Screen fourteen times" is not a number it has. The report says so itself, so you're never the one who has to explain the gap. (A logo on the **Logo:** row is different: it belongs to its sponsor, which is why the stream line above can count it.)
 
 The clipboard rather than a file, because pasting into an email is what actually happens to this. The whole report is also shown in the message that confirms it was copied, so you can read it before you send it.
 

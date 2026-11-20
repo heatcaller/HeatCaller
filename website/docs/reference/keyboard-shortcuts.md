@@ -2,7 +2,7 @@
 
 These are all the keyboard shortcuts in HeatCaller. The most useful ones are the flag keys on **Race Control**, which let you run a race without aiming the mouse at a small button.
 
-Press <kbd>?</kbd> at any time you're not typing in a box to see a sheet of the main shortcuts in the app itself. Any key or a click closes it. Pointing at a button on **Race Control** also shows its shortcut.
+Press <kbd>?</kbd> at any time you're not typing in a box to see a sheet of the main shortcuts in the app itself, titled **Keyboard shortcuts**. Any key (other than <kbd>Shift</kbd>, <kbd>Ctrl</kbd> or <kbd>Alt</kbd> on their own) or a click closes it. Pointing at a button on **Race Control** also shows its shortcut.
 
 ## Race Control
 
@@ -44,6 +44,9 @@ The F-keys work even while you're typing in a box on the page. The letter keys a
 !!! note "Race Mode and the flag keys"
     <kbd>F11</kbd> always switches to the Race Control page and selects **Race Control** in the sidebar, even if you press it on another page. The flag keys work straight away in Race Mode, and still work when you leave it.
 
+!!! note "Desk View turns the shortcuts off"
+    While the laptop is locked with **Desk View...** (on **Race Day → Who's Racing**), none of these shortcuts work: not the function keys, not the letters, not <kbd>F11</kbd>. Typing still works, and so do <kbd>Ctrl</kbd>+<kbd>C</kbd>, <kbd>Ctrl</kbd>+<kbd>V</kbd>, <kbd>Ctrl</kbd>+<kbd>X</kbd>, <kbd>Ctrl</kbd>+<kbd>A</kbd> and <kbd>Ctrl</kbd>+<kbd>Z</kbd> in a box (there <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes your typing, never the app's last change). <kbd>AltGr</kbd> still types characters such as @. See [Events and entries](../race-day/events-and-entries.md#self-check-in-poster).
+
 ## The selected driver
 
 Click a driver on the Race Control leaderboard first. These work while **Race Control** is showing, and not while you're typing in a box.
@@ -71,7 +74,7 @@ If no driver is selected, nothing happens and the Race Control log says why. See
 | <kbd>Shift</kbd>+<kbd>T</kbd> | Starts the app tour, a short look around the main pages. See [The app tour](../getting-started/install.md#the-app-tour). Not in Race Mode. |
 | <kbd>M</kbd> | Mutes or unmutes all sound, the same as the mute button at the bottom of the sidebar. |
 | <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo, the same as the **Undo** button at the bottom of the sidebar. In a text box, it undoes your typing instead. |
-| <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> | Opens that page in the sidebar, counting from the top (hidden pages are skipped). Not in Race Mode. |
+| <kbd>Ctrl</kbd>+<kbd>1</kbd> to <kbd>Ctrl</kbd>+<kbd>9</kbd> | Opens that page in the sidebar, counting from the top row you can see (hidden pages are skipped, and while something is typed in **Search pages...**, it counts only the pages that match). Not in Race Mode. |
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> | Puts the cursor in the **Search pages...** box. If the sidebar is down to its icons, it opens again first. Not in Race Mode. |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> | Narrows the sidebar to just its icons, and opens it again. The chevron beside the **Search pages...** box does the same. How you leave it is remembered. Not in Race Mode, which has no sidebar. |
 | <kbd>F11</kbd> | Turns **Race Mode** on or off. Race Mode is full screen with no sidebar, showing only the **Race Control** page. Turning it on also selects **Race Control** in the sidebar. |
@@ -119,11 +122,19 @@ This covers the "scan to join" posters opened from **Local Screens** (**QR code*
 | A sponsor video's **Preview** window | <kbd>Space</kbd> | **Pause**, and again to play on. |
 | **Themes**, the list of looks | <kbd>Delete</kbd> | Deletes the selected look, if it's one you made, after asking. Built-in looks can't be deleted. |
 | **Manage Navigation** | <kbd>Space</kbd> | Ticks or unticks the selected page. |
+| **Stream overlays**, the live picture | Arrow keys | Nudge the picked graphic a little. Hold <kbd>Shift</kbd> to move it further. Click the graphic first. See [Make your own layout](../screens/stream-overlays.md#make-your-own-layout). |
+| **Stream overlays**, the grid of positions | Arrow keys, <kbd>Space</kbd> / <kbd>Enter</kbd> | Move round the nine places a graphic can sit, and pick one. |
 | **Suggest Handicaps** | <kbd>Space</kbd> | Ticks or unticks **Apply** on the selected row. |
 | **Inbox** | <kbd>A</kbd> | **Approve** the picked item. Not while you're typing in a box. See [The Inbox](../race-control/inbox.md#keys). |
 | **Inbox** | <kbd>D</kbd> | **Decline**, opening the quick replies. |
 | **Inbox** | <kbd>N</kbd> | **Noted**. |
 | **Inbox** | <kbd>S</kbd> | **Later**: moves it to the foot until the race on track finishes (10 minutes at most). Again brings it back. |
+| **Inbox** | <kbd>Delete</kbd> | **Discard** the picked item (for a club note, **Remove**). |
+| **Inbox** | <kbd>1</kbd> to <kbd>7</kbd> | Shows that list, in the order down the side: **All**, **Race-blocking**, **Requests**, **Result queries**, **Crew and notes**, **Club notes**, **Sign-ups**. |
+| **Inbox** | <kbd>V</kbd> | Opens the **Room vote**, while there's one tonight. |
+| **Inbox** | <kbd>H</kbd> | Shows what's **Done**, and again goes back to what's waiting. |
+| **Inbox** | <kbd>Esc</kbd> | From **Details** or the **Done** list, goes back to the list of what's waiting. |
+| **Inbox**, the quick replies after **Decline** | <kbd>1</kbd> to <kbd>9</kbd>, <kbd>O</kbd> | Picks that quick reply, or <kbd>O</kbd> for **Other reason...** |
 | **Inbox** | <kbd>Enter</kbd> | The main answer: **Approve**, or **Noted**. Double-clicking a row does the same. |
 | **Inbox**, **Your own note:** box | <kbd>Enter</kbd> | Adds the note you've typed. |
 
@@ -133,7 +144,7 @@ Click the search box above the **Who's Racing** list (or the big box in **Desk m
 
 ## Move drivers between heats
 
-In the **Move drivers between heats** window (right-click the program on **Race Day → Next Steps** and choose **Move Drivers Between Heats...**):
+In the **Move drivers between heats** window (right-click the run sheet on **Race Day → Next Steps** and choose **Move Drivers Between Heats...**):
 
 | Key | What it does |
 |---|---|

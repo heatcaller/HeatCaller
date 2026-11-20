@@ -8,7 +8,7 @@ The pages covered here are all in the sidebar: **Driver Hub**, **Classes**, **Re
 
 A driver profile ties a transponder to a person. When the decoder reports a transponder, HeatCaller looks up its profile to get the name the announcer says, the class the driver races in, and everything shown on screens and results.
 
-![Driver Hub in its Table view: the roster with each driver's classes, car, transponder and whether they're checked in tonight, and Al Gorithim's card on the right with Edit, Photo and the buttons that open each part of the card](../assets/images/driver-hub.png)
+![Driver Hub in its Table view: nine drivers with their classes, car, transponder and whether they're checked in tonight, and Al Gorithim's card on the right with Edit, Photo and the buttons that open each part of the card](../assets/images/driver-hub.png)
 
 The page has three views: **Card**, **Table** and **Garage**, in the upper left. The page opens on the one you used last. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is across the top of all three.
 
@@ -187,7 +187,7 @@ If racers have their own check-in PINs (see [Online check-in](../online/check-in
 
 ### Profile fields
 
-The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left column holds the organizer's details. The right-hand strip holds the parts that are shown to the crowd.
+The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. Across the top is who the driver is at a glance: their photo, name and number, with **Choose Photo** and **Remove Photo**. Under it the fields are in cards by what they're for: **Who they are**, **Car and class**, **On the PA**, **Their crew**, **Junior**, **Privacy**, **Contact**, **Driver card**, **Records** and **Notes**. On a small screen the cards scroll while **Save** and **Cancel** stay in view.
 
 | Field | What it's for |
 |---|---|
@@ -196,6 +196,8 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 | **Announcer name:** | What the announcer reads instead of their real name: a nickname the crowd knows, or the name spelled the way it sounds, which is how you fix a name the voice says wrong. Leave it blank to use the driver name. It takes effect straight away, and **Hear It** under the box reads it back to you. See [The name the announcer says](#the-name-the-announcer-says). |
 | **Pronouns:** | How the AI commentary refers to them — pick he/him, she/her or they/them, or type their own (like she/they). It's handed to the AI beside their name whenever it writes about them, so it uses these instead of guessing from the name. Leave it blank if you don't know; blank changes nothing. |
 | **About them:** | One line in the driver's own words for the AI commentary, up to 120 characters, for example "racing since I was eight; my dad builds the cars". The commentary is handed it as something they said about themselves. It's never shown publicly. Drivers can ask to change it from their phone (see [Driver requests](../online/driver-requests.md)). |
+| **Their principal:**, **Their tech lead:** | On the **Their crew** card: made-up names for the driver's own Team Principal and Technical Lead. Blank uses the club's. See [Drivers' own crew](../announcer/commentary.md#drivers-own-crew). |
+| **Tonight's goal:**, **Thanks:**, **Car's story:** | Also on **Their crew**, all optional: a few words in their own words for the principal and the Technical Lead, spoken over the PA and the stream. **Tonight's goal:** is said before their race tonight only. |
 | **Active car:** | The car they race in now — the one that's announced and recorded. Pick one of their cars from the list. To add a new car, type its name and click **Add**; it's added to their garage when you save (a name you type but don't add is saved too). To retire a car or give it to someone else, use their [garage](#a-drivers-garage). |
 | **Race number:** | Racing number. Shown as a chip on the driver card, on Race Control, and on the online check-in list. |
 | **Car colour:** | The main color of their car's body. **Choose** picks it; **None** clears it. It goes beside their name on the [stream overlays](../screens/stream-overlays.md), so viewers can tell the cars apart. |
@@ -213,13 +215,15 @@ The dialog is titled **Add Driver Profile** or **Edit Driver Profile**. The left
 | **Rental / loaner transponder** | Marks this transponder as a club loaner. |
 | **Exclude from track records and points** | Keeps the driver out of all-time records and championship points. Use it for guests, staff cars and loaners. |
 | **Visiting from another club** | Marks the driver as a visitor. The announcer's Tonight Open counts these, and only these: "41 drivers across 6 classes, 7 of them visiting". Changes no points or records. See [The top and tail of the night](../announcer/commentary.md#the-top-and-tail-of-the-night). |
+| **Junior:** | **Under 18**, with their age: **Age not set**, **Under 13** or **13-17**. Under it, **A parent or guardian agreed these notes and the about line can be said on the PA and the stream**: without it, a junior's crew notes and about line are kept but never said. See [Drivers' own crew](../announcer/commentary.md#drivers-own-crew). |
+| **On stream:** | For a junior: **Shortened (Mia K)** or **Not at all**, with **A parent or guardian agreed to them appearing on the stream**. Online a junior's name is always shortened. **Not at all** keeps their name off the stream's overlays and the club's captions, keeps lines naming them from listeners at home, and leaves them out of the night-before preview. The PA in the room still says their name. |
 | **Notes:** | Free text. Shown at the bottom of the driver card. |
 | **Team / club:** | The team or club the driver runs under. |
 | **Sponsors:** | Who backs the driver, for example "Kyosho, PN Racing". Shown on the driver card. |
 
 Team and sponsors are also available to announcement templates as `{team}` and `{sponsors}`. See [Voice announcements](../announcer/voice.md).
 
-If the driver has earned any achievements, a **Badges** line appears at the bottom of the dialog.
+If the driver has earned any achievements, a **Badges** line shows in the card at the top of the dialog.
 
 !!! note
     Both **Rental / loaner transponder** and **Exclude from track records and points** stop the driver from setting an all-time track record, and keep them off the records published online.
@@ -296,7 +300,7 @@ If a picture can't be used, a **Photo not added** message says **Couldn't use th
 
 ### Online privacy
 
-Under the profile's fields, the **PRIVACY** group has three ticks on its **Online:** row. They're for a driver, or a parent, who wants less of them on the internet. All three start unticked.
+The **Privacy** card has three ticks on its **Online:** row. They're for a driver, or a parent, who wants less of them on the internet. All three start unticked.
 
 | Tick | What it changes online |
 |---|---|
@@ -304,7 +308,7 @@ Under the profile's fields, the **PRIVACY** group has three ticks on its **Onlin
 | **No podium videos of them** | Always met: since 28 October 2026 no podium video goes on the club's page - they all stay on this PC. The tick is kept so a driver's ask still has somewhere to go. Their own race calls on their private night page aren't affected. |
 | **Initials only ("Sam Parker" shows as "S.P.")** | Everywhere on the club's pages - live, results, standings, schedule, badges, tracks and check-in - they're shown by their initials. Lines the announcer says about them are left out of the captions on the club's page and aren't sent to people listening along from home. Their own night page still uses their full name. |
 
-The hint under them says: "Online is only what goes on the internet: the club's relay pages. In the room those change nothing - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. A driver can ask for them from their phone; only the desk can turn one off. Big Screen keeps their photo off the driver introductions; their name still shows." The **Big Screen:** row under them is the one switch in the group that changes the room; see [Keeping a photo off the Big Screen](#keeping-a-photo-off-the-big-screen).
+The hint under them says: "Online is only what goes on the internet: the club's relay pages. In the room those change nothing - the Wi-Fi pages, the Big Screen and the announcer still use their name and photo. A driver can ask for them from their phone; only the desk can turn one off. Big Screen keeps their photo off the driver introductions; their name still shows." The **Big Screen:** row under them is the one switch in the card that changes the room; see [Keeping a photo off the Big Screen](#keeping-a-photo-off-the-big-screen).
 
 - **A driver can turn them on from their phone; only the desk can turn them off.** From their night page, a driver can ask for any of the three (see [Driver requests](../online/driver-requests.md)). Nothing changes until the desk approves it. A phone can never untick one: to turn one off, untick it here and click **Save**.
 - **It's quick, but not instant.** Once the profile is saved, the club's live pages follow within a few seconds. HeatCaller then re-sends every saved result the driver is in, a few at a time so results from tonight aren't held up. For a driver with a long history this takes a few minutes, and it carries on after a restart if HeatCaller is closed first. The console says "[privacy] A driver's online privacy changed - the club's page is being brought in line." and then "[privacy] The club's page now shows the drivers' latest privacy choices."
@@ -312,7 +316,7 @@ The hint under them says: "Online is only what goes on the internet: the club's 
 
 ### Keeping a photo off the Big Screen
 
-The same **PRIVACY** group has a **Big Screen:** row with one tick, **Keep their photo off it (a young driver, say)**. It starts unticked.
+The same **Privacy** card has a **Big Screen:** row with one tick, **Keep their photo off it (a young driver, say)**. It starts unticked.
 
 - **What it changes.** During the [driver introductions](../screens/big-screen.md#driver-introductions), the Big Screen shows this driver's name, grid spot, number and home club as usual, with their initials in a colored disc where the photo would be. Their name is never hidden.
 - **What it doesn't.** It's for the driver introductions on the Big Screen. Their photo stays everywhere else in the room as before, and the online ticks above are separate.
@@ -391,7 +395,7 @@ A **Points so far** column brings each driver's championship points in with them
 
 A class is the rulebook a group of drivers races under: how qualifying is scored, how many heats count, how big a main is, whether bump-ups happen, what a scrutineer checks, and how the races are run. Every setting is per class, because clubs rarely run two classes the same way.
 
-![The Classes page listing four classes with their Qualifying, Mains, Race Format, Tech and Fee columns, and Add a Class, Edit, Sanctioning Preset and Delete below](../assets/images/classes.png)
+![The Classes page: four classes, 50%, Box Stock, Mod and Stock, with their Qualifying, Mains, Race Format, Tech and Fee columns, and Add a Class, Edit, Sanctioning Preset and Delete below](../assets/images/classes.png)
 
 The **Classes** page lists every class in a grid, so you can compare them side by side:
 
@@ -401,10 +405,10 @@ The **Classes** page lists every class in a grid, so you can compare them side b
 | **Qualifying** | How qualifying is scored, for example "Most laps, then time · best heat" or "Best 3 consecutive · best 2 heats". |
 | **Mains** | Main size and bump-ups, for example "8 per main · top 2 bump up" or "10 per main · no bump-ups". |
 | **Race format** | The class's race format, or "app default", with how a timed race finishes: "then finish the lap" or "stop at the time". If the class has a separate qualifier format, it's shown after `quals:`. |
-| **Tech** | How many items are on the class's tech checklist, or "-" if there's none. |
+| **Tech** | How many items are on the class's tech checklist, for example "6 checks", or "-" if there's none. |
 | **Fee** | The class's own entry fee, and its fee as an extra class if it has one ("$20.00, $10.00 as an extra class"), or "Race day's" when it charges the race day's fees. See [Money at the desk](events-and-entries.md#money-at-the-desk). |
 
-Use **Add a Class**, **Edit** (or double-click a row), **Sanctioning Preset** and **Delete**. You can also reach the same list from a driver profile by clicking **Manage** next to **Class:**.
+Tiles across the top count the **Classes**, how many are **With tech checks** and **With own fees**, and the **Main size** (for example "8 per main", or "8-10 per main" when the classes differ). Use **Add a Class**, **Edit** (or double-click a row), **Sanctioning Preset** and **Delete**. You can also reach the same list from a driver profile by clicking **Manage** next to **Class:**.
 
 When you delete a class, drivers keep the class name on their profile, but it no longer appears in the class list. You can undo a delete with the **Undo** button.
 
@@ -537,7 +541,7 @@ A sanctioning preset applies a governing body's published rules to a class. It o
 To apply one:
 
 1. Select a class on the **Classes** page and click **Sanctioning Preset** (or click the same button inside the class editor).
-2. Pick a preset from the list. The right side explains **WHERE IT CAME FROM**, **WHAT IT SETS** and **WHAT IT DOES NOT SET** — read the last one before you apply it.
+2. Pick a preset from the list. The cards on the right explain it: **Where it came from**, **What it sets** and **What it does not set** — read the last one before you apply it.
 3. Click **Apply to This Class**, check the list of changes, and click **Yes**.
 
 Each preset names the rulebook edition it came from. Check it against your current rulebook before a sanctioned meeting.
@@ -561,7 +565,7 @@ Each preset names the rulebook edition it came from. Check it against your curre
 !!! warning
     - The IFMAR, EFRA and NZRCA off-road presets switch on **Points per round** with **Top qualifier scores:** on that body's 0-point scale. IFMAR and EFRA count fewer rounds when fewer are run, so check **Heats that count:** against your schedule. The ROAR presets are for Level 1-4, which ranks on each driver's single best heat; ROAR's Qual-Points is for Level 5. See [The top qualifier on 0 points](program-and-mains.md#the-top-qualifier-on-0-points-ifmar-and-efra).
     - The IFMAR section, EFRA, NZRCA and Reedy presets set the class's **A-main:** to 3 legs. HeatCaller runs only the A-main in legs, so lower mains that their rules run in legs are run once.
-    - The PNWC preset sets the length of one leg only. It doesn't change the class's **A-main:** setting, so to run PNWC's three-leg A-main, set that yourself (see [Double and triple A-mains](program-and-mains.md#double-and-triple-a-mains)). HeatCaller has no multi-leg lower mains. Read **WHAT IT DOES NOT SET** for each one.
+    - The PNWC preset sets the length of one leg only. It doesn't change the class's **A-main:** setting, so to run PNWC's three-leg A-main, set that yourself (see [Double and triple A-mains](program-and-mains.md#double-and-triple-a-mains)). HeatCaller has no multi-leg lower mains. Read **What it does not set** for each one.
     - If the class was following the app default format, a preset that sets a duration gives the class its own format. Later changes to the app default won't reach it any more. The other settings in that new format start from HeatCaller's built-in values (for example a 3000 ms minimum lap), not from your app default, so check **Format** afterwards.
     - Applied from the **Classes** page, the preset is saved as soon as you click **Yes**. Applied from inside the class editor, it's saved when you click **Save** on the class.
 
@@ -569,11 +573,11 @@ Each preset names the rulebook edition it came from. Check it against your curre
 
 The **Rentals** page keeps track of the club's loaner transponders — who has each one, what deposit you're holding, and above all what hasn't come back yet.
 
-![The Rentals page with the ALL UNITS RETURNED banner and one transponder listed as Available](../assets/images/rentals.png)
+![The Rentals page with the ALL UNITS RETURNED banner, 1 in the box and 0 on loan, and one transponder listed as Available](../assets/images/rentals.png)
 
 A large banner at the top shows **ALL UNITS RETURNED**, or how many are still out (for example **2 UNITS STILL OUT**) with a slow pulse. The sidebar shows the same count as a badge on **Rentals**, so you can see it from any page. Check it before you pack up.
 
-The grid lists units that are out first. Its columns are **Asset Tag**, **Transponder**, **Status** (**OUT**, **Available** or **Retired**), **With**, **Deposit Held**, **Out For**, **Loans** and **Notes**.
+Tiles beside it count what's **In the box**, what's **On loan**, the **Deposits held** and the **Loans all time**. The **Transponders** card lists units that are out first. Its columns are **Asset Tag**, **Transponder**, **Status** (**OUT**, **Available** or **Retired**), **With**, **Deposit Held**, **Out For**, **Loans** and **Notes**.
 
 ### Add a rental unit
 
@@ -604,9 +608,11 @@ The event report also lists any units still out. See [Results and championships]
 
 A venue saves everything specific to one physical track so you can switch it all over with one click — useful if your club races at more than one place.
 
-![The Venues page: two venues listed, and Venue settings for Home Track with its decoder, preferred soundscape and race defaults, and Apply This Venue](../assets/images/venues.png)
+![The Venues page: Home Track and Upstate Mini Z listed, and Home Track's settings with its EasyLap decoder, Classic soundscape and race defaults, and Apply This Venue](../assets/images/venues.png)
 
-Click **New Venue**, then fill in **Venue settings**, beside the list. Changes save as you go (the status line shows **Saved.**).
+The **Venues** card down the left lists each venue as a card: its initials, its name, and what it sets (decoder, track layout, soundscape). The venue applied last is marked **APPLIED**. **New Venue** adds one and **Delete** removes the one picked.
+
+Pick a venue and the rest of the page is about it. Tiles across the top say what applying it sets: **Decoder**, **Track layout**, **Soundscape** ("Left as is" when none is picked) and **Race length** (for example "20 laps or 5 min", or "No limit"). Under them, the **The venue** and **Race defaults** cards hold its settings. Changes save as you go (the line under **Apply This Venue** shows **Saved.**).
 
 | Setting | What it does |
 |---|---|
@@ -614,12 +620,12 @@ Click **New Venue**, then fill in **Venue settings**, beside the list. Changes s
 | **Connect via:** | Which decoder this venue uses. See [Decoders](../timing/decoders.md). |
 | **Preferred track:** | A saved track layout to select, or **(none)**. |
 | **Preferred soundscape:** | A soundscape to apply, or **(none)**. |
-| **Lap limit (0 = none):** | Race default for this venue. |
+| **Lap limit (0 = none):** | On the **Race defaults** card, like the three below: a race default for this venue. |
 | **Time limit, min (0 = none):** | Race default for this venue. |
 | **Minimum lap time (ms):** | Race default for this venue. |
 | **Streak slow-lap multiplier:** | How far a lap can differ from the previous one and still extend a streak. It's converted to the streak window when applied: 1.5 becomes ±50%. |
 
-To use a venue, select it and click **Apply This Venue**, then confirm. HeatCaller then:
+To use a venue, select it and click **Apply This Venue** on the **Apply** card, then confirm. HeatCaller then:
 
 - sets **Connect via:** on the **Connection** page (a venue saved for Next Level Timing, which was retired in 0.50.0, gets the EasyLap decoder, and the console says so);
 - selects the preferred track layout, if it still exists;
@@ -634,7 +640,7 @@ A venue can't be applied while a race or practice is running, since switching th
 
 Mini-Z and RC tracks are rebuilt often, so HeatCaller lets you name and describe each layout. The track layout also holds the all-time lap record for that layout and how many corner marshal posts it needs.
 
-![The Track Layouts page with two layouts listed, one with a 76-tile plan, and the Selected Track card beside it showing that plan, with Add, Edit, Delete, Reset Record and Track Designer below](../assets/images/track-layouts.png)
+![The Track Layouts page with Drift 2.0 and Home Track listed, Drift 2.0 picked with its 76-tile plan on the Selected Track card, Edit Details, Use Tonight, Open in Track Designer and More over it, and its lap record, average, length, marshal and pieces tiles below](../assets/images/track-layouts.png)
 
 The list down the left shows each layout with a picture of its plan (or photo), and under its name how many tiles the plan has and its lap record. The layout tonight's race day races on is marked **Tonight**. Pick one and it fills the rest of the page:
 
@@ -652,7 +658,8 @@ Click **+ New Layout → Name and Photo Only...**, or **Edit Details** for the l
 | Field | What it's for |
 |---|---|
 | **Name:** | Required. |
-| **Track length (ft):** | Optional, for information only. |
+| **Track length (ft):** | Optional. The hint beside it says it "gives Race Analytics its car lengths": with the length and the car scale below, a gap can be counted in car lengths. See [Car lengths](../race-control/results-and-championships.md#car-lengths). |
+| **Car scale:** | The scale of car raced on this layout: **1/8 (buggy, truggy)**, **1/10 (buggy, touring)** (the default), **1/12 (pan car)**, **1/18**, **1/24** or **1/28 (Mini-Z)**. It sets how long a car is when Race Analytics counts a gap in car lengths. |
 | **Average lap time (sec):** | Optional. Used to pace Demo Mode races on this track. See [Practice, ghosts and demo mode](../race-control/practice-and-ghosts.md). |
 | **Corner marshal posts:** | How many marshal posts the layout needs (0–20). **0** means marshals aren't tracked. Posts are named Corner 1, Corner 2 and so on. See [Marshal assignments](program-and-mains.md#corner-marshals). |
 | **Notes:** | Free text. |
@@ -677,9 +684,9 @@ Pick a layout and click **Open in Track Designer** (or, for a new layout, **+ Ne
 
 The **Garage** page shows all the club's cars. One driver's cars are also on their own page, in **Driver Hub** (see [A driver's garage](#a-drivers-garage)). Both show the same cars.
 
-The **Garage** page shows the club's cars as cards, grouped under their class. A car with a photo shows it; one without gets a plate with its number. **Show:** picks whose cars are on the wall (**Everyone's cars**, **The club's own cars**, or one driver's), and **Include retired** adds retired cars. The buttons under the wall are **Add a Car**, **Chassis Types** (the list of chassis a car can be), **Chassis Sheets** (see [Chassis sheets](#chassis-sheets)) and **Club Batteries** (see [Club batteries](#club-batteries)).
+The **Garage** page shows the club's cars as cards, grouped under their class. A car with a photo shows it; one without gets a plate with its number. Tiles count the **Cars**, **Classes**, **Retired** cars and **Setups logged**. On the **Which cars** card, **Show:** picks whose cars are on the wall (**Everyone's cars**, **The club's own cars**, or one driver's), and **Include retired** adds retired cars. The **Garage** card has **Add a Car**, **Chassis Types** (the list of chassis a car can be), **Chassis Sheets** (see [Chassis sheets](#chassis-sheets)) and **Club Batteries** (see [Club batteries](#club-batteries)).
 
-![Garage page: Everyone's cars, grouped under Box Stock 2, Mod 2 and Stock 6, some with photos and the rest on plates with their initials, with Add a Car, Chassis Types, Chassis Sheets and Club Batteries below](../assets/images/garage.png)
+![Garage page: Everyone's cars, 10 cars in 3 classes, grouped under Box Stock 2 with the cars on plates with their initials and Mod 2 with photos, with Add a Car, Chassis Types, Chassis Sheets and Club Batteries below](../assets/images/garage.png)
 
 Click a car to open it. Across the top is the car: a small picture, its details, and the buttons **Edit**, **Photos** and **More**. **More** holds **Lend Out**, **Transfer** (see [Transfer a car](#transfer-a-car)), **Retire** and **Delete Car**. Under that is every setup logged for the car.
 
@@ -727,7 +734,7 @@ When there are any left, the **Garage** page has a **Setups Without a Car** butt
 
 ### Club batteries
 
-**Club Batteries** on the **Garage** page lists the club's own packs, with how many **Sessions** each has run on and whose car each is **In the car of**. **Add Pack**, **Edit**, **Retire** (or **Bring Back**), **Transfer** and **Delete** work as on a driver's [Batteries tab](#a-drivers-batteries), and can be undone. **Transfer** gives a pack to a driver for good.
+**Club Batteries** on the **Garage** page opens the **Club Batteries** window. Its **The club's packs** card lists the club's own packs, each saying how many sessions it has run and whose car it's in now ("in the car of Sam", or "in nobody's car"). A retired pack is marked **RETIRED**. **Add Pack**, **Edit**, **Retire** (or **Bring Back**), **Transfer** and **Delete** work as on a driver's [Batteries tab](#a-drivers-batteries), and can be undone. **Transfer** gives a pack to a driver for good.
 
 Any driver can run a club pack: put it in their car on their **Batteries** tab, at check-in, on **Race Control** or from the phone. No loan is recorded; the sessions run on it say who had it.
 
@@ -752,6 +759,6 @@ In the sheet editor (**Chassis Diagram**):
 - **Free text**
 - **Yes / no tickbox**
 
-For the dropdown and checklist kinds, build the **Options:** list with **Add**, **Rename**, **Remove**, **Move Up** and **Move Down**.
+For the dropdown and checklist kinds, build the list on the **Options** card with **Add**, **Rename**, **Remove**, **Move Up** and **Move Down**.
 
 Because setup values are stored as text, you can edit a sheet's fields later without losing setups already saved against it.

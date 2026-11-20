@@ -5,7 +5,7 @@ The **Race Control** page is where you run every race: you pick what's about to 
 !!! note
     HeatCaller runs its own race control, reading the decoder (EasyLap or I-Lap) directly. See [Decoders](../timing/decoders.md).
 
-![The Race Control page during a demo race: the Green flag lit, the clock at 01:05 under GREEN FLAG with 3 LAPS TO GO, the Now and Next bar, and seven drivers on the leaderboard with their laps, gaps, last and best laps and streaks, with Auto start on below](../assets/images/race-control-racing.png)
+![The Race Control page during a demo race: the Green flag lit, Race Running in the Now and Next bar, the clock at 01:03 with 4 LAPS TO GO under GREEN FLAG, and seven drivers on the leaderboard with their laps, gaps, last and best laps and streaks, with Auto on below](../assets/images/race-control-racing.png)
 
 ## The page at a glance
 
@@ -45,15 +45,15 @@ Once a race is finished, the row is for the gap before the next one: what the an
 
 | Button | What it does | Key |
 |---|---|---|
-| **Skip** | A click stops the line on air and moves the show on to its next part (the On Air bar names it at its right, for example "Skip: Race Recap"): a recap goes on to the honors, the gap to its next line. Press and hold for a second to end the whole recap show, as the **Broadcast** window's **Skip** does. Grayed out when nothing is on air. | <kbd>F9</kbd> (a click) |
-| **Hold Talk** | Stops everything between races: the commentary's lines, sponsor reads, the hand-over, call-ups and the automatic countdown. It turns amber and reads **Resume Talk** until you press it again, and the On Air bar says "Between-race talk held - press Resume Talk or F10". Let go, talk picks up after the **Space between lines**, not the instant it comes off. The race itself is never held: flags, the countdown to green and the finish calls still play. With commentary on, it's the same hold as the **Broadcast** window's **Hold**, so either shows on both. | <kbd>F10</kbd> |
+| **Skip** | A click stops the line on air and moves the show on to its next part (the On Air bar names it at its right, for example "Skip: Race Recap"): a recap goes on to the honors, the gap to its next line. Press and hold for a second to end the whole recap show, as the **Broadcast** window's **Skip** does. While On Air is opening the next race, holding it skips On Air and stages the race instead, the same as holding <kbd>0</kbd>: the strip under the row says "Keep holding to skip On Air and stage now". Grayed out when nothing is on air. | <kbd>F9</kbd> (a click) |
+| **Hold Talk** | Stops everything between races: the commentary's lines, sponsor reads, the hand-over, call-ups and the automatic countdown. It turns amber and reads **Resume Talk** until you press it again, and the On Air bar says "Between-race talk held - press Resume Talk or F10." Let go, talk picks up after the **Space between lines**, not the instant it comes off. The race itself is never held: flags, the countdown to green and the finish calls still play. With commentary on, it's the same hold as the **Broadcast** window's **Hold**, so either shows on both. | <kbd>F10</kbd> |
 | **Call Up** | Calls up the next race now, and the marshals with it when **Marshals to their posts** is ticked. Grayed out when the program has nothing next. A second press while the last call-up is still waiting to be said, or within 30 seconds of it, says nothing: the console answers, for example, "Already called up A-Main 7s ago." Right-click it for **Push the next race back 1 minute** (its run-sheet time, the countdown and the next call-up move with it), **Call up two races out**, **Marshals only** and **Not checked in**. | <kbd>F12</kbd> |
 | **Edit Result** | Opens the race just run in **Race History** with **Edit Result** open. | |
 | **Reset** | Press and hold, as always. Takes the row back to the set before the green. | <kbd>F7</kbd> |
 
 **Inbox** is the one button that follows the desk rather than the race. It's cyan, at the end of the row, and only there while something is waiting for the desk: drivers' requests from their phones, club notes from the room or online sign-ups, with a badge saying how many. The badge is red only while something holds up the next race (a driver asking for **More time** or **Skip my race**, a marshal swap, or a result query inside its protest window), and dark otherwise. Click it to open the [Inbox](inbox.md) and answer them. When the last one is answered it goes, and the other buttons close up again. (It was **Requests** until 15 November 2026, and **Desk** before that.) With a full row on a narrow window it goes on a line of its own and the card grows to hold it.
 
-**Next Heat** and **Results** used to be on this row. **Next Heat** did what **Start Next** on the Next Up bar does, and **Results** opened the same race as **Edit Result**, so both went on 31 Oct 2026 to make room. What the gap says, and how often, is set on the **Between races** card (see [Between races](../announcer/commentary.md#between-races)). To keep the old row (**Edit Result** and **Reset**, with **Stage** when nothing is next in the program), untick **Show Skip, Hold Talk and Call Up on the flag row after the flag** on that card. The keys work either way.
+**Next Heat** and **Results** used to be on this row. **Next Heat** did what **Start Next** on the Next Up bar does, and **Results** opened the same race as **Edit Result**, so both went on 31 Oct 2026 to make room. What the gap says, and how often, is set on the **Between races** card (see [Between races](../announcer/commentary.md#between-races)). To keep the old row (**Edit Result** and **Reset**, with **Warm-up** and **Stage** when nothing is next in the program), untick **Show Skip, Hold Talk and Call Up on the flag row after the flag** on that card. The keys work either way.
 
 The phone remote has the same three under **BETWEEN RACES**: **SKIP**, **HOLD TALK** and **CALL UP**.
 
@@ -194,9 +194,11 @@ With a warm-up set, pressing **Stage** (or **Quick Race**) between races opens t
 
 The warm-up is a flag of its own. While it's open the **Warm-up** button is lit, the flag shows as **Warm-up** in blue, and the phone pages show the warm-up flag. When it ends, the flag that was out before it comes back.
 
-**The Warm-up button.** The first button on the flag row before the green. It opens a warm-up whether or not the format has one: the format's length, or two minutes if it has none. It doesn't open one over a race that's staged, counting down or running; the log says why.
+**The Warm-up button.** The first button on the flag row before the green. It opens a warm-up whether or not the format has one: the length picked on the **Warm-up** switch's right-click menu (below), else the format's length, or two minutes if it has none. It doesn't open one over a race that's staged, counting down or running; the log says why.
 
 **Warm-up: Off | On.** At the foot of the leaderboard, beside **Start:**. Switched **On**, every start opens a warm-up first: **Start Next**, **Auto start**, the program's **Start**, <kbd>F1</kbd>, the phone, **Stage** and **Quick Race**. With **Start:** on **On Air** too, On Air's opening comes first, then the warm-up. It's **Off** by default, and a format with a warm-up still has one either way.
+
+**How long the warm-up runs.** Right-click the **Warm-up: Off | On** switch to pick its length: **Warm-up length: the race format's** (the format's own, or two minutes when it has none), or **Warm-up length: 1 min**, **1:30**, **2 min**, **3 min**, **5 min** or **10 min**. Picking a length switches **Warm-up** on. From then on, whenever a warm-up is wanted (the switch, or the **Warm-up** button), the length you picked is used in place of the format's, and it's remembered from night to night. Pick **the race format's** to go back. The log says, for example, "Warm-up first is on - 3 min of free laps before every race from now on."
 
 **Reset** cancels a warm-up. A warm-up never opens during practice, or over a race that's staged, counting down or running.
 
@@ -342,7 +344,7 @@ Rejected passes:
 Set the minimum a little under the quickest real lap anyone could do on your track.
 
 !!! tip
-    The first counted pass after the green is the start lap. Its time runs from the green to the line, so it counts toward the lap total but never counts as a best lap. In the lap breakdown it's labeled **START**.
+    The first counted pass after the green is the start lap. Its time runs from the green to the line, so it counts toward the lap total but never counts as a best lap. In the lap breakdown it's labeled **Start**.
 
 ## The leaderboard
 
@@ -460,7 +462,8 @@ A car that's broken, or a driver who's gone home: right-click the Next Up bar (b
 
 After each race, HeatCaller counts down a gap and starts the next race by itself, so nobody has to press **Start Next**. It's on by default. The switch is at the foot of the leaderboard: **Auto: Off | On**.
 
-- **When it counts.** From the checkered flag of a race on the program. It doesn't count after a demo, a Quick Race or a race kept on its own, and it doesn't start the first race of the night. The gap is 2:30 unless you choose another: right-click the switch for 1:30 to 5:00.
+- **When it counts.** From the checkered flag of a race on the program. It doesn't count after a demo, a Quick Race or a race kept on its own, and it doesn't start the first race of the night. The gap is 2:30 unless you choose another: right-click the switch and pick a **Gap between races:** from 1:30 to 5:00.
+- **The count runs to the green.** When the start opens a warm-up, or runs staging and the countdown by itself, **NEXT**, the Big Screen and the phones count to the moment the race goes green, not to the moment it starts: the warm-up's length is added, and so are the format's **Stage (s):** and **Countdown (s):** for the steps that move on by themselves. With the announcer speaking, those steps follow the calls, so the time is the format's best estimate.
 - **The call-ups follow it.** The call-ups are timed to the real start, whether or not the timetable has times, and so is the spoken countdown ("one minute") when it's ticked on the **Between races** card. Phones show the start time too.
 - **A rest for back-to-back drivers.** When a driver in the next race raced too recently (two classes, or a bump-up), that race waits an extra 2 minutes, and **NEXT** says who the rest is for. "Too recently" is closer than **Races off between a driver's races:** on **Setup** allows: with 1 (the default), the race just run; with 2 or 3, any of the last 2 or 3. With 0 there's no rest.
 - **Planned breaks.** A break planned on **Setup**, such as watering the track after Q2, is added to the gap before the race that follows, and the announcer says it as it begins: "Time for a 10-minute break - water the track. Racing starts again about 20:40." See [Planned breaks](../race-day/program-and-mains.md#planned-breaks).
@@ -476,7 +479,7 @@ After each race, HeatCaller counts down a gap and starts the next race by itself
 - **The start itself** is **Start Next**'s, so it goes through On Air when **Start:** is on **On Air**, and it never runs a step that's owed first. When bump-ups or the finals are due, the count stops and **Start Next** offers them for you to do.
 - **Off is for tonight only.** Switch it off and races wait for **Start Next** until tomorrow's racing. To keep it off, right-click the switch and choose **Off until I switch it on again**.
 - **On the Big Screen**, the countdown band says "NEXT RACE IN 1:42" between races, "NEXT RACE AT 20:40" while a race waits for its time, "NEXT RACE ON HOLD" while it's held, and "NEXT RACE SOON" at zero. A missing car isn't named there.
-- **From the phone:** the remote's **HOLD START** and **+1 MIN** (see [Phone remote](../screens/phone-and-web.md)). A driver can ask the desk for 5 more minutes or to be skipped, and once you approve, the count moves or they come out of the race (see [More time, or skip my race](../online/driver-requests.md#more-time-or-skip-my-race)). A driver whose race is about 5 minutes away gets a "Your race is in about 5 minutes" alert on their phone.
+- **From the phone:** the remote's **HOLD START** and **+1 MIN** (see [Phone remote](../screens/phone-and-web.md)). A driver can ask the desk for 5 more minutes or to be skipped, and once you approve, the count moves or they come out of the race (see [More time, or skip my race](../online/driver-requests.md#more-time-or-skip-my-race)). A driver whose race is about 5 minutes away gets a "Your race is in about 5 minutes" alert on their phone. To let a deputy run the starts from their phone while you race, right-click the switch and choose **Hand the Desk to a Phone...**: it shows the phone remote's QR code to scan.
 
 If something is owed before the next race can go out, the bar says so in place of the next round and the button does it instead: **Move the top finishers up** when a lower main has finished and its bump-ups are due, or **Build the finals from qualifying** when a class has finished qualifying. That way the upper main can't go out before its bump-ups. See [Program and mains](../race-day/program-and-mains.md#the-next-step-card).
 
@@ -511,7 +514,7 @@ Mission Control puts every check that matters before a green flag in one window,
 
 Open it with the **Mission Control** button at the bottom of the clock column, from **Connection → Mission Control**, or from **Mission Control** in the **Pre-race check** window. It isn't a dialog: it can stay open beside Race Control, or on a second screen, all night. It checks everything again once a second. Opening it again brings the open one to the front.
 
-![Mission Control reading "1 problem to fix before the green, and 1 to keep an eye on.": the Decoder tile red for a decoder that is not connected, Next race amber at 0 of 7 heard, and the Timing, Transponders, Website, Sound, Cloud Backup and Allowances tiles green](../assets/images/mission-control.png)
+![Mission Control reading "2 problems to fix before the green, and 1 to keep an eye on.": the Decoder tile red for a MyLaps P3 that is not connected, Cloud Backup red with Copy failed, Next race amber at 3 of 8 heard, Split Loop dimmed at Off, and the Cars heard, Timing, Transponders, Website, Sound and Allowances tiles green](../assets/images/mission-control.png)
 
 The headline over the tiles sums it up: "All clear. Ready to race.", "Ready to race - 2 to keep an eye on." or "1 problem to fix before the green."
 

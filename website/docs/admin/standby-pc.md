@@ -52,7 +52,7 @@ The standby's card, and the **Next Up** bar on its Race Control page, then show 
 
 When the timing laptop can't carry on:
 
-1. On the standby, open **Backup & Restore** and press **Take Over...** in the **Standby PC** card.
+1. On the standby, open **Backup & Restore** and press **Take Over** in the **Standby PC** card.
 2. The question says how old the copy is. Anything the timing laptop saved after that isn't on the standby, so check the last race's result once you're running.
 3. Press **Yes**. HeatCaller saves the standby's current data to a safety backup, puts the copy in place and restarts.
 4. Connect the decoder to the standby. If a race was running, HeatCaller offers to carry on with it.
