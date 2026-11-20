@@ -1,6 +1,8 @@
 # Looks and the club logo
 
-A look is the set of colors HeatCaller paints with. You choose one look for the app on the laptop and one for the crowd screens (the Big Screen, the Wi-Fi pages and your club's online pages), or let the screens match the app. This page also covers the club logo and the **Appearance** options. They're all on the **Themes** page, which has no tabs: its **Looks**, **Club logo** and **Appearance** cards are all on the one page.
+A look is the set of colors HeatCaller paints with. You choose one look for the app on the laptop and one for the crowd screens (the Big Screen, the Wi-Fi pages and your club's online pages), or let the screens match the app. This page also covers the club logo and the **Appearance** options. They're all on the **Themes** page, which has no tabs: its **Looks**, **Crowd screens**, **Club logo** and **Appearance** cards are all on the one page.
+
+Four tiles across the top show what's in use: **App look** (with an arrow to the next one, such as "Midnight → Paddock", while a new look waits for a restart), **Crowd screens** (the look they're showing), **Your looks** (how many you've made) and **Club logo** (where it shows: **App and screens**, **In the app**, **On the screens** or **Online pages**, or a dash with no logo).
 
 You can open the page in two ways:
 
@@ -11,7 +13,7 @@ Typing `look`, `theme`, `colour`, `color`, `dark mode`, `light mode`, `synthwave
 
 How the app sounds, rather than how it looks, is on **Sounds → Soundscapes**, which was the **Announcer Style** tab on this page before 0.56. See [Soundscapes](../announcer/sounds-and-music.md#soundscapes).
 
-![The Themes page: the Looks card with Synthwave in use for the app and the crowd screens, its preview beside the list, and Crowd screens below](../assets/images/themes.png)
+![The Themes page: Synthwave in use for the app and the crowd screens, marked App and Screens in the Looks list, with its preview beside the list and New Look below](../assets/images/themes.png)
 
 ## Where a look applies
 
@@ -81,7 +83,7 @@ A new install starts on the look picked on the **Look** step of the **Welcome to
 
 ## Choose the crowd screens' look
 
-Pick the look in **Crowd screens:**, under the buttons in the **Looks** card, or select a look in the list and click **Use for Crowd Screens**. Both do the same thing. There's no restart and no Save button.
+Pick the look in **Crowd screens:**, on the **Crowd screens** card under the **Looks** card, or select a look in the list and click **Use for Crowd Screens**. Both do the same thing. There's no restart and no Save button.
 
 The first choice in the list is **Match the app**, with the name of the look the app is running in brackets, for example **Match the app (Midnight)**. It follows the look the app is running now, not one waiting for a restart.
 

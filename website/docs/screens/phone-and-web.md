@@ -4,7 +4,7 @@ HeatCaller has a small web server built in. Turn it on from the **Local Screens*
 
 These pages work only on the venue's own network, with no internet needed. To publish results and check-in to the internet, use the online relay instead; see [The online relay](../online/index.md). The race-day manager can also be reached over the relay if the club turns that on - see [Race-day manager](#race-day-manager) below.
 
-![The Local Screens page with the server stopped: Port and PINs, Start Server, the Race-day manager card, and the addresses waiting to be filled in](../assets/images/local-screens.png)
+![The Local Screens page with the server stopped: the Port and hidden PINs, Start Server and Set up phone pages, and the Race-day manager (phone) card below](../assets/images/local-screens.png)
 
 ## Before you start
 
@@ -21,7 +21,9 @@ These pages work only on the venue's own network, with no internet needed. To pu
 5. In **Manager PIN:**, enter a PIN of six or more digits if you want the race-day manager reachable from a phone. Leave it blank to leave the manager closed - unlike the check-in PIN, a blank Manager PIN does not open the manager to anyone.
 6. Click **Start Server**, at the foot of the **Server** card.
 
-The status beside the buttons changes from "Stopped" to "Running on port *n* - stop the server to change the port or PINs", and the five addresses on the **Open these on your phone, tablet, or in OBS** card fill in.
+The status beside the buttons changes from "Stopped" to "Running on port *n* - stop the server to change the port or PINs", and the addresses on the **Phone and tablet pages** and **Streaming in OBS** cards fill in.
+
+Four tiles at the top of the page show where things stand: **Server** (**Running** or **Stopped**), **Address** (the laptop's address and port, as you'd read it out to someone typing it into a phone), **Remote PIN** (**Set**, or **Not set** in the warning color) and **Stream overlays** (how many layouts there are to pick, and how many are your own).
 
 While the server is running, you can't change the port or the PINs. Click **Stop Server**, make the change, and start it again.
 
@@ -67,15 +69,24 @@ The PINs are stored encrypted on the laptop. See [Where HeatCaller keeps your da
 
 ## The addresses
 
-When the server is running, the page lists one address for each page:
+When the server is running, the page lists one address for each page, on two cards. The **Phone and tablet pages** card has the pages for phones:
 
 | Caption | Address | Buttons |
 |---|---|---|
 | **Phone remote:** | `http://<laptop address>:<port>/remote` | **Copy**, **QR code** |
 | **Driver check-in:** | `http://<laptop address>:<port>/checkin` | **Copy**, **QR code** |
 | **Race manager:** | `http://<laptop address>:<port>/manage` | **Copy**, **QR code** |
+
+The **Streaming in OBS** card under it has the pages to paste into OBS as a **Browser** source:
+
+| Caption | Address | Buttons |
+|---|---|---|
+| **Stream overlay:** and **Its address:** | The layout you pick, and its address. See [Stream overlays](#stream-overlays). | **Edit**; **Copy**, **Preview**, **Phone view** |
+| **Junior drivers:** | How an under-18's name shows on the stream. | |
 | **OBS overlay:** | `http://<laptop address>:<port>/overlay` | **Copy** |
 | **Broadcast graphics:** | `http://localhost:<port>/broadcast` | **Copy** |
+
+**Stream overlay:** is the one to use for a new OBS source. The **OBS overlay:** and **Broadcast graphics:** addresses still work, for sources already set up.
 
 HeatCaller works out the laptop's address on the local network for you (usually something like `192.168.1.20`). If an address says `localhost`, the laptop isn't connected to a network phones can reach.
 
@@ -259,18 +270,20 @@ The overlay, the phone remote and the check-in page all use the crowd-screen loo
 
 ## Other settings on this page
 
+At the foot of the page are two smaller cards, side by side when there's room: **Big Screen** and **Off this Wi-Fi**.
+
 | Setting | What it does |
 |---|---|
 | **Choose Web Columns** | Picks the columns on the OBS overlay and the remote's table. The live board on the club's website uses them too, until you choose its own with **Choose Live Board Columns** on the **Club Website** page (see [Choose the leaderboard columns](big-screen.md#choose-the-leaderboard-columns)). A transponder column never goes online. |
 | **Choose Big Screen Columns** | Picks the columns on the Big Screen window. |
 | **Open Big Screen** | Opens the Big Screen window. |
-| **Club Website Settings** | Opens the **Club Website** page. |
+| **Club Website Settings** | Opens the **Club Website** page. On the **Off this Wi-Fi** card. |
 
-Column changes apply to the web pages immediately, and to the Big Screen the next time it's opened. See [The Big Screen and sponsors](big-screen.md).
+The first three are on the **Big Screen** card. Column changes apply to the web pages immediately, and to the Big Screen the next time it's opened. See [The Big Screen and sponsors](big-screen.md).
 
-A note on the page says the Big Screen and these pages use the crowd-screen look, which is set on the **Themes** page. The **Use the Synthwave palette on the Big Screen** checkbox of earlier versions has gone; choose **Synthwave** there instead.
+A note on the **Big Screen** card says the Big Screen and these pages use the crowd-screen look, which is set on the **Themes** page. The **Use the Synthwave palette on the Big Screen** checkbox of earlier versions has gone; choose **Synthwave** there instead.
 
-Near the bottom, one line tells you whether the club's online relay is publishing. When it's off, it reads "Online publishing is off. These pages are reachable only from this Wi-Fi, and results stop being visible when this laptop closes." See [Setting up online publishing](../online/setup.md).
+On the **Off this Wi-Fi** card, one line tells you whether the club's online relay is publishing. When it's off, it reads "Online publishing is off. These pages are reachable only from this Wi-Fi, and results stop being visible when this laptop closes." See [Setting up online publishing](../online/setup.md).
 
 ## Security
 

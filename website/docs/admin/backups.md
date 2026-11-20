@@ -2,7 +2,20 @@
 
 A backup is a single `.zip` file holding everything HeatCaller has saved: driver profiles, classes, race history, championships, track layouts, sounds, soundscapes and their recorded voice lines, your own looks, the club logo, all your settings, and the Big Screen's own ON AIR switch. Use the **Backup & Restore** page to make one by hand, to have HeatCaller make them automatically, and to restore one, including onto a new laptop.
 
-![The Backup & Restore page: Manual backup and restore, Automatic backups copying to OneDrive and up to date, and the Backup password card](../assets/images/backup-restore.png)
+![The Backup & Restore page: the last backup yesterday and 16 in the folder, Manual backup and restore, Automatic backups every 7 days, and Cloud copies to OneDrive showing Copy failed because no backup password is set](../assets/images/backup-restore.png)
+
+## The page at a glance
+
+Four tiles across the top of **Backup & Restore** say how things stand before you read any further:
+
+| Tile | What it shows |
+|---|---|
+| **Last backup** | When the last backup was made, for example "Today, 9:04 PM", "Yesterday, ..." or a date, or "Never". |
+| **Backups in folder** | How many backups are in the backup folder, or "None". |
+| **Cloud copies** | The same words, in the same color, as the light on the **Cloud copies** card (see [Copies in the cloud](#copies-in-the-cloud)). |
+| **Standby PC** | "Off", "Timing PC" (this laptop lets a standby copy it), "Standby, copy ... old" or "Standby, no copy yet" (this laptop is the standby), or "Took over". See [Standby PC](standby-pc.md). |
+
+Under the tiles, the cards come in this order: **Manual backup and restore**, **Automatic backups**, **Cloud copies** and **Backup password**; then **Standby PC**, **Default settings**, **Getting help** and **Updates**; and **Existing backups** last. On a wide window they sit two across. Each backup in the **Existing backups** list shows its date, whether it was made **AUTOMATIC** or **BY HAND**, its size and its file name.
 
 ## What's in a backup
 
@@ -84,7 +97,7 @@ It uses each service's own Windows app, which you install and sign in to once:
 | iCloud Drive | iCloud for Windows (from the Microsoft Store) |
 | OneDrive | Built into Windows. Sign in from the OneDrive icon by the clock. |
 
-Then, on **Backup & Restore**, on the **Automatic backups** card, tick the services under **Also copy every backup to:**. Press **Check Again** after installing one.
+Then, on **Backup & Restore**, on the **Cloud copies** card, tick the services under **Also copy every backup to:**. Press **Check Again** after installing one.
 
 - Every backup gets copied: automatic ones and **Back Up Now**.
 - Copies go in a **HeatCaller Backups** folder at the top of your Drive, iCloud Drive or OneDrive. The service's app uploads them whenever the laptop is online, so an offline race night is fine.
@@ -228,7 +241,8 @@ To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of
 ## The other cards on the page
 
 - **Standby PC** lets a second laptop on the track's network keep a copy of this one's race data and take over by hand if this one dies. See [Standby PC](standby-pc.md).
-- **Default settings** has **Restore Default Settings...** and **Put Back Earlier Settings...**, which reset the tuning settings without touching your drivers, results or keys. See [Default settings](#default-settings) below.
+- **Default settings** has **Restore Default Settings** and **Put Back Earlier Settings**, which reset the tuning settings without touching your drivers, results or keys. See [Default settings](#default-settings) below.
+- **Updates** says which version this PC is on, has **Check for Updates**, and the **Look for updates by itself every few hours** switch. See [Updates](../getting-started/install.md#updates).
 - **Getting help** has **Save Support Info** (below), **About HeatCaller** (the version, and the licenses of the components HeatCaller ships) and **License and Privacy** (the license agreement and privacy notice you accepted). It also has **Send HeatCaller anonymous usage totals**, ticked to begin with in the United States only: see [Usage totals](#usage-totals) below.
 
 ## Usage totals
@@ -256,7 +270,7 @@ Use the **Default settings** card if a change to a setting has broken something,
 ### Restore default settings
 
 1. Open **Backup & Restore**.
-2. On the **Default settings** card, click **Restore Default Settings...**.
+2. On the **Default settings** card, click **Restore Default Settings**.
 3. Read what goes back and what's kept. The tuning settings go back to how HeatCaller ships: sounds, voice, AI commentary, race format tuning, the cast beyond the announcer and co-host, and the like. To reset the everyday settings too, tick **Also reset the everyday settings (track, lap count, voice, volumes, look)**.
 4. Click **Restore Defaults**.
 
@@ -276,7 +290,7 @@ It's not offered while a race or practice is running, because it restarts the ap
 
 Each restore first saves your settings to a dated copy in the `Settings Backups` folder in HeatCaller's data folder, so it travels in your backups. The last 10 copies are kept.
 
-1. On the **Default settings** card, click **Put Back Earlier Settings...**.
+1. On the **Default settings** card, click **Put Back Earlier Settings**.
 2. Pick a copy by its date.
 3. Click **Put Back**.
 

@@ -24,7 +24,22 @@ Corrections made on the **Race Control** board after the checkered flag change t
 
 ## Race History
 
-The **Race History** page lists every saved session on the left, with **Date**, **Type**, **Track** and **Label**. Click a session to see its results on the right: **Pos**, **Driver**, **Car**, **Laps**, **Fastest Lap** and **Warnings**, plus **Handicap Pos** when the class uses handicaps, and **Best Sectors** and **Ideal Lap** when the session was run with a [split loop](../timing/decoders.md#a-split-loop). **Warnings** shows "-", the number of warnings a driver was given in the race (for example "⚠ 2"), or "Black flag" with the count when one of them was a black flag; hover over it to see each warning.
+The **Race History** page has its buttons in one bar across the top, the **Sessions** card down the left, and the **Results** card taking the rest of the width.
+
+**Sessions** opens with a month calendar. Every night with saved sessions has a dot under its date and can be clicked; the other days are grayed out. Click a night and its sessions are listed under the calendar, with a line such as "Friday 14 Nov · 6 sessions". Each session shows **When** (its start time) and **Session** (its type and name, for example "Race · Stock A-Main"); hover over one for the full date, time and name. Tick **Every night** to list every saved session instead, with the date in **When**. With the calendar picked, <kbd>Left</kbd> and <kbd>Right</kbd> go to the night before or after, <kbd>Page Up</kbd> and <kbd>Page Down</kbd> go back or on a month, and <kbd>Home</kbd> goes to the latest night.
+
+A night runs from 6 a.m. to 6 a.m., so mains that ran past midnight stay on the night they belong to. Opening the page shows the latest night, and one session is always picked, so the results are never blank.
+
+Four tiles over the results sum up the race picked: **Winner** (with their laps; **Handicap winner** in a class with handicaps), **Fastest lap** and who set it, **Best ideal lap** (with a split loop) and **Warnings** (how many, and how many drivers had them).
+
+The results show **Pos**, **Driver**, **Car**, **Laps**, **Fastest Lap** and **Lap Times**. The race's fastest lap is picked out in its **Fastest Lap** cell. **Lap Times** draws each driver's laps as a line, quicker laps higher, all on the same scale so the lines can be compared, with a dot on their best lap; hover over it for their lap count and best lap. Some columns only appear when the race needs them:
+
+- **Handicap Pos** when the class uses handicaps.
+- **Warnings** when anyone was warned: the number of warnings a driver was given (for example "⚠ 2"), or "Black flag" with the count when one of them was a black flag. Hover over it to see each warning.
+- **Best Sectors** and **Ideal Lap** when the session was run with a [split loop](../timing/decoders.md#a-split-loop). Each best sector is shaded by how close it came to the race's best through that sector.
+- **Class Place** for a heat shared by more than one class: each driver's class and their place in it.
+
+In a narrow window, **Lap Times** goes first and then **Car** (it's still in the hover over the driver's name), so the results fit without scrolling sideways. They come back when there's room.
 
 A saved demo race shows **Demo** as its type, and its detail title reads "Demo race (not scored)". A race brought in with **Paste a Result** shows **Imported**, and its detail title reads "Imported from LiveRC (not scored)", or "Imported from another results page (not scored)" when it wasn't copied from LiveRC.
 
@@ -34,7 +49,9 @@ After the checkered flag, **Edit Result** on Race Control's flag row opens the r
 
 Below the results is a notes box, for the weather, the track surface, incidents or anything else worth remembering. Notes are saved when you click away from the box, or when you close HeatCaller.
 
-![Race History listing saved demo races, none selected yet, with the results columns and the action buttons below, from Replay to Delete Session](../assets/images/race-history.png)
+![Race History with Sunday 15 Nov picked on the calendar and its 5:20 PM demo session selected: the Winner, Fastest lap, Ideal lap and Warnings tiles, and five drivers' results with their fastest laps, best sectors and ideal laps, under the buttons from Replay to Paste a Result and Delete Session](../assets/images/race-history.png)
+
+The buttons, left to right across the top: **Replay**, **Pace**, **Share Results Card**, **Event Report**, **Print Results**, **Export Results**, **Export Session**, **Edit Result** and **Paste a Result**, with **Delete Session** on its own at the right-hand end. In a narrow window the bar wraps onto a second line.
 
 | Button | What it does |
 |---|---|
@@ -49,7 +66,7 @@ Below the results is a notes box, for the weather, the track surface, incidents 
 | **Edit Result** | Corrects a saved race: laps, time and lap penalties, or an outcome such as DNF or DQ, with a reason. Needs **Allow corrections to saved results** ticked on **Local Screens**. You can undo this. See [Correcting a saved result](corrections-and-recovery.md#correcting-a-saved-result). |
 | **Delete Session** | Deletes the selected sessions after you confirm. A heat whose race you delete goes back to unrun on the race program, so it can be run again. You can undo this. |
 
-Right-click a driver in the results and choose **Report Card for *name*...** for that driver's report card for the night of that race: their best and ideal lap, their driver rating (out of 150), consistency, the sector that costs them most, how they compare with last time on the layout, what a setup change logged that night did to their pace, and how far off the quickest driver they raced with they were. It's the full card, setup line included, since it's on the club's own laptop. See [The report card](../screens/phone-and-web.md#the-report-card) for each line. "Nothing to report for that night - no laps were filed for this driver." means there's nothing saved to work it out from.
+Right-click a driver in the results and choose **Report Card for *name*...** for that driver's report card for the night of that race: their best and ideal lap, their driver rating (out of 150), consistency, the sector that costs them most, how they compare with last time on the layout, what a setup change logged that night did to their pace, and how far off the quickest driver they raced with they were. It's the full card, setup line included, since it's on the club's own laptop. See [The report card](../screens/phone-and-web.md#the-report-card) for each line. "Nothing to report for that night - no laps were filed for this driver. The card fills in from the laps of a night they raced." means there's nothing saved to work it out from.
 
 The card opens in its own window with **Print** (a Letter page, with a preview), **Save Image** (the same page as a PNG to send on) and **Copy** (the lines as text, to paste into a message).
 
@@ -72,7 +89,7 @@ Races saved before lap-by-lap times were recorded can't be replayed.
     - **Print friendly - white background, dark ink**
     - **Monochrome - white background, gray lines (mono printers)**
     - **Match the app's look - as shown on screen**
-3. Check the **Preview:** and press **Save**. The results card always comes out the same size, so there is no **Size:** list here.
+3. Check the **Preview** card and press **Save**. The results card always comes out the same size, so there is no **Size:** list here.
 4. Choose where to save the PNG file.
 
 The style you pick is remembered for next time.
@@ -186,9 +203,9 @@ When a class uses handicaps, the results show a **Handicap pos** column, and the
 
 ## Championship
 
-The **Championship** page has two tabs, **Standings** and **Calendar**. The **Standings** tab is where you build a championship (a season) and see its table. Your championships are cards down the left, each with its class, how far through the season it is ("Stock · round 7 of 8", with a bar) and who leads, or who won once it's over. Pick one and it fills the rest of the page: its name, its rules in a line ("mains only · best 6 count · new races added automatically"), **More** (**Rename** and **Delete Championship**), and four views to switch between: **Standings**, **Races**, **Points & Rules** and **Carried In**. Each says how many it holds. See [Championship → Calendar](../race-day/events-and-entries.md#championship-calendar) for the **Calendar** tab.
+The **Championship** page has two tabs, **Standings** and **Calendar**. The **Standings** tab is where you build a championship (a season) and see its table. Your championships are cards down the left, each with its class, how far through the season it is ("Stock · round 7 of 8", with a bar) and who leads, or who won once it's over. Pick one and it fills the rest of the page: its name, its rules in a line ("mains only · best 6 count · new races added automatically"), **More** (**Rename** and **Delete Championship**), and four views to switch between: **Standings**, **Races**, **Points & Rules** and **Carried In**. **Standings**, **Races** and **Carried In** each say how many they hold. See [Championship → Calendar](../race-day/events-and-entries.md#championship-calendar) for the **Calendar** tab.
 
-![Championship → Standings with the Fall Series 2026 - Stock championship selected: the points scheme (25, 20, 16, 13, 11 down the places), the races counted with seven Stock A-Mains ticked and one heat left out, and the standings table of seven drivers with points, wins, podiums, races and DNFs, under "best 6 rounds count"](../assets/images/championship-standings.png)
+![Championship → Standings with Mod Season picked from the two championships on the left: every class, 1 race counted, and an empty Standings table saying "Nothing counted yet", with the Can they still win? card beside it](../assets/images/championship-standings.png)
 
 ### Create a championship
 
@@ -201,7 +218,7 @@ The **Championship** page has two tabs, **Standings** and **Calendar**. The **St
 
 ### Scoring rules
 
-**Edit Scoring Rules** opens the rules for the championship picked:
+**Edit Scoring Rules** opens the rules for the championship picked. Tiles across the top sum them up as you change them (**Races join**: **Automatic** or **By hand**; **Race days**; **Rounds counted**), and the settings are in three cards: **What counts**, **How it adds up** and **For the announcer**.
 
 | Setting | What it does | Default for a new championship |
 |---|---|---|
@@ -212,6 +229,8 @@ The **Championship** page has two tabs, **Standings** and **Calendar**. The **St
 | **Count each driver's best:** | "Best N rounds": only each driver's N highest-scoring rounds count. **0** counts every round. | 0 |
 | **Rounds in the season:** | How many rounds the championship is *scheduled* to run. It changes no points and no standings. It's the one figure that lets the announcer, and the **Can they still win?** card, say what's still possible: "nobody can catch him now", "three rounds left and these two are level", "a win today and it's his". **0** means you haven't said, and then the announcer says nothing about any of that rather than guessing. | 0 |
 | **Announcer's note:** | One sentence about the season in your own words, up to 60 characters, for example "two rounds left and four points covering the top three". **Only the announcer uses this.** It's read out as typed at the Tonight Open and in the sign-off numbers, on a night with a race this championship counts. Leave it empty to say nothing. See [The top and tail of the night](../announcer/commentary.md#the-top-and-tail-of-the-night). | Empty |
+
+With **Count every race day** unticked, at least one race day has to be ticked. Pressing **Save** with none ticked says "No race days ticked" and asks you to tick the days, or tick **Count every race day**.
 
 The rules read each race's round to find its class and whether it was a main. A freeform race with no round can't match a class or mains-only rule, but you can still tick it by hand.
 
@@ -251,7 +270,7 @@ Drivers are matched by the name saved with each result, so keep driver names con
 
 Beside the standings, **Can they still win?** says, for the season as it stands, who can still win the championship:
 
-- A line on top: "2 rounds left, up to 10 points each. 3 drivers can still win it.", "1 round left, and nobody can catch Billy Bob now.", or once the season is over, "The season is over. Billy Bob is champion."
+- A line on top: "2 rounds left, up to 10 points each. 3 drivers can still win it.", "1 round left, and nobody can catch Billy Bob now.", or once the season is over, "The season is over. Billy Bob is champion." (or "The season is over, with 2 level at the top." when it ended in a tie).
 - A row for each driver with their place, their gap to the leader, and **Leading**, **Still in it** or **Out of reach** (**Champion** once it's over). Everyone who can still win is listed, then the first three out of reach, then "and 6 more out of reach".
 
 It works it out the way the announcer does before a race (see [what the championship still has riding on it](../announcer/commentary.md#what-the-championship-still-has-riding-on-it)): each driver's best case, taking the place that pays most in every round left, against the leader scoring nothing in any of them, with **Count each driver's best** applied. A driver who can draw level is still in it. So the card and the announcer always agree, and a driver close on points can be out of reach when their best rounds are already full and a win would only replace their worst.
@@ -276,62 +295,103 @@ Either way, the sidebar **Undo** button puts the points back as they were.
 
 ## Race Analytics
 
-**Race Analytics** reads your saved history. Each tab refreshes when you open it, so it's up to date as soon as a race finishes.
+**Race Analytics** reads your saved history. Each tab refreshes when you open it, so it's up to date as soon as a race finishes. It reads every saved session, including races run before this version.
+
+Every tab works the same way: it opens with a sentence on what the figures add up to, then the chart or table that shows it, and most end with a **Try this** line: one thing to try next time out. The figures are all still there, under the reading.
 
 ![Race Analytics → Overview: At a glance tiles for races run, laps counted, drivers seen and the best lap ever, with who set it and where, and the Track records table with each layout's lap record, who holds it, when it was set and how many races it has had](../assets/images/race-analytics-overview.png)
 
+<!-- screenshot: Race Analytics → Overview with the headline, the From the last race night news and the Track records card with its Next closest column -->
+
+### Car lengths
+
+Where a track layout has a **Track length (ft):** set on **Track Layouts**, Race Analytics gives gaps in car lengths as well as seconds, for example "+0.214s (2 car lengths)", because a driver can feel a car length and can't feel a tenth. A gap under three quarters of a car length reads "under a car length". With no length set, gaps are in seconds only; nothing is guessed.
+
+The length of a car depends on its scale, so set **Car scale:** on the layout too, beside its length: **1/8 (buggy, truggy)**, **1/10 (buggy, touring)**, **1/12 (pan car)**, **1/18**, **1/24** or **1/28 (Mini-Z)**. A layout with none set is counted in 1/10 cars, as every layout was before the setting. The layout's **Length** tile on **Track Layouts** shows the scale under the length, for example "1/10 cars". See [Drivers, classes and venues](../race-day/drivers-and-classes.md).
+
 ### Overview
 
-The **AT A GLANCE** section shows the number of **Races run**, **Laps counted** and **Drivers seen**, and the **Best lap ever**, with who set it, where and when. Below it, **TRACK RECORDS** lists each track layout with its **Lap record**, **Held by**, **Set** and **Races here**.
+The Overview tells you what happened at the club lately.
 
-**Races run** counts races only. The laps, drivers, best lap and track records include saved practice sessions too. Ghosts, demo races and pasted results are never counted. The best lap and the track records never go to a rental transponder or to a driver with **Exclude from track records and points** ticked.
+- **The headline** on top. With two months of racing to compare, it says how the club's month went on its busiest layout, for example "The club got quicker this month: the typical best lap on Club Oval is down 0.120s on the month before." (the typical best lap is the middle driver's best). Otherwise it sums up the last night: how many drivers ran how many sessions, and any new track records and PBs. Before anything has been raced it says "Nothing raced yet. Run a race and the news from the night starts here."
+- **From the last race night**: the night's date and the layouts raced on it, then up to five pieces of news, each with a short badge (**REC**, **PB**, an up arrow or **!**):
+    - a new track record, with how much it took off the old one, or how long the old record has stood and who came closest to it that night. A layout's first night isn't news: its first lap is a record by default.
+    - the biggest PBs of the night, "Sam took 0.214s off their Club Oval best", with how many more PBs there were.
+    - the driver who got quickest through a race, with how much quicker their last third was than their first.
+    - a driver whose mistakes cost them most in a race, when the mistakes were the story of it and cost a second or more.
+
+    A night with none of those says "A quiet night: no records, PBs or standout races to report."
+- **Track records**: each track layout with its **Lap record**, **Held by**, **Set**, **Next closest** (the quickest lap by anybody else and how far off it is, in car lengths too where the layout has a length) and **Races here**. Under the table, a line gives the quickest lap anywhere, who set it and where, and how many races and laps have been run. With nothing raced yet, the card says "No races recorded yet - run one and the records start here."
+
+**Races here** and the race total count races only. The laps, the quickest lap and the track records include saved practice sessions too. Ghosts, demo races and pasted results are never counted. The quickest lap and the track records never go to a rental transponder or to a driver with **Exclude from track records and points** ticked. A lap that equals a record only ties it: the record stays with whoever set it first.
 
 A renamed track layout starts a new row, because the app can't tell whether the track itself was changed too.
 
 ### Personal Bests
 
-Each driver's best-ever lap on each track, across every saved session, with the **Car** and **Date Set**. Use **Driver:** to show one driver. This is separate from the all-time track record on the **Track Layouts** page: it tracks each driver's own progress.
+Each driver's best-ever lap on each track, across every saved session, and how real each one is. Pick the driver in **Driver:**; the tab is one driver at a time, because the reading is said to them. This is separate from the all-time track record on the **Track Layouts** page: it tracks each driver's own progress.
+
+A sentence on top says which PB is their real pace and which is soft, for example "Your Club Oval PB is the real thing. Your Indoor PB is a one-off you haven't been near since 3 Sep, so that is where the easiest time is." The **Personal bests** table has a row for each track:
+
+| Column | Shows |
+|---|---|
+| **Track** | The track layout. |
+| **PB** | Their best lap there. |
+| **How real is it?** | A pill: **Solid** (within a tenth of it in most of their last five races there), **In reach** (within three tenths sometimes, not most of the time), **One-off** (never within three tenths of it in the races since), or **Fresh** (fewer than three races there, too early to say). |
+| **Races near it (last 5)** | Five dots, one for each of their last five races there, filled for the ones that came within a tenth of the PB. |
+| **Gap to the record** | How far the PB is off the track record, in seconds and car lengths, or "You hold the record" / "Equals the record". A PB quicker than the record that can't hold it (a rental, or a driver left out of records) says "(not counted for the record)". |
+| **What it means** | The reading in a sentence. |
+
+**Try this**, under the table, gives one thing to aim for, keyed to the softest PB on the list.
 
 #### Resetting a personal best
 
-After a big change (a new car, a rebuilt track), you can start a driver's personal best again:
+After a big change (a new car, a rebuilt track), you can start a driver's personal best again. Pick the row, then:
 
-- **Reset This Track** ignores the selected driver's laps set before now on that track.
+- **Reset This Track** ignores the driver's laps set before now on that track.
 - **Reset All Tracks** does the same on every track.
 - **Clear Reset** brings back the driver's full history on every track.
 
-A reset never deletes race history. Results, track records and championship points aren't affected. The **Counting Since** column shows when a reset started, or "all history". A ghost based on a driver's personal best chases the same number this tab shows. Resets can be undone.
+A reset never deletes race history. Results, track records and championship points aren't affected. **What it means** ends "Counting since the reset on 3 Nov." while a reset is in force, and a track with no laps since its reset says "No laps here since the reset on 3 Nov." A ghost based on a driver's personal best chases the same number this tab shows. Resets can be undone.
 
 ### Lap Times
 
-Lap-by-lap pace for one saved session. Choose the **Session:**, then tick drivers in the **Drivers** list, down the left, to plot them against each other. The **Consistency** table under the chart shows each driver's **Best**, **Average**, **Avg-Best** and **Std Dev**. **Save Chart as Image** exports the chart.
+Lap-by-lap pace for one saved race, read for one driver. Choose the **Session:**, and the driver in **Focus on:**. Tick other drivers in the **Drivers** list, down the left, to put them on the chart too, fainter, to compare against.
+
+The sentence over the chart sums up the focused driver's race, for example "Quick through the middle, one big mistake, then you faded by about a tenth a lap." The **Lap times** chart marks their best lap, each mistake (a lap well off their best that stands out from the laps around it) with what it cost, and where a fade starts, over a shaded band for laps **At your limit (within 1.5% of your best)**. Hover over the chart to read a lap.
+
+**Three things in this race**, beside the chart, gives up to three findings: their longest run of laps at the limit, their biggest mistake against any fade, and how their last laps compared with the rest. **Try this** follows. The **Consistency** table under it all shows each ticked driver's **Best**, **Average**, **Avg-Best** and **Std Dev**. **Save Chart as Image** exports the chart.
 
 Sessions saved before lap-by-lap times were recorded, and pasted results, have no chart data: the line beside **Session:** says "This session has no lap-by-lap data recorded."
 
 ### Head to Head
 
-Pick **Driver A:** and **Driver B:** to compare two drivers across every session they both raced in. A race one of them missed doesn't count.
+Who beats whom at the club, in races they both ran. A race one of them missed doesn't count.
 
-**Career comparison (shared sessions only)**, on the right, covers:
+The **Who beats whom** grid has a row and a column for each regular (a driver who has raced at least three times against someone else), up to twelve; rentals and drivers kept out of records are left out of it. Each square is the row driver's wins and losses against the column driver: green when they win 60% or more, red at 40% or less. Regulars the grid has no room for are named under it. Above the grid, **Count:** chooses what a win is (**Finishing ahead** or **Quicker best lap**), and **Since:** how far back to look (**All time**, **This year** or **Last 3 months**).
 
-- sessions won and win rate
-- current and longest win streaks
-- recent form (last 5)
-- best laps, average laps and consistency
-- average finish position, podiums and winning margins
-- pace gap, improvement over time and strongest track.
+Click a square to open that pair in the **Matchup** card beside it: the score, then **Quicker best lap**, **Finished ahead**, **Fastest lap of the race**, **Last 5** and the **Best-lap gap** on the track they have raced together most (in car lengths too, where it has a length), and a sentence on what they add up to. To compare drivers the grid leaves out, pick them under **Or pick any two drivers:** in **Driver A:** and **Driver B:**.
 
-**Session by session**, beside it, lists each shared race with both positions, both best laps and who was **Ahead**.
+Under the grid and the matchup:
+
+- **Session by session** lists each shared race with its **Date**, **Track**, both positions (**A Pos**, **B Pos**), both best laps (**A Best**, **B Best**) and who was **Ahead**.
+- **Career comparison (shared sessions only)** covers sessions won and win rate, current and longest win streaks, recent form (last 5), best laps, average laps and consistency, average finish position, podiums and winning margins, pace gap, improvement over time, strongest track, and more.
 
 ### Trends
 
-One driver's best lap per session over time. Choose the **Driver:** and a **Track:**. Comparing across different layouts would only show which track is faster, not whether anyone is improving, so pick one track. **Include practice sessions** is on by default. **Save Chart as Image** exports the chart.
+One driver's best lap per session over time, and where they are on their curve. Choose the **Driver:** and a **Track:**. **Include practice sessions** is on by default.
+
+The sentence on top says whether they're still improving and how their pace now compares with earlier. The **Trend** chart draws the curve their points are following behind them, and **Where you are on the curve** says where on it they are now, from their last few sessions, and how far their best is off the track record (in car lengths too, where the layout has a length). **Try this** follows. **Save Chart as Image** exports the chart.
+
+**(all tracks)** in **Track:** plots every track together, but there's no reading then: comparing layouts would only show which track is faster, not whether anyone is improving. The page says so and asks you to pick one track. It takes a few sessions over more than a week before it can place a driver on the curve.
 
 ### Pace
 
-The pace table for any saved session. Choose it in **Race:**. Pasted results aren't listed: they have no lap times. The same table opens from **Pace** on **Race History**.
+The pace read for any saved race. Choose it in **Race:**. Pasted results aren't listed: they have no lap times. The same read opens from **Pace** on **Race History**.
 
-It's sorted by each driver's best three laps in a row, the pace they could actually hold, rather than by result. Where the two orders disagree, a driver lost time somewhere other than outright speed.
+**Whose race:** picks the driver it reads, the winner to start with. Under a headline for their race, three gauges show **Consistency**, **Left on the table** and **Fade** against colored zones, so a figure reads as good or bad without knowing the scale. **Everyone's verdict** gives every driver's **Fin**, **Best 3 in a row** and **Read** (what their race adds up to); click a line to read that driver's race. **Try this** follows, then **All the numbers**, the full table, with a line on who stood out (quickest single lap, tidiest, most left on the table).
+
+**All the numbers** is sorted by each driver's best three laps in a row, the pace they could actually hold, rather than by result. Where the two orders disagree, a driver lost time somewhere other than outright speed.
 
 Hover over a column heading for an explanation.
 
@@ -353,14 +413,14 @@ Hover over a column heading for an explanation.
 
 Drivers earn badges for what they do on track. Badges are worked out once each race is saved, and the announcer calls up to three of them at the end of the race. Any more are still awarded and listed in the console, but not announced. Each badge can be earned once per driver.
 
-![The Achievements page for one driver: 0 of 84 earned, and the In a race badges such as Metronome, Wire to Wire and Photo Finish, still locked](../assets/images/achievements.png)
+![The Achievements page for Al Gorithim: 0 of 84 earned, and the In a race badges such as Metronome, Unshakeable, Quickest of the Day and Wire to Wire, all Not earned yet](../assets/images/achievements.png)
 
 On the **Achievements** page:
 
-1. Choose a **Driver:** to see their badges. Earned badges are shown in color. Badges not yet earned are grayed out, with the rule that earns them.
+1. On the **Whose achievements** card, choose a **Driver:** to see their badges. Four tiles sum them up: **Earned** (for example "12 of 84"), **Complete** (as a percentage), **Rarest earned** and **Latest earned**. Earned badges are shown in color. Badges not yet earned are grayed out, with the rule that earns them.
 2. Tick **Earned only** to hide the rest.
 3. **Where you race:** is **Club** or **At home**. See [At a club or at home](#at-a-club-or-at-home).
-4. Double-click a badge to see who else has it. In that window, double-click a driver to see their badges.
+4. Double-click a badge to see who else has it. The window's **Who has it** list puts whoever earned it first at the top, marked FIRST, with everyone after them under it. Double-click a driver there to see their badges.
 
 Each badge has a tier (Bronze, Silver, Gold or Legend) and belongs to one of four groups:
 

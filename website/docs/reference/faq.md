@@ -141,7 +141,7 @@ Every race is saved to **Race History** automatically when it finishes. A result
 
 ### Can I print heat sheets?
 
-Yes. On **Race Day → Next Steps**, right-click the program list and choose **Save Heat Sheet...**. It saves a PNG image for you to print. See [Program and mains](../race-day/program-and-mains.md).
+Yes. On **Race Day → Next Steps**, right-click the run sheet and choose **Save Heat Sheet...**. It saves a PNG image for you to print. See [Program and mains](../race-day/program-and-mains.md).
 
 ## Phones, screens and online
 
@@ -205,11 +205,13 @@ Back up on the old laptop, set HeatCaller up on the new one, and restore that ba
 
 ### Can two laptops, or two copies of the app, share the same data?
 
-No. Only one copy of HeatCaller can run on a PC at a time ("HeatCaller is already running."), because two copies would overwrite each other's changes. Different PCs don't sync with each other either. Pick one laptop as the race laptop, and use backups to move data.
+No. Only one copy of HeatCaller can run on a PC at a time ("HeatCaller is already running."), because two copies would overwrite each other's changes. Different PCs don't share or sync data either. Pick one laptop as the race laptop, and use backups to move data.
+
+The one exception is a **standby PC**: a second laptop on the track's network can keep a copy of the timing laptop's race data, one way only, and take over by hand if the timing laptop dies. Nothing on the standby changes the timing laptop. See [Standby PC](../admin/standby-pc.md).
 
 ### Will updating lose my drivers or results?
 
-No. Your data isn't kept with the app, so replacing the app leaves it alone. HeatCaller also makes a backup before it installs an update, and doesn't install it if the backup fails. Updates are never offered while a race day is open or a race is on, and **After tonight** holds one until the next start. See [Updates](../getting-started/install.md#updates).
+No. Your data isn't kept with the app, so replacing the app leaves it alone. HeatCaller also makes a backup before it installs an update, and doesn't install it if the backup fails. Updates are never offered while a race day is open or a race is on, and **After tonight** holds one until the next start. To look for one straight away, press **Check for Updates** on the **Updates** card of the **Backup & Restore** page. See [Updates](../getting-started/install.md#updates).
 
 ### How do I report a problem?
 

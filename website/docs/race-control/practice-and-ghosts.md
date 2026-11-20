@@ -11,15 +11,17 @@ This page covers four features that sit around racing:
 
 The **Practice** page is for open lapping with no staging, flags or finish. Every transponder that crosses the line is timed, and the table shows live lap stats instead of a finishing order. It's the quickest way to run an open practice night or a tuning session.
 
-![The Practice page before a session starts: the Setup card, the Ghost Cars card with three ghosts to pick from, the clock reading IDLE, and the empty This session table](../assets/images/practice.png)
+![The Practice page before a session starts: the Run practice card, the Setup card, the Ghost Cars card with three ghosts to pick from, the clock reading IDLE, and the empty This session table](../assets/images/practice.png)
 
 ### Run a practice session
 
 1. On the **Practice** page, choose the **Track:** in the **Setup** card.
 2. Set a **Practice length:** if you want one (see the settings table below).
-3. Press **Start Practice**. The status line reads "Practice running - lap the track freely".
+3. Press **Start Practice** in the **Run practice** card. The status line reads "Practice running - lap the track freely".
 4. When you're done, press **Stop**.
 5. To keep the laps, press **Save Session**, or tick **Save automatically on stop** before you stop.
+
+Beside the cards, under the clock and **Open Big Screen**, four tiles sum up the session: **Session** (Idle, Running or Stopped), **Drivers**, **Laps** and **Best lap**.
 
 !!! note "Practice and races share the timing session"
     Practice and races use the same timing session, so HeatCaller keeps them apart:
@@ -77,7 +79,7 @@ Ghosts run in any session once it's racing, whether that's practice or a race, a
 
     When a race is saved, the console confirms how many ghost cars were left out.
 
-![The Ghost Cars page with four ghosts listed, each with its pace and consistency, all switched off](../assets/images/ghost-cars.png)
+![The Ghost Cars page with ghost racing ON and four ghosts listed, each with its pace and consistency, all switched off](../assets/images/ghost-cars.png)
 
 ### Set up a ghost
 
@@ -92,19 +94,19 @@ To build a ghost by hand:
 
 1. Press **Add Ghost**.
 2. Enter a **Name:** (required, because it's what the announcer calls it). You can also enter a **Car:**.
-3. Under **PACE**, choose **Based on:** and fill in the fields that appear.
+3. In the **Pace** card, choose **Based on:** and fill in the fields that appear.
 4. Set **Pace adjust:** and **Consistency:**, then press **Save**.
 5. Make sure **Enable ghost cars** is ticked.
 
 | Page control | What it does | Default |
 |---|---|---|
-| **Enable ghost cars** | Master switch. Ghosts only join a session when this is on. | Off |
+| **Enable ghost cars** | In the **Ghost racing** card. Master switch. Ghosts only join a session when this is on. | Off |
 | **Announce ghosts like real drivers** | The announcer calls ghosts, including when you pass a ghost or a ghost passes you. | On |
-| **Add Ghost** / **Edit** | Create or change a ghost. You can also double-click a row to edit it. | |
-| **On / Off** | Turns the selected ghosts on or off. You can select several at once. | |
+| **Add Ghost** / **Edit** | Create or change a ghost. You can also double-click a ghost to edit it. | |
+| **On / Off** | Turns the selected ghosts on or off. You can select several at once (Ctrl or Shift). | |
 | **Delete** | Deletes the selected ghosts. You can undo this. | |
 
-The **Your ghosts** list shows **On**, **Name**, **Car**, **Pace from**, **Adjust** and **Consistency** for each ghost.
+The **Your ghosts** list has a card for each ghost: its name, an **ON** or **OFF** chip, and a line under the name with its car, where its pace comes from (for example "Pace from Sam's best"), its pace adjust when it isn't 100%, and its consistency. Tiles beside the cards count the **Ghosts**, how many **Will run** ("Off" while ghost racing is switched off), the **Quickest set lap** of the ones that run (or "From lap times" when they all take their pace from someone's laps) and their **Consistency** ("Mixed" when they differ).
 
 ### Pace sources
 
@@ -154,7 +156,7 @@ It's a ghost like any other: it's on the board and the Big Screen, it can be edi
 
 **Demo Mode** runs a fake race through the same race logic as a real one, with no decoder needed. Announcements, sound effects, the leaderboard and the clock all work for real, so it's a full rehearsal of your setup before race day. Switch to the **Race Control** page to watch it.
 
-![The Demo Mode page: Start Demo Race, the Settings and Log cards, and the Racers card with three drivers ticked](../assets/images/demo-mode.png)
+![The Demo Mode page: 8 racers at an 8.00s lap pace, Start Demo Race, the Settings and Race history cards, and the Racers card with eight drivers ticked](../assets/images/demo-mode.png)
 
 ### Run a demo
 
@@ -163,7 +165,7 @@ It's a ghost like any other: it's on the board and the Big Screen, it can be edi
 3. In the **Racers** card, choose what to **Run:**:
     - **Free-form - use the drivers ticked below**: tick driver profiles (using real profiles tests real names and rivalry lines), and add up to 8 made-up placeholder racers. Ghost cars are in the list too, marked "[ghost]". Only the drivers and ghosts you tick run in the demo.
     - A round from today's program: runs the drivers already in that round. It reads the round but never changes it. A round with nobody assigned uses placeholders.
-4. Press **Start Demo Race**. The demo's log starts with who's in it, for example "In this demo: ... Ghost cars run only if ticked under Racers."
+4. Press **Start Demo Race** in the **Run the demo** card. Its tiles show the **Racers**, what it will **Run**, the **Lap pace** and the **Status**. The **Log** card starts with who's in it, for example "In this demo: ... Ghost cars run only if ticked under Racers."
 
 A demo can't start while practice is running ("Stop practice first on the Practice page"), or while a real race is staged, counting down or running. A demo of ghost cars only is refused with **Nobody to race** when none of them can run, because ghost cars are switched off or none of the ticked ghosts is switched on.
 
@@ -183,12 +185,12 @@ Press **Stop** on the Demo Mode page. It stops the simulation at whatever step i
 
 ### Demo results
 
-Demo races are never offered back after a crash. By default they aren't saved either. To save them to **Race History**, for example so you can look at a finished demo afterwards, tick **Save demo races to Race History** in the **Settings** card on the Demo Mode page.
+Demo races are never offered back after a crash. By default they aren't saved either. To save them to **Race History**, for example so you can look at a finished demo afterwards, tick **Save demo races to Race History** in the **Race history** card on the Demo Mode page.
 
 A saved demo is marked as a demo and is never scored:
 
 - In **Race History** its type is **Demo**, and its detail title reads "Demo race (not scored)".
-- By default it's never linked to a heat and never moves the program on, even if a round is selected on **Race Control**, and running a round with **Start as Demo...** leaves that round unrun. To rehearse a whole night, tick **Let a demo fill in the race program (rehearse a whole night)** in the **Settings** card (it ticks **Save demo races to Race History** too): a demo race then marks its heat as run and the program moves on, with qualifying, the mains and bump-ups worked out from the demo results. A demo never replaces a heat that has really been run. To clear a rehearsed night, delete its demo races from **Race History** and the heats go back to unrun.
+- By default it's never linked to a heat and never moves the program on, even if a round is selected on **Race Control**, and running a round with **Start as Demo...** leaves that round unrun. To rehearse a whole night, tick **Let a demo fill in the race program (rehearse a whole night)** in the same **Race history** card (it ticks **Save demo races to Race History** too): a demo race then marks its heat as run and the program moves on, with qualifying, the mains and bump-ups worked out from the demo results. A demo never replaces a heat that has really been run. To clear a rehearsed night, delete its demo races from **Race History** and the heats go back to unrun.
 - It never counts toward championship points (even if you tick it into a championship by hand), badges and achievements, personal bests, track records, ghost pace, handicap suggestions, Race Analytics totals, trends and head-to-head, the event report, or battery pack pace. It counts toward qualifying only when it's been let fill in the program, as above.
 - It isn't published to the online relay, neither in results nor in track best laps. The one place it goes online is each driver's own night page, marked **Demo** and counted for nothing, so they can look at their lap stats after a rehearsal (see [A driver's own night](../online/index.md#a-drivers-own-night)).
 - In the results JSON export it has an `"isDemo"` field.
@@ -199,7 +201,7 @@ So you can use real driver profiles in a demo without affecting anyone's records
 
 The **Handicaps** page evens out a grid where drivers have very different pace. A handicap is a scoring decision, not a measurement. Recorded lap times, personal bests and track records are never changed. The handicap is applied when results are shown.
 
-![The Handicaps page with a class selected and handicaps off, listing its six drivers with no credits yet](../assets/images/handicaps.png)
+![The Handicaps page with the 50% class selected and handicaps off, listing its six drivers with no credits yet](../assets/images/handicaps.png)
 
 ### Set up handicaps for a class
 

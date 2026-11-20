@@ -16,7 +16,7 @@ Since 26 Oct 2026, a driver who has a personal PIN can only be checked in or out
 
 - Tapping **Check in** (or **Checked in ✓** to check out) on a card opened from a QR check-in opens a small box on the page: "Type your own check-in PIN (the one the club emailed you) to check in or out." The PIN shows as dots, and the phone's number pad comes up. Type the six digits and tap **Continue** (or press Enter) and the tap goes through. A wrong PIN asks again, with the relay's reason, for example "That PIN is not right. Try again:". **Cancel** (or Escape) changes nothing. The PIN is never kept; the phone keeps only the sign-in it earns, until the tab is closed, so the next tap doesn't ask again.
 - A card opened by typing the personal PIN in the PIN box doesn't ask again: the PIN was already given.
-- The same goes for the **Check in** button at the top of a driver's night page on **Me**, shown until they're checked in.
+- The **Check in** card at the top of a driver's night page on **Me**, shown until they're checked in, first asks "Are you at the track tonight?" (**Yes, check me in** or **Not yet**), then asks for the PIN the same way, unless they signed in with it on **Me** in that browser tab (see [Me on a phone](index.md#me-on-a-phone)).
 - The relay checks this itself, so it can't be got round by changing the page. The PIN is checked against that driver's own PIN only, never anyone else's.
 - **Its own limit, apart from the lockouts.** Each driver's QR check-in allows five wrong PINs in ten minutes; after that it says "Too many wrong PINs for this driver. Wait ten minutes, or check in at the desk." These don't count toward the club's [lockouts](#lockouts), and a lockout someone else caused (the whole club's, or one on the venue's shared connection) doesn't stop a driver checking in with their own PIN.
 - **The staff PIN still checks anyone in or out**, from the full list (staff PIN), as before. Typed into a driver's card, the staff PIN is just a wrong PIN: use the full list at the desk.
@@ -39,11 +39,14 @@ New drivers who aren't on your books yet can sign themselves up with an invite; 
 1. On the **Club Website** page, in the **Online check-in** card, tick **Let drivers check in from their own phones**.
 2. In **Staff PIN:**, type 6 to 8 digits (the box suggests "e.g. 246813"), then click or tab out of the box. The PIN is saved when you leave the box, not as you type. A shorter PIN isn't saved: "Not saved - a new staff PIN must be 6 to 8 digits." Nor is one that's already a racer's personal PIN: "Not saved - that PIN is already in use elsewhere in HeatCaller. Choose another."
 3. Decide on **Include photos (drivers can be children - off unless you're sure)**. It's off by default.
-4. Check the state line under it (see [Check-in states](#check-in-states)).
-5. Click **Open Check-in Page** to see the page as drivers will.
-6. Print QR check-ins: go to **Race Day → Who's Racing** and click **Print QR Check-ins** (see [QR check-ins](#qr-check-ins)).
+4. Decide on **Let drivers email themselves a link to their page (uses the club's email, below)**. It's off by default. With it ticked, **Me** offers **Email me a link to my page** under the PIN box: a driver types the address the club has for them, and this laptop emails that driver the link to their own night from the club's mailbox. The page gives the same answer whatever address is typed, and the laptop only ever sends to an address on a driver's profile. It's only offered while drivers' own nights are on and the **Email (for racer PINs)** card is set up (see [Opening your night with your PIN](index.md#opening-your-night-with-your-pin)).
+5. Check the state line under it (see [Check-in states](#check-in-states)).
+6. Click **Open Check-in Page** to see the page as drivers will.
+7. Print QR check-ins: go to **Race Day → Who's Racing** and click **Print QR Check-ins** (see [QR check-ins](#qr-check-ins)).
 
-While online check-in is on, a driver who types their personal PIN on the **Me** tab is checked in there and then (see [Opening your night with your PIN](index.md#opening-your-night-with-your-pin)). (Until 29 October 2026 check-in had a tab of its own, and until 30 October **Me** linked to this page instead. From 30 October to 5 November the home page also had a **Check in: tap Me and type your PIN** line; Home no longer mentions check-in.)
+While online check-in is switched on, a driver can sign in on the **Me** tab with their personal PIN, on any day. Signing in opens their own night but doesn't check them in: they check in from the card at the top of their night, which asks "Are you at the track tonight?" first (see [Opening your night with your PIN](index.md#opening-your-night-with-your-pin)). From 30 October to 14 November 2026 a PIN typed on **Me** checked the driver in as well. (Until 29 October 2026 check-in had a tab of its own, and until 30 October **Me** linked to this page instead.)
+
+Checking in only works against a check-in list the laptop has sent in the last day. If the laptop hasn't sent one for 24 hours (it was closed after last week's meeting, say), the relay treats check-in as closed until HeatCaller is running with publishing on again; signing in on **Me** still works.
 
 When you untick **Let drivers check in from their own phones**, the check-in page says it's closed and the list of names is taken back off the relay.
 
@@ -169,7 +172,7 @@ Photos are never on the public pages, but anyone with the staff PIN sees every d
 A racer who scans their QR check-in, or types their personal PIN, sees their own card:
 
 - their photo (or initials), name, and "#*number* · *class* · *event*"
-- when tonight's race day has an entry fee, **Entry: $15.00 - pay at the desk** until the desk marks them paid on **Who's Racing**, then **Paid ✓** (a comp counts as paid). It's only ever their own: the relay gives it out with that one driver, to their QR check-in or their personal PIN, and never on the full list the staff PIN opens. HeatCaller never takes a payment. See [Money at the desk](../race-day/events-and-entries.md#money-at-the-desk).
+- when tonight's race day has an entry fee, **Entry: $15.00 - pay at the desk** until the desk marks them paid on **Who's Racing**, then **Paid ✓ - thank you!** (a comp counts as paid). It's only ever their own: the relay gives it out with that one driver, to their QR check-in or their personal PIN, and never on the full list the staff PIN opens. HeatCaller never takes a payment. See [Money at the desk](../race-day/events-and-entries.md#money-at-the-desk).
 - a big **Check in** button, with "One tap and the timing desk knows you are here." From a QR check-in, a driver with a personal PIN is asked for it on the first tap; see [Checking in or out needs the driver's own PIN](#checking-in-or-out-needs-the-drivers-own-pin).
 
 After tapping, the button turns to "Checked in ✓", with "Tap again if you need to check out.", and a message says "*name* is checked in."
@@ -178,7 +181,7 @@ Under the card:
 
 - From a QR check-in: **Not you? Open the full list**, which goes to the PIN box.
 - From a personal PIN: **Not you? Sign out**, which forgets the PIN on that phone and goes back to the PIN box.
-- On a driver's own night, the **Check in** card on **Me** and the **Alerts** card say the same about their entry, from their own private live details.
+- On a driver's own night, the **Alerts** card says the same about their entry ("Paid ✓ - thank you!" once paid), from their own private live details. While they owe, the fee line is also a banner at the top of **Me** and of every club page on that phone.
 - When the club gives drivers their own nights, the card also has **See your racing from last time**, which opens that driver's night page, whether the card was opened from a QR check-in or a personal PIN. See [A driver's own night](index.md#a-drivers-own-night).
 
 ### The first-night guide

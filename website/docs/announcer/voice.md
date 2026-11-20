@@ -15,6 +15,8 @@ Everything to do with the announcer speaking is on the **Voice** page (called **
 | **Race Calls** | One row for each moment the announcer can call: whether it's on for races and for practice, and the lines it picks from (called **Announcements** before 17 October). See [Announcements](#announcements). Under the rows, the **How often** card sets how many calls a lap gets, the gap between them and what counts as a streak; see [How often](#how-often). Its last section, **Rivalries**, holds lines for two particular drivers swapping places; see [Rivalries](#rivalries). |
 | **AI Commentary** | Race intros, recaps and talking points, written through your club's relay or by the small model built into HeatCaller. It has [its own page](commentary.md). |
 
+The **Voice**, **Race Calls** and **AI Commentary** tabs each open on a row of tiles that sum the tab up at a glance. On **Voice → Voice** they're **Speaks with** (the voice chosen), **Announcer voice** (the voice picked on the Cast tab), **Kokoro on this PC** (**Ready**, **Downloading** or **Not ready**) and **Race calls** (**On**, **Races only**, **Practice only** or **Off**). The Race Calls tab's are described under [Announcements](#announcements), and the AI Commentary tab's on [its own page](commentary.md#settings).
+
 This page also covers the [Announcer screen](#announcer-screen), a window for whoever is on the microphone, opened from **Race Control**. How the whole race night sounds, the announcer's words included, can be set in one go with a [soundscape](sounds-and-music.md#soundscapes).
 
 ## Before you start
@@ -43,7 +45,7 @@ The announcer's voice itself is picked on **Voice → Cast**, on the **Announcer
 
 ![Voice, Cast tab: the Voices card with Load Voices, the Announcer card with its Name, an ElevenLabs voice and the Kokoro voice under If ElevenLabs runs out, and the Recap host card](../assets/images/voice-cast.png)
 
-![Voice tab, Speak with card: ElevenLabs chosen, with the Kokoro voice ready on this PC and standing by](../assets/images/voice-voice.png)
+![Voice tab, Speak with card: ElevenLabs chosen at 77% used, the HeatCaller voice not included for this club yet, and the Kokoro voice ready on this PC and standing by](../assets/images/voice-voice.png)
 
 | Choice | What it is |
 |---|---|
@@ -57,7 +59,11 @@ Kokoro is the bottom of the ladder, and nothing stands in for it. On a PC that h
 
 ### Race calls on or off
 
-Under the three choices on the **Speak with** card, **Race calls:** has two tick boxes, **In races** and **In practice**. Untick one and every call on the **Race Calls** tab goes quiet there at once, while each call keeps its own **Race** and **Practice** ticks for when you tick the box again. Sound effects and the AI commentary aren't race calls, so they carry on. Both are ticked to begin with, and applying a soundscape leaves them as they are.
+Under the **Speak with** card, the **Race calls** card has **Race calls:** with two tick boxes, **In races** and **In practice**. Untick one and every call on the **Race Calls** tab goes quiet there at once, while each call keeps its own **Race** and **Practice** ticks for when you tick the box again. Sound effects and the AI commentary aren't race calls, so they carry on. Both are ticked to begin with, and applying a soundscape leaves them as they are.
+
+### Offline voices for juniors
+
+Beside the **Race calls** card (under it on a narrow window), the **Juniors** card has **Offline voices for juniors**, off to start with. As the card says: "Any line that names a junior is said by Kokoro on this PC, and AI commentary about a junior is written by the model on this PC, so their names aren't sent to a cloud voice or the relay. Those lines sound plainer." It works whichever voice is chosen under **Speak with**.
 
 ### Pick a HeatCaller voice
 
@@ -265,7 +271,7 @@ On a PC that hasn't got Kokoro's voice file there's nothing to stand in, and tho
 
 The stock HeatCaller voices are nobody's own. If your relay offers a voice recorded from a real person, such as your own announcer, HeatCaller won't speak in it until this PC holds a record that they agreed: until then the free Kokoro voice reads every line.
 
-The record is on the **Speak with** card, in the **Who agreed:** row:
+The record is on the **Voice consent** card, under the **ElevenLabs connection** card, in the **Who agreed:** row:
 
 1. Pick that voice in **HeatCaller voice:** on **Voice → Cast**. A consent is for one voice.
 2. Type the name of the person who agreed in **Who agreed:**.
@@ -468,7 +474,7 @@ In `%LocalAppData%\HeatCaller\VoiceLibrary` on the laptop, up to about 500 MB. P
 - **Caution**: lets this announcement speak while a yellow or red flag is out. Off for everything by default (see [How the announcer behaves during a race](#how-the-announcer-behaves-during-a-race)).
 - **Test**: speaks one random line from this box, at this row's speed, using the settings currently on screen and the voice chosen under **Speak with**. With ElevenLabs it always renders a fresh take; see [Fix a line that came out wrong](#fix-a-line-that-came-out-wrong).
 
-Above the rows are the placeholders you can use ("Placeholders you can use in a line: {driver} {car} {team} {sponsors} {lap} {time} {laptime} {gate} - and with a split loop {sector} {sectortime} {split} {gap}"), a note on how lines are picked, **Restore Default Lines**, and a line about audio tags for the voice and model you've chosen (see [Audio tags](#audio-tags)). There's no Save button: changes save as you make them, as the status line under the rows says. That line also shows what a **Test** spoke; see [Testing a line](#testing-a-line). The grip under the rows drags the list taller or shorter, and it keeps the height you leave it at.
+Above the rows, a row of tiles counts what's on: **On in races** and **On in practice** (for example "18 of 26", or "Switched off" while **Race calls:** on **Voice → Voice** is unticked for it), **Pacing** and **Most per lap**. Under them, the **Writing the lines** card has the placeholders you can use ("Placeholders you can use in a line: {driver} {car} {team} {sponsors} {lap} {time} {laptime} {gate} - and with a split loop {sector} {sectortime} {split} {gap}"), a note on how lines are picked, **Restore Default Lines**, and a line about audio tags for the voice and model you've chosen (see [Audio tags](#audio-tags)). There's no Save button: changes save as you make them, as the status line under the rows says. That line also shows what a **Test** spoke; see [Testing a line](#testing-a-line). The grip under the rows drags the list taller or shorter, and it keeps the height you leave it at.
 
 Under the rows are the [How often](#how-often) card and then the [Rivalries](#rivalries).
 
@@ -476,7 +482,7 @@ To silence every row at once, for races or for practice, use **Race calls:** on 
 
 With the HeatCaller voice chosen, the lines boxes are read-only, the **Speed** boxes are switched off and the **Test** buttons aren't shown. The **Race** and **Practice** ticks, **Caution**, **Weight** and the per-row extras all still work. See [What's fixed while it's chosen](#whats-fixed-while-its-chosen).
 
-![Voice, Race Calls tab: rows for Race staging, Countdown started, Race started and Fast lap (race best), each with Race and Practice ticks, its lines, Weight and Speed](../assets/images/voice-race-calls.png)
+![Voice, Race Calls tab: 38 of 50 calls on in races and in practice, the Writing the lines card with its placeholders and audio tags, and rows for Race staging, Countdown started and Race started, each with Race and Practice ticks and its lines](../assets/images/voice-race-calls.png)
 
 ### Race and practice
 
@@ -535,7 +541,7 @@ Placeholders are words in curly brackets that are filled in when the line is spo
 | `{laps}` | How many laps make the block, "five" (**Consistency (coach)** only). |
 | `{minutes}` | The minutes left, "four" (**Minutes left** only). |
 | `{seconds}` | The seconds left, "thirty" (**Last minute countdown** only). |
-| `{marshals}` | The corner marshals for the heat being called, said as "Sam, Bill and Frank" (**Grid call** only). It's the same list as the **Marshals...** window, for the current race day. |
+| `{marshals}` | The corner marshals for the heat being called, said as "Sam, Bill and Frank" (**Grid call** only). It's the same list as the **Marshals** window, for the current race day. |
 
 Each row's hint says which placeholders that announcement supports.
 
@@ -615,7 +621,7 @@ Reminders from the race day's **Timetable** ("5 minutes to Stock Buggy A-Main") 
 | **Consistency streak** | **Only the longest streak in the field** | Only the driver on the longest clean run is called. |
 | **Consistency streak** | **Mention the runner-up** | Adds the next-best streak to the line. |
 | **Position report** | **Read every** _n_ **lap(s) of the LEADER, down to P** _n_ | Every 1 to 50 leader laps (default 5), reading from 2 to 10 places deep (default 3). The report waits until the last car it names has crossed the line on the leader's lap (a car a lap or more down doesn't hold it up), then gives each car its gap to the leader exactly, to the thousandth, the same as the board's **Gap to P1**: "Bill one point two three four back". A car that never comes round holds it up for half a lap longer than the leader's last lap at most; it's then read without that car and anyone behind it. The line under the setting says when it's read, and turns into a warning past P3, since a deeper report is heard well after the leader crosses. If it has to wait behind other lines, it waits its turn: just before it's spoken the board is read again, and if anything in it has changed, it's said from the order as it stands then. A newer report replaces one still waiting. |
-| **Position report** | **Say each car's gap to the leader (put {gaps} in the line)** | Reads the order as places and says the gaps where you put `{gaps}` in the line, so no gap is said twice. Off by default. Gaps make the report longer to say, and a gap can change while it's being said, so the gaps you hear are the gaps when the report started. |
+| **Position report** | **Say each car's gap to the leader (put {gaps} in the line to say them after the order)** | Reads the order as places and says the gaps where you put `{gaps}` in the line, so no gap is said twice. Off by default. Gaps make the report longer to say, and a gap can change while it's being said, so the gaps you hear are the gaps when the report started. |
 | **Minutes left** | **Only the last** _n_ **minutes (untick to call every minute)** | 2 to 60 (default 5): with 5, a ten-minute race hears five, four, three and two minutes to go. Untick it to hear every minute. One minute to go is always **Final minute**'s, so it's never said twice. |
 
 ### How often
@@ -716,7 +722,7 @@ The same two-at-once limit and the same 30-second give-up apply to the relay.
 
 The Announcer screen is a window for whoever is on the microphone. It's not another leaderboard. It gives you things to say. Open it with **Announcer Screen** on **Race Control** (shortcut <kbd>A</kbd>). The first time, it opens beside the main window when there's room, so the director keeps **Race Control** while you keep the Announcer; you can also put it on a second monitor. Closing it only hides it: open it again and everything is still on it. The **Race Control** button in the window brings the main window forward on **Race Control** without closing the Announcer.
 
-![The Announcer screen during a demo race: GREEN FLAG with the clock and ON DECK, the running order, talking points with the latest lines, the Spotlight on the leader, and Last race summary](../assets/images/announcer-screen.png)
+![The Announcer screen during a demo race: GREEN FLAG with the clock and ON DECK, the running order of eight drivers, talking points with the latest line, the Spotlight on the leader, and the Last line card](../assets/images/announcer-screen.png)
 
 The page shows:
 

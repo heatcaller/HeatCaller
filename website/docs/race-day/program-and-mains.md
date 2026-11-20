@@ -2,7 +2,7 @@
 
 The program is the race day's running order: every qualifying heat and main, for every class, in the order they go out. This page explains how to build it, adjust heats, start rounds, see who's qualified where, seed the mains, apply bump-ups, assign corner marshals, print heat sheets, and keep a timed running order.
 
-Almost all of it happens on **Race Day → Next Steps**, which says what to do next and has tonight's program underneath. The timed running order is in the **Timetable** window, opened from the program.
+Almost all of it happens on **Race Day → Next Steps**, tonight's run sheet: every race at its time, with the next one opened up on it. The timed running order is in the **Timetable** window, opened from **More** along the foot of Next Steps.
 
 ## Before you start
 
@@ -18,31 +18,41 @@ Changes on **Setup** save themselves; there's nothing to click.
 Each class also needs drivers: a driver is in a class when their profile says so (see [Driver Hub](drivers-and-classes.md#driver-hub)). How a class is scored — its qualifying method, main size and bump-ups — is set on the **Classes** page (see [Classes](drivers-and-classes.md#classes)).
 
 !!! note "Club nights"
-    On a club night (**What kind of night:** set to **Club night - just races**) there are no finals. The program builds races instead of heats, the finals commands and **Move the Top Finishers Up** aren't offered, and the next-step card never asks for bump-ups or finals. See [Race day or club night](events-and-entries.md#race-day-or-club-night).
+    On a club night (**What kind of night:** set to **Club night - just races**) there are no finals. The program builds races instead of heats, the finals commands and **Move the Top Finishers Up** aren't offered, and the card on **Next Steps** never asks for bump-ups or finals. See [Race day or club night](events-and-entries.md#race-day-or-club-night).
 
 ## Race Day → Next Steps
 
-**Next Steps** is the first tab on the Race Day page. It has two halves, one above the other:
+**Next Steps** is the first tab on the Race Day page. It's tonight's run sheet: the night as a timetable, with the next race opened up on it, what's wrong before it can go and, when the night is running late, what would bring it back. It's laid out for a glance between races:
 
-- **The top half** says where the day has got to: the day's name, the next-step card, the **Ready to race** card and the day so far.
-- **The bottom half** is **Tonight's program**: every round of the day, with the commands that act on them. See [Tonight's program](#tonights-program).
+- **Across the top**, only when the night is running late, a strip says by how much. See [The late strip](#the-late-strip).
+- **Tonight's run sheet** takes most of the page: every race at its clock time, with the card for the next race on its row. See [Tonight's run sheet](#tonights-program).
+- **Beside it**, the **Get back on time** card, while the night would finish past its out-by time (see [Get back on time](#get-back-on-time)), and the **Go / no-go** list (see [Go / no-go](#go-no-go)).
+- **Along the foot**, the buttons for the day. See [The buttons along the foot](#the-buttons-along-the-foot).
 
-Drag the handle across the top of **Tonight's program** up or down to give either half more room; the two halves follow the mouse as you drag. HeatCaller remembers where you leave it. Double-click the handle to put it back, with the top half just tall enough for **Next Steps**. The bottom half never gets so short that its buttons go out of sight; on a small screen the top half scrolls instead.
+![Race Day, Next Steps tab: tonight's run sheet at 0 of 12 run, with the card for the next race, 50% · Q1 Heat 1, warning that the timer isn't connected, the Go / no-go list beside it with Timer red, and the buttons along the foot](../assets/images/race-day-next-steps.png)
 
-![Race Day, Next Steps tab: the Next step card with Next up: Q1 Heat 1, the finish estimate inside the out-by time and Start Q1 Heat 1, Ready to race at 5 of 6, and Tonight's program with each race's About time and status](../assets/images/race-day-next-steps.png)
+While **Next Steps** is showing, the clock and the day's line sit in the Race Day tab row, to the right of the tabs. The line gives the date, "club night" on a club night, the venue, the track layout, and "closed" if the day is closed. With no race day open it says "No race day is open".
 
-At the top, under the day's name, a line gives the date, whether it's a race day or a club night, the venue, the track layout, "closed" if the day is closed, and "running 12 min late" (or early) once the day is 5 minutes or more off the timetable. With no race day open it says "No race day is open".
+Every state on the page is told by a shape and a word as well as a color: a tick when all is well, a triangle for something to watch, a square for something that stops you.
 
-### The next-step card
+### The card for the next race { #the-next-step-card }
 
-The card works out the single next thing to do, with one button that does it. The small heading above it reads **BEFORE YOU START**, **NEXT STEP** or **ALL DONE**. It checks, in this order:
+The card sits on the next race's row of the run sheet, so the time, the race and its **Start** button are in one line of sight. Over the time column it says **NEXT** and the time the race should start. It names the race with its class first, for example "Stock · Q2 Heat 1", because every class has a Q2 Heat 1. Under the name are the facts to check before you start it: how many drivers, how many of them are checked in (when the night is checking drivers in), how long the race is ("5 min race") and the track layout.
+
+- **Start** *race*, for example **Start Stock Q2 Heat 1**, starts it (see [Start a round](#start-a-round)). Press and hold it for about a second to run the same round as a demo instead: simulated laps, never filed as a result, never scored.
+- **Call to the Stand** calls the race up now, the same as **Call Up** on Race Control (see [The flag row after the flag](../race-control/running-a-race.md#the-flag-row-after-the-flag)). What it says back shows under the buttons for a few seconds.
+- **Skip** puts the race off: **Run It After the Next Race** or **Move It to the End of the Night**. **Undo** puts it back, and the console says where it went.
+
+When the timer isn't connected, a strip above the buttons says "Timer not connected. Laps won't be counted." with **Connect Timer**, which opens the **Connection** page.
+
+When there's no race to start, the card gives the next step instead: a small heading (**FIRST** while the night is still being set up, **NEXT**, or **DONE** once the program is complete), a headline, a line or two of detail, and one button that does it. It checks, in this order:
 
 | Situation | Headline | Button |
 |---|---|---|
-| No race day is open, and a night template is set for today (see **Templates:** on [Race Day → Setup](events-and-entries.md#about-the-day)) | "No race day is open." | **Start tonight's** *template*... - for example **Start tonight's Tuesday club night...**. It opens the [Start Tonight window](events-and-entries.md#the-start-tonight-window) on that template |
-| No race day is open, and there's a race day from before tonight to go by | "No race day is open." | **Start tonight like last time...**. It opens the [Start Tonight window](events-and-entries.md#the-start-tonight-window) on **Like last time**: the last race day's kind of night and classes, and everything else a new day carries forward. Press **Start Tonight**, or pick something else there |
-| No race day is open | "No race day is open." | **Start Tonight...** (opens the [Start Tonight window](events-and-entries.md#the-start-tonight-window)) |
-| The current race day is closed | "Race Day 21 Sep 2026" is closed. | **Start Tonight...** |
+| No race day is open, and a night template is set for today (see [Templates](events-and-entries.md#templates)) | "No race day is open." | **Start tonight's** *template*, for example **Start tonight's Tuesday club night**. It opens the [Start Tonight window](events-and-entries.md#the-start-tonight-window) on that template |
+| No race day is open, and there's a race day from before tonight to go by | "No race day is open." | **Start tonight like last time**. It opens the [Start Tonight window](events-and-entries.md#the-start-tonight-window) on **Like last time**: the last race day's kind of night and classes, and everything else a new day carries forward. Press **Start Tonight**, or pick something else there |
+| No race day is open | "No race day is open." | **Start Tonight** (opens the [Start Tonight window](events-and-entries.md#the-start-tonight-window)) |
+| The current race day is closed | "Race Day 21 Sep 2026" is closed. | **Start Tonight** |
 | There are no classes at all | "There are no classes yet." | **Set Up Classes** (opens the **Classes** page) |
 | There are no drivers at all | "There are no drivers yet." | **Add Drivers** (opens **Driver Hub**) |
 | No driver has a class | "No driver is in a class yet." | **Add Drivers** |
@@ -51,55 +61,100 @@ The card works out the single next thing to do, with one button that does it. Th
 | None of today's classes has any drivers | "None of today's classes has any drivers." (or "No drivers in Stock." with one class) | **Add Drivers** |
 | Nothing is scheduled yet | "Nothing is scheduled yet." | **Build tonight's heats** (**Build tonight's races** on a club night) |
 | A lower main has finished and bump-ups are due | "B-Main has finished." | **Move the top finishers up** |
-| Drivers checked in after the heats were posted, and the club asks before adding them | "Max Power checked in after the heats were posted." | **Add them to the heats...**. See [Checked in late](#checked-in-late) |
-| The heats are built, none has run, and they haven't been posted | "Tonight's heats are built - post them next." | **Post the heats...** (**Post the races...** on a club night). See [Post the heats](#post-the-heats) |
-| A round is waiting to run | "Next up: Q2 Heat 1" | **Start Q2 Heat 1** |
+| Drivers checked in after the heats were posted, and the club asks before adding them | "Max Power checked in after the heats were posted." | **Add them to the heats**. See [Checked in late](#checked-in-late) |
+| The heats are built, none has run, and they haven't been posted | "Tonight's heats are built - post them next." | **Post the heats** (**Post the races** on a club night). See [Post the heats](#post-the-heats) |
+| A round is waiting to run | The race itself, as above | **Start** *race* |
 | Everything has run, and a class has qualified but has no mains | "Qualifying is complete for Stock." | **Build the finals from qualifying** |
-| Everything has run | "The program is complete." | **Qualifying Standings** (**Tonight's Standings** on a club night) |
+| Everything has run | "The program is complete." | **Qualifying Standings** (**Tonight's Standings** on a club night), or **Close the night** with the [closing checklist](#the-closing-checklist) on |
 
-The line under the headline gives the numbers behind it — for example the class, driver count and track for the next round, and how many rounds have run and how many are left. If one class has no drivers while others do, it says that class will be skipped. With **Entries close at:** set on **Setup**, the card counts down to it while the heats are still to build ("Entries close at 18:30, in 12 min."), then says "Entries closed at 18:30 - build the heats and post them." While races are still to run, it also says when the night should finish (see [When the night finishes](#when-the-night-finishes)). Once everything has run, it gives the night pace and lists what's left before lights out (see [Closing the night](#closing-the-night)).
+The line under the headline gives the numbers behind it, for example how many rounds have run and how many are left. If one class has no drivers while others do, it says that class will be skipped. With **Entries close at:** set on **Setup**, the card counts down to it while the heats are still to build ("Entries close at 18:30, in 12 min."), then says "Entries closed at 18:30 - build the heats and post them." Once everything has run, it lists what's left before lights out (see [Closing the night](#closing-the-night)). When the night will finish is on the run sheet and the late strip, not on the card (see [When the night finishes](#when-the-night-finishes)).
 
 ### When the night finishes
 
-While races are still to run, the next-step card ends with "Finishes about 22:40." HeatCaller works it out like this:
+The run sheet's **Time** column gives each race still to run the time it should start, and its last row, **Racing done**, the time racing should end. HeatCaller works them out like this:
 
 - Every race still to run takes its format's time limit plus staging and the countdown. A lap race with no time limit is counted as 5 minutes.
 - After each race comes the gap before the next green. Once tonight has run three races, that's tonight's own typical gap (the same figure as the event report's [night pace](../race-control/results-and-championships.md)). Before then it's 3 minutes.
 - A race on track is taken as half done.
-- On a race day, a class with heats but no finals yet is given the finals it will have (one per heat's worth of drivers), so the finish includes them.
-- Each break planned with **Breaks...** on **Setup** is added where it falls, and the card says so: "Finishes about 22:40 (with 30 min of breaks)." See [Planned breaks](#planned-breaks).
+- On a race day, a class with heats but no finals yet is given the finals it will have (one per heat's worth of drivers), so the finish includes them. They show on the sheet as one row, for example "Stock · Mains" (or "Mains · 2 classes"), "built from qualifying", marked **Not built**.
+- Each break planned with **Breaks** on **Setup** is added where it falls. See [Planned breaks](#planned-breaks).
 
-With **Out of the venue by:** set on **Setup**, the card says whether that's in time: "Finishes about 22:40, inside the 23:00 out-by time." If it isn't, it says by how much, then what would help, biggest saving first:
+The times are worked out again whenever the program changes, and each is an estimate.
 
-- **drop Q3** (the last qualifying round, when none of its heats has run, and never the first)
-- **run qualifiers a minute shorter**
-- **run one main fewer** in a class with more than one main still to run
+With **Out of the venue by:** set on **Setup**, the sheet also shows that time:
 
-For example: "Finishes about 22:40 - 15 min past the 22:00 out-by time. To finish in time: drop Q3 (6 races) to save 48 min; run qualifiers a minute shorter to save 12 min." HeatCaller doesn't make these changes itself. To drop the rest of qualifying, use [We're done after this round](#were-done-after-this-round). The estimate is worked out again whenever the program changes, and each is shown as "about".
+- A dashed **OUT BY** line runs across the sheet above the first race that would start after it, and every time past it is in red.
+- The **Racing done** row says **On time**, or how far past the out-by time racing would end, for example "+15 min" or "+3 h 30".
+- Once racing would end 10 minutes or more past it, the [late strip](#the-late-strip) appears across the top, and while it would end past it at all, the [Get back on time](#get-back-on-time) card offers what would help.
+
+### The late strip
+
+The strip across the top of **Next Steps** shows only when the night is running late: amber once racing would end 10 minutes past the out-by time, red at 30 minutes. It reads, for example, "4 h 02 min late", then when racing ends, the out-by time and how many races are left: "Ends 9:01 PM · out by 5:00 PM · 8 races left". While fixes are ticked on the **Get back on time** card, it also says what the end would become: "With the fixes ticked: ends 7:40 PM".
+
+### Get back on time
+
+The **Get back on time** card beside the run sheet is there while racing would end past the out-by time. It lists what would help, biggest saving first, each with what it would save in green, for example "−48 min":
+
+- **Drop Q3 (6 races)**: the last qualifying round, when none of its heats has run, and never the first.
+- **Qualifiers 1 min shorter**: a minute off every qualifier still to run that can spare one.
+- **One main fewer in Stock** (or **One main fewer in each class**): in a class with more than one main still to come, while those mains are still to be built.
+
+Tick one or more and the run sheet shows the change before anything is made: the dropped round becomes one row with its old time crossed out and **Dropped**, every later time moves up, and **Racing done** comes earlier. The late strip says what the end would become. Untick to take the preview away.
+
+**Apply** (it reads **Apply 1 Change** or **Apply 2 Changes** as you tick) makes the ticked changes, all as one step for **Undo**. The card then says what changed, for example "Changed tonight's program: Q3 dropped (6 races); 12 qualifiers a minute shorter. Racing should now finish about 22:40." One main fewer is kept on the race day and applied when the finals are built, as with [We're done after this round](#were-done-after-this-round). **Tell the Drivers** then has the announcer say it to the room, with the words on the screens: "A change to tonight's program: Q3 is cancelled, and qualifiers will be a minute shorter. Racing should now finish about 22:40."
+
+What HeatCaller can't change itself is under the boxes as advice, for example "Also: run Stock and Mod together (Run Together on the program) (−12 min)." See [Mixed-class heats](#mixed-class-heats). A main fewer when the mains are already built is advice too: delete the main yourself. To drop the rest of qualifying at once, use [We're done after this round](#were-done-after-this-round).
+
+### Go / no-go
+
+The **Go / no-go** list beside the run sheet says whether the next race can go. A check that's fine is quiet gray text with a tick; something to watch is amber with a triangle; something that stops you is red with a square, and has a button that sorts it:
+
+| Check | What it says | Button |
+|---|---|---|
+| The timer | "Timer connected" or "Timer not connected". | **Connect** opens the **Connection** page |
+| Check-in | "5 of 6 checked in", or "Check-in not used tonight" on a night that doesn't check drivers in. | **Who's Out** opens **Who's Racing**, while anybody isn't here |
+| The night | "Night set up", or the first thing still to do, with how many more, for example "Build the program (+1 more)": open tonight's race day (or start a new one, when this one is closed), add your classes, choose tonight's classes, check drivers in (or add drivers to tonight's classes), and build the program (build the races, on a club night). | **Set Up** opens the Set Up Tonight wizard at the first step that isn't done (see [The Set Up Tonight wizard](events-and-entries.md#the-set-up-tonight-wizard)) |
+| The phones | The club website: "Phones · relay live", "Phones · off", or what's wrong, such as "Phones · offline". | |
+| The caller | "Caller on" or "Caller muted". | |
+
+### The buttons along the foot
+
+| Button | What it does |
+|---|---|
+| **Drivers' Meeting** | Opens the drivers' meeting, any time a race day is open. See [The drivers' meeting](#the-drivers-meeting). |
+| **Ready to Race** | Opens the start-of-night checklist. It's there once the night is set up and the program is built, until the first race has run. See [The Ready to race checklist](#the-ready-to-race-checklist). |
+| **Edit Drivers** | Changes who's in the round picked on the sheet, or the next race with nothing picked. See [Change who's in a round](#change-whos-in-a-round). |
+| **+ Add Race** | On a race day, adds a main by hand (see [Add a main by hand](#add-a-main-by-hand)); on a club night, builds tonight's races. There while a race day is open. |
+| **Standings** | The class's qualifying order, or tonight's order on a club night. See [Qualifying standings](#qualifying-standings). |
+| **Marshals** | Who marshals each round. See [Corner marshals](#corner-marshals). |
+| **More** | **Timetable...** (see [The Timetable](#the-timetable)), **Move the Top Finishers Up...** (not on a club night), **Glossary...** (it opens **What these words mean**, a plain-English list of the racing terms used on this page), **Build Tonight's Heats...** (**Build Tonight's Races...** on a club night), **Build the Finals from Qualifying...** (not on a club night), **Add a Late Entry...**, **Move Drivers Between Heats...**, **Save Heat Sheet...**, **Print Heat Sheet...** and **We're Done After This Round...**. Everything on it is also on the sheet's right-click menu. |
+| **↶ Undo** | Takes back the last change, as <kbd>Ctrl</kbd>+<kbd>Z</kbd> does. |
+
+The class tools work on the class chosen in the **Class:** filter. If the filter shows all classes, they use the class of the selected round, or the only class racing. If none of those settles it, HeatCaller asks you to pick a class. What a command did goes to the console.
 
 ### Post the heats
 
-Posting is the moment tonight's heats go on the board. Drivers look up their heat once and trust it, so HeatCaller treats it as a step of its own. With **Post the heats before the first race** ticked on **Race Day → Setup** (on by default), once the heats are built the card reads "Tonight's heats are built - post them next." and its button is **Post the heats...**.
+Posting is the moment tonight's heats go on the board. Drivers look up their heat once and trust it, so HeatCaller treats it as a step of its own. With **Post the heats before the first race** ticked on **Race Day → Setup** (on by default), once the heats are built the card reads "Tonight's heats are built - post them next." and its button is **Post the heats**.
 
 The card also lists any car on tonight's heats that the loop hasn't heard tonight, for example "2 cars on tonight's heats haven't crossed the loop tonight: Al Gorithim and Rhoda Rage." A car counts as heard when it has crossed the line since 6am (practice counts), or when it has a timed lap in a race saved tonight. Get those cars out in practice, or check their transponders, before Q1. In Demo Mode every car counts as heard.
 
-**Post the heats...** opens a window that says the same, with three boxes, all ticked to start with:
+**Post the heats** opens the **Post the Heats** window, which says the same, with three boxes, all ticked to start with:
 
-- **Print the heat sheets** for every class racing tonight, with their estimated start times (see [Heat sheets](#heat-sheets)).
-- **Print the marshal list**, the same roster as the **Marshals...** window (see [Corner marshals](#corner-marshals)).
+- **Print the heat sheets** (**Print the race sheets** on a club night) for every class racing tonight, with their estimated start times (see [Heat sheets](#heat-sheets)).
+- **Print the marshal list**, the same roster as the **Marshals** window (see [Corner marshals](#corner-marshals)).
 - **Tell the room (the announcer)**: "Tonight's heats are posted. Check the board, or your phone, for your heat and your marshal post."
 
-Click **Post the Heats**. The print preview opens with all the pages together, and the card moves on to **Start Q1 Heat 1**. **Undo** takes the posting back.
+Click **Post the Heats**. The print preview opens with all the pages together, and the card moves on to the first race. **Undo** takes the posting back.
 
 Posting also keeps each race's estimated start, as printed and shown on the phones, as the time drivers were given. Auto start never starts a race more than 2 minutes before it (see [Auto start between races](../race-control/running-a-race.md#auto-start-between-races)). The time from **Entries close at:** to posting is the first of the race director's two measures in the event report's [night pace](../race-control/results-and-championships.md).
 
 Once the heats are posted, **Move Drivers Between Heats** and **Redo Remaining Heats** (on **Race Control**) ask before changing them: "The heats were posted at 18:42, so drivers and marshals may already have looked theirs up." **Add a Late Entry** doesn't ask, because it moves nobody else (see [A late entry](#a-late-entry)).
 
-If you start the first race without posting, the heats count as out and the card stops asking. Untick **Post the heats before the first race** to go straight from building to **Start Q1 Heat 1**, as before.
+If you start the first race without posting, the heats count as out and the card stops asking. Untick **Post the heats before the first race** to go straight from building to the first race.
 
 ### Planned breaks
 
-**Breaks...** on **Race Day → Setup** plans breaks into the night before it starts: watering the track, dinner, track repairs. Each break has:
+**Breaks** on **Race Day → Setup** plans breaks into the night before it starts: watering the track, dinner, track repairs. Each break has:
 
 - **When**: **After Q1**, **After Q2** and so on (**After Race 1** on a club night), or **Before the finals**.
 - **Minutes**: from 1 to 120.
@@ -109,7 +164,7 @@ Up to four breaks. **No break** on a line leaves it out. The **Breaks:** line on
 
 A break falls between the last race of its round and the next race. A break after Q2 still comes before the finals if Q3 is dropped. HeatCaller allows for breaks in:
 
-- **The finish time and estimated starts** on the next-step card, the heat sheets and the phones' **Schedule** page (see [When the night finishes](#when-the-night-finishes)).
+- **The estimated starts and the end of racing** on the run sheet, the heat sheets and the phones' **Schedule** page (see [When the night finishes](#when-the-night-finishes)).
 - **Auto start.** The gap before the race after a break is the usual gap plus the break, and the announcer says it as the break begins: "Time for a 10-minute break - water the track. Racing starts again about 20:40." **Hold**, **+1 min** and **Start now** work as usual. With **Auto start** off, nothing is said and the break is yours to time.
 
 A new race day at the same venue starts with the last day's breaks.
@@ -129,31 +184,25 @@ For example: "Before lights out: 2 rentals still out (Sam, Jo) · 14 night email
 
 ### The closing checklist
 
-With **Close the night with a checklist** ticked on **Race Day → Setup** (on by default), the card's button reads **Close the night...** once everything has run. It opens a window listing the same things, one per line, plus any lines of your own:
+With **Close the night with a checklist** ticked on **Race Day → Setup** (on by default), the card's button reads **Close the night** once everything has run. It opens a window listing the same things, one per line, plus any lines of your own:
 
 - Each line the app can check ticks itself when it sees the job done, for example when the last rental is checked back in on **Rentals**. The window stays open beside the rest of the app and checks again every couple of seconds.
 - The button beside a line goes to the screen that sorts it: **Rentals**, **Who's Racing** (for entries still owed), **Club Website** (for results and night emails) or **Setup** (for **Close Day**). **Back Up Now** takes a backup to your usual backup folder straight away.
 - If you've dealt with something the app can't see (a rental handed back over the fence, an entry paid to the treasurer), tick it off by hand. It drops off the card too. Hand ticks are kept for tonight's race day only.
-- **Your Own Lines...** adds your club's own jobs, one per line, for example "Lock the clubhouse" or "Pack up the timing loop". They're on the list every night, ticked off by hand.
+- **Your Own Lines** adds your club's own jobs, one per line, for example "Lock the clubhouse" or "Pack up the timing loop". They're on the list every night, ticked off by hand.
 
-Checks that don't apply tonight, such as money when the day has no entry fee, aren't listed. With the checklist off, the card just shows the one line, and its button opens **Tonight's Standings** as before. Standings is always on the program's **Standings** button too.
+Checks that don't apply tonight, such as money when the day has no entry fee, aren't listed. With the checklist off, the card just shows the one line, and its button opens **Qualifying Standings** (**Tonight's Standings** on a club night). **Standings** along the foot always opens them too.
 
 Bump-ups come *before* starting the next round on purpose: once the upper main has gone out, it's too late to add the bumped drivers. The Next Up bar on **Race Control** follows the same rule: while bump-ups or finals are owed, its **Start Next** button offers them instead of the next race. See [The Next Up bar](../race-control/running-a-race.md#the-next-up-bar).
 
-The card is only a shortcut. Every program command it offers is also on the program's buttons or its right-click menu, so you can build or seed at any time, not only when the card suggests it.
+The card is only a shortcut. Every program command it offers is also on **More** along the foot or on the sheet's right-click menu, so you can build or seed at any time, not only when the card suggests it.
 
 !!! tip
     A helper can run the program from a phone or tablet too: the race-day manager's **Program** tab builds the finals, applies bump-ups, moves drivers between heats and reorders or deletes rounds. See [Race-day manager](../screens/phone-and-web.md#race-day-manager).
 
-### Ready to race
-
-The **Ready to race** card beside it shows how ready the day is, as a bar and a count such as "3 of 6 ready". Under the bar, **Still to do:** lists what's left: open tonight's race day (or start a new one, when this one is closed), add your classes, choose tonight's classes, check drivers in (or add drivers to tonight's classes), build the program (build the races, on a club night), and connect the timer.
-
-**Finish Setting Up** opens the Set Up Tonight wizard at the first step that isn't done (see [The Set Up Tonight wizard](events-and-entries.md#the-set-up-tonight-wizard)). When only the timer is left, the button is **Connect Timer**, which opens the **Connection** page. Once everything is done, the card says **All set**, and until the first race has run its button is **Ready to Race...** (see [The Ready to race checklist](#the-ready-to-race-checklist)).
-
 ### The Ready to race checklist
 
-**Ready to Race...** opens a list of what to check before the first race, the start-of-night twin of [the closing checklist](#the-closing-checklist). Each line ticks itself as HeatCaller sees it done, has a button to the screen that sorts it, and can be ticked off by hand:
+**Ready to Race** along the foot opens a list of what to check before the first race, the start-of-night twin of [the closing checklist](#the-closing-checklist). It's there once the night is set up and the program is built, until the first race has run. Each line ticks itself as HeatCaller sees it done, has a button to the screen that sorts it, and can be ticked off by hand:
 
 - **The decoder is connected and hearing cars**: connected, and a car has crossed the loop tonight. **Connection**.
 - **The phone pages are up on the Wi-Fi**, when the club uses them. **Local Screens**.
@@ -163,60 +212,54 @@ The **Ready to race** card beside it shows how ready the day is, as a bar and a 
 - **Every car on tonight's heats has been on the loop**, or which haven't (see [Post the heats](#post-the-heats)). **Race Control**.
 - **Everybody's papers are in order**, when the club checks waivers or memberships (see [Papers](events-and-entries.md#papers-waivers-and-memberships)). **Who's Racing**.
 - **Backed up in the last week**. **Back Up Now** takes one.
-- **Hold the drivers' meeting**. **Meeting Sheet...** opens it (see below), and printing it or reading it out ticks this line.
+- **Hold the drivers' meeting**. **Meeting Sheet** opens it (see below), and printing it or reading it out ticks this line.
 
-**Your Own Lines...** adds your club's own jobs, such as "Water the track" or "Set out the marshal posts". They're on the list every night, ticked off by hand. Hand ticks are kept for tonight's race day only. The window stays open beside the rest of the app and checks again every couple of seconds.
+**Your Own Lines** adds your club's own jobs, such as "Water the track" or "Set out the marshal posts". They're on the list every night, ticked off by hand. Hand ticks are kept for tonight's race day only. The window stays open beside the rest of the app and checks again every couple of seconds.
 
 ### The drivers' meeting
 
-**Meeting Sheet...** on the Ready to race checklist writes the drivers' meeting from tonight's day, one point to a line: the classes in running order, how many rounds and heats, the first race, the breaks, the out-by time, the marshal rule (each heat marshals the next, and whether the start waits for them), how long results stay provisional, the papers, and the day's **Notes:** from **Setup**. Change anything in the box, then:
+**Drivers' Meeting** along the foot (any time a race day is open), or **Meeting Sheet** on the Ready to race checklist, opens the **Drivers' Meeting** window. It writes the meeting from tonight's day, one point to a line: the classes in running order, how many rounds and heats, the first race, the breaks, the out-by time, the marshal rule (each heat marshals the next, and whether the start waits for them), how long results stay provisional, the papers, and the day's **Notes:** from **Setup**. Change anything in the box, then:
 
-- **Print...** prints it on a page for the board.
-- **Read It Out** has the announcer say it to the room.
+- **Print** prints it on a page for the board.
+- **Read It Out** has the announcer say it to the room. Once it has been read, the button reads **Read It Again**.
 
 Changes in the box are for tonight only. To say something every week, put it in the day's **Notes:**.
 
-### The day so far
+## Tonight's run sheet { #tonights-program }
 
-Five tiles under **THE DAY SO FAR**: how many classes are racing, how many drivers are in them, how many are checked in, how many rounds have run (for example "4 / 12"), and what's next up — the next round, "Done" once the program is complete, or the next line on the timetable when there's no program yet.
-
-## Tonight's program
-
-The **Tonight's program** card lists the race day's rounds, all classes together, in the order they run.
+The **Tonight's run sheet** card lists the race day's races, all classes together, in the order they run, each at its clock time. Above it, the **Class:** filter shows one class at a time (**All classes** shows everything), and beside it a count says how far through the night you are, for example "4 of 12 run". HeatCaller remembers the filter. It lists only the classes racing today, not every class on the club's books; a remembered class that isn't racing today falls back to **All classes** and is picked up again on the next race day that runs it. The next race is the next one for the whole day, whichever class you're looking at: when it isn't on show, the card sits on a row of its own between what has run and what is to come.
 
 | Column | Shows |
 |---|---|
-| **#** | Position in the running order. |
-| **Due** | The round's time on the timetable. Only shown once at least one round has a time. See [The Timetable](#the-timetable). |
-| **About** | When a round still to run should start, worked out from tonight's pace. Blank for rounds already run. See [When the night finishes](#when-the-night-finishes). |
-| **Round** | The round's name, such as "Q2 Heat 1" or "A-Main". |
-| **Kind** | **Heat** (**Race** on a club night), **A-Main**, **B-Main** and so on, **Main (no tier)** for a hand-added main whose name doesn't say its tier, or **Practice**. |
-| **Class** | The class, in the class's color. |
-| **Drivers** | How many drivers are in the round. Point at the number to see who they are, in running order. |
-| **Track** | The track layout, or "-". |
-| **Status** | **Recorded** (run and saved), **NEXT** (the next round to run, highlighted), or **Scheduled**. |
+| **Due** | The race's time on the timetable. Only shown once at least one race has a time there. See [The Timetable](#the-timetable). |
+| **Time** | For a race already run, when it started. For one still to run, when it should start, from tonight's pace (see [When the night finishes](#when-the-night-finishes)). |
+| (the timeline) | A dot for each race, down a line through the night. |
+| **Race** | The race with its class first, for example "Stock · Q2 Heat 1", in the class's color while it's still to run. A shared heat names both classes: "Stock + Mod · Q1 Heat 1". |
+| **Drivers** | For a race still to run, how many of its drivers are here, for example "4 of 5 here" (or "5 drivers" on a night that doesn't check drivers in). Point at it to see who they are, in running order. |
+| **Length** | How long the race is on track, for example "5 min". |
+| **Status** | **Recorded** (run and saved), **Ready** (everybody in it is here), "2 missing" (two of its drivers aren't checked in), or **No drivers**. |
 
-Only rounds that belong to the current race day are listed, so last week's heats don't appear. The **Class:** filter above the list shows one class at a time (**All classes** shows everything), and HeatCaller remembers your choice. It lists only the classes racing today, not every class on the club's books; a remembered class that isn't racing today falls back to **All classes** and is picked up again on the next race day that runs it. **NEXT** is always the next round for the whole day, whichever class you're looking at.
+The sheet reads down the night:
 
-The buttons under the list come in two groups:
+- **Races already run** are quiet gray. The last one stays in view; the earlier ones fold into one row, for example "▸ 3 earlier races recorded". Click it to show them, and "▾ Hide the earlier races" to fold them again. So the next race is always near the top, and its **Start** button stays put through the night.
+- **A NOW line** with the time runs across the top of the next race's row, where [the card](#the-next-step-card) sits.
+- **The races still to run** follow, each at its time.
+- **The finals still to build**, on a race day, are one row marked **Not built**.
+- **Racing done** ends the sheet, at the time racing should end, with **On time** or how late, when the day has an out-by time. The dashed **OUT BY** line sits above the first race that would start after it.
 
-- On the left, buttons that act on the **selected round**: **Start Selected** and **Edit Drivers**.
-- On the right, tools for the day and its classes: **Timetable**, **Standings** (**Tonight's Standings** on a club night), **Marshals**, **Move the Top Finishers Up** (not on a club night) and **Glossary**, which opens **What these words mean**, a plain-English list of the racing terms used on this page.
+Only rounds that belong to the current race day are listed, so last week's heats don't appear.
 
-The class tools work on the class chosen in the **Class:** filter. If the filter shows all classes, they use the class of the selected round, or the only class racing. If none of those settles it, HeatCaller asks you to pick a class.
-
-The line under the buttons says what the last command did. Until then it reminds you that everything else is on the right-click menu.
-
-Everything else is on the round menu. Right-click the list to open it: on a round to act on that round, or anywhere in the list for the commands that don't need one.
+Double-click a race to start it. Everything else is on the round menu: right-click the sheet, on a race to act on that race, or anywhere in the sheet for the commands that don't need one.
 
 | Menu item | What it does |
 |---|---|
-| **Start This Round** | Same as **Start Selected**. |
+| **Start This Round** | Starts the race (see [Start a round](#start-a-round)). |
 | **Start as Demo...** | Runs the round as a simulated race, with no timing hardware. Nothing is recorded against the round unless **Let a demo fill in the race program (rehearse a whole night)** is ticked on **Demo Mode**; then the demo marks it as run. See [Practice, ghosts and demo mode](../race-control/practice-and-ghosts.md). |
 | **Edit Drivers...** | Changes who's in the round. |
-| **Edit Result** | For a round that has been raced: opens its race in **Race History** with **Edit Result** open, to add a missed lap, a penalty or a DNF after the next race is under way. Greyed out for a round not raced yet. See [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result). |
+| **Edit Result** | For a round that has been raced: opens its race in **Race History** with **Edit Result** open, to add a missed lap, a penalty or a DNF after the next race is under way. Grayed out for a round not raced yet. See [Correcting a saved result](../race-control/corrections-and-recovery.md#correcting-a-saved-result). |
 | **Move Drivers Between Heats...** | Opens the class's heats side by side. See [Balance heats](#balance-heats). |
-| **Add a Late Entry...** | Puts a driver who has just arrived into the smallest heat of each round still to run, without moving anyone else. See [A late entry](#a-late-entry). |
+| **Add a Late Entry...** | Puts a driver who has just arrived into a heat of each round still to run, without moving anyone else. See [A late entry](#a-late-entry). |
+| **Run Together...** | With two heats selected, runs them as one race, each class scored on its own. See [Mixed-class heats](#mixed-class-heats). |
 | **Move Up** / **Move Down** | Moves the round one place in the running order. |
 | **Build Tonight's Heats...** | Builds (or rebuilds) the qualifying heats. On a club night it's **Build Tonight's Races...**. |
 | **Build the Finals from Qualifying...** | Seeds a class's mains. Not shown on a club night. |
@@ -228,7 +271,7 @@ Everything else is on the round menu. Right-click the list to open it: on a roun
 
 ### We're done after this round
 
-For rain, a curfew, or a track that has to close early. Right-click the list and choose **We're Done After This Round...**. HeatCaller lists the races it would drop: every heat of the later qualifying rounds (Q3, Q4...), none of them run. The round under way is the one on track, or else the next to run, and it's finished as normal. Click **Yes** to drop them.
+For rain, a curfew, or a track that has to close early. Right-click the run sheet (or click **More** along the foot) and choose **We're Done After This Round...**. HeatCaller lists the races it would drop: every heat of the later qualifying rounds (Q3, Q4...), none of them run. The round under way is the one on track, or else the next to run, and it's finished as normal. Click **Yes** to drop them.
 
 When the race day has an **Out by** time and finals still to run, the question also offers the finals' share, with what each saves from tonight's estimate:
 
@@ -240,14 +283,14 @@ The choice is kept on the race day and applied when the finals are built: **Buil
 
 - Nothing that has run is touched, and the dropped races' lines leave the timetable.
 - The announcer tells the room, with the words on the Big Screen: "Change of plan, everyone: qualifying finishes after Q2, and the finals are next." On a club night: "...tonight finishes after Race 2."
-- When the round is done, the next-step card offers **Build the finals from qualifying** as usual, from the qualifying that ran.
+- When the round is done, the card on **Next Steps** offers **Build the finals from qualifying** as usual, from the qualifying that ran.
 - **Undo** puts the dropped races back, with their timetable lines.
 
 The command is grayed out when there's no later qualifying round still to run, and refused on a closed day.
 
 ## Build the qualifying program
 
-1. Click **Build tonight's heats** on the next-step card (or right-click the list and choose **Build Tonight's Heats...**).
+1. Click **Build tonight's heats** on the card on **Next Steps** (or choose **Build Tonight's Heats...** on **More** or the run sheet's right-click menu).
 2. Check the summary: how many heats per class, how many drivers, the heat size, the track, and whether only checked-in drivers are used. It also says how many unrun qualifiers will be replaced (only today's are counted and replaced).
 3. Click **Yes**.
 
@@ -282,7 +325,7 @@ Set **First round seeded:** to **Heads-up (HRQF, from practice)** on **Setup** t
 
 ### Change who's in a round
 
-Select a round and click **Edit Drivers**. In **Drivers in *round***, tick the drivers to include and use **Move Up** / **Move Down** to set their order — that's the order they appear on the heat sheet. **Select All** and **Clear All** tick or untick everyone. Click **Save**.
+Select a race on the run sheet and click **Edit Drivers** along the foot of **Next Steps** (with nothing selected, it opens the next race), or right-click it and choose **Edit Drivers...**. In **Drivers in *round***, tick the drivers to include and use **Move Up** / **Move Down** to set their order — that's the order they appear on the heat sheet. **Select All** and **Clear All** tick or untick everyone. Click **Save**.
 
 The list shows the class's drivers, including those who race it as one of their other classes. To add someone from another class (a late entry, say), click **Add Driver** — they're shown with "(not in this class)" beside their name, every time the round is opened.
 
@@ -292,7 +335,7 @@ For a no-show or a late entry across every heat still to run, **Redo Remaining H
 
 ### Balance heats
 
-**Move Drivers Between Heats...** (on the round menu: right-click the list) shows all of a class's rounds for the day side by side, one column per round, so you can see everyone at once.
+**Move Drivers Between Heats...** (on **More**, or the run sheet's right-click menu) shows all of a class's rounds for the day side by side, one column per round, so you can see everyone at once.
 
 <!-- screenshot: Move drivers between heats window with several heat columns and the NOT IN A HEAT column -->
 
@@ -318,11 +361,11 @@ Only heats that can still change are sorted: a recorded heat, or the one on trac
 
 ### Change the running order
 
-Drag rounds up or down the list to reorder them — a line shows where they'll land. You can drag several selected rounds together.
+Drag races up or down the run sheet to reorder them — a line shows where they'll land. You can drag several selected rounds together.
 
 A drag that starts on a round that's already selected moves it. A drag that starts on a round that isn't selected selects every round you pass instead. So to move a run of rounds, drag down them to select them, then drag them to where they go. **Move Up** and **Move Down** on the round menu do the same one place at a time. **Move Up** and **Move Down** on a round's line in the Timetable move the round here too.
 
-When the list is filtered to one class, moves are made relative to what you can see. A drag that would put a driver closer than tonight's **Races off between a driver's races:** asks first, with the same warning as **Move Drivers Between Heats** ("... would race in Q2 Heat 1 and Q2 Heat 2 back to back"). A move can be undone with **Undo**, which puts the whole running order back as it was.
+When the run sheet is filtered to one class, moves are made relative to what you can see. A drag that would put a driver closer than tonight's **Races off between a driver's races:** asks first, with the same warning as **Move Drivers Between Heats** ("... would race in Q2 Heat 1 and Q2 Heat 2 back to back"). A move can be undone with **Undo**, which puts the whole running order back as it was.
 
 ### Delete rounds
 
@@ -330,7 +373,7 @@ Select one or more rounds, right-click them and choose **Delete**, then confirm.
 
 ### A late entry
 
-For a driver who turns up after the heats are posted. Right-click the list and choose **Add a Late Entry...** (it works on the class in the **Class:** filter, or the selected round's class). Pick the driver from the class's drivers who aren't in a heat still to run, and click **Add to Heats**.
+For a driver who turns up after the heats are posted. Choose **Add a Late Entry...** on **More** or the run sheet's right-click menu (it works on the class in the **Class:** filter, or the selected round's class). Pick the driver from the class's drivers who aren't in a heat still to run, and click **Add to Heats**.
 
 They go into one heat of each qualifying round still to run that they aren't already in, never a heat on track or already run. Which heat:
 
@@ -345,7 +388,7 @@ Nobody else moves, so the heat sheet on the wall and everybody's phones stay rig
 A driver who checks in after tonight's heats are built (at the desk, on a phone, or by scanning) goes into them the same way as **Add a Late Entry**, without anyone having to notice:
 
 - **Before the heats are posted**, they go in by themselves within a few seconds, and nobody else moves. The console says where each went, and **Undo** takes them out.
-- **After the heats are posted** (or once a race has run), the card asks first: "Max Power checked in after the heats were posted." **Add them to the heats...** lists each driver and the heats they'd go in. Untick anyone who isn't racing tonight (say they've only come to marshal), and click **Add the Ticked**. An unticked driver isn't asked about again tonight. **Undo** takes back either.
+- **After the heats are posted** (or once a race has run), the card asks first: "Max Power checked in after the heats were posted." **Add them to the heats** opens **Checked In Late**, which lists each driver and the heats they'd go in. Untick anyone who isn't racing tonight (say they've only come to marshal), and click **Add the Ticked**. An unticked driver isn't asked about again tonight. **Undo** takes back either.
 - Tick **Add late check-ins to posted heats without asking** on **Setup** to have them go in by themselves after posting too.
 
 Only drivers who check in after the heats are built count. A driver you take out of the heats on purpose, with **Move Drivers Between Heats** say, isn't put back. After HeatCaller restarts, everybody already checked in counts as known.
@@ -375,11 +418,11 @@ How a shared heat shows up:
 
 Each driver's class in the heat is the class whose heat they came from (or the class they were added to as a late entry). A driver added by hand some other way counts in their main class if it's one of the heat's, otherwise their first other class that is. A driver who races both classes is in one of them for that heat.
 
-The [curfew planner](#tonights-program) can suggest it too: when the night is running late and two classes each run one small heat a round, the next-step card offers "run Stock and Mod together (Run Together on the program) to save ...".
+The curfew planner can suggest it too: when the night is running late and two classes each run one small heat a round, the **Get back on time** card suggests "Also: run Stock and Mod together (Run Together on the program) (−12 min)." See [Get back on time](#get-back-on-time).
 
 ## Start a round
 
-Click the next-step card's **Start** button, select a round and click **Start Selected**, or double-click the round. HeatCaller asks you to confirm ("Staging and the countdown begin immediately."), then switches to **Race Control**, calls the grid, and begins staging and the countdown straight away. See [Running a race](../race-control/running-a-race.md).
+Click **Start** on the card for the next race, double-click a race on the run sheet, or right-click it and choose **Start This Round**. HeatCaller asks you to confirm ("Staging and the countdown begin immediately."), then switches to **Race Control**, calls the grid, and begins staging and the countdown straight away. See [Running a race](../race-control/running-a-race.md).
 
 You'll get an extra warning if the round has no drivers, or has already been run — starting a recorded round again records a new session and doesn't replace the existing result.
 
@@ -468,7 +511,7 @@ On the IFMAR and EFRA scales, a dropped round isn't looked at for a tie, as thei
 
 ### Qualifying standings
 
-Click **Standings** under the program (or **Qualifying Standings** on the next-step card once the program is complete) to see the class's current qualifying order.
+Click **Standings** along the foot of **Next Steps** (or **Qualifying Standings** on the card once the program is complete) to see the class's current qualifying order.
 
 <!-- screenshot: Qualifying Standings window for a best-3-consecutive class with dropped heats -->
 
@@ -506,7 +549,7 @@ If no qualifier is running, the window says so.
 
 ## Seed the mains
 
-When a class has finished qualifying, the next-step card offers **Build the finals from qualifying** (it's also **Build the Finals from Qualifying...** on the round menu, available at any time: right-click the list).
+When a class has finished qualifying, the card on **Next Steps** offers **Build the finals from qualifying** (it's also **Build the Finals from Qualifying...** on **More** and on the run sheet's right-click menu, available at any time).
 
 1. Click **Build the finals from qualifying**.
 2. Check the preview: every driver under the main they go in, in order, with the qualifying result that put them there (for example "14 laps, 5:02.3 (Q2 Heat 1)", "best 3 in a row 36.912" for best-consecutive qualifying, or "6 pts (best 2 of 3)" for points qualifying), the places that bump up marked **[bump-up place]**, and whether bump-ups are on. While the class's results are still provisional, it starts by saying so (see [The protest window](#the-protest-window)).
@@ -534,7 +577,7 @@ Ties are broken by the best finish in any single leg, then by the better finish 
 
 The overall result is in the event report, under **A-Main overall**, with each driver's place and points in every leg. Each leg's own result is in **Results** like any race. Once the last leg is recorded, the announcer says who won overall straight after that leg's result, for example "Sam wins the A-Main overall, best two of three legs", and the race recap mentions it too.
 
-The legs take their bump-ups from the B-Main together. **Move the Top Finishers Up...** (or the next-step card) asks once and puts the B-Main's top finishers into every leg that hasn't run, with one **Undo**. Skipping bump-ups skips them for every leg too. A leg that has already run, or already has its bump-ups, is left alone.
+The legs take their bump-ups from the B-Main together. **Move the Top Finishers Up...** (or the card on **Next Steps**) asks once and puts the B-Main's top finishers into every leg that hasn't run, with one **Undo**. Skipping bump-ups skips them for every leg too. A leg that has already run, or already has its bump-ups, is left alone.
 
 Seeding only looks at the current race day's mains. If the class already has mains today that haven't run, seeding replaces them. If any of today's mains have already been run, seeding stops with **Mains already run** — take the ones you don't want off the program first, so recorded results aren't orphaned. Mains from earlier race days are left alone and never block seeding. A main that's out on track can't be replaced either. Seeding can be undone. As with the qualifying build, any new mains that have been run by the time you undo are kept, along with a main that's on track right now, and a **Some rounds were kept** box lists them.
 
@@ -547,14 +590,14 @@ Each qualifying round of a class, once all its heats are recorded, and each main
 - The **Big Screen**'s finished board says "RACE COMPLETE — PROVISIONAL UNTIL 20:42" while the window of the race on it is open.
 - Drivers can query a result from their phone in the meantime (see [Querying a result](../online/driver-requests.md#querying-a-result)). When a round's window closes, **Something wrong?** goes from its races on each driver's night page. A round with heats still to run keeps it as before.
 - A query asked while its race's window was open goes to the top of the [Inbox](../race-control/inbox.md), counted as race-blocking, marked **In the protest window** in its notes.
-- The finals still wait only for the class's last qualifying round: the next-step card says "Results are provisional until 20:42 (the protest window)." above **Build the finals from qualifying**. Building the finals before then is allowed. The question starts with the same words and "A query still to come could change this order."
+- The finals still wait only for the class's last qualifying round: the card on **Next Steps** says "Results are provisional until 20:42 (the protest window)." above **Build the finals from qualifying**. Building the finals before then is allowed. The question starts with the same words and "A query still to come could change this order."
 - A window of 0 turns it off, and the phones behave as before.
 
 If the class has no recorded qualifying yet, seeding offers to add a main by hand instead.
 
 ### Add a main by hand
 
-For a one-off main, right-click the list and choose **Add a Main by Hand...**. In the **Add Main** window, enter a **Round Label:** (it suggests the first letter not already used by the class's mains in today's program: "A-Main", then "B-Main", "C-Main" and so on), pick a **Track Layout:**, and tick the drivers under **Drivers in this main:**. **Top:** with **from Qualifying** ticks the top N qualifiers; **All** and **None** tick or clear everyone.
+For a one-off main, click **+ Add Race** along the foot of **Next Steps**, or right-click the run sheet and choose **Add a Main by Hand...**. In the **Add Main** window, enter a **Round Label:** (it suggests the first letter not already used by the class's mains in today's program: "A-Main", then "B-Main", "C-Main" and so on), pick a **Track Layout:**, and tick the drivers under **Drivers in this main**. **Top:** with **from Qualifying** ticks the top N qualifiers; **All** and **None** tick or clear everyone.
 
 A hand-added main takes part in bump-ups only if its label names a tier — "A-Main", "B Main", "A Final", "C" and so on. A label like "Consolation" isn't treated as a tier, and shows as **Main (no tier)** in the **Kind** column.
 
@@ -570,9 +613,9 @@ A bump-up can happen only when **all** of these are true:
 - The upper main hasn't been run yet.
 - The upper main is set to receive bump-ups, and they haven't already been applied to it.
 
-When a bump-up is due, the next-step card says so ("B-Main has finished.") and offers **Move the top finishers up**. You can also click **Move the Top Finishers Up** under the program at any time.
+When a bump-up is due, the card on **Next Steps** says so ("B-Main has finished.") and offers **Move the top finishers up**. You can also choose **Move the Top Finishers Up...** on **More** along the foot at any time.
 
-1. Click **Move the top finishers up** (or **Move the Top Finishers Up**).
+1. Click **Move the top finishers up** (or choose **Move the Top Finishers Up...** on **More**).
 2. Check the drivers and positions listed. The list shows exactly who will move.
 3. Choose:
     - **Yes** to move them up now.
@@ -603,7 +646,7 @@ For each round, the **Corner Marshals** window lists **Round**, **Marshaled By**
 - The first round has no previous heat, so its posts are left for you to assign by hand.
 - If there aren't enough free drivers, the uncovered posts are shown and the round is highlighted, for example "Q1 Heat 2 has 3 drivers free for 4 posts - 1 corner uncovered. (1 more is driving in Q2 Heat 1.)"
 
-**Swap...** covers a post with somebody else: a driver who needs to fix their car can swap their marshal duty with a friend. Select the post's row, click **Swap...**, and pick who covers it (anybody racing tonight who isn't driving in that round). The roster then reads, for example, "Sam (covering Jo)", and the announcer's marshal call, the Next Up bar and drivers' phones all follow it. Pick the original driver again to put them back, or use **Undo**. A swap is for that one round.
+**Swap** covers a post with somebody else: a driver who needs to fix their car can swap their marshal duty with a friend. Select the post's row, click **Swap**, and pick who covers it (anybody racing tonight who isn't driving in that round). The roster then reads, for example, "Sam (covering Jo)", and the announcer's marshal call, the Next Up bar and drivers' phones all follow it. Pick the original driver again to put them back, or use **Undo**. A swap is for that one round.
 
 **Copy as Text** copies the whole roster as plain text, ready to print or paste into a group chat.
 
@@ -614,16 +657,16 @@ To stop Auto start going green with empty posts, right-click the **Auto:** switc
 - A minute before the start, a banner names them: "Marshals for Q2 Heat 3: Hugh Turn (Turn 1), Rhoda Rage (Turn 2). In place?"
 - **Marshals in place** confirms them, and the race starts on time.
 - If nobody has confirmed by zero, the race waits: the banner reads "Q2 Heat 3 is waiting for its marshals", and the announcer calls them once: "Marshals for Q2 Heat 3, to your posts please: Hugh Turn on Turn 1 and Rhoda Rage on Turn 2."
-- **Someone's missing...** logs a marshal who didn't turn up, and applies your club's rule, **A marshal who doesn't turn up:** on **Setup** (see [Setup](events-and-entries.md)). Get someone onto the post, then press **Marshals in place**.
+- **Someone's missing** logs a marshal who didn't turn up, and applies your club's rule, **A marshal who doesn't turn up:** on **Setup** (see [Setup](events-and-entries.md)). Get someone onto the post, then press **Marshals in place**.
     - **Loses their best qualifying result** (the default): their best counted qualifier tonight in their class goes, and their next best stands in. Under points qualifying it's their best round, which then scores as missed. **Qualifying Standings** marks them with a * and says which and why: "Marshal rule: Max Power: Lost Q1 Heat 1 (14 laps) - marshal no-show, Q3 Heat 2 (Turn 1)." The mains are seeded from it, and the event report shows it.
     - **Time penalty in their next race** (10 seconds unless you change it): added when their next race is saved, as a correction with its reason, so **Race History** shows it.
     - **Nothing**: logged only.
-    - The event report lists every no-show under **Marshal no-shows**, with what the rule did. Clicking the same line in **Someone's missing...** again ("... did turn up - take the no-show off") takes it back off, the time penalty too. So does **Undo**.
+    - The event report lists every no-show under **Marshal no-shows**, with what the rule did. Clicking the same line in **Someone's missing** again ("... did turn up - take the no-show off") takes it back off, the time penalty too. So does **Undo**.
 - **Start now** on the Hold button's menu starts without waiting.
 
 **From the marshals' own phones.** While a driver's marshal duty is the next race to start, their night page offers **I'm at my post (Turn 3)**. A tap tells Race Control they're in, and the banner says who's in and who isn't: "Marshals for Q2 Heat 3 - 2 of 3 in: Hugh Turn, Rhoda Rage; waiting for Axel Grease (Turn 3)." When every marshal of the race has tapped it, the race no longer waits for them, as if you'd pressed **Marshals in place**. At zero the announcer calls only the posts still empty. **Marshals in place** still confirms them all, whatever the phones say. This needs the driver's own night and [Driver requests](../online/driver-requests.md) turned on.
 
-**Swaps from phones.** On their marshal duty a driver can tap **Ask someone to cover...** and pick a driver who's checked in tonight and isn't racing or marshalling that race. The asked driver's phone says "Max P. asks you to cover Turn 3 in Q2 Heat 3 (Stock)" with **Accept** and **Decline**. A yes is the same swap **Swap...** makes. While **Marshal swaps from phones need the desk's OK** is ticked under **Rules** in the [Inbox](../race-control/inbox.md) (it is to start with), the yes waits there as a **Marshal swap**, at the top as race-blocking, for you to **Approve...**. Untick it and the swap is made by itself. A no never waits.
+**Swaps from phones.** On their marshal duty a driver can tap **Ask someone to cover...** and pick a driver who's checked in tonight and isn't racing or marshalling that race. The asked driver's phone says "Max P. asks you to cover Turn 3 in Q2 Heat 3 (Stock)" with **Accept** and **Decline**. A yes is the same swap **Swap** makes. While **Marshal swaps from phones need the desk's OK** is ticked under **Rules** in the [Inbox](../race-control/inbox.md) (it is to start with), the yes waits there as a **Marshal swap**, at the top as race-blocking, for you to **Approve...**. Untick it and the swap is made by itself. A no never waits.
 
 A race with nobody on a post (a layout with no **Corner marshal posts:**) never waits.
 
@@ -636,23 +679,23 @@ The same marshal list is what the announcer reads out for the `{marshals}` place
 
 A heat sheet is a printable page for the pit table: the current race day's rounds of a class with its drivers, cars, transponders and blank columns to write laps and times in.
 
-**To print it straight away:** right-click the list and choose **Print Heat Sheet...**. It uses the class in the **Class:** filter (or the selected round's class). Pick the printer, check the preview, and print from the preview's toolbar. Each page is fitted inside the printer's margins without being stretched.
+**To print it straight away:** choose **Print Heat Sheet...** on **More** along the foot of **Next Steps**, or on the run sheet's right-click menu. It uses the class in the **Class:** filter (or the selected round's class). Pick the printer, check the preview, and print from the preview's toolbar. Each page is fitted inside the printer's margins without being stretched.
 
 **To save it as a picture instead:**
 
-1. Right-click the list and choose **Save Heat Sheet...**.
+1. Choose **Save Heat Sheet...** on **More** or the run sheet's right-click menu.
 2. Choose where to save the PNG.
 3. Open it and print it at full page size.
 
 The sheet is black on white for easy reading, with a band of the class's color across the top and beside each round, so you can sort a pile of sheets by class at a glance. It's letter-size. A class with more rounds than fit on one page runs onto as many pages as it needs, each marked "page 1 of 2" and so on. Saved, the first page goes to the file you chose and the others beside it with "-page2", "-page3" added to the name; HeatCaller asks before replacing pages already in that folder.
 
-Each round still to run shows its estimated start after its title, for example "Q2 Heat 1 - about 20:42", from the same plan of the night as the **Next Steps** finish time. The times are worked out when you print or save, so print the sheet again later in the night for times that have moved. Rounds already run, and a sheet printed with no race day open, show none.
+Each round still to run shows its estimated start after its title, for example "Q2 Heat 1 - about 20:42", from the same plan of the night as the times on the **Next Steps** run sheet. The times are worked out when you print or save, so print the sheet again later in the night for times that have moved. Rounds already run, and a sheet printed with no race day open, show none.
 
 ## The Timetable
 
 The timetable is the day's running order with times: every heat and final in the order it runs, plus anything else happening that day — doors open, lunch, the prize-giving. It shows what's done, what's on track now and how far off its slot it started, and what's next.
 
-Click **Timetable** under **Tonight's program** to open it. It opens in a window of its own, titled **Timetable**; close it with **Close** or <kbd>Esc</kbd> to get back to the main window.
+Choose **Timetable...** on **More** along the foot of **Next Steps** to open it. It opens in a window of its own, titled **Timetable**; close it with **Close** or <kbd>Esc</kbd> to get back to the main window.
 
 <!-- screenshot: Timetable window with done, on-track and up-next lines -->
 
@@ -683,7 +726,7 @@ The grid shows **Done**, **Time**, **Class**, **What** and **Status**. The **Sta
 
 Click the **Done** checkbox to tick a line off (or back on) by hand. Double-click a line to edit it.
 
-The timetable's times show up elsewhere too: in the **Due** column of **Tonight's program**, as "running 12 min late" on **Next Steps** (at 5 minutes or more), as minutes behind or ahead on the Race Control Next Up bar (at 3 minutes or more), in the **ON DECK** bar on the [Big Screen](../screens/big-screen.md), and on your club's online schedule.
+The timetable's times show up elsewhere too: in the **Due** column of the run sheet on **Next Steps**, as minutes behind or ahead on the Race Control Next Up bar (at 3 minutes or more), in the **ON DECK** bar on the [Big Screen](../screens/big-screen.md), and on your club's online schedule.
 
 ### Add and change lines
 

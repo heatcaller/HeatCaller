@@ -380,7 +380,7 @@ Only a render that isn't already on disk is charged to ElevenLabs and counted ag
 
 - **A line with no driver's name in it is rendered once for every club.** The laptop tells the relay when a line is one of the announcer's fixed lines, so "Green flag!" is paid for by the first club that asks and handed to all the rest. Most of a club's fixed lines cost nothing at all.
 - **A line with a name in it is cached for that club alone.**
-- **A re-roll is charged like a new line.** **Re-roll Line...** on the club's **Voice → Voice** tab asks for a fresh take past every cache. It's counted against that club's month and kept in that club's own cache, so other clubs keep hearing the shared take; the club's own copy is used first from then on. An older relay ignores the request and hands back the cached take - redeploy with `fly deploy --ha=false`.
+- **A re-roll is charged like a new line.** **Re-roll Line** on the club's **Voice → Voice** tab asks for a fresh take past every cache. It's counted against that club's month and kept in that club's own cache, so other clubs keep hearing the shared take; the club's own copy is used first from then on. An older relay ignores the request and hands back the cached take - redeploy with `fly deploy --ha=false`.
 - **Each club's month is a calendar month (UTC)**, counted in `dataDir/.voice/usage/<club>.json`, so a deploy doesn't hand anybody a fresh allowance.
 - **The allowance holds under load.** A club's characters are reserved before the render and given back if it fails, so a laptop with several lines in flight at once can't slip past the limit.
 

@@ -26,7 +26,7 @@ On the **Sign-ups** chip:
 
 The Inbox can stay open while you work. A sign-up made while it's open appears within about ten seconds.
 
-![The Inbox on the Sign-ups chip: three sign-ups waiting, with Approve, Turn Down and Later, and the Invites list below them with the codes hidden](../assets/images/inbox-signups.png)
+![The Inbox on the Sign-ups filter, its filters folded to their keys: three sign-ups waiting, the first picked on the right with Approve, Turn Down and Later, and the Invites list below with one expired invite, its code hidden, and Invite Drivers, Code for Someone Here, Show Code, Email Again and Cancel Invite](../assets/images/inbox-signups.png)
 
 ## Turn it on
 
@@ -91,6 +91,8 @@ A transponder that already belongs to another driver is refused, with the same m
 ## Turn a sign-up down
 
 Select it, click **Turn Down**, optionally type why or what to do instead, and click **Turn Down**. Their phone shows "Not signed up" with your message.
+
+**A junior's sign-up gets a set reply.** When a parent or guardian ticked **I am a parent or guardian signing up a driver under 18**, or the transponder is a junior's already on your books, **Turn Down** offers only three set lines: "The timing desk couldn't take this sign-up.", "Please sign up at the desk instead." and "Please pick a different class." **Other reason...** is grayed out, with "Juniors get a set reply - tell the parent in person if you need to say more." Nothing typed at the desk goes to a child's phone.
 
 For 10 seconds after you approve or turn down a sign-up, the line under the buttons has **Undo**.
 

@@ -8,7 +8,7 @@ penalties, qualifying, mains, championships), keeps and corrects the
 results, publishes them to phones and the club's website, and calls the
 race out loud with an announcer, AI commentary and soundscapes.
 
-Version **0.62.0 BETA** (the one number is `<Version>` in
+Version **0.63.0 BETA** (the one number is `<Version>` in
 `HeatCaller\HeatCaller.csproj`; `AppVersion` reads it back from the
 assembly). What changed in each release is in
 `..\website\docs\release-notes.md`.
@@ -45,7 +45,7 @@ for reports.
 
 ```
 HeatCaller.sln
-HeatCaller/            the WinForms app (net10.0-windows), ~600 source files
+HeatCaller/            the WinForms app (net10.0-windows), ~800 source files
   ROADMAP.md           the live roadmap: where things stand, what's next, gotchas
   ROADMAP-1.md         archived snapshot of 27 Sep 2026, not maintained
   Assets/              fonts, sound packs, music, icons, legal text; Kokoro and
@@ -61,7 +61,8 @@ on Fly.io that gives a club its https address and phone pages), `website\`
 
 Main packages: NAudio, HidSharp, System.IO.Ports, QRCoder, KokoroSharp
 (the free local voice), LLamaSharp (the built-in commentary model),
-LibVLCSharp (video) and Velopack (installer and updates).
+LibVLCSharp (video), WebView2 (the overlay editor's live picture) and Velopack
+(installer and updates).
 
 ## Building
 

@@ -123,7 +123,9 @@ The check compares two lists:
 | ? | Heard, but not on the roster. | "On track but not in this race - ... Either they are in the wrong heat, or this is a car from the last one still circulating." |
 | OK | Heard clearly. | "Heard just now, *n* passes, signal *n*." |
 
-Problems are listed first. When everything is fine, the headline reads "All *n* clear. Every car on the ... is being heard. Good to go."
+Four tiles at the top count the cars in each group: **Heard**, **Weak**, **Not heard** and **Not in race**. The list under them has **Driver**, **Transponder** and **What the decoder hears**, with problems listed first. When everything is fine, the headline reads "All *n* clear. Every car on the ... is being heard. Good to go." Otherwise it sums up what's wrong and ends "Put the cars that failed on the track and press Check again."
+
+Opened from **Race Control**, the window also has **Mission Control**, which opens [Mission Control](../race-control/running-a-race.md#mission-control) for the wider check (the decoder, timing, the website) and closes this one.
 
 ### Signal strength
 

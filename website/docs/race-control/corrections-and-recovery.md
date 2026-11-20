@@ -112,9 +112,11 @@ The saved result, the championship points and the qualifying figures keep the fi
 
 **Edit Result** on the **Race History** page corrects a race after it has been saved. It only works once **Allow corrections to saved results** is ticked on the **Local Screens** page, in the **Race-day manager (phone)** card. It's off by default; until then it says "Correcting saved results is switched off on the laptop." Only a real race can be corrected, not practice or a demo race. A result pasted in from LiveRC can't be corrected either: delete it and paste it again.
 
-1. Select the race on **Race History** and click **Edit Result**. From the race program, right-click a round that has been raced and choose **Edit Result** to go straight there.
+1. Select the race on **Race History** and click **Edit Result**. From the race program on **Race Day → Next Steps**, right-click a round that has been raced and choose **Edit Result** to go straight there, even after the next race is under way (it's grayed out for a round not raced yet). After the flag, **Edit Result** on the Race Control flag row does the same for the race just run.
 2. For each driver, set **Added Laps** (laps added, or taken away with a minus sign), **Time Penalty (s)**, **Lap Penalty** and **Outcome** (**Finished**, **DNF** or **DQ**). **New order** shows the result as it will be.
-3. Type a reason in **Reason (required, kept with the result):** and click **Save Correction**.
+3. Type a reason in **Reason:** (it's needed to save, and kept with the result) and click **Save Correction**.
+
+The tiles across the top of the window sum the correction up as you go: **Drivers**, **Winner**, **Changed** (how many drivers' figures you've changed) and **Order moves** (how many drivers end up in a different place). In **New order**, a driver who has moved shows "▲ was P3" or "▼ was P2".
 
 Corrections are worked out from the race as it was actually run, not from the last correction, so setting everything back to zero and **Finished** gives the original result back. Qualifying, the mains, the championship and the results pages all use the corrected figures. Badges already earned for the race aren't worked out again. **Undo** takes a correction back.
 
@@ -134,7 +136,9 @@ If the decoder or the loop stops working during a race, you don't have to stop t
 - **Right-click** a car to take a lap off, or use **Undo last tap** (or <kbd>Ctrl</kbd>+<kbd>Z</kbd>) for the last car you tapped.
 - A second tap on the same car within a second is ignored, so a finger bouncing on a touch screen doesn't count two laps.
 - **Close (keep scoring)** hides the grid and leaves hand scoring on. **Score by Hand** on the Next Up bar brings it back.
-- **Stop hand scoring** goes back to counting laps from the loop, for example once the decoder is working again. Laps already counted by hand stay.
+- **Stop hand scoring** goes back to counting laps from the loop, for example once the decoder is working again. It asks first. Laps already counted by hand stay.
+
+While hand scoring is on, the leaderboard's right-click item reads **Open the hand-scoring grid...**. Before the first car has crossed, the grid says "No car on the board yet" and that each car gets a button once it crosses the line.
 
 Each tap is the same as **+1 Lap** in the drawer: it has no lap time, so it never sets a best lap or a record, it's on the **Undo** list, and a lap that reaches the lap limit brings the checkered flag out as usual. A car joins the grid once it has crossed the line in this race, or when you add it (below).
 
