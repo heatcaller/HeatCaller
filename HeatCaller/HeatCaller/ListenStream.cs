@@ -77,8 +77,9 @@ internal sealed record ListenSegment(
 /// so each of its reads says how much time has passed; the music and the
 /// crowd are held a moment in a buffer each (BedLead) and laid under the
 /// bus read by read. Their devices run on the same sound card as the bus
-/// almost always, so they keep step; when one gets ahead it is trimmed,
-/// and when it runs dry it is silence until it has caught up again.
+/// almost always, so they keep step; when one gets ahead it is trimmed
+/// with a crossfade, and when it runs dry it fades out and comes back as
+/// soon as there is a read's worth again (see Run.Bed).
 /// </summary>
 internal sealed class ListenStream : IDisposable
 {
@@ -349,7 +350,8 @@ internal sealed class ListenStream : IDisposable
             }
 
             var rate = bed.SourceRate == SampleRate ? "" : $", resampled from {bed.SourceRate} Hz";
-            shape.Add($"{name} held {Seconds(bed.LeastHeldSeconds)} to {Seconds(bed.MostHeldSeconds)}{rate}");
+            var slowed = bed.SlowedSeconds > 0 ? $", played slower for {Seconds(bed.SlowedSeconds)} to build its lead back" : "";
+            shape.Add($"{name} held {Seconds(bed.LeastHeldSeconds)} to {Seconds(bed.MostHeldSeconds)}{rate}{slowed}");
         }
 
         if (health.Dropped > 0)
@@ -384,7 +386,8 @@ internal sealed class ListenStream : IDisposable
     /// <summary>
     /// What one bed did in a stretch. Heard is how many of the bus's reads
     /// had this bed under them; a bed that played nothing is left out of
-    /// the line.
+    /// the line. SlowedSeconds is how long it played slower building its
+    /// lead back after a drop (19 Nov 2026 - see Run.Bed).
     /// </summary>
     internal readonly record struct BedHealth(
         int Heard,
@@ -395,7 +398,8 @@ internal sealed class ListenStream : IDisposable
         double SkipSeconds,
         double LeastHeldSeconds,
         double MostHeldSeconds,
-        int SourceRate);
+        int SourceRate,
+        double SlowedSeconds = 0);
 
     private void Say(string? problem)
     {
@@ -433,6 +437,10 @@ internal sealed class ListenStream : IDisposable
         private readonly BlockingCollection<Chunk> _in = new(boundedCapacity: 128);
         private readonly BlockingCollection<short[]> _pcm = new(boundedCapacity: 256);
         private readonly Bed[] _beds = { new(), new() };
+
+        // One per source (bus, music, crowd), so each read carries on from
+        // the one before - see RecapBed.Resampler. The mixer thread's.
+        private readonly RecapBed.Resampler[] _resamplers = { new(SampleRate), new(SampleRate), new(SampleRate) };
         private readonly long[] _loud = new long[LoudRing];
         private readonly ConcurrentQueue<(long Sample, string Text)> _captions = new();
         private readonly long _runTicks = DateTime.UtcNow.Ticks;
@@ -519,7 +527,7 @@ internal sealed class ListenStream : IDisposable
             {
                 foreach (var chunk in _in.GetConsumingEnumerable())
                 {
-                    var mono = RecapBed.ToMonoAtRate(chunk.Samples, chunk.Samples.Length, chunk.Channels, chunk.Rate, SampleRate);
+                    var mono = _resamplers[chunk.Source].Next(chunk.Samples, chunk.Samples.Length, chunk.Channels, chunk.Rate);
 
                     if (chunk.Source != BusSource)
                     {
@@ -666,23 +674,61 @@ internal sealed class ListenStream : IDisposable
         ///
         /// Counted as it goes (11 Nov 2026 - see <see cref="HealthEvery"/>),
         /// the two things it does to the sound that the room never hears:
-        /// running dry, which is silence until half a second has built up
-        /// again, and being trimmed, which jumps the music forward. A dry
-        /// spell counts as a drop only when the music was sounding as it
+        /// running dry, and being trimmed, which jumps the music forward. A
+        /// dry spell counts as a drop only when the music was sounding as it
         /// ran out and came back within <see cref="LongestDrop"/> - a track
         /// fading out, or the music being stopped, is not one. Add and Under
         /// are the mixer thread's; TakeHealth is anybody's.
+        ///
+        /// KEEPING IN TIME (19 Nov 2026, the music "skips or drops"). It used
+        /// to go silent on running dry until a whole half second had built up
+        /// again, so a tenth-of-a-second stall in the music's output was most
+        /// of a second of silence on the phones, and a trim was a hard cut.
+        /// Now:
+        ///  - Running dry fades the last <see cref="FadeSeconds"/> out rather
+        ///    than stopping dead, and whatever plays next fades in.
+        ///  - After a drop it plays again as soon as one of the bus's reads is
+        ///    there, and builds its half second back by playing
+        ///    <see cref="SlowBy"/> slower until it has (counted, so the console
+        ///    says how long it took). A fresh start, a track that faded out or
+        ///    the music having stopped still waits for the whole half second,
+        ///    where the wait is in silence anyway.
+        ///  - A trim goes back to the half second, not to nothing, and
+        ///    crossfades from where the music was to where it jumps to.
         /// </summary>
         internal sealed class Bed
         {
             /// <summary>A dry spell longer than this is the music having stopped, not a drop.</summary>
             internal const double LongestDrop = 5.0;
 
-            private readonly Queue<float[]> _parts = new();
+            /// <summary>How long a fade in, a fade out or a trim's crossfade takes: short enough not to be heard as one, long enough not to click.</summary>
+            internal const double FadeSeconds = 0.02;
+
+            /// <summary>How much slower the bed plays while it builds its lead back after a drop - a third of a semitone.</summary>
+            internal const double SlowBy = 0.02;
+
+            internal const int FadeSamples = (int)(FadeSeconds * SampleRate);
+
+            /// <summary>The most it holds - see <see cref="BedStalledSeconds"/>.</summary>
+            private const int Capacity = (int)(BedStalledSeconds * SampleRate);
+
+            private const int LeadSamples = (int)(BedLeadSeconds * SampleRate);
+
+            private readonly float[] _ring = new float[Capacity];
             private readonly object _tally = new();
-            private int _head;
+
+            // The oldest sample held, how many are held, and how far between
+            // it and the next the bed has played (only while slowed).
+            private int _read;
             private int _held;
+            private double _frac;
+
             private bool _primed;
+            private bool _started;
+            private bool _slowed;
+
+            // Samples still to fade in at the front of what plays next.
+            private int _fadeIn;
 
             // The dry spell under way: how much silence it has made so far,
             // and whether it cut the sound off rather than following a fade.
@@ -700,9 +746,16 @@ internal sealed class ListenStream : IDisposable
             private long _longestDropSamples;
             private int _skips;
             private long _skipSamples;
+            private long _slowedSamples;
             private int _leastHeld = int.MaxValue;
             private int _mostHeld;
             private int _sourceRate = SampleRate;
+
+            /// <summary>How much is held, in samples - for the tests.</summary>
+            internal int Held => _held;
+
+            /// <summary>Whether it is playing slower to build its lead back - for the tests.</summary>
+            internal bool Slowed => _primed && _slowed;
 
             /// <param name="sourceRate">The device's own rate, before it was brought to the stream's - for the console only.</param>
             public void Add(float[] mono, int sourceRate = SampleRate)
@@ -712,17 +765,23 @@ internal sealed class ListenStream : IDisposable
                     return;
                 }
 
-                _parts.Enqueue(mono);
-                _held += mono.Length;
+                // Nothing is taking it (see BedStalledSeconds): the oldest
+                // goes. Not counted as a trim here: Under counts the jump
+                // when the bus is back.
+                var from = Math.Max(0, mono.Length - Capacity);
+                var n = mono.Length - from;
+                var over = _held + n - Capacity;
 
-                // Nothing is taking it (see BedStalledSeconds). Not counted
-                // as a trim here: Under counts the jump when the bus is back.
-                var most = (int)(BedStalledSeconds * SampleRate);
-
-                if (_held > most)
+                if (over > 0)
                 {
-                    Skip(_held - most);
+                    Drop(over);
                 }
+
+                var write = (_read + _held) % Capacity;
+                var first = Math.Min(n, Capacity - write);
+                Array.Copy(mono, from, _ring, write, first);
+                Array.Copy(mono, from + first, _ring, 0, n - first);
+                _held += n;
 
                 if (sourceRate > 0)
                 {
@@ -733,11 +792,14 @@ internal sealed class ListenStream : IDisposable
             /// <summary>Adds the next stretch of this bed into <paramref name="mix"/>, as long as the mix.</summary>
             public void Under(float[] mix)
             {
-                var lead = (int)(BedLeadSeconds * SampleRate);
-
                 if (!_primed)
                 {
-                    if (_held < lead)
+                    // Back from a drop: as soon as a read's worth is here,
+                    // rather than silence until the whole lead is.
+                    var quick = _started && _dry && _dryCutSound && _drySamples <= LongestDrop * SampleRate;
+                    var need = quick ? Math.Min(LeadSamples, Math.Max(1, mix.Length)) : LeadSamples;
+
+                    if (_held < need)
                     {
                         if (_dry)
                         {
@@ -748,6 +810,10 @@ internal sealed class ListenStream : IDisposable
                     }
 
                     _primed = true;
+                    _started = true;
+                    _slowed = quick && _held < LeadSamples;
+                    _fadeIn = FadeSamples;
+                    _frac = 0;
 
                     if (_dry)
                     {
@@ -757,14 +823,20 @@ internal sealed class ListenStream : IDisposable
 
                 if (_held > BedMostSeconds * SampleRate)
                 {
-                    var trimmed = _held - lead;
-                    Skip(trimmed);
+                    var trimmed = _held - LeadSamples;
+                    Crossfade(trimmed);
 
                     lock (_tally)
                     {
                         _skips++;
                         _skipSamples += trimmed;
                     }
+                }
+
+                if (_slowed && _held >= LeadSamples)
+                {
+                    _slowed = false;
+                    _frac = 0;
                 }
 
                 lock (_tally)
@@ -774,37 +846,77 @@ internal sealed class ListenStream : IDisposable
                     _mostHeld = Math.Max(_mostHeld, _held);
                 }
 
-                var at = 0;
+                var speed = _slowed ? 1.0 - SlowBy : 1.0;
+
+                // How many of the mix's samples what is held makes, and
+                // whether that leaves nothing for the next read.
+                var count = _held <= 0 ? 0 : (int)Math.Min(mix.Length, Math.Floor((_held - 1 - _frac) / speed) + 1);
+                var emptied = count < mix.Length || _frac + (count * speed) >= _held;
+                var fadeOut = emptied ? Math.Min(FadeSamples, count) : 0;
+                var pos = _frac;
                 var peak = 0f;
 
-                while (at < mix.Length && _parts.Count > 0)
+                for (var i = 0; i < count; i++, pos += speed)
                 {
-                    var part = _parts.Peek();
-                    var n = Math.Min(mix.Length - at, part.Length - _head);
+                    var whole = (int)pos;
+                    var a = _ring[(_read + whole) % Capacity];
+                    var level = a;
 
-                    for (var i = 0; i < n; i++)
+                    if (_slowed && whole + 1 < _held)
                     {
-                        var level = part[_head + i];
-                        mix[at + i] += level;
-                        peak = Math.Max(peak, Math.Abs(level));
+                        level = a + ((_ring[(_read + whole + 1) % Capacity] - a) * (float)(pos - whole));
                     }
 
-                    at += n;
-                    Used(part, n);
+                    peak = Math.Max(peak, Math.Abs(level));
+
+                    var gain = 1f;
+
+                    if (_fadeIn > 0)
+                    {
+                        gain = (FadeSamples - _fadeIn + 1f) / (FadeSamples + 1f);
+                        _fadeIn--;
+                    }
+
+                    if (i >= count - fadeOut)
+                    {
+                        gain *= (count - i) / (fadeOut + 1f);
+                    }
+
+                    mix[i] += level * gain;
                 }
 
-                if (at > 0)
+                var used = emptied ? _held : Math.Min(_held, (int)pos);
+                _frac = emptied ? 0 : pos - (int)pos;
+                _read = (_read + used) % Capacity;
+                _held -= used;
+
+                if (_slowed && count > 0)
+                {
+                    lock (_tally)
+                    {
+                        _slowedSamples += count;
+                    }
+                }
+
+                if (count > 0)
                 {
                     _lastPeak = peak;
                 }
 
-                // Ran dry: silence until it has caught up again, rather than
-                // a stutter of whatever arrives.
-                if (at < mix.Length)
+                if (emptied)
+                {
+                    // Faded out, so whatever plays next fades in - and it
+                    // will be short of its lead, so it builds it back.
+                    _fadeIn = FadeSamples;
+                    _slowed = _started;
+                }
+
+                // Ran dry: silence until the next read's worth is here.
+                if (count < mix.Length)
                 {
                     _primed = false;
                     _dry = true;
-                    _drySamples = mix.Length - at;
+                    _drySamples = mix.Length - count;
                     _dryCutSound = _lastPeak > LoudEnough;
                 }
             }
@@ -823,7 +935,8 @@ internal sealed class ListenStream : IDisposable
                         (double)_skipSamples / SampleRate,
                         _heard == 0 ? 0 : (double)_leastHeld / SampleRate,
                         (double)_mostHeld / SampleRate,
-                        Volatile.Read(ref _sourceRate));
+                        Volatile.Read(ref _sourceRate),
+                        (double)_slowedSamples / SampleRate);
 
                     _heard = 0;
                     _drops = 0;
@@ -831,6 +944,7 @@ internal sealed class ListenStream : IDisposable
                     _longestDropSamples = 0;
                     _skips = 0;
                     _skipSamples = 0;
+                    _slowedSamples = 0;
                     _leastHeld = int.MaxValue;
                     _mostHeld = 0;
                     return health;
@@ -854,27 +968,46 @@ internal sealed class ListenStream : IDisposable
                 }
             }
 
-            private void Skip(int samples)
+            /// <summary>
+            /// Jumps <paramref name="trimmed"/> forward, crossfading from what
+            /// would have played next to what plays now, in place: the first
+            /// of what is kept becomes the blend of the two.
+            /// </summary>
+            private void Crossfade(int trimmed)
             {
-                while (samples > 0 && _parts.Count > 0)
+                var fade = Math.Min(FadeSamples, _held - trimmed);
+
+                for (var i = 0; i < fade; i++)
                 {
-                    var part = _parts.Peek();
-                    var n = Math.Min(samples, part.Length - _head);
-                    samples -= n;
-                    Used(part, n);
+                    var g = (i + 1f) / (fade + 1f);
+                    var outgoing = _ring[(_read + i) % Capacity];
+                    var into = (_read + trimmed + i) % Capacity;
+                    _ring[into] = (outgoing * (1f - g)) + (_ring[into] * g);
                 }
+
+                _read = (_read + trimmed) % Capacity;
+                _held -= trimmed;
             }
 
-            private void Used(float[] part, int n)
+            /// <summary>
+            /// The oldest <paramref name="samples"/> go. While it is playing
+            /// the first of what is held is what follows what was last heard,
+            /// so that much is kept, for the trim to crossfade from, and the
+            /// samples after it go instead.
+            /// </summary>
+            private void Drop(int samples)
             {
-                _head += n;
-                _held -= n;
+                samples = Math.Min(samples, _held);
+                var keep = _primed ? Math.Min(FadeSamples, _held - samples) : 0;
 
-                if (_head >= part.Length)
+                // Backwards, as the two may overlap.
+                for (var i = keep - 1; i >= 0; i--)
                 {
-                    _parts.Dequeue();
-                    _head = 0;
+                    _ring[(_read + samples + i) % Capacity] = _ring[(_read + i) % Capacity];
                 }
+
+                _read = (_read + samples) % Capacity;
+                _held -= samples;
             }
         }
 

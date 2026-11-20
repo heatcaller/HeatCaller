@@ -51,8 +51,12 @@ public sealed class BugHunt17_ListenStreamTests
         var mix = new float[Tenth];
         bed.Under(mix);
 
-        // The lead is the last half second added.
-        Assert.All(mix, level => Assert.Equal(0.75f, level));
+        // The lead is the last half second added - after the fade in the
+        // bed starts with (19 Nov 2026, see ListenStream.Run.Bed), which
+        // never goes past it.
+        var fade = ListenStream.Run.Bed.FadeSamples;
+        Assert.All(mix.Skip(fade), level => Assert.Equal(0.75f, level));
+        Assert.All(mix.Take(fade), level => Assert.InRange(level, 0f, 0.75f));
     }
 
     [Fact]

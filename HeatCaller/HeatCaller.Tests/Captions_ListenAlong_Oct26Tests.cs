@@ -190,27 +190,22 @@ public sealed class Captions_ListenAlong_Oct26Tests
     // ------------------------------------------------- listen lines first
 
     [Fact]
-    public void Listen_lines_go_first_in_the_pass_and_between_the_documents_drained()
+    public void Listen_lines_never_wait_behind_the_worker()
     {
+        // Since 19 Nov 2026 not "first in the worker's pass" but not on the
+        // worker at all: a thread and a client of their own - see
+        // RelayPublisher.Listen, ListenLoop. The behaviour is tested in
+        // RelayPublisherListenThreadTests; this says the worker sends none.
         var publisher = Source("RelayPublisher.cs");
+        var worker = Method(publisher, "private void Run()");
+        var drain = Method(publisher, "private void Drain(CancellationToken token)");
 
-        // Before Drain in the worker's pass.
-        var first = publisher.IndexOf("SendListenLinesWaiting(pass.Token);", StringComparison.Ordinal);
-        var drain = publisher.IndexOf("Drain(pass.Token);", StringComparison.Ordinal);
-        Assert.True(first > 0 && first < drain, "the waiting lines go before the documents");
+        Assert.Equal(0, Count(worker, "SendListen"));
+        Assert.Equal(0, Count(drain, "SendListen"));
 
-        // And inside Drain, after the result and after each snapshot.
-        var body = Method(publisher, "private void Drain(CancellationToken token)");
-        Assert.Equal(2, Count(body, "SendListenLinesWaiting(token);"));
-        Assert.True(body.IndexOf("SendListenLinesWaiting(token);", StringComparison.Ordinal)
-                    < body.IndexOf("var taken = TakeSnapshots();", StringComparison.Ordinal));
-        Assert.True(body.LastIndexOf("SendListenLinesWaiting(token);", StringComparison.Ordinal)
-                    > body.IndexOf("for (var i = 0; i < taken.Count; i++)", StringComparison.Ordinal));
-
-        // Nothing at all when nobody is listening or nothing is waiting.
-        var waiting = Method(Source("RelayPublisher.Listen.cs"), "private void SendListenLinesWaiting(CancellationToken token)");
-        Assert.Contains("!_settings.ListenAlongOnTheRelay", waiting);
-        Assert.Contains("Listening.Waiting == 0", waiting);
+        var listen = Source("RelayPublisher.Listen.cs");
+        Assert.Contains("_listenHttp.SendAsync(", listen);
+        Assert.Contains("SendListenLines(token);", Method(listen, "private void ListenPass(CancellationToken token)"));
     }
 
     // ------------------------------------------------- helpers

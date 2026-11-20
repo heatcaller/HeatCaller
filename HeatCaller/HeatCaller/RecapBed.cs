@@ -95,6 +95,9 @@ internal sealed class RecapBed
     private readonly float[][] _rings = { new float[RingLength], new float[RingLength] };
     private readonly long[] _nextPos = new long[2];
     private readonly long[] _furthest = new long[2];
+
+    // One per source, so each read carries on from the one before - see Resampler.
+    private readonly Resampler[] _resamplers = { new(SampleRate), new(SampleRate) };
     private readonly byte[] _scratch = new byte[32 * 1024];
     private long _flushed;
 
@@ -414,10 +417,11 @@ internal sealed class RecapBed
 
             _furthest[s] = Math.Min(_furthest[s], Math.Max(from, _flushed));
             _nextPos[s] = _furthest[s];
+            _resamplers[s].Reset();
             return;
         }
 
-        var mono = ToMonoAtRate(chunk.Samples, chunk.Samples.Length, chunk.Channels, chunk.Rate, SampleRate);
+        var mono = _resamplers[s].Next(chunk.Samples, chunk.Samples.Length, chunk.Channels, chunk.Rate);
         var pos = PositionAt(chunk.DueTicks);
 
         if (Math.Abs(pos - _nextPos[s]) <= SnapSamples)
@@ -551,6 +555,113 @@ internal sealed class RecapBed
         }
 
         return output;
+    }
+
+    /// <summary>
+    /// <see cref="ToMonoAtRate"/> for a stream of reads from one device
+    /// (19 Nov 2026, Listen Now's music "skips or drops"). Converting each
+    /// read on its own drops the fraction of a sample left over at its end
+    /// and cannot interpolate across into the next read, so every read
+    /// boundary was a small step in the music and a sliver of drift. This
+    /// carries both over: where between two source frames the next output
+    /// sample falls (exactly, in whole ticks of the output rate), and the
+    /// last frame of the read before, so a read's first samples are
+    /// interpolated from the end of the one before. Read after read, the
+    /// output is what one long read would have made. A rate or channel
+    /// change mid-stream (the next track at 44.1k after one at 48k) carries
+    /// straight on from where it was. One per device; not thread safe.
+    /// </summary>
+    internal sealed class Resampler
+    {
+        private readonly int _toRate;
+
+        // Where the next output sample falls, in source frames times _toRate,
+        // counted from the first frame of the next read. Between reads it is
+        // in (-_toRate, 0]: at or after the last frame of the read before.
+        private long _phase;
+        private float _last;
+        private bool _hasLast;
+
+        public Resampler(int toRate) => _toRate = Math.Max(1, toRate);
+
+        /// <summary>Forgets the read before - after a cut, so the next read does not lean on sound that was cut.</summary>
+        public void Reset()
+        {
+            _phase = 0;
+            _last = 0f;
+            _hasLast = false;
+        }
+
+        /// <summary>One read as mono at the stream's rate, carried on from the read before.</summary>
+        public float[] Next(float[] interleaved, int count, int channels, int fromRate)
+        {
+            channels = Math.Max(1, channels);
+            var frames = Math.Min(count, interleaved.Length) / channels;
+
+            if (frames <= 0 || fromRate <= 0)
+            {
+                return Array.Empty<float>();
+            }
+
+            var mono = new float[frames];
+
+            for (var f = 0; f < frames; f++)
+            {
+                var sum = 0f;
+                var at = f * channels;
+
+                for (var c = 0; c < channels; c++)
+                {
+                    sum += interleaved[at + c];
+                }
+
+                var level = sum / channels;
+                mono[f] = float.IsFinite(level) ? level : 0f;
+            }
+
+            float[] output;
+
+            if (fromRate == _toRate && _phase == 0)
+            {
+                // The bus and the crowd, nearly always: nothing to do.
+                output = mono;
+            }
+            else
+            {
+                if (!_hasLast && _phase < 0)
+                {
+                    _phase = 0;
+                }
+
+                // Every output sample whose phase is at or before the last frame.
+                var lastPhase = (long)(frames - 1) * _toRate;
+                var length = _phase > lastPhase ? 0 : (int)(((lastPhase - _phase) / fromRate) + 1);
+                output = new float[length];
+                var phase = _phase;
+
+                for (var i = 0; i < length; i++, phase += fromRate)
+                {
+                    var before = FloorDiv(phase, _toRate);
+                    var fraction = (float)(phase - (before * _toRate)) / _toRate;
+                    var a = before < 0 ? _last : mono[before];
+                    var b = before + 1 < frames ? mono[before + 1] : a;
+
+                    output[i] = a + ((b - a) * fraction);
+                }
+
+                _phase = phase - ((long)frames * _toRate);
+            }
+
+            _last = mono[frames - 1];
+            _hasLast = true;
+            return output;
+        }
+
+        private static long FloorDiv(long a, long b)
+        {
+            var q = a / b;
+            return (a % b != 0 && (a < 0) != (b < 0)) ? q - 1 : q;
+        }
     }
 
     /// <summary>
