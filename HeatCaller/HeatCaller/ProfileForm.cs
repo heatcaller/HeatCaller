@@ -777,6 +777,19 @@ public sealed class ProfileForm : Form
             crewVoicesWidth = Math.Max(crewVoicesWidth, FitPicker(picker, keepToRow: false) + picker.Margin.Horizontal);
         }
 
+        // One width for the two, one under the other in the same card: a
+        // voice kept from before ("not on the list now") is on only one
+        // list, and made that one alone wider.
+        foreach (var picker in new[] { _cmbCrewPrincipalVoice, _cmbCrewTechVoice }.OfType<ComboBox>())
+        {
+            var voiceWidth = crewVoicesWidth - picker.Margin.Horizontal;
+
+            if (picker.Width != voiceWidth)
+            {
+                picker.Width = voiceWidth;
+            }
+        }
+
         // The fields' column: never narrower than the text boxes were, wide
         // enough for the garage's drop-down and its two buttons on one line
         // when its names are short, as they were, and for each drop-down's

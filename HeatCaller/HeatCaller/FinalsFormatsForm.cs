@@ -168,8 +168,11 @@ public sealed class FinalsFormatsForm : Form
         lowerLegsCard.Add(Hint("The B, C and lower mains run in legs like the A-Main."));
         lowerLegsCard.Add(lowerLegs, gapBelow: 0);
 
-        var invitationalCard = new Section(Invitational.Name);
-        invitationalCard.Add(Hint("A series of mains for the whole field, scored on points, best ones counting."));
+        // The card says the short name (look-back, 19 Nov 2026): the full
+        // name is past the 28 letters a card title is spaced out to, and sat
+        // unspaced between two spaced titles. The full name is in the hint.
+        var invitationalCard = new Section(Invitational.ShortName);
+        invitationalCard.Add(Hint("A Reedy-style format: a series of mains for the whole field, scored on points, best ones counting."));
         invitationalCard.Add(invitational, gapBelow: 0);
 
         var lblIntro = new Label
@@ -329,6 +332,12 @@ public sealed class FinalsFormatsForm : Form
         private readonly ListBox _list = new();
         private readonly List<string> _transponders = new();
 
+        /// <summary>The drivers' names in the list's order; the list shows each with its place in front.</summary>
+        private readonly List<string> _names = new();
+
+        /// <summary>The widest the window grows to for a long name, at the normal text size.</summary>
+        private const int MostWidth = 640;
+
         public SeedOrderForm(string className, IReadOnlyList<(string Transponder, string Name)> rows)
         {
             using var building = LayoutFreeze.HoldWhileBuilding();
@@ -344,7 +353,8 @@ public sealed class FinalsFormatsForm : Form
             foreach (var (transponder, name) in rows)
             {
                 _transponders.Add(transponder);
-                _list.Items.Add(name);
+                _names.Add(name);
+                _list.Items.Add(Numbered(_names.Count - 1));
             }
 
             if (_list.Items.Count > 0)
@@ -404,7 +414,28 @@ public sealed class FinalsFormatsForm : Form
             AppTheme.ApplyRecursively(this);
             AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
 
-            DialogFit.Keep(this, page, width: 492, height: 480);
+            // As wide as it was made, at the text size in use - or wider, up
+            // to MostWidth, for the longest numbered name (look-back, 19 Nov
+            // 2026): at 492 a name of 26 letters was cut, and names that
+            // differ only at the end all read the same. The list measured in
+            // the face the theme pass left, with room for its scrollbar and
+            // edge, beside the column of buttons - as Add a Driver to This
+            // Round measures its list.
+            var widest = _list.Items.Cast<object>()
+                .Take(400)
+                .Select(item => TextRenderer.MeasureText(_list.GetItemText(item) ?? string.Empty, _list.Font).Width)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            var side = new[] { btnTop, btnUp, btnDown, btnClear }.Max(b => UiLayout.ButtonSizeFor(b).Width);
+
+            var width = Math.Clamp(
+                UiLayout.PageLeft + Section.Inset.Horizontal + widest + SystemInformation.VerticalScrollBarWidth + 8
+                    + UiLayout.RowGap + side + UiLayout.PageRight,
+                UiLayout.AtTextSize(492),
+                UiLayout.AtTextSize(MostWidth));
+
+            DialogFit.Keep(this, page, width: width, height: 480, widthMeasured: true);
         }
 
         /// <summary>Roster Order was pressed: the class goes back to its roster order.</summary>
@@ -423,14 +454,33 @@ public sealed class FinalsFormatsForm : Form
                 return;
             }
 
-            var item = _list.Items[index];
+            var name = _names[index];
             var transponder = _transponders[index];
 
-            _list.Items.RemoveAt(index);
+            _names.RemoveAt(index);
             _transponders.RemoveAt(index);
-            _list.Items.Insert(target, item);
+            _names.Insert(target, name);
             _transponders.Insert(target, transponder);
+
+            // Every row between the two moves up or down one place.
+            _list.BeginUpdate();
+
+            for (var i = Math.Min(index, target); i <= Math.Max(index, target); i++)
+            {
+                _list.Items[i] = Numbered(i);
+            }
+
+            _list.EndUpdate();
             _list.SelectedIndex = target;
         }
+
+        /// <summary>A row as the list shows it: its place, then the name - so names cut short still tell apart.</summary>
+        private string Numbered(int index) => $"{index + 1}. {_names[index]}";
+
+        /// <summary>The rows as the list shows them, for tests.</summary>
+        internal IReadOnlyList<string> RowsShown => _list.Items.Cast<object>().Select(item => _list.GetItemText(item)).ToList();
+
+        /// <summary>Moves the selected row, for tests: -1 up, 1 down, minus its index to the top.</summary>
+        internal void MoveForTests(int by) => Move(by);
     }
 }
