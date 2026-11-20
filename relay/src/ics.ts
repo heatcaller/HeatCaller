@@ -14,7 +14,7 @@
 
 /** Escapes a TEXT value: backslash, semicolon, comma and newlines. */
 export function icsText(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+  return value.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
 }
 
 /** Folds one content line at 75 octets, as the standard asks. */
@@ -189,13 +189,24 @@ export function nightsFeedWith(was: unknown, next: unknown, now: Date): { nights
   const night = feedNightFrom(next);
   const nowMs = now.getTime();
   const oldest = new Date(nowMs - FEED_KEEP_DAYS * 24 * 3600 * 1000).toISOString().slice(0, 10);
-  const over = (n: FeedNight) => typeof n["until"] === "string" && n["until"] !== "" && Date.parse(n["until"] as string) < nowMs;
+  // Whether the night's day has begun. The laptop's `until` is 06:00 local
+  // the morning AFTER the night (NextNight.UntilUtc), so the day began a day
+  // before it - 06:00 that morning, the night's own rollover. Keyed off
+  // `until` passing, tonight counted as "still to come" all evening, and
+  // announcing next week's night after racing (or taking the card down)
+  // deleted tonight from every subscribed calendar.
+  const begun = (n: FeedNight) => {
+    if (typeof n["until"] === "string" && n["until"] !== "") {
+      return Date.parse(n["until"] as string) - 24 * 3600 * 1000 <= nowMs;
+    }
+    return (n["day"] as string) <= now.toISOString().slice(0, 10);
+  };
 
   let nights = feedNights(was)
     .filter((n) => (n["day"] as string) >= oldest)
     // A night still to come that isn't the one just announced was moved
     // (or taken down before it happened): it isn't on any more.
-    .filter((n) => over(n) || (night !== undefined && n["day"] === night["day"]) || n["off"] === true)
+    .filter((n) => begun(n) || (night !== undefined && n["day"] === night["day"]) || n["off"] === true)
     .filter((n) => night === undefined || n["day"] !== night["day"]);
 
   if (night !== undefined) nights.push(night);
