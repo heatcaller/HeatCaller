@@ -6,6 +6,7 @@ import { appShellPage, DEFAULT_CONTEXT, DRIVER_THEMES, driverThemeOf, familyPage
 import { themeCookieOf } from "../src/server.js";
 import { DEFAULT_LOOK, lookFrom } from "../src/site.js";
 import type { StoredDocument } from "../src/types.js";
+import { pageScriptMatch, withSharedInline } from "./pagescript.js";
 
 /**
  * DRIVER THEMES (15 Nov 2026, Asher: "plan the ability for the driver to
@@ -71,17 +72,17 @@ describe("the Look button and the club's switch", () => {
   });
 
   it("sits next to High contrast on every club page", () => {
-    for (const html of [homePage("acme-rc", "Acme RC"), livePage("acme-rc", "Acme RC")]) {
+    for (const html of [withSharedInline(homePage("acme-rc", "Acme RC")), withSharedInline(livePage("acme-rc", "Acme RC"))]) {
       assert.match(html, /data-hc="1" aria-label="High contrast">Contrast<\/button><button type="button" data-look="1" aria-haspopup="dialog">Look<\/button><\/span>/);
       assert.doesNotMatch(html, /<html [^>]*data-nothemes/);
     }
   });
 
   it("is gone when the club turns it off, and the page says so to its script", () => {
-    const html = homePage("acme-rc", "Acme RC", off);
+    const html = withSharedInline(homePage("acme-rc", "Acme RC", off));
     assert.doesNotMatch(html, /data-look="1"/);
     assert.match(html, /<html [^>]*data-nothemes/);
-    assert.match(appShellPage("acme-rc", "Acme RC", off), /<html [^>]*data-nothemes/);
+    assert.match(withSharedInline(appShellPage("acme-rc", "Acme RC", off)), /<html [^>]*data-nothemes/);
   });
 
   it("counts which look a phone picked, nothing more", () => {
@@ -98,7 +99,7 @@ describe("the page's script puts the theme on <html>", () => {
     return match[0];
   }
 
-  const script = /<script[^>]*>([\s\S]*)<\/script>/.exec(homePage("acme-rc", "Acme RC"))![1]!;
+  const script = pageScriptMatch(withSharedInline(homePage("acme-rc", "Acme RC")))![1]!;
   const list = /const HC_THEMES = (\{[\s\S]*?\});\n/.exec(script)![1]!;
 
   function run(stored: string | null, opts: { hc?: boolean; nothemes?: boolean; scheme?: string; cookie?: string } = {}) {
@@ -190,7 +191,7 @@ describe("team colours on Daylight", () => {
       const on = contrast("#FFFFFF", s.onLight);
       assert.ok(on >= 4.5, `white on ${s.id} is ${on.toFixed(2)}:1`);
     }
-    assert.match(homePage("acme-rc", "Acme RC"), /html\.th-daylight\.tc-teal \{ --primary: #00695C; --on-primary: #FFFFFF;/);
+    assert.match(withSharedInline(homePage("acme-rc", "Acme RC")), /html\.th-daylight\.tc-teal \{ --primary: #00695C; --on-primary: #FFFFFF;/);
   });
 });
 
@@ -208,25 +209,25 @@ describe("drawn in the phone's theme from the start", () => {
   });
 
   it("puts the theme on <html>, its light or dark, and the club's own scheme beside it", () => {
-    const html = homePage("acme-rc", "Acme RC", themed("daylight:teal"));
+    const html = withSharedInline(homePage("acme-rc", "Acme RC", themed("daylight:teal")));
     assert.match(html, /<html lang="en" class="light synthwave th-daylight tc-teal"[^>]* data-club-scheme="dark">/);
-    assert.match(appShellPage("acme-rc", "Acme RC", themed("pitlane")), /<html lang="en" class="hcshell dark th-pitlane"[^>]* data-club-scheme="dark">/);
+    assert.match(withSharedInline(appShellPage("acme-rc", "Acme RC", themed("pitlane"))), /<html lang="en" class="hcshell dark th-pitlane"[^>]* data-club-scheme="dark">/);
   });
 
   it("draws a page as it always was with no cookie or one it doesn't know", () => {
-    assert.match(homePage("acme-rc", "Acme RC"), /<html lang="en" class="dark synthwave"[^>]*>/);
-    assert.doesNotMatch(homePage("acme-rc", "Acme RC", themed("neon")), /<html [^>]*(data-club-scheme|th-neon)/);
+    assert.match(withSharedInline(homePage("acme-rc", "Acme RC")), /<html lang="en" class="dark synthwave"[^>]*>/);
+    assert.doesNotMatch(withSharedInline(homePage("acme-rc", "Acme RC", themed("neon"))), /<html [^>]*(data-club-scheme|th-neon)/);
   });
 
   it("ignores it where the club has themes off", () => {
     const off: PageContext = { ...themed("pitlane"), look: { ...DEFAULT_LOOK, driverThemes: false } };
-    assert.doesNotMatch(homePage("acme-rc", "Acme RC", off), /class="[^"]*th-pitlane/);
+    assert.doesNotMatch(withSharedInline(homePage("acme-rc", "Acme RC", off)), /class="[^"]*th-pitlane/);
   });
 });
 
 describe("the family page keeps the club's own look", () => {
   it("has no Look button and no theme, cookie or not", () => {
-    const html = familyPage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, theme: "pitlane" });
+    const html = withSharedInline(familyPage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, theme: "pitlane" }));
     assert.doesNotMatch(html, /data-look="1"/);
     assert.match(html, /<html [^>]*data-nothemes/);
     assert.doesNotMatch(html, /class="[^"]*th-pitlane/);
@@ -235,7 +236,7 @@ describe("the family page keeps the club's own look", () => {
 
 describe("the Look sheet keeps Tab inside it", () => {
   it("goes round from the last button to the first and back", () => {
-    const html = homePage("acme-rc", "Acme RC");
+    const html = withSharedInline(homePage("acme-rc", "Acme RC"));
     assert.match(html, /if \(e\.key !== 'Tab'\) return;/);
     assert.match(html, /if \(e\.shiftKey && document\.activeElement === first\) \{ e\.preventDefault\(\); last\.focus\(\); \}/);
   });
@@ -243,7 +244,7 @@ describe("the Look sheet keeps Tab inside it", () => {
 
 describe("the theme CSS sits under High contrast", () => {
   it("comes after the club's own and before html.hc", () => {
-    const html = homePage("acme-rc", "Acme RC");
+    const html = withSharedInline(homePage("acme-rc", "Acme RC"));
     const th = html.indexOf("html.th-night {");
     const hc = html.indexOf("html.hc {");
     const light = html.indexOf("html.light { --warn");

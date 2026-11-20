@@ -10,6 +10,7 @@ import { MemoryStore } from "../src/store.js";
 import { VoiceService, type CatalogueVoice } from "../src/voice.js";
 import { ACME_TOKEN, BROOK_TOKEN, call, start, tenants, type Harness } from "./helpers.js";
 import { FakeAudioWorld } from "./listen-fake-audio.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 /**
  * BUG HUNT 7, THE RELAY (13 Oct 2026).
@@ -42,7 +43,7 @@ async function settle(): Promise<void> {
 }
 
 function scriptOf(page: string): string {
-  const match = /<script[^>]*>([\s\S]*)<\/script>/.exec(page);
+  const match = pageScriptMatch(page);
   assert.ok(match, "the page carries a script");
   return match[1] as string;
 }

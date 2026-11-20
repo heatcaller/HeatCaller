@@ -8,6 +8,7 @@ import { pinHash } from "../src/server.js";
 import { encodePng } from "../src/icon.js";
 import { logoVersionOf } from "../src/site.js";
 import { SUN_ICON_VERSION, sunIcon } from "../src/sun.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 /** A real 256-pixel PNG, standing in for a club's logo. */
 function plainPng(red: number): Buffer {
@@ -406,7 +407,7 @@ describe("the club's look", () => {
 
   it("ships a check-in page whose script parses", async () => {
     const answer = await call(harness, "GET", "/c/acme-rc/checkin");
-    const script = /<script[^>]*>([\s\S]*)<\/script>/.exec(answer.text)?.[1] ?? "";
+    const script = pageScriptMatch(answer.text)?.[1] ?? "";
 
     assert.equal(answer.status, 200);
     assert.doesNotThrow(() => new Script(script));

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createContext, runInContext } from "node:vm";
+import { pageScriptMatch, pageWithoutScripts } from "./pagescript.js";
 
 /**
  * Just enough of a browser to run a whole relay page's script (22 Oct
@@ -380,7 +381,7 @@ export class FakePage {
 
 /** A page's markup and its one inline script, apart. */
 export function pageParts(text: string): { html: string; script: string } {
-  const match = /<script[^>]*>([\s\S]*)<\/script>/.exec(text);
+  const match = pageScriptMatch(text);
   assert.ok(match, "the page carries its script inline");
-  return { html: text.replace(match[0], ""), script: match[1] as string };
+  return { html: pageWithoutScripts(text), script: match[1] as string };
 }

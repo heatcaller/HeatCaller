@@ -3,6 +3,7 @@ import { after, before, describe, it } from "node:test";
 import { appShellPage, homePage, livePage, nightPage, resultsPage, schedulePage } from "../src/pages.js";
 import { FakePage, pageParts } from "./driverexp-rp1-fakepage.js";
 import { call, start, type Harness } from "./helpers.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * ONE BAR ON THE HOME-SCREEN ICON (1 Nov 2026, Asher on his iPhone, once the
@@ -14,15 +15,15 @@ import { call, start, type Harness } from "./helpers.js";
  */
 
 const pages: [string, string][] = [
-  ["home", homePage("acme-rc", "Acme RC")],
-  ["live", livePage("acme-rc", "Acme RC")],
-  ["schedule", schedulePage("acme-rc", "Acme RC")],
-  ["results", resultsPage("acme-rc", "Acme RC")],
-  ["a driver's night", nightPage("acme-rc", "Acme RC")],
+  ["home", withSharedInline(homePage("acme-rc", "Acme RC"))],
+  ["live", withSharedInline(livePage("acme-rc", "Acme RC"))],
+  ["schedule", withSharedInline(schedulePage("acme-rc", "Acme RC"))],
+  ["results", withSharedInline(resultsPage("acme-rc", "Acme RC"))],
+  ["a driver's night", withSharedInline(nightPage("acme-rc", "Acme RC"))],
 ];
 
 describe("the home-screen icon's one bar", () => {
-  const shell = appShellPage("acme-rc", "Acme RC");
+  const shell = withSharedInline(appShellPage("acme-rc", "Acme RC"));
 
   it("holds the five tabs with none marked, a stage for the pages, and the screen's insets to hand on", () => {
     assert.match(shell, /<html lang="en" class="hcshell dark">/);
@@ -71,7 +72,7 @@ describe("the home-screen icon's one bar", () => {
   }
 
   it("leaves a page in a browser tab as it was", () => {
-    const { html, script } = pageParts(homePage("acme-rc", "Acme RC"));
+    const { html, script } = pageParts(withSharedInline(homePage("acme-rc", "Acme RC")));
     const page = new FakePage(html, async () => ({ status: 404 }), {});
     page.run(script);
     assert.equal(page.eval("location.href"), undefined);

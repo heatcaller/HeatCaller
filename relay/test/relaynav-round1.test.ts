@@ -3,6 +3,7 @@ import { Script } from "node:vm";
 import { after, before, describe, it } from "node:test";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
 import { managePage, missingPage, nightPage, relayNoticePage, signupPage } from "../src/pages.js";
+import { pageScriptMatch, withSharedInline } from "./pagescript.js";
 
 /** The club's tabs, as the shell draws them. */
 function tabsOf(html: string): string {
@@ -43,8 +44,8 @@ describe("relay navigation, round 1: the club's tabs", () => {
   });
 
   it("lights Me on every page of a driver's own", () => {
-    assert.equal(litTab(nightPage("acme-rc", "Acme RC")), "Me");
-    assert.equal(litTab(signupPage("acme-rc", "Acme RC")), "Me");
+    assert.equal(litTab(withSharedInline(nightPage("acme-rc", "Acme RC"))), "Me");
+    assert.equal(litTab(withSharedInline(signupPage("acme-rc", "Acme RC"))), "Me");
   });
 
   it("lights Me on check-in and the PIN box, and the page's own tab elsewhere", async () => {
@@ -55,7 +56,7 @@ describe("relay navigation, round 1: the club's tabs", () => {
   });
 
   it("puts the race-on dot on Live and reads it from the state snapshot, but not on Live itself", async () => {
-    const html = (await call(harness, "GET", "/c/acme-rc/schedule")).text;
+    const html = withSharedInline((await call(harness, "GET", "/c/acme-rc/schedule")).text);
 
     assert.match(tabsOf(html), /<span>Live<\/span><i class="dot"/);
     assert.match(html, /grab\('\/snapshot\/state'\)/);
@@ -64,7 +65,7 @@ describe("relay navigation, round 1: the club's tabs", () => {
   });
 
   it("keeps the Following chip above the phone bar", async () => {
-    const html = (await call(harness, "GET", "/c/acme-rc")).text;
+    const html = withSharedInline((await call(harness, "GET", "/c/acme-rc")).text);
     assert.match(html, /@media \(max-width: 640px\)[\s\S]*?nav\.tabs \{ position: fixed;[\s\S]*?body \.follow \{ bottom: calc\(68px/);
   });
 });
@@ -115,15 +116,15 @@ describe("relay navigation, round 1: no dead ends", () => {
   });
 
   it("gives the manager page a way back to the club's page", () => {
-    assert.match(managePage("acme-rc", "Acme RC"), /<a class="linkbtn" href="\/c\/acme-rc">Club page<\/a>/);
+    assert.match(withSharedInline(managePage("acme-rc", "Acme RC")), /<a class="linkbtn" href="\/c\/acme-rc">Club page<\/a>/);
   });
 
   it("escapes what it is given and ships scripts that parse", () => {
-    const html = missingPage("acme-rc", "<b>Acme</b>");
+    const html = withSharedInline(missingPage("acme-rc", "<b>Acme</b>"));
     assert.doesNotMatch(html, /<b>Acme<\/b>/);
-    assert.doesNotMatch(relayNoticePage("<i>x</i>", "<i>y</i>"), /<i>/);
+    assert.doesNotMatch(withSharedInline(relayNoticePage("<i>x</i>", "<i>y</i>")), /<i>/);
 
-    const script = /<script[^>]*>([\s\S]*)<\/script>/.exec(html)?.[1] ?? "";
+    const script = pageScriptMatch(html)?.[1] ?? "";
     assert.doesNotThrow(() => new Script(script));
   });
 });

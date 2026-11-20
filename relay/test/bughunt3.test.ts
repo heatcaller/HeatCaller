@@ -3,6 +3,7 @@ import { createContext, runInContext } from "node:vm";
 import { after, before, describe, it } from "node:test";
 import { MemoryStore } from "../src/store.js";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 /**
  * Bug hunt 3, relay side: the results index evicting newer years (#19),
@@ -22,7 +23,7 @@ async function years(harness: Harness): Promise<string[]> {
 
 /** The one inline script a page carries. */
 function scriptOf(html: string): string {
-  const match = /<script[^>]*>([\s\S]*)<\/script>/.exec(html);
+  const match = pageScriptMatch(html);
   assert.ok(match, "every page carries its script inline");
   return match[1] as string;
 }

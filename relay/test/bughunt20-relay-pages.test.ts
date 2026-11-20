@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createContext, runInContext } from "node:vm";
 import { appShellPage, DEFAULT_CONTEXT, livePage, nightPage } from "../src/pages.js";
+import { withSharedInline } from "./pagescript.js";
 
 function fn(source: string, name: string, indent = ""): string {
   const match = new RegExp(`${indent}(?:async )?function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n${indent}\\}`).exec(source);
@@ -15,7 +16,7 @@ function fn(source: string, name: string, indent = ""): string {
  * driver, and following their own row said "Following".
  */
 describe("the You card on Live finds the driver signed in by the board's short name", () => {
-  const live = livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: true } });
+  const live = withSharedInline(livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: true } }));
   const source = ["rowName", "youSignedIn", "youIsSignedIn", "youBoardName", "youName"].map((n) => fn(live, n)).join("\n");
 
   function page(full: string, memory = "") {
@@ -56,7 +57,7 @@ describe("the You card on Live finds the driver signed in by the board's short n
  * push address and told the relay for that driver only.
  */
 describe("the alerts switch on a phone with two drivers", () => {
-  const night = nightPage("acme-rc", "Acme RC");
+  const night = withSharedInline(nightPage("acme-rc", "Acme RC"));
   const source = ["pushOthers", "pushTellOthers", "pushOff"].map((n) => fn(night, n)).join("\n");
   const ella = "a".repeat(20);
   const ben = "b".repeat(20);
@@ -109,7 +110,7 @@ describe("the alerts switch on a phone with two drivers", () => {
  * and Listen stopped asking for audio that was still getting through.
  */
 describe("Listen while one board read timed out", () => {
-  const live = livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: true } });
+  const live = withSharedInline(livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: true } }));
   const sweep = fn(live, "sweepOnce", "  ");
 
   function page(listenPaused: boolean) {
@@ -149,7 +150,7 @@ describe("Listen while one board read timed out", () => {
  * address to the tab before and left Live on screen.
  */
 describe("Back after the Live page took the bar back", () => {
-  const shell = appShellPage("acme-rc", "Acme RC");
+  const shell = withSharedInline(appShellPage("acme-rc", "Acme RC"));
   const engine = /const HC_HOME = [\s\S]*?\nfunction hcHushListen\(\) \{[\s\S]*?\n\}\n/.exec(shell)?.[0] ?? "";
 
   it("holds the bar again and shows the page Back went to", () => {

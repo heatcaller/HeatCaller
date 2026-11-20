@@ -429,11 +429,15 @@ describe("listening along from home", () => {
 
     const page = await call(live, "GET", "/c/acme-rc/live", {});
 
-    // One script block, with the nonce - the player is appended to the
-    // live page's own script rather than added as a second one, so there
-    // is still nothing on the page an injected tag could run from.
-    assert.equal((page.text.match(/<script/g) ?? []).length, 1);
-    assert.match(page.text, /<script nonce="/);
+    // The player is appended to the live page's own script rather than
+    // added as a block of its own, so there is still nothing on the page
+    // an injected tag could run from: the shared app.js (19 Nov 2026) and
+    // the page's own script, both under the one nonce.
+    const tags = page.text.match(/<script[^>]*>/g) ?? [];
+    const nonce = /<script nonce="([^"]+)">/.exec(page.text)?.[1] ?? "";
+    assert.equal(tags.length, 2);
+    assert.match(tags[0] ?? "", /^<script src="\/c\/acme-rc\/app\.js\?v=[0-9a-f]{12}" nonce="/);
+    assert.ok(nonce !== "" && tags.every((t) => t.includes(`nonce="${nonce}"`)));
   });
 
   it("one club turning it on does not turn it on for another", async () => {

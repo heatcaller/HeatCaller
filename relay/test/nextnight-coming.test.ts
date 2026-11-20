@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { homePage } from "../src/pages.js";
 import { CLOCK_JS } from "../src/clock.js";
 import { ME_JS } from "../src/mespaces.js";
+import { withSharedInline } from "./pagescript.js";
 
 /** One function's whole text out of a page, by its braces. */
 function fn(html: string, head: string): string {
@@ -19,7 +20,7 @@ function fn(html: string, head: string): string {
 }
 
 function card(body: Record<string, unknown>, tabHref: string | null, stored: Map<string, string> = new Map()): string {
-  const html = homePage("acme-rc", "Acme RC");
+  const html = withSharedInline(homePage("acme-rc", "Acme RC"));
   const escFrom = html.indexOf("const esc = (v) =>");
   const context = createContext({
     BASE: "/c/acme-rc",
@@ -38,7 +39,7 @@ function card(body: Record<string, unknown>, tabHref: string | null, stored: Map
 
 /** Home's Dismiss, clicked: what nnWire does with the card's holder. */
 function dismiss(stored: Map<string, string>): string {
-  const html = homePage("acme-rc", "Acme RC");
+  const html = withSharedInline(homePage("acme-rc", "Acme RC"));
   let click: (() => void) | null = null;
   const at = {
     innerHTML: "card",

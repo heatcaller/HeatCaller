@@ -3,6 +3,7 @@ import { createContext, runInContext, Script } from "node:vm";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
+import { pageScriptMatch, withSharedInline } from "./pagescript.js";
 
 /**
  * THE PAGE A DRIVER OPENS (13 Oct 2026) - the half of a driver's own night
@@ -40,12 +41,15 @@ afterEach(async () => {
 });
 
 async function page(club = "acme-rc") {
-  return call(harness, "GET", `/c/${club}/night`);
+  // With the shared app.js and app.css written back in (19 Nov 2026), as
+  // these tests read the escaper and the club's name out of the page.
+  const answer = await call(harness, "GET", `/c/${club}/night`);
+  return { ...answer, text: withSharedInline(answer.text) };
 }
 
 /** The one inline script the page carries. */
 function script(html: string): string {
-  const match = /<script[^>]*>([\s\S]*)<\/script>/.exec(html);
+  const match = pageScriptMatch(html);
 
   assert.ok(match, "the page carries its script inline");
 
@@ -60,7 +64,9 @@ function script(html: string): string {
  *
  * The script ends by calling load(), so it cannot simply be evaluated.
  */
-function lifted(html: string, names: readonly string[], extras: Record<string, unknown> = {}) {
+function lifted(served: string, names: readonly string[], extras: Record<string, unknown> = {}) {
+  // The escaper is the shared app.js's (19 Nov 2026), so read it with that in.
+  const html = withSharedInline(served);
   const context = createContext(extras);
 
   const escFrom = html.indexOf("const esc = (v) =>");

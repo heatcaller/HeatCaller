@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { homePage, livePage } from "../src/pages.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * A LINK THAT FOLLOWS A DRIVER, AND THEIR NEXT RACE ON HOME (14 Nov 2026,
@@ -22,7 +23,7 @@ function programme(lines: unknown[], lineups = true): unknown {
 }
 
 async function openHome(stored: Record<string, string>, doc: unknown, search = ""): Promise<FakePage> {
-  const { html, script } = pageParts(homePage("acme-rc", "Acme RC"));
+  const { html, script } = pageParts(withSharedInline(homePage("acme-rc", "Acme RC")));
   const answer: Answerer = async (url) => url === PROGRAMME && doc !== undefined ? { status: 200, body: doc } : { status: 404 };
   const page = new FakePage(html, answer, { search });
   for (const [k, v] of Object.entries(stored)) page.store.set(k, v);
@@ -76,7 +77,7 @@ describe("Share on the Live card", () => {
   const row = (pos: number, name: string) => ({ cells: [pos, name, 8, "6.4", "6.2", pos === 1 ? "-" : "+1.10"].map((t) => ({ text: String(t), emphasis: "none" })) });
 
   async function openLive(stored: Record<string, string>): Promise<FakePage> {
-    const { html, script } = pageParts(livePage("acme-rc", "Acme RC"));
+    const { html, script } = pageParts(withSharedInline(livePage("acme-rc", "Acme RC")));
     let p: FakePage;
     const answer: Answerer = async (url) => url === STATE
       ? { status: 200, body: { seq: 1, publishedAt: new Date(p.clock).toISOString(), body: { state: "Racing", flag: "Green", countdown: "4 LAPS TO GO", columns: COLUMNS, standings: [row(1, "Terry Byte"), row(2, "Mia Kent")] } } }
@@ -161,7 +162,7 @@ describe("the followed driver's next race on Home", () => {
 
 describe("sharing a race (overlay plan 7.4)", () => {
   it("offers Share this race in the video sheet, with YouTube's own link at the race", () => {
-    const html = homePage("acme-rc", "Acme RC");
+    const html = withSharedInline(homePage("acme-rc", "Acme RC"));
     assert.match(html, /hcVel\('button', 'page hcvyt', 'Share this race'\)/);
     assert.match(html, /hcShareLink\(hcVideoYouTube\(v, from\), 'Watch this race'/);
   });

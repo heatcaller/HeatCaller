@@ -6,6 +6,7 @@ import { CHANNELS } from "../src/types.js";
 import { askFieldsFrom, ASK_MAX_COMING_CLASSES, DRIVER_ASK_KINDS, isWriteKind } from "../src/driverasks.js";
 import { FakePage, pageParts, type FakeNode } from "./driverexp-rp1-fakepage.js";
 import { CLOCK_JS } from "../src/clock.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * THE NEXT RACE NIGHT, AND "I'M COMING" (12 Nov 2026).
@@ -87,7 +88,7 @@ describe("the nextnight channel", () => {
 });
 
 describe("Home: the next race night", () => {
-  const html = homePage("acme-rc", "Acme RC");
+  const html = withSharedInline(homePage("acme-rc", "Acme RC"));
   const draw = nextNightHtmlFrom(html);
 
   it("has its own place, right under the club's updates, and reads the snapshot", () => {
@@ -193,7 +194,7 @@ const PAGE_LATER = "2026-10-23T19:00:00Z";
 async function openMe(nn: Record<string, unknown> | null, asksOpen = true): Promise<{ page: FakePage; sent: Record<string, unknown>[] }> {
   const sent: Record<string, unknown>[] = [];
   const live = { at: "2026-10-22T19:00:00Z", next: { race: "Q3 Heat 1", away: 2, slot: 4 } };
-  const { html, script } = pageParts(nightPage("acme-rc", "Acme RC"));
+  const { html, script } = pageParts(withSharedInline(nightPage("acme-rc", "Acme RC")));
   const page = new FakePage(html, async (url, body) => {
     if (url.endsWith("/snapshot/nextnight")) return nn === null ? { status: 404 } : { status: 200, body: { body: nn } };
     if (url.endsWith("/night")) {
@@ -219,7 +220,7 @@ function card(page: FakePage): FakeNode {
 
 describe("Me: I'm coming to the next race night", () => {
   it("is in the Me page", () => {
-    const html = nightPage("acme-rc", "Acme RC");
+    const html = withSharedInline(nightPage("acme-rc", "Acme RC"));
 
     assert.ok(html.includes('id="me-coming"'));
     assert.ok(html.includes("sendAsk('coming'"));

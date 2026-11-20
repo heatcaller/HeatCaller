@@ -5,6 +5,7 @@ import { PAGE_COUNT_EVENTS } from "../src/pagecounts.js";
 import { DEFAULT_CONTEXT, homePage, livePage, myNightPage, nightPage } from "../src/pages.js";
 import { lookFrom } from "../src/site.js";
 import { ACME_TOKEN, BROOK_TOKEN, call, start } from "./helpers.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * DRIVER PHONE PLAN, THE LEFTOVERS (19 Nov 2026): what steps A-H left that
@@ -80,10 +81,10 @@ describe("every race night as a feed (item 10 step 3)", () => {
   });
 
   it("is offered on Home as a subscription, and Add my races is made on the phone", () => {
-    const home = homePage("acme-rc", "Acme RC");
+    const home = withSharedInline(homePage("acme-rc", "Acme RC"));
     assert.match(home, /Every race night in your calendar/);
     assert.match(home, /'webcal:\/\/' \+ location\.host \+ path/);
-    const night = nightPage("acme-rc", "Acme RC");
+    const night = withSharedInline(nightPage("acme-rc", "Acme RC"));
     assert.match(night, /Add my races to my calendar/);
     assert.match(night, /new Blob\(\[myRacesIcs\(/);
     assert.match(night, /a\.download = 'my-races\.ics'/);
@@ -137,14 +138,14 @@ describe("the 192 px icon (item 11)", () => {
 describe("the club in each social icon's name (item 23)", () => {
   it("reads \"Acme RC on Facebook\", the tooltip still the service", () => {
     const look = lookFrom({ seq: 1, publishedAt: "2026-11-19T00:00:00Z", body: { social: [{ kind: "facebook", url: "https://facebook.com/acme" }] } }, undefined);
-    const live = livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look });
+    const live = withSharedInline(livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look }));
     assert.match(live, /aria-label="Acme RC on Facebook" title="Facebook"/);
   });
 });
 
 describe("the phone board at 130% text (item 6)", () => {
   it("lets the driver's name give way and keeps the last column off the card's edge", () => {
-    const live = livePage("acme-rc", "Acme RC");
+    const live = withSharedInline(livePage("acme-rc", "Acme RC"));
     assert.match(live, /#board \.card:not\(\.all\) td\.kd \{ max-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; \}/);
     assert.match(live, /html\[data-ts\] #board \.card:not\(\.all\) \.kl \{ padding-right: 14px; \}/);
     assert.match(live, /function boardLastKept\(roles, n\)/);
@@ -152,7 +153,7 @@ describe("the phone board at 130% text (item 6)", () => {
 });
 
 describe("Listen fetches the next clip ahead (item 19 step 5)", () => {
-  const html = livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: true } });
+  const html = withSharedInline(livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: true } }));
 
   it("asks for every new line at once while the signal is good, and takes them in order", () => {
     assert.match(html, /if \(!listenPaused\) \{\s*for \(const one of lines\) \{\s*if \(isNew\(one\.id, one\.at\) && !ahead\.has\(one\.id\)\) \{\s*ahead\.set\(one\.id, fetchOne\(one\.id\)\);/);
@@ -165,7 +166,7 @@ describe("Listen fetches the next clip ahead (item 19 step 5)", () => {
 });
 
 describe("Live: All columns in a sheet, and a followed driver elsewhere (item 4)", () => {
-  const live = livePage("acme-rc", "Acme RC");
+  const live = withSharedInline(livePage("acme-rc", "Acme RC"));
 
   it("opens All columns in a sheet that Back or Done closes", () => {
     assert.match(live, /if \(boardAllSheet\(\)\) return;/);
@@ -182,7 +183,7 @@ describe("Live: All columns in a sheet, and a followed driver elsewhere (item 4)
 
 describe("Back closes a sheet (item 18 step 3)", () => {
   it("adds a history step for a sheet, at the same address, and Back closes it", () => {
-    const html = nightPage("acme-rc", "Acme RC");
+    const html = withSharedInline(nightPage("acme-rc", "Acme RC"));
     assert.match(html, /history\.pushState\(\{ hcsheet: 1 \}, '', location\.href\)/);
     assert.match(html, /if \(typeof hcSheetOpened === 'function'\) hcSheetOpened\(meCloseSheet\);/);
     assert.match(html, /if \(was && typeof hcSheetClosed === 'function'\) hcSheetClosed\(\);/);
@@ -190,7 +191,7 @@ describe("Back closes a sheet (item 18 step 3)", () => {
 });
 
 describe("Me (items 2, 8 and 9)", () => {
-  const html = nightPage("acme-rc", "Acme RC");
+  const html = withSharedInline(nightPage("acme-rc", "Acme RC"));
 
   it("says who this phone follows under the driver's own name, apart from who they are", () => {
     assert.match(html, /'<div class="me-following">Following: <b>' \+ esc\(who\) \+ '<\/b>/);
@@ -205,14 +206,14 @@ describe("Me (items 2, 8 and 9)", () => {
   it("opens a race or marshal alert at its own card", () => {
     assert.match(html, /meGoAlert = \(\/\[#&\]go=\(race\|duty\)\(&\|\$\)\/\.exec/);
     assert.match(html, /meGoAlert === 'duty' \? document\.querySelector\('\.lc-duty'\) : document\.querySelector\('\.me-hero'\)/);
-    const my = myNightPage("acme-rc", "Acme RC");
+    const my = withSharedInline(myNightPage("acme-rc", "Acme RC"));
     assert.match(my, /HC_ALERT_FROM === 'marshal' \? '&go=duty'/);
   });
 });
 
 describe("in-app browsers on Android (item 16 step 3)", () => {
   it("offers Chrome by an intent: address, never with the fragment", () => {
-    const html = nightPage("acme-rc", "Acme RC");
+    const html = withSharedInline(nightPage("acme-rc", "Acme RC"));
     assert.match(html, /'intent:\/\/' \+ location\.host \+ location\.pathname \+ location\.search \+ '#Intent;scheme=https;package=com\.android\.chrome;end'/);
     assert.doesNotMatch(html, /location\.hash \+ '#Intent/);
   });
@@ -221,7 +222,7 @@ describe("in-app browsers on Android (item 16 step 3)", () => {
 describe("Racing tonight? (item 22)", () => {
   it("counts a visit from the poster, links sign-up only while the club takes them, and folds once all set", () => {
     assert.ok(PAGE_COUNT_EVENTS.includes("poster_opened"));
-    const home = homePage("acme-rc", "Acme RC");
+    const home = withSharedInline(homePage("acme-rc", "Acme RC"));
     assert.match(home, /hcCount\('poster_opened'\)/);
     assert.match(home, /document\.body\.dataset\.signup === '1'/);
     assert.match(home, /You\\u2019re all set for tonight \\u2713/);
@@ -241,7 +242,7 @@ describe("Racing tonight? (item 22)", () => {
 
 describe("an old page after a deploy (item 21 step 5)", () => {
   it("asks the relay's build once on a plain 404, and offers the reload when it differs", () => {
-    const html = homePage("acme-rc", "Acme RC");
+    const html = withSharedInline(homePage("acme-rc", "Acme RC"));
     assert.match(html, /function hcRouteGone\(response\)/);
     assert.match(html, /\.then\(hcBuildSeen\)/);
     assert.match(html, /if \(response\.status === 404\) \{ hcNetOk\(\); seenKeep\(path, undefined, true\); noteRead\(path, page\); hcRouteGone\(response\); \}/);

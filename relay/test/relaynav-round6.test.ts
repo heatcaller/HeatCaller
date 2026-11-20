@@ -4,6 +4,7 @@ import { Script } from "node:vm";
 import { DEFAULT_CONTEXT, homePage, nightPage, resultsPage, tracksPage } from "../src/pages.js";
 import { DEFAULT_LOOK, lookFrom, newcomerFrom } from "../src/site.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
+import { pageScriptMatch, withSharedInline } from "./pagescript.js";
 
 /**
  * RELAY NAVIGATION, ROUND 6 (30 Oct 2026, Asher: "build it with newcomer and
@@ -21,7 +22,7 @@ const DAY = "2026-10-21";
 const NEWCOMER = { where: "Kent Hobbies, 12 Main St", when: "Tuesdays from 6pm", join: "Bring your car - the first night is free." };
 
 function homeWith(newcomer = NEWCOMER): string {
-  return homePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_LOOK, newcomer } });
+  return withSharedInline(homePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_LOOK, newcomer } }));
 }
 
 const INDEX = {
@@ -156,12 +157,12 @@ describe("relay navigation, round 6: New here? and the club's tracks on Home", (
   });
 
   it("lights Home on the Tracks page, which is no longer one of Results' tabs", () => {
-    const tracks = tracksPage("acme-rc", "Acme RC");
+    const tracks = withSharedInline(tracksPage("acme-rc", "Acme RC"));
     const bar = /<nav class="tabs"[\s\S]*?<\/nav>/.exec(tracks)?.[0] ?? "";
 
     assert.match(bar, /aria-current="page">[\s\S]*?<span>Home<\/span>/);
     assert.doesNotMatch(tracks, /class="subtabs"/);
-    assert.doesNotMatch(resultsPage("acme-rc", "Acme RC"), /<nav class="subtabs"[\s\S]*?\/tracks"[\s\S]*?<\/nav>/);
+    assert.doesNotMatch(withSharedInline(resultsPage("acme-rc", "Acme RC")), /<nav class="subtabs"[\s\S]*?\/tracks"[\s\S]*?<\/nav>/);
   });
 });
 
@@ -212,7 +213,7 @@ describe("relay navigation, round 6: Home changes with the night", () => {
 });
 
 describe("relay navigation, round 6: tabs that look like buttons", () => {
-  const css = homePage("acme-rc", "Acme RC");
+  const css = withSharedInline(homePage("acme-rc", "Acme RC"));
 
   it("gives Results' tabs room and a button's shape, the page's own one filled in", () => {
     assert.match(css, /nav\.subtabs a \{ flex: 1 1 auto;[^}]*min-height: 46px;[^}]*border: 1px solid var\(--border\); border-radius: 12px; \}/);
@@ -226,8 +227,8 @@ describe("relay navigation, round 6: tabs that look like buttons", () => {
   });
 
   it("ships scripts that parse", () => {
-    for (const html of [homeWith(), nightPage("acme-rc", "Acme RC"), tracksPage("acme-rc", "Acme RC")]) {
-      const script = /<script[^>]*>([\s\S]*)<\/script>/.exec(html)?.[1] ?? "";
+    for (const html of [homeWith(), withSharedInline(nightPage("acme-rc", "Acme RC")), withSharedInline(tracksPage("acme-rc", "Acme RC"))]) {
+      const script = pageScriptMatch(html)?.[1] ?? "";
       assert.doesNotThrow(() => new Script(script));
     }
   });

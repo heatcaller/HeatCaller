@@ -19,6 +19,9 @@ import {
   managePage,
   manifest,
   missingPage,
+  sharedAssetOf,
+  SHARED_ASSETS,
+  type SharedAsset,
   nightPage,
   familyPage,
   pausedPage,
@@ -2455,6 +2458,21 @@ export class Relay {
       const name = segments[1];
 
       if (name !== undefined && isValidClubId(name)) {
+        // THE SHARED SCRIPT AND STYLE (19 Nov 2026, driver phone plan item 1
+        // step 6; see SHARED_ASSETS in pages.ts): the same words for every
+        // club, so answered before the club is looked up - a short address
+        // or a paused club's page gets them as well. Kept for a year when
+        // asked for by this build's fingerprint; any other ?v= (a page from
+        // another build, mid-deploy) gets today's words, never kept, so a
+        // fingerprint never names the wrong file in a cache.
+        const asset = segments.length === 3 ? sharedAssetOf(segments[2] as string) : undefined;
+
+        if (asset !== undefined) {
+          const current = parsed.query.get("v") === asset.version;
+          sendBody(response, 200, asset.type, asset.body, current ? "public, max-age=31536000, immutable" : "no-store");
+          return;
+        }
+
         const tenant = this.tenants.club(name);
 
         // A CLUB'S SHORT ADDRESS (14 Nov 2026, driver phone plan item 5):
@@ -2557,7 +2575,7 @@ export class Relay {
           }
 
           if (page === "sw.js") {
-            sendBody(response, 200, "text/javascript; charset=utf-8", serviceWorkerFor(PAGES_BUILD), "no-cache");
+            sendBody(response, 200, "text/javascript; charset=utf-8", serviceWorkerFor(PAGES_BUILD, Object.keys(SHARED_ASSETS).map((n) => `${n}?v=${(SHARED_ASSETS[n] as SharedAsset).version}`)), "no-cache");
             return;
           }
 
@@ -12444,8 +12462,9 @@ function sendJson(response: ServerResponse, status: number, body: unknown): void
  * results page showing last week's heat, and the document it draws is
  * fetched separately anyway.
  *
- * The content policy is the backstop behind the escaping: the one script
- * that runs is the page's own, named by its nonce, so even a name that
+ * The content policy is the backstop behind the escaping: the scripts
+ * that run are the page's own and the shared app.js (19 Nov 2026), both
+ * named by its nonce, so even a name that
  * somehow got past esc() as markup could not run anything. Data comes
  * only from this relay; images only from here or as data: pictures the
  * laptop sent; nothing may frame the page or be submitted elsewhere.
@@ -12466,7 +12485,9 @@ function sendHtml(response: ServerResponse, status: number, html: string, nonce:
   const policy = [
     "default-src 'none'",
     `script-src 'nonce-${nonce}'`,
-    "style-src 'unsafe-inline'",
+    // 'self' for the shared app.css (19 Nov 2026, item 1 step 6); the
+    // shared app.js needs nothing more, as its tag carries the nonce.
+    "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
 
     // MEDIA, for listening along from home - see CHANNELS.listen.
