@@ -1137,17 +1137,18 @@ public sealed partial class AnnouncementService
             // writes _standings (6 Nov 2026, Bug hunt 11b - see LapCrossingBook).
             var board = _lapCrossings.Board;
 
-            // For the winner's lines: no ghost, and no black-flagged car
-            // either (bug hunt 22) - neither can win.
-            HashSet<string>? outOfIt = noGhosts
-                ? board.Where(s => s.BlackFlagged).Select(s => s.Transponder).ToHashSet(StringComparer.OrdinalIgnoreCase)
-                : null;
+            // No black-flagged car, ever (bug hunt 22): it is out of the race,
+            // as in HandleStandingUpdated. For the winner's lines no ghost
+            // either - a ghost never wins.
+            var outOfIt = board.Where(s => s.BlackFlagged).Select(s => s.Transponder).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             Func<string, bool>? leaveOut = noGhosts
-                ? transponder => GhostService.IsGhost(transponder) || outOfIt!.Contains(transponder)
+                ? transponder => GhostService.IsGhost(transponder) || outOfIt.Contains(transponder)
                 : AnnounceGhostsProvider?.Invoke() == false
-                    ? transponder => MutedGhost(transponder)
-                    : null;
+                    ? transponder => MutedGhost(transponder) || outOfIt.Contains(transponder)
+                    : outOfIt.Count > 0
+                        ? transponder => outOfIt.Contains(transponder)
+                        : null;
 
             var ranked = PositionReportOrder.Rank(board, leaveOut);
 
@@ -1200,7 +1201,12 @@ public sealed partial class AnnouncementService
         _lapCrossings.Record(standing, _standings.Values.ToArray());
 
         // Same ranking rule as the leaderboard: most laps, then lowest elapsed.
+        // A black-flagged car is out of the race (bug hunt 22, Asher's pick B):
+        // it leaves the order quietly - the flag comes in as an adjustment, so
+        // the car behind is made leader without a call - and is in no gap,
+        // position report, battle or lapping from then on.
         var ordered = _standings.Values
+            .Where(s => !s.BlackFlagged)
             .OrderByDescending(s => s.Laps)
             .ThenBy(s => s.ElapsedMs)
             .ToList();
@@ -1442,6 +1448,7 @@ public sealed partial class AnnouncementService
             }
 
             var ordered = board
+                .Where(s => !s.BlackFlagged)
                 .OrderByDescending(s => s.Laps)
                 .ThenBy(s => s.ElapsedMs)
                 .ToList();

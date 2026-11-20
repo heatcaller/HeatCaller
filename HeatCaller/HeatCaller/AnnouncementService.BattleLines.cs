@@ -562,7 +562,11 @@ public sealed partial class AnnouncementService
             // mid-sentence like one a real pass overtakes, and the ruling
             // is called after it - see below. Marked overtaken, so the next
             // real crossing does not cut it again.
-            if (_battleOnAir is { Overtaken: false } onAir && !CutSinceTaken(onAir) && HasPassed(onAir.Pair, StandingOf)
+            // A line about a car just black-flagged is about a car out of the
+            // race (bug hunt 22, Asher's pick B): stopped and binned like one
+            // a ruling has overturned, but quietly - nobody took anything.
+            if (_battleOnAir is { Overtaken: false } onAir && !CutSinceTaken(onAir)
+                && (HasPassed(onAir.Pair, StandingOf) || OutOfTheRaceNow(onAir.Pair))
                 && onAir.MarkOvertaken())
             {
                 cut = onAir;
@@ -571,7 +575,7 @@ public sealed partial class AnnouncementService
             stale = _voiceQueue
                 .Select(item => item.Battle)
                 .OfType<BattleLine>()
-                .Where(waiting => !waiting.Overtaken && HasPassed(waiting.Pair, StandingOf))
+                .Where(waiting => !waiting.Overtaken && (HasPassed(waiting.Pair, StandingOf) || OutOfTheRaceNow(waiting.Pair)))
                 .Distinct()
                 .Where(waiting => waiting.MarkOvertaken())
                 .ToList();
@@ -590,18 +594,24 @@ public sealed partial class AnnouncementService
 
             var driver = DisplayNameFor(cut.Pair.BehindId);
 
+            // Out of the race, not passed (a black flag): stopped, and
+            // nothing called.
+            var outOfTheRace = OutOfTheRaceNow(cut.Pair);
+
             StatusMessage?.Invoke(
-                $"[voice] Battle line {(wasSpeaking ? "cut off mid-sentence" : "dropped before it spoke")} - a correction by hand "
-                + $"put {driver} ahead of {DisplayNameFor(cut.Pair.AheadId)}.");
+                $"[voice] Battle line {(wasSpeaking ? "cut off mid-sentence" : "dropped before it spoke")} - "
+                + (outOfTheRace
+                    ? $"{DisplayNameFor(cut.Pair.AheadId)} or {driver} has been shown the black flag."
+                    : $"a correction by hand put {driver} ahead of {DisplayNameFor(cut.Pair.AheadId)}."));
 
             // And the call for it, with its spice (8 Nov 2026) - worded as the
             // ruling it was. See RulingPassWords.
             // Not between two classes of a shared heat, and worded by class
             // place - as CallTheBattlePass (bug hunt 20).
-            if (!Muted && !_postRaceQuiet && !InDifferentClasses(cut.Pair.AheadId, cut.Pair.BehindId))
+            if (!outOfTheRace && !Muted && !_postRaceQuiet && !InDifferentClasses(cut.Pair.AheadId, cut.Pair.BehindId))
             {
                 var ordered = _standings.Values
-                    .Where(standing => !MutedGhost(standing.Transponder))
+                    .Where(standing => !MutedGhost(standing.Transponder) && !standing.BlackFlagged)
                     .OrderByDescending(standing => standing.Laps)
                     .ThenBy(standing => standing.ElapsedMs)
                     .ToList();
@@ -630,7 +640,12 @@ public sealed partial class AnnouncementService
         if (stale.Count > 0)
         {
             StatusMessage?.Invoke(
-                $"[voice] Dropped {Plural.Of(stale.Count, "waiting line")} - a correction by hand put the two cars it is about the other way round.");
+                $"[voice] Dropped {Plural.Of(stale.Count, "waiting line")} - a correction by hand put the two cars it is about the other way round, or out of the race.");
         }
     }
+
+    /// <summary>Either car of the pair black-flagged, as the announcer has it now.</summary>
+    private bool OutOfTheRaceNow(BattlePair pair) =>
+        (_standings.TryGetValue(pair.AheadId, out var ahead) && ahead.BlackFlagged)
+        || (_standings.TryGetValue(pair.BehindId, out var behind) && behind.BlackFlagged);
 }
