@@ -123,6 +123,7 @@ public sealed partial class LayoutTests
             alsoCheck: (view, _, page) =>
             {
                 wrong.AddRange(ProgramButtonsOutOfView(page).Select(what => $"  {view.Name}: {what}"));
+                wrong.AddRange(StripWordsCutOff(page).Select(what => $"  {view.Name}: {what}"));
 
                 // After the check, so a check that threw - noted as a
                 // problem by the sweep - counts as a size not looked at.
@@ -190,6 +191,50 @@ public sealed partial class LayoutTests
             }
         }
 
+        return wrong;
+    }
+
+    /// <summary>
+    /// The card's strip above Start with its longest words - the demo
+    /// night's, which name a setting (20 Nov 2026) - wrapped and wholly
+    /// shown, and the program's buttons still in view under the taller card.
+    /// </summary>
+    private static List<string> StripWordsCutOff(Control page)
+    {
+        var wrong = new List<string>();
+
+        if (Descendants(page).OfType<NowCard>().FirstOrDefault() is not { } card)
+        {
+            wrong.Add("the Race Day page has no Next Steps card");
+            return wrong;
+        }
+
+        card.ShowRace("Stock Buggy", "Q1 Heat 1", "7:30", new List<(string, string)>(), TodayControl.DemoNotFiledWords,
+            "Start Stock Buggy Q1 Heat 1", TodayControl.OpenDemoModeCaption);
+
+        for (var i = 0; i < 4; i++)
+        {
+            StaThread.Settle();
+        }
+
+        var label = Descendants(card).OfType<Label>().FirstOrDefault(l => l.Text == TodayControl.DemoNotFiledWords);
+
+        if (label is null || !label.Visible)
+        {
+            wrong.Add("the card's strip did not show");
+        }
+        else
+        {
+            var needed = TextRenderer.MeasureText(label.Text, label.Font, new Size(label.Width, int.MaxValue),
+                TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height;
+
+            if (label.Height < needed)
+            {
+                wrong.Add($"the strip's words need {needed}px down and have {label.Height}px");
+            }
+        }
+
+        wrong.AddRange(ProgramButtonsOutOfView(page).Select(what => "with the strip showing, " + what));
         return wrong;
     }
 

@@ -78,6 +78,49 @@ public sealed class TodayControl : UserControl
     /// <summary>"Call to the Stand" on the card: Race Control's Call Up. What it says back is shown under the buttons.</summary>
     public Func<string?>? CallUp { get; set; }
 
+    /// <summary>Whether a demo race files its result against its heat ("Let a demo fill in the race program" on Demo Mode).</summary>
+    public Func<bool>? DemoFillsTheProgram { get; set; }
+
+    /// <summary>The round last run as a demo while demos were not filed against the program - or null.</summary>
+    public Func<string?>? UnfiledDemoRoundId { get; set; }
+
+    /// <summary>Raised by the card's "Open Demo Mode" - see BlockerFor.</summary>
+    public event Action? DemoModeRequested;
+
+    /// <summary>Whether the strip's button opens Demo Mode rather than Connection, for the card's race as last shown.</summary>
+    private bool _blockerOpensDemoMode;
+
+    internal const string ConnectTimerCaption = "Connect Timer";
+    internal const string OpenDemoModeCaption = "Open Demo Mode";
+    internal const string TimerDownWords = "Timer not connected. Laps won't be counted.";
+    internal const string DemoLapsOnlyWords = "Demo laps only - connect the timer for real cars.";
+    internal const string DemoNotFiledWords = "Demos don't move the night on: tick \"Let a demo fill in the race program\" on Demo Mode.";
+
+    /// <summary>
+    /// The strip above Start, and its button - or null for none.
+    ///
+    /// WHY (20 Nov 2026, head-to-head baseline): on a demo night the strip
+    /// said "Laps won't be counted" over races whose demo laps were counted,
+    /// and a demo run with "Let a demo fill in the race program" off left
+    /// the same heat as next up for ever with nothing saying why.
+    /// </summary>
+    internal static (string Text, string Button, bool OpensDemoMode)? BlockerFor(bool timerDown, bool demoFillsTheProgram, bool demoOfThisRaceNotFiled)
+    {
+        if (demoOfThisRaceNotFiled)
+        {
+            return (DemoNotFiledWords, OpenDemoModeCaption, true);
+        }
+
+        if (!timerDown)
+        {
+            return null;
+        }
+
+        return demoFillsTheProgram
+            ? (DemoLapsOnlyWords, ConnectTimerCaption, false)
+            : (TimerDownWords, ConnectTimerCaption, false);
+    }
+
     /// <summary>Swallows the click a completed hold's let-go makes - see HeldClickFilter.</summary>
     private readonly HeldClickFilter _heldClicks = new();
 
@@ -189,7 +232,16 @@ public sealed class TodayControl : UserControl
                 RunStep();
             }
         };
-        _card.ConnectTimerClicked += () => ConnectTimerRequested?.Invoke();
+        _card.ConnectTimerClicked += () =>
+        {
+            if (_blockerOpensDemoMode)
+            {
+                DemoModeRequested?.Invoke();
+                return;
+            }
+
+            ConnectTimerRequested?.Invoke();
+        };
         _card.CallClicked += () => _card.ShowNote(CallUp?.Invoke() ?? string.Empty);
         _card.SkipChosen += toTheEnd => _program.PutOffNext(toTheEnd);
         _card.SizeWanted += () => _program.NowCardResized();
@@ -446,14 +498,19 @@ public sealed class TodayControl : UserControl
             var facts = _program.NextFacts(round);
             var start = _program.StartOfNext();
             var timerDown = _timerConnected is { } connected && !connected();
+            var demoFills = DemoFillsTheProgram?.Invoke() == true;
+            var demoNotFiled = !demoFills && string.Equals(UnfiledDemoRoundId?.Invoke(), round.Id, StringComparison.Ordinal);
+            var blocker = BlockerFor(timerDown, demoFills, demoNotFiled);
+            _blockerOpensDemoMode = blocker?.OpensDemoMode == true;
 
             _card.ShowRace(
                 MixedHeats.ClassLabel(round),
                 round.RoundLabel,
                 start is { } at ? RunSheet.ShortClock(AppTime.TimeOfDay(at.ToLocalTime())) : string.Empty,
                 FactsOf(round, facts),
-                timerDown ? "Timer not connected. Laps won't be counted." : null,
-                $"Start {RunSheet.RaceName(MixedHeats.ClassLabel(round), round.RoundLabel).Replace(" · ", " ")}");
+                blocker?.Text,
+                $"Start {RunSheet.RaceName(MixedHeats.ClassLabel(round), round.RoundLabel).Replace(" · ", " ")}",
+                blocker?.Button ?? ConnectTimerCaption);
 
             _tips.SetToolTip(_card.StartButton, StartNextHold.Tip);
             _card.StartButton.AccessibleDescription = StartNextHold.AccessibleDescription;
@@ -1033,8 +1090,14 @@ internal sealed class NowCard : Panel
     }
 
     /// <summary>The next race: its class and label, when it should go, the facts, and what would stop it.</summary>
-    public void ShowRace(string classLabel, string roundLabel, string time, List<(string Value, string Caption)> facts, string? blocker, string startCaption)
+    public void ShowRace(string classLabel, string roundLabel, string time, List<(string Value, string Caption)> facts, string? blocker, string startCaption,
+        string blockerButton = "Connect Timer")
     {
+        if (_btnConnect.Text != blockerButton)
+        {
+            _btnConnect.Text = blockerButton;
+        }
+
         _race = true;
         _kicker = "NEXT";
         _time = time;
@@ -1119,7 +1182,26 @@ internal sealed class NowCard : Panel
             ? 0
             : TextRenderer.MeasureText(_detail, AppTheme.BodyFont, new Size(TextWidth(width), int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height;
 
-    private int BlockerHeight => Math.Max(_btnConnect.Height, AppTheme.BodyFont.Height) + UiLayout.AtTextSize(8);
+    /// <summary>
+    /// The strip's height in a card whose words are <paramref name="width"/> wide: its
+    /// words wrapped to the room left of its button, or the button's height.
+    /// WHY (20 Nov 2026): one line, cut short with "..." - "Timer not
+    /// connected" already was at 200% text, and the demo night's line names a
+    /// setting, which needs two lines at 1280x720.
+    /// </summary>
+    private int BlockerHeight(int width)
+    {
+        var words = TextRenderer.MeasureText(_lblBlocker.Text, AppTheme.BoldFont, new Size(Math.Max(40, BlockerWordsWidth(width)), int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height;
+
+        return Math.Max(Math.Max(_btnConnect.Height, AppTheme.BodyFont.Height), words) + UiLayout.AtTextSize(8);
+    }
+
+    private static int BlockerMarkRoom => UiLayout.AtTextSize(28);
+
+    /// <summary>How wide the strip's words may be in a strip <paramref name="width"/> wide: up to its button.</summary>
+    private int BlockerWordsWidth(int width) =>
+        width - _btnConnect.GetPreferredSize(Size.Empty).Width - UiLayout.AtTextSize(4) - BlockerMarkRoom - 4;
 
     public override Size GetPreferredSize(Size proposedSize)
     {
@@ -1130,7 +1212,7 @@ internal sealed class NowCard : Panel
 
         if (_blocker.Visible)
         {
-            y += BlockerHeight + UiLayout.AtTextSize(8);
+            y += BlockerHeight(TextWidth(width)) + UiLayout.AtTextSize(8);
         }
 
         y += _buttons.GetPreferredSize(new Size(TextWidth(width), 0)).Height;
@@ -1155,14 +1237,15 @@ internal sealed class NowCard : Panel
 
         if (_blocker.Visible)
         {
-            _blocker.Bounds = new Rectangle(left, y, width, BlockerHeight);
+            var blockerHeight = BlockerHeight(width);
+            _blocker.Bounds = new Rectangle(left, y, width, blockerHeight);
             var buttonWidth = _btnConnect.GetPreferredSize(Size.Empty).Width;
             _btnConnect.Bounds = new Rectangle(_blocker.Width - buttonWidth - UiLayout.AtTextSize(4), (_blocker.Height - _btnConnect.Height) / 2, buttonWidth, _btnConnect.Height);
             _lblBlocker.Font = AppTheme.BoldFont;
             _lblBlocker.ForeColor = AppTheme.Warning;
-            var markRoom = UiLayout.AtTextSize(28);
+            var markRoom = BlockerMarkRoom;
             _lblBlocker.Bounds = new Rectangle(markRoom, 0, Math.Max(0, _btnConnect.Left - markRoom - 4), _blocker.Height);
-            y += BlockerHeight + UiLayout.AtTextSize(8);
+            y += blockerHeight + UiLayout.AtTextSize(8);
         }
 
         var bar = _buttons.GetPreferredSize(new Size(width, 0));
