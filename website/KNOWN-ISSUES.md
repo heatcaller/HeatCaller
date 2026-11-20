@@ -8,13 +8,14 @@ Re-checked against the code on 13 Nov 2026, and the open table on 19 Nov 2026. T
 
 | Issue | Where it's documented |
 |---|---|
-| **Race Tools card cut off the first time Connection opens.** On a 1280-wide window the card under **RACE TOOLS** is laid out one button row short the first time the page is shown, so **Photo Finish** is hidden under the card's foot; going to another page and back lays it out right. Seen in the off-screen screenshot run, 19 Nov 2026; not yet checked on screen. | timing/decoders.md (the Race tools card) |
-| **A white scroll bar under an empty Standings table.** On **Championship → Standings** with nothing counted yet, the table's columns are wider than the card at 1280 wide and the grid shows the system's own light horizontal scroll bar, not the app's slim drawn one. Seen in the screenshot run, 19 Nov 2026. | race-control/results-and-championships.md (Championship) |
+| Nothing open. |  |
 
 ## Fixed on 19 Nov 2026 (docs refresh)
 
 - **Search pages... finds the Updates and Standby PC cards.** Backup & Restore's search words now include "update", "check for updates", "version" and "standby". getting-started/install.md.
 - **The Connection page's four tiles take the look.** They were made in a field initializer, before MainForm puts the look on, so they kept the light look's white card and dark text in every look. They are made in BuildConnectionTiles now. timing/decoders.md.
+- **Connection's Race tools card holds Photo Finish the first time.** CardColumns asked a card its height at the start of the card's own layout, before its button row wrapped; it now looks again once the card has finished (CardColumns.ArrangeAgainAfterward). timing/decoders.md.
+- **A grid wider than its card gets the slim bar.** ThinScrollBar read a grid's horizontal range from its window, where a grid keeps none, so Windows' white bar showed under Championship's standings; it now reads the grid's own bar and scrolls by HorizontalScrollingOffset. race-control/results-and-championships.md.
 
 ## Documented states, not bugs
 

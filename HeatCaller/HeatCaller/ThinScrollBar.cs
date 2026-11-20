@@ -112,6 +112,21 @@ internal sealed class ThinScrollBar : Control
     /// </summary>
     private readonly DataGridView? _grid;
 
+    /// <summary>
+    /// The target when it is a DataGridView and this is the bottom bar (19
+    /// Nov 2026). Columns are Fill-sized nearly everywhere, but each has a
+    /// least width, and a table of many columns in a narrow card is wider
+    /// than its box: Championship's ten-column standings at 1280 wide. The
+    /// grid's own child HScrollBar then showed, white, because the window
+    /// path below reads nothing from a grid and kept this bar hidden. So the
+    /// grid's bar is read directly, in pixels, and the grid is moved by
+    /// HorizontalScrollingOffset.
+    /// </summary>
+    private readonly DataGridView? _gridAcross;
+
+    /// <summary>The grid's own horizontal bar, when it has made one.</summary>
+    private HScrollBar? GridAcrossBar => _gridAcross?.Controls.OfType<HScrollBar>().FirstOrDefault();
+
     /// <summary>True for the bottom bar, false for the right one. The one field the whole geometry keys off.</summary>
     private readonly bool _horizontal;
 
@@ -131,10 +146,10 @@ internal sealed class ThinScrollBar : Control
         _target = target;
         _horizontal = horizontal;
 
-        // Vertical only. A grid's columns are almost always Fill-sized in
-        // this app, so the horizontal case does not arise, and rows are
-        // the only unit the row-based path below can speak in.
+        // Vertical only: rows are the unit the row-based path below speaks
+        // in. Across, a grid is read from its own bar instead - see _gridAcross.
         _grid = horizontal ? null : target as DataGridView;
+        _gridAcross = horizontal ? target as DataGridView : null;
 
         SetStyle(ControlStyles.OptimizedDoubleBuffer
                  | ControlStyles.AllPaintingInWmPaint
@@ -499,6 +514,23 @@ internal sealed class ThinScrollBar : Control
             pos = Math.Max(0, _grid.FirstDisplayedScrollingRowIndex);
             scrollable = rows > shown;
         }
+        else if (_gridAcross is not null)
+        {
+            // Only while the grid shows its own bar: that is what this covers.
+            if (GridAcrossBar is not { Visible: true } across)
+            {
+                SetShown(false);
+                return;
+            }
+
+            // A ScrollBar's range is Win32's: the furthest it goes is
+            // Maximum - LargeChange + 1, as MaxPos works it out.
+            min = across.Minimum;
+            max = across.Maximum;
+            page = Math.Max(1, across.LargeChange);
+            pos = across.Value;
+            scrollable = max - min + 1 > page;
+        }
         else
         {
             // A panel that scrolls by itself (AutoScroll) says whether it
@@ -591,6 +623,11 @@ internal sealed class ThinScrollBar : Control
     /// <summary>Whether Windows is showing the native bar this one sits over.</summary>
     private bool NativeBarShown()
     {
+        if (_gridAcross is not null)
+        {
+            return GridAcrossBar is { Visible: true };
+        }
+
         if (_grid is not null || !_target.IsHandleCreated)
         {
             return false;
@@ -636,8 +673,14 @@ internal sealed class ThinScrollBar : Control
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
         // The track takes the control's own background rather than the page
-        // canvas: the bar sits inside the field's edge, not beside it.
-        using (var back = new SolidBrush(_target.BackColor))
+        // canvas: the bar sits inside the field's edge, not beside it. A
+        // grid's background is its BackgroundColor - the theme sets that,
+        // and leaves BackColor at Windows' light default, which drew a white
+        // track under any grid wider than its card (19 Nov 2026: an empty
+        // Championship standings table at 1280 wide).
+        var track = _target is DataGridView grid ? grid.BackgroundColor : _target.BackColor;
+
+        using (var back = new SolidBrush(track))
         {
             g.FillRectangle(back, ClientRectangle);
         }
@@ -772,6 +815,12 @@ internal sealed class ThinScrollBar : Control
             return;
         }
 
+        if (_gridAcross is not null)
+        {
+            ScrollGridAcross(code, position);
+            return;
+        }
+
         // The two thumb codes cannot go to every control as a message. Only
         // the edit and list box controls (text boxes, rich text, list boxes,
         // checked lists) read the position from the message's high word. A
@@ -803,6 +852,44 @@ internal sealed class ThinScrollBar : Control
         var wParam = (IntPtr)((position << 16) | (code & 0xFFFF));
 
         SendMessage(_target.Handle, _horizontal ? WM_HSCROLL : WM_VSCROLL, wParam, IntPtr.Zero);
+    }
+
+    /// <summary>Moves a grid sideways, in pixels, by its own bar's steps - see _gridAcross.</summary>
+    private void ScrollGridAcross(int code, int position)
+    {
+        if (_gridAcross is null || GridAcrossBar is not { } across)
+        {
+            return;
+        }
+
+        var last = Math.Max(0, across.Maximum - across.LargeChange + 1);
+        var current = _gridAcross.HorizontalScrollingOffset;
+
+        var wanted = code switch
+        {
+            SB_LINEUP => current - across.SmallChange,
+            SB_LINEDOWN => current + across.SmallChange,
+            SB_PAGEUP => current - across.LargeChange,
+            SB_PAGEDOWN => current + across.LargeChange,
+            SB_THUMBTRACK or SB_THUMBPOSITION => position,
+            _ => current,
+        };
+
+        wanted = Math.Clamp(wanted, 0, last);
+
+        if (wanted == current)
+        {
+            return;
+        }
+
+        try
+        {
+            _gridAcross.HorizontalScrollingOffset = wanted;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            // The columns can change between the read and this - skip the step.
+        }
     }
 
     /// <summary>
