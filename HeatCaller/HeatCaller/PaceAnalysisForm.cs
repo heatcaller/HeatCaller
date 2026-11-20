@@ -37,7 +37,13 @@ public sealed class PaceAnalysisForm : Form
 
     public PaceAnalysisForm(SessionRecord session)
     {
-        Text = $"Pace - {(string.IsNullOrWhiteSpace(session.Label) ? "Race" : session.Label)}";
+        // The pieces held while the window is built and laid out once at the
+        // end (LayoutFreeze.HoldWhileBuilding). Why (19 Nov 2026): built
+        // without one, the pace view's page was laid out again for every
+        // part put in it and every value its gauges were given.
+        using var building = LayoutFreeze.HoldWhileBuilding();
+
+        Text =$"Pace - {(string.IsNullOrWhiteSpace(session.Label) ? "Race" : session.Label)}";
 
         var pace = new PaceAnalysisControl(session);
 
