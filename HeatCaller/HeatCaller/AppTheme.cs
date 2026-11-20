@@ -1617,37 +1617,29 @@ public static class AppTheme
         ThinScrollBar.Attach(grid);
         ThinScrollBar.AttachHorizontal(grid);
 
-        grid.BorderStyle = BorderStyle.None;
-        grid.BackgroundColor = Surface;
-        grid.GridColor = Border;
-        grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        grid.EnableHeadersVisualStyles = false;
+        // Rows that size themselves to their cells are measured again, every
+        // row, for each style set below - the face, the padding, the headers.
+        // So that is held off while they are set, and the grid sizes its rows
+        // once when it is put back - before the least height below, which it
+        // would otherwise undo. WHY (19 Nov 2026): a seventh of the Pace
+        // window's opening was its table measuring its rows six times over.
+        var rowSizing = grid.AutoSizeRowsMode;
+        grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+
+        try
+        {
+            StyleGridFaces(grid);
+        }
+        finally
+        {
+            grid.AutoSizeRowsMode = rowSizing;
+        }
+
         // Header and row heights follow the FONT rather than being fixed.
         // At 30px a row was comfortable at 9.5pt and clipped the descenders
         // at 11.5pt - and since a grid's rows are the densest text in the
         // app, that is the first place a bigger font shows up as damage.
         var rowHeight = Math.Max(30, BodyFont.Height + 12);
-
-        grid.ColumnHeadersHeight = Math.Max(34, MicroFont.Height + 18);
-        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
-
-        // The accent, not a quiet grey - the same treatment the ListView
-        // headers get, so every table in the app wears one header. On the
-        // leaderboard especially, the header is the top edge of the most
-        // looked-at thing in the room and deserves to read as chrome.
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Primary;
-        grid.ColumnHeadersDefaultCellStyle.ForeColor = OnPrimary;
-        grid.ColumnHeadersDefaultCellStyle.Font = MicroFont;
-        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Primary;
-        grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = OnPrimary;
-        grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-        grid.DefaultCellStyle.BackColor = Surface;
-        grid.DefaultCellStyle.ForeColor = TextDark;
-        grid.DefaultCellStyle.Font = BodyFont;
-        grid.DefaultCellStyle.SelectionBackColor = PrimaryTint;
-        grid.DefaultCellStyle.SelectionForeColor = TextDark;
-        grid.DefaultCellStyle.Padding = new Padding(8, 4, 8, 4);
-        grid.AlternatingRowsDefaultCellStyle.BackColor = RowAlt;
         grid.RowTemplate.Height = rowHeight;
 
         // The template only applies to rows added AFTER it is set, so a grid
@@ -1674,6 +1666,37 @@ public static class AppTheme
         // box in the app is drawn, rather than Windows' 13px glyph.
         grid.CellPainting -= TickCellPaint;
         grid.CellPainting += TickCellPaint;
+    }
+
+    /// <summary>The grid's colours, faces and padding - see StyleGrid, which holds the rows' sizing off while these are set.</summary>
+    private static void StyleGridFaces(DataGridView grid)
+    {
+        grid.BorderStyle = BorderStyle.None;
+        grid.BackgroundColor = Surface;
+        grid.GridColor = Border;
+        grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+        grid.EnableHeadersVisualStyles = false;
+
+        grid.ColumnHeadersHeight = Math.Max(34, MicroFont.Height + 18);
+        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
+
+        // The accent, not a quiet grey - the same treatment the ListView
+        // headers get, so every table in the app wears one header. On the
+        // leaderboard especially, the header is the top edge of the most
+        // looked-at thing in the room and deserves to read as chrome.
+        grid.ColumnHeadersDefaultCellStyle.BackColor = Primary;
+        grid.ColumnHeadersDefaultCellStyle.ForeColor = OnPrimary;
+        grid.ColumnHeadersDefaultCellStyle.Font = MicroFont;
+        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Primary;
+        grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = OnPrimary;
+        grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        grid.DefaultCellStyle.BackColor = Surface;
+        grid.DefaultCellStyle.ForeColor = TextDark;
+        grid.DefaultCellStyle.Font = BodyFont;
+        grid.DefaultCellStyle.SelectionBackColor = PrimaryTint;
+        grid.DefaultCellStyle.SelectionForeColor = TextDark;
+        grid.DefaultCellStyle.Padding = new Padding(8, 4, 8, 4);
+        grid.AlternatingRowsDefaultCellStyle.BackColor = RowAlt;
     }
 
     /// <summary>

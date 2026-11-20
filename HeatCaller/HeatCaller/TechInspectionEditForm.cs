@@ -60,6 +60,19 @@ public sealed class TechInspectionEditForm : Form
     /// <summary>Lines of notes the box shows before it scrolls.</summary>
     private const int NotesLines = 3;
 
+    /// <summary>
+    /// Holds the layout pieces' layouts while the window is built, let go
+    /// at the end of the constructor (LayoutFreeze.HoldWhileBuilding) -
+    /// first among the fields, so the checklist's PageStack below is made
+    /// under it too.
+    ///
+    /// Why (19 Nov 2026): built without one, every check line added laid the
+    /// checklist, its card and the page out again, and 18 of the window's
+    /// parts made their windows before it was shown - about a tenth of a
+    /// second to open one with a filled-in checklist.
+    /// </summary>
+    private readonly IDisposable _building = LayoutFreeze.HoldWhileBuilding();
+
     private readonly ProfileStore _profiles;
     private readonly RaceClassStore _classes;
 
@@ -128,6 +141,8 @@ public sealed class TechInspectionEditForm : Form
     public TechInspectionEditForm(TechInspection? existing, ProfileStore profiles, RaceClassStore classes,
         string? presetTransponder = null, string? presetClass = null)
     {
+        using var building = _building;
+
         _profiles = profiles;
         _classes = classes;
         _presetClass = presetClass;

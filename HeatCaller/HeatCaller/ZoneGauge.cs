@@ -175,10 +175,13 @@ internal sealed class ZoneGauge : Control
         // A few pixels over the measured width: the heading face's last
         // glyph overhangs what TextRenderer measures, and drawn in exactly
         // that box "2.6%" came out as "2..." with an ellipsis.
-        var figureSize = TextRenderer.MeasureText(_figure, AppTheme.HeadingFont, Size.Empty, FigureFlags);
+        // Through the theme's cache (19 Nov 2026): a gauge is asked at many
+        // widths as the page settles, and the figure and the reading came out
+        // the same at most of them - a seventh of the Pace window's opening.
+        var figureSize = AppTheme.WrappedSize(_figure, AppTheme.HeadingFont, Size.Empty, FigureFlags);
         figureSize.Width += UiLayout.AtTextSize(8);
         var captionWidth = Math.Max(1, inside - figureSize.Width - Gap * 2);
-        var captionSize = TextRenderer.MeasureText(CaptionText, AppTheme.MicroFont, new Size(captionWidth, 0), Wrap);
+        var captionSize = AppTheme.WrappedSize(CaptionText, AppTheme.MicroFont, new Size(captionWidth, 0), Wrap);
         var top = inset.Top;
         var headHeight = Math.Max(figureSize.Height, captionSize.Height);
 
@@ -195,7 +198,7 @@ internal sealed class ZoneGauge : Control
         top += labelHeight + Gap;
         var readingSize = string.IsNullOrEmpty(_reading)
             ? Size.Empty
-            : TextRenderer.MeasureText(_reading, AppTheme.BodyFont, new Size(inside, 0), Wrap);
+            : AppTheme.WrappedSize(_reading, AppTheme.BodyFont, new Size(inside, 0), Wrap);
         var reading = new Rectangle(inset.Left, top, inside, readingSize.Height);
 
         return (caption, figure, bar, labels, reading, top + readingSize.Height + inset.Bottom);
