@@ -24,9 +24,16 @@ describe("a video made public after its week (bug hunt 20)", () => {
     assert.equal(asked.length, 2, "asked again on day 10");
     assert.equal(check.dead("acme-rc").size, 1);
 
+    // Its quick re-asks after a refusal (open items 19 Nov 2026: 2, 5, 15,
+    // 60 min), then once a day.
+    for (const minutes of [5, 15, 60]) {
+      now += minutes * 60 * 1000;
+      await check.saw("acme-rc", ["AAAAAAAAAAA"]);
+    }
+    assert.equal(asked.length, 5, "the quick re-asks");
     now += 2 * 60 * 60 * 1000;
     await check.saw("acme-rc", ["AAAAAAAAAAA"]);
-    assert.equal(asked.length, 2, "at most once a day");
+    assert.equal(asked.length, 5, "then at most once a day");
 
     answers.push(200);
     now += DAY;
@@ -35,7 +42,7 @@ describe("a video made public after its week (bug hunt 20)", () => {
 
     now += DAY;
     await check.saw("acme-rc", ["AAAAAAAAAAA"]);
-    assert.equal(asked.length, 3, "a playing video past its week is not asked about");
+    assert.equal(asked.length, 6, "a playing video past its week is not asked about");
   });
 });
 

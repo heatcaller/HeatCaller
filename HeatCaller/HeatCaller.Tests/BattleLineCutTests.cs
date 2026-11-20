@@ -259,11 +259,7 @@ public sealed class BattleLineCutTests : IDisposable
         announcer.OnStandingUpdated(Car("101", 5, 50_100));
 
         // The lead change call waits in the per-lap batch before it decides.
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (DateTime.UtcNow < deadline && !shown.Any(text => text.Contains("now leads", StringComparison.Ordinal)))
-        {
-            Thread.Sleep(50);
-        }
+        UntilSettled(announcer);
 
         announcer.Muted = true;
 
@@ -281,14 +277,23 @@ public sealed class BattleLineCutTests : IDisposable
 
     // --- Wider: every call a position change can betray (3 Nov 2026) --------
 
-    /// <summary>Waits for the per-lap batches to settle, as the lead change test above does.</summary>
-    private static void UntilShown(ConcurrentQueue<string> shown, string words)
+    /// <summary>
+    /// Waits until every lap call offered so far has been said or dropped
+    /// (open items, 19 Nov 2026). It waited up to 3 s for the words it hoped
+    /// for, and on a loaded machine the per-lap batch and the field window
+    /// could take longer - the lead change test failed in the full suite.
+    /// The 60 s only bounds a broken run; a working one settles in well
+    /// under a second.
+    /// </summary>
+    private static void UntilSettled(AnnouncementService announcer)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (DateTime.UtcNow < deadline && !shown.Any(text => text.Contains(words, StringComparison.Ordinal)))
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        while (!announcer.LapCallsSettledForTests && DateTime.UtcNow < deadline)
         {
-            Thread.Sleep(50);
+            Thread.Sleep(20);
         }
+
+        Assert.True(announcer.LapCallsSettledForTests, "the lap calls never settled");
     }
 
     [Fact]
@@ -339,11 +344,11 @@ public sealed class BattleLineCutTests : IDisposable
         if (billIsStraightBack)
         {
             announcer.OnStandingUpdated(Car("102", 6, 60_000));
-            UntilShown(shown, "Bill now leads");
+            UntilSettled(announcer);
         }
         else
         {
-            UntilShown(shown, "Sam now leads");
+            UntilSettled(announcer);
         }
 
         announcer.Muted = true;
@@ -380,7 +385,7 @@ public sealed class BattleLineCutTests : IDisposable
         }
 
         // Waited out in full when it is dropped - long past the batch window.
-        UntilShown(shown, "all over");
+        UntilSettled(announcer);
         announcer.Muted = true;
 
         if (samGetsThrough)

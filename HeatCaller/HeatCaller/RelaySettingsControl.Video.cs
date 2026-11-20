@@ -218,13 +218,11 @@ public sealed partial class RelaySettingsControl
             var when = AppTime.TimeOfDay(p.StartedUtc.ToLocalTime()) + (p.EndedUtc is { } e ? " - " + AppTime.TimeOfDay(e.ToLocalTime()) : " - live");
             row.Controls.Add(new Label { AutoSize = true, Text = $"Piece {i + 1}, {when}:", Margin = new Padding(0, 6, 6, 0) });
             var link = new TextBox { Width = UiLayout.AtTextSize(260), Text = p.VideoId, Tag = p.VideoId, PlaceholderText = "YouTube link" };
-            link.Leave += (_, _) =>
-            {
-                if (Stream?.SetLink(index, link.Text) == false)
-                {
-                    MessageBox.Show(this, "That isn't a YouTube link HeatCaller can read. Paste the link from YouTube Studio or the watch page.", "Race video");
-                }
-            };
+            // Saved on paste, a second after typing stops, and on leaving (open items item 1).
+            _ = new VideoLinkBoxSaver(
+                link,
+                text => Stream?.SetLink(index, text) != false,
+                () => MessageBox.Show(this, "That isn't a YouTube link HeatCaller can read. Paste the link from YouTube Studio or the watch page.", "Race video"));
             row.Controls.Add(link);
 
             foreach (var (label, seconds) in new[] { ("-30s", -30.0), ("-5s", -5.0), ("-1s", -1.0), ("+1s", 1.0), ("+5s", 5.0), ("+30s", 30.0) })

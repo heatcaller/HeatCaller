@@ -1581,7 +1581,7 @@ export class Relay {
     this.videoCheck = options.videoCheck === undefined ? undefined : new VideoCheck(options.videoCheck, this.now, {
       load: async (club) => {
         const kept = (await this.store.getSnapshot(club, VIDEO_CHECK_CHANNEL))?.body;
-        return isPlainObject(kept) && Array.isArray(kept["checks"]) ? (kept["checks"] as { id: string; firstMs: number; lastMs: number; dead?: boolean }[]) : undefined;
+        return isPlainObject(kept) && Array.isArray(kept["checks"]) ? (kept["checks"] as { id: string; firstMs: number; lastMs: number; dead?: boolean; refused?: number }[]) : undefined;
       },
       save: async (club, checks) => {
         await this.store.putSnapshot(club, VIDEO_CHECK_CHANNEL, { seq: this.now().getTime(), publishedAt: this.now().toISOString(), body: { checks } });

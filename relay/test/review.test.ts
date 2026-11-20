@@ -37,6 +37,16 @@ function result(i: number, bytes: number): StoredDocument {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Waits until <ready> is true, looking every few milliseconds, for up to
+ * <ms>. For a state reached through the disk: a fixed sleep was a guess
+ * that a loaded machine could miss (open items, 19 Nov 2026).
+ */
+async function until(ready: () => boolean, ms = 10_000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!ready() && Date.now() < deadline) await wait(5);
+}
+
 /** A store that says how many item reads are under way at once, and how many there have been. */
 class CountingStore extends MemoryStore {
   reads = 0;
@@ -745,7 +755,9 @@ describe("the voice's allowance and slots", () => {
       const acme = Array.from({ length: 12 }, (_, i) =>
         voice.speak("acme-rc", plan, "clubhouse", `line ${i}`, false).finally(() => settled++),
       );
-      await wait(100);
+      // Every one of the twelve has its place once both renders have
+      // started (each takes its characters off the month on disk first).
+      await until(() => pending.length === 2 && voice.slots("acme-rc").clubWaiting === 10);
 
       assert.deepEqual(voice.slots("acme-rc"), { inFlight: 2, waiting: 10, clubInFlight: 2, clubWaiting: 10 });
 
@@ -755,12 +767,14 @@ describe("the voice's allowance and slots", () => {
 
       // ...and another club gets one of them straight away.
       const brook = voice.speak("brookside", plan, "clubhouse", "Green flag", false).finally(() => settled++);
-      await wait(50);
+      await until(() => pending.length === 3);
       assert.equal(voice.slots("brookside").clubInFlight, 1);
 
       // Finishing everything drains the queue in turn, never more than two
-      // of acme's at once.
-      for (let turn = 0; settled < 13 && turn < 2000; turn++) {
+      // of acme's at once. Held to a time, not a count of turns, so a
+      // loaded machine's slower disk doesn't run out of turns.
+      const deadline = Date.now() + 30_000;
+      while (settled < 13 && Date.now() < deadline) {
         pending.shift()?.();
         await wait(5);
         assert.ok(voice.slots("acme-rc").clubInFlight <= 2);

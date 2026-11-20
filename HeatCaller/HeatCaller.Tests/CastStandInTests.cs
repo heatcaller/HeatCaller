@@ -44,9 +44,20 @@ public sealed class CastStandInTests : IDisposable
     /// warm-up loading this empty file records "the model wouldn't load"
     /// for a minute - Kokoro unable to speak for whatever test comes next.
     /// </remarks>
+    /// <remarks>
+    /// The stand-in model first, then the placeholder, then the slate
+    /// cleared (open items, 19 Nov 2026). It cleared first and set the model
+    /// last, and a warm-up left running by an earlier test that failed in
+    /// between - while the 60 MB placeholder was written, which under a
+    /// loaded full suite takes a while - was recorded as "the model wouldn't
+    /// load" (KokoroSpeech only ignores one while a stand-in model is set),
+    /// so Kokoro read as unavailable and the quota test heard the saved take.
+    /// Now a failure before the model is set is cleared, and one after it
+    /// is never recorded.
+    /// </remarks>
     private static void FakeKokoro()
     {
-        KokoroSpeech.RecordLoadFailureForTests(null, default);
+        KokoroSpeech.ModelForTests = (name => name, (_, voice, _) => Task.FromResult(SaidBy((string)voice)));
         Directory.CreateDirectory(KokoroSpeech.Folder);
 
         using (var file = new FileStream(KokoroSpeech.ModelPath, FileMode.Create, FileAccess.Write))
@@ -54,7 +65,8 @@ public sealed class CastStandInTests : IDisposable
             file.SetLength(60L * 1024 * 1024);
         }
 
-        KokoroSpeech.ModelForTests = (name => name, (_, voice, _) => Task.FromResult(SaidBy((string)voice)));
+        KokoroSpeech.RecordLoadFailureForTests(null, default);
+        Assert.True(KokoroSpeech.IsAvailable, KokoroSpeech.UnavailableReason);
     }
 
     /// <summary>A tenth of a second of "audio" - the least Kokoro takes for a line - starting with who said it.</summary>

@@ -171,6 +171,22 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Videos one club's checks have seen. */
 const VIDEO_CHECK_MAX = 200;
 
+/**
+ * How long after its first, second, third and fourth refusal in a row a
+ * dead video is asked about again; after that, once a day (open items 19
+ * Nov 2026). A stream that is private when it ends and goes public an hour
+ * later is picked up the same night, not the next day.
+ */
+export const VIDEO_RECHECK_BACKOFF_MS: readonly number[] = [2, 5, 15, 60].map((m) => m * 60 * 1000);
+
+/** One video's checks: when first and last asked, YouTube's last word, and refusals in a row. */
+type Checked = { firstMs: number; lastMs: number; dead: boolean; asking: boolean; refused: number };
+
+/** How long after its last ask a video is due again. */
+function waitFor(v: Checked): number {
+  return v.dead ? VIDEO_RECHECK_BACKOFF_MS[Math.max(0, v.refused - 1)] ?? DAY_MS : DAY_MS;
+}
+
 /** How long a video is checked for: the night it arrives, then once a day for a week. */
 export const VIDEO_CHECK_FOR_MS = 7 * DAY_MS;
 
@@ -180,7 +196,7 @@ export const VIDEO_CHECK_FOR_MS = 7 * DAY_MS;
  * playing before one found dead, so a dead video stays dead the longest.
  * False when every video is still inside its week.
  */
-function roomFor(mine: Map<string, { firstMs: number; dead: boolean; asking: boolean }>, now: number): boolean {
+function roomFor(mine: Map<string, Checked>, now: number): boolean {
   let oldest: [string, { firstMs: number; dead: boolean }] | undefined;
   for (const entry of mine) {
     const [, v] = entry;
@@ -195,14 +211,15 @@ function roomFor(mine: Map<string, { firstMs: number; dead: boolean; asking: boo
 /**
  * Checks each video the night it arrives, then once a day for a week (V7).
  * 401 (embedding turned off), 403 and 404 (private, removed) make it dead:
- * no race shows it. A 200 brings it back - a video still processing after
+ * no race shows it, and it is asked about again after 2, 5, 15 and 60
+ * minutes, then daily (VIDEO_RECHECK_BACKOFF_MS). A 200 brings it back - a video still processing after
  * the stream, or made public again. YouTube not answering changes nothing.
  * A dead video goes on being asked about once a day after its week (bug
  * hunt 20), so one the club makes public later still comes back. Kept in
  * the club's "videocheck" snapshot across restarts (see VideoCheckKeep).
  */
 export class VideoCheck {
-  private readonly seen = new Map<string, Map<string, { firstMs: number; lastMs: number; dead: boolean; asking: boolean }>>();
+  private readonly seen = new Map<string, Map<string, Checked>>();
 
   /** Clubs whose checks have been read back from the keep (see VideoCheckKeep). */
   private readonly loaded = new Map<string, Promise<void>>();
@@ -228,9 +245,13 @@ export class VideoCheck {
           return;
         }
         if (kept === undefined || this.seen.has(club)) return;
-        const mine = new Map<string, { firstMs: number; lastMs: number; dead: boolean; asking: boolean }>();
+        const mine = new Map<string, Checked>();
         for (const k of kept.slice(0, VIDEO_CHECK_MAX)) {
-          if (YOUTUBE_ID.test(k.id) && Number.isFinite(k.firstMs) && Number.isFinite(k.lastMs)) mine.set(k.id, { firstMs: k.firstMs, lastMs: k.lastMs, dead: k.dead === true, asking: false });
+          if (!YOUTUBE_ID.test(k.id) || !Number.isFinite(k.firstMs) || !Number.isFinite(k.lastMs)) continue;
+          const dead = k.dead === true;
+          // Kept before refusals were counted: a dead one is taken as past its quick re-asks.
+          const refused = !dead ? 0 : typeof k.refused === "number" && Number.isInteger(k.refused) && k.refused >= 1 ? k.refused : VIDEO_RECHECK_BACKOFF_MS.length + 1;
+          mine.set(k.id, { firstMs: k.firstMs, lastMs: k.lastMs, dead, asking: false, refused });
         }
         this.seen.set(club, mine);
       })();
@@ -262,9 +283,9 @@ export class VideoCheck {
       const known = mine.get(id);
       if (known === undefined) {
         if (mine.size >= VIDEO_CHECK_MAX && !roomFor(mine, now)) continue;
-        mine.set(id, { firstMs: now, lastMs: now, dead: false, asking: true });
+        mine.set(id, { firstMs: now, lastMs: now, dead: false, asking: true, refused: 0 });
         due.push(id);
-      } else if (!known.asking && now - known.lastMs >= DAY_MS && (known.dead || now - known.firstMs < VIDEO_CHECK_FOR_MS)) {
+      } else if (!known.asking && now - known.lastMs >= waitFor(known) && (known.dead || now - known.firstMs < VIDEO_CHECK_FOR_MS)) {
         known.lastMs = now;
         known.asking = true;
         due.push(id);
@@ -276,20 +297,25 @@ export class VideoCheck {
       const v = mine.get(id);
       if (v === undefined) return;
       v.asking = false;
-      if (status === 200) v.dead = false;
-      else if (status === 401 || status === 403 || status === 404) v.dead = true;
+      if (status === 200) {
+        v.dead = false;
+        v.refused = 0;
+      } else if (status === 401 || status === 403 || status === 404) {
+        v.dead = true;
+        v.refused = Math.min(v.refused + 1, VIDEO_RECHECK_BACKOFF_MS.length + 1);
+      }
     }));
 
     if (due.length > 0 && this.keep !== undefined) {
-      await this.keep.save(club, [...mine].map(([id, v]) => ({ id, firstMs: v.firstMs, lastMs: v.lastMs, dead: v.dead }))).catch(() => {});
+      await this.keep.save(club, [...mine].map(([id, v]) => ({ id, firstMs: v.firstMs, lastMs: v.lastMs, dead: v.dead, refused: v.refused }))).catch(() => {});
     }
   }
 }
 
 /** Where VideoCheck keeps what it learnt, per club, across restarts. */
 export interface VideoCheckKeep {
-  load(club: string): Promise<{ id: string; firstMs: number; lastMs: number; dead?: boolean }[] | undefined>;
-  save(club: string, checks: { id: string; firstMs: number; lastMs: number; dead: boolean }[]): Promise<void>;
+  load(club: string): Promise<{ id: string; firstMs: number; lastMs: number; dead?: boolean; refused?: number }[] | undefined>;
+  save(club: string, checks: { id: string; firstMs: number; lastMs: number; dead: boolean; refused: number }[]): Promise<void>;
 }
 
 /** Nights of stream the relay keeps for a club: about eighteen months of weekly racing (VL7). */
