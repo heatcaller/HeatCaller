@@ -1390,8 +1390,21 @@ public sealed partial class AnnouncementService
     /// where it was true is not said at all, rather than telling the room
     /// thirty seconds when there are twenty left.
     /// </summary>
-    public void NotifyTimeLeft(int secondsLeft)
+    /// <param name="timeLeft">
+    /// The time actually left as the mark was offered, so a mark reached late
+    /// (the window stalled) has its say-by counted from the mark itself, as
+    /// FinalMinuteSayByMs does (bug hunt 22). Null when not known.
+    /// </param>
+    public void NotifyTimeLeft(int secondsLeft, TimeSpan? timeLeft = null)
     {
+        var withinMs = secondsLeft >= 120 ? MinutesLeftSayWithinMs : FinalSecondsSayWithinMs;
+
+        if (TimeLeftSayByMs(TimingClock.NowMs, secondsLeft, timeLeft, withinMs) is not { } sayByMs)
+        {
+            StatusMessage?.Invoke($"[voice] Time left ({secondsLeft} s) skipped - the clock was already past it by more than it may be said late.");
+            return;
+        }
+
         if (secondsLeft >= 120 && secondsLeft % 60 == 0)
         {
             var minutes = secondsLeft / 60;
@@ -1409,7 +1422,7 @@ public sealed partial class AnnouncementService
                 {
                     ["minutes"] = (RaceNumbers.Words(minutes), minutes.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 },
-                sayByMs: TimingClock.NowMs + MinutesLeftSayWithinMs);
+                sayByMs: sayByMs);
             return;
         }
 
@@ -1420,8 +1433,25 @@ public sealed partial class AnnouncementService
                 {
                     ["seconds"] = (RaceNumbers.Words(secondsLeft), secondsLeft.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 },
-                sayByMs: TimingClock.NowMs + FinalSecondsSayWithinMs);
+                sayByMs: sayByMs);
         }
+    }
+
+    /// <summary>
+    /// When a time-left call must be said by, counted from the mark itself:
+    /// <paramref name="withinMs"/> after the clock passed it, less however
+    /// late the mark was offered. Null when it is already past that.
+    /// </summary>
+    internal static long? TimeLeftSayByMs(long nowMs, int secondsLeft, TimeSpan? timeLeft, long withinMs)
+    {
+        if (timeLeft is not { } left)
+        {
+            return nowMs + withinMs;
+        }
+
+        var lateMs = Math.Max(0, (secondsLeft * 1000L) - (long)left.TotalMilliseconds);
+
+        return lateMs > withinMs ? null : nowMs + withinMs - lateMs;
     }
 
     /// <summary>

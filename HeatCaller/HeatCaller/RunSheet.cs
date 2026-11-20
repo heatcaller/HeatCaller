@@ -195,7 +195,9 @@ internal static class RunSheet
             return new(Pill.OnTime, "On time");
         }
 
-        var minutes = (int)Math.Round(late.TotalMinutes);
+        // Never "+0 min" in red: past the out-by time by under half a
+        // minute is still past it (bug hunt 22).
+        var minutes = Math.Max(1, (int)Math.Round(late.TotalMinutes));
 
         return new(Pill.Late, minutes < 60 ? $"+{minutes} min" : $"+{minutes / 60} h {minutes % 60:00}");
     }

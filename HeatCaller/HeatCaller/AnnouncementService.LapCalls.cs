@@ -1132,16 +1132,25 @@ public sealed partial class AnnouncementService
         try
         {
             // The same field the report was built from: no muted ghosts.
-            Func<string, bool>? leaveOut = noGhosts
-                ? transponder => GhostService.IsGhost(transponder)
-                : AnnounceGhostsProvider?.Invoke() == false
-                    ? transponder => MutedGhost(transponder)
-                    : null;
-
             // The board as of the last crossing, not _standings itself: this
             // runs on a timer or the voice thread while the timing thread
             // writes _standings (6 Nov 2026, Bug hunt 11b - see LapCrossingBook).
-            var ranked = PositionReportOrder.Rank(_lapCrossings.Board, leaveOut);
+            var board = _lapCrossings.Board;
+
+            // No black-flagged car, ever (bug hunt 22): it is out of the race,
+            // as in HandleStandingUpdated. For the winner's lines no ghost
+            // either - a ghost never wins.
+            var outOfIt = board.Where(s => s.BlackFlagged).Select(s => s.Transponder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            Func<string, bool>? leaveOut = noGhosts
+                ? transponder => GhostService.IsGhost(transponder) || outOfIt.Contains(transponder)
+                : AnnounceGhostsProvider?.Invoke() == false
+                    ? transponder => MutedGhost(transponder) || outOfIt.Contains(transponder)
+                    : outOfIt.Count > 0
+                        ? transponder => outOfIt.Contains(transponder)
+                        : null;
+
+            var ranked = PositionReportOrder.Rank(board, leaveOut);
 
             return PositionReportOrder.Read(ranked, depth, CrossingMs);
         }
@@ -1192,7 +1201,12 @@ public sealed partial class AnnouncementService
         _lapCrossings.Record(standing, _standings.Values.ToArray());
 
         // Same ranking rule as the leaderboard: most laps, then lowest elapsed.
+        // A black-flagged car is out of the race (bug hunt 22, Asher's pick B):
+        // it leaves the order quietly - the flag comes in as an adjustment, so
+        // the car behind is made leader without a call - and is in no gap,
+        // position report, battle or lapping from then on.
         var ordered = _standings.Values
+            .Where(s => !s.BlackFlagged)
             .OrderByDescending(s => s.Laps)
             .ThenBy(s => s.ElapsedMs)
             .ToList();
@@ -1434,6 +1448,7 @@ public sealed partial class AnnouncementService
             }
 
             var ordered = board
+                .Where(s => !s.BlackFlagged)
                 .OrderByDescending(s => s.Laps)
                 .ThenBy(s => s.ElapsedMs)
                 .ToList();

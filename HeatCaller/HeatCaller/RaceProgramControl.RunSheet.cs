@@ -434,7 +434,15 @@ public sealed partial class RaceProgramControl
         // When it isn't on show (the filter is on another class) or there is
         // none (nothing built yet, or everything run), the card still goes
         // here, on a row of its own, between what has run and what is to come.
-        var nextShown = next is not null && toRun.Any(r => string.Equals(r.Id, next.Id, StringComparison.Ordinal));
+        //
+        // Nor when a ticked fix's preview drops it (bug hunt 22): its row is
+        // then hidden under the "cut" line, and with no other row hosting
+        // the card, ticking "Drop Q3" while Q3 was next took Start, Call and
+        // Skip off the screen until it was unticked. It is only a preview,
+        // so the card still offers the race that is next.
+        var nextShown = next is not null
+                        && toRun.Any(r => string.Equals(r.Id, next.Id, StringComparison.Ordinal))
+                        && !dropped.Contains(next.Id);
 
         if (!nextShown)
         {

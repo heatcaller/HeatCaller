@@ -190,11 +190,22 @@ internal sealed class AppUsage
         _lastMark = null;
     }
 
+    /// <summary>Whether saving is frozen for a restore; a test can stand in for SafeFile.IsFrozen, which can't be undone in-process.</summary>
+    internal Func<bool> SavingFrozen { get; init; } = () => SafeFile.IsFrozen;
+
     /// <summary>Writes the file, dropping days older than <see cref="DaysKept"/>. Never throws: losing a count must never cost the club anything.</summary>
     internal void Save(DateTime now)
     {
         var oldest = DateOnly.FromDateTime(now).AddDays(-(DaysKept - 1));
         _store.Days.RemoveAll(day => day.Date < oldest);
+
+        // A restore froze saving (SafeFile.Freeze) and is restarting: the
+        // closing window's save would put these pre-restore totals back
+        // over the restored file (or re-make one the restore set aside).
+        if (SavingFrozen())
+        {
+            return;
+        }
 
         try
         {

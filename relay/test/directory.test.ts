@@ -3,6 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import { loadConfig } from "../src/config.js";
 import { DIRECTORY_FRESH_MS, directoryEntry, directoryFacts, nextNightWords, racingWords } from "../src/directory.js";
 import { DEFAULT_LOOK } from "../src/site.js";
+import { MemoryStore } from "../src/store.js";
 import { ACME_TOKEN, BROOK_TOKEN, call, start, tenants, type Harness } from "./helpers.js";
 
 /**
@@ -178,5 +179,45 @@ describe("the next night", () => {
     );
 
     assert.deepEqual(facts, { club: "acme-rc", name: "Acme RC", liveAt: Date.parse("2026-11-19T19:00:00.000Z"), racing: "Stock · A Main", next: undefined });
+  });
+});
+
+describe("Delete Everything Published during a refill (bug hunt 22)", () => {
+  it("does not let a refill already under way put the deleted club back", async () => {
+    // A store whose next read of "state" waits until let go.
+    let reached: () => void = () => {};
+    let release: () => void = () => {};
+    let armed = false;
+    const atTheGate = new Promise<void>((resolve) => { reached = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+
+    class GatedStore extends MemoryStore {
+      override async getSnapshot(club: string, channel: string) {
+        if (armed && channel === "state") {
+          armed = false;
+          reached();
+          await gate;
+        }
+        return super.getSnapshot(club, channel);
+      }
+    }
+
+    clock = new Date("2026-11-19T19:00:00.000Z").getTime();
+    h = await start(new GatedStore(), tenants([{ listInDirectory: true }, { listInDirectory: false }]), () => new Date(clock));
+    await publish("acme-rc", ACME_TOKEN, "site", site(true));
+    assert.match(await page(), /Acme RC/);
+
+    clock += 10_000;
+    armed = true;
+    const refill = call(h, "GET", "/clubs");
+    await atTheGate;
+
+    assert.equal((await call(h, "DELETE", "/api/v1/c/acme-rc", { token: ACME_TOKEN })).status, 200);
+    release();
+    await refill;
+
+    // No time passes: what the refill read before the delete is not held.
+    const answer = await call(h, "GET", "/clubs");
+    assert.doesNotMatch(answer.text, /Acme RC/);
   });
 });

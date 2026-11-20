@@ -118,6 +118,7 @@ public sealed partial class RaceControlControl
         {
             if (InvokeRequired) { BeginInvoke(() => OnSplitCrossed(standing, point)); return; }
             if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => OnSplitCrossed(standing, point), _race.DeliveringAgeMs); return; }
+            if (HandScoringOn) { _announcer.WhileHandScoring(() => OnSplitCrossed(standing, point)); return; }
 
             // Its calls are timed from the split crossing (9 Nov 2026, Bug
             // hunt 15, B7) - see AnnouncementService.SplitSayBy.
@@ -137,6 +138,7 @@ public sealed partial class RaceControlControl
         {
             if (InvokeRequired) { BeginInvoke(() => OnSectorsRecorded(standing, lapIndex, sectors)); return; }
             if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => OnSectorsRecorded(standing, lapIndex, sectors), _race.DeliveringAgeMs); return; }
+            if (HandScoringOn) { _announcer.WhileHandScoring(() => OnSectorsRecorded(standing, lapIndex, sectors)); return; }
             OnSectorsRecorded(standing, lapIndex, sectors);
         };
         _race.SectorsRecorded += _sectorsRecordedHandler;
@@ -145,6 +147,11 @@ public sealed partial class RaceControlControl
         {
             if (InvokeRequired) { BeginInvoke(() => _announcer.NotifyPersonalBestLap(standing.TransponderId, standing.FastestLapMs)); return; }
             if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => _announcer.NotifyPersonalBestLap(standing.TransponderId, standing.FastestLapMs), _race.DeliveringAgeMs); return; }
+
+            // Scored by hand (bug hunt 22): a personal best, a split or a
+            // sector is the loop's crossing too, as untrusted as the lap
+            // call LapProcessed already holds back - see HandScoring.
+            if (HandScoringOn) { _announcer.WhileHandScoring(() => _announcer.NotifyPersonalBestLap(standing.TransponderId, standing.FastestLapMs)); return; }
             _announcer.NotifyPersonalBestLap(standing.TransponderId, standing.FastestLapMs);
         };
         _race.PersonalBestLap += _personalBestHandler;
@@ -651,6 +658,7 @@ public sealed partial class RaceControlControl
             Status = isValid ? "active" : "invalid",
             Id = standing.TransponderId,
             LapsLed = standing.LapsLed,
+            BlackFlagged = standing.IsBlackFlagged,
             // The race penalty (20 Oct 2026, bug hunt 8): the provisional
             // pole call adds it to a driver's best run, as qualifying does.
             PenaltyMs = standing.PenaltyMs,
@@ -764,9 +772,20 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void OnStandingAdjusted(RacerStanding standing)
     {
+        _announcer.OnStandingUpdated(AdjustedStandingFor(standing));
+
+        // The crash journal is written for it, forced - a correction by hand
+        // is rare and is exactly the sort of thing nobody wants to do twice -
+        // by MainForm's journal recorder (23 Oct 2026, timing layer, P2).
+        AfterStandingAdjusted(standing);
+    }
+
+    /// <summary>The announcer's copy of a standing changed by hand (or by a warning) - not a pass.</summary>
+    private RaceStanding AdjustedStandingFor(RacerStanding standing)
+    {
         var profile = _profiles.Get(standing.TransponderId);
 
-        _announcer.OnStandingUpdated(new RaceStanding
+        return new RaceStanding
         {
             Transponder = standing.TransponderId,
             Name = profile?.DriverName,
@@ -776,6 +795,7 @@ public sealed partial class RaceControlControl
             Status = "adjusted",
             Id = standing.TransponderId,
             LapsLed = standing.LapsLed,
+            BlackFlagged = standing.IsBlackFlagged,
             // The race penalty (20 Oct 2026, bug hunt 8): the provisional
             // pole call adds it to a driver's best run, as qualifying does.
             PenaltyMs = standing.PenaltyMs,
@@ -783,12 +803,11 @@ public sealed partial class RaceControlControl
             // gets none, as on the board (8 Nov 2026) - see
             // RaceStanding.LapTimesMs.
             LapTimesMs = standing.LapTimesMs.ToArray(),
-        });
+        };
+    }
 
-        // The crash journal is written for it, forced - a correction by hand
-        // is rare and is exactly the sort of thing nobody wants to do twice -
-        // by MainForm's journal recorder (23 Oct 2026, timing layer, P2).
-
+    private void AfterStandingAdjusted(RacerStanding standing)
+    {
         // After the flag the result has already gone to the history, and
         // this only changes the board. Said plainly, because the board then
         // disagrees with the saved result, the points and the qualifying

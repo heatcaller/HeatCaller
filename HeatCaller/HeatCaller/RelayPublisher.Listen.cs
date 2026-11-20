@@ -592,8 +592,12 @@ public sealed partial class RelayPublisher
             {
                 ListenUnreachable();
             }
-            else
+            else if (response.IsSuccessStatusCode)
             {
+                // Only a yes (bug hunt 22): a 401/403/404 is one the worker
+                // retries and backs off from, and taking it as "reached"
+                // zeroed that backoff every thirty seconds and showed the
+                // relay online while it refused the token.
                 ListenReached();
             }
 

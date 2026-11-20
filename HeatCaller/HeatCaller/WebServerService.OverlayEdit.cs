@@ -163,11 +163,16 @@ public sealed partial class WebServerService
             if (said !== clashSaid){ clashSaid = said; post({ t: 'clash', pairs }); }
           }
 
-          function finish(k, node, scale){
-            const r = node.getBoundingClientRect();
+          function finish(k, node, scale){ finishAt(k, node.getBoundingClientRect(), scale); }
+          function finishAt(k, r, scale){
             const p = placement(r);
             post({ t: 'place', k, anchor: p.anchor, x: p.x, y: p.y, scale: Math.max(0.5, Math.min(2, Math.round(scale * 20) / 20)) });
           }
+          // A graphic not showing now (bug hunt 22) is hidden by its CSS or
+          // pushed off the picture, so moving it moves nothing on screen and
+          // its own rectangle is not the box drawn for it: the box itself is
+          // moved, and the place saved is where the box was dropped.
+          function isGhost(k){ return !!(boxes[k] && boxes[k].classList.contains('gh')); }
 
           layer.addEventListener('pointerdown', ev => {
             const b = ev.target.closest('.bx');
@@ -176,14 +181,27 @@ public sealed partial class WebServerService
             const k = b.dataset.k;
             if (k !== sel) pick(k);
             const node = nodeOf(k);
+            const ghost = isGhost(k), b0 = b.getBoundingClientRect();
             drag = { k, node, b, sx: ev.clientX, sy: ev.clientY, rz: ev.target.classList.contains('rz'), started: false,
-                     w0: node.getBoundingClientRect().width || 1, s0: scaleOf(k) };
+                     ghost, b0, w0: (ghost ? b0.width : node.getBoundingClientRect().width) || 1, s0: scaleOf(k) };
             b.setPointerCapture(ev.pointerId);
           });
           layer.addEventListener('pointermove', ev => {
             if (!drag) return;
             const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
             if (!drag.started){ if (Math.abs(dx) + Math.abs(dy) < 4) return; drag.started = true; layer.classList.add('dragging'); }
+            if (drag.ghost){
+              const r0 = drag.b0;
+              if (drag.rz){
+                drag.f = Math.max(0.5 / drag.s0, Math.min(2 / drag.s0, (drag.w0 + dx) / drag.w0));
+                drag.b.style.width = (r0.width * drag.f) + 'px';
+                drag.b.style.height = (r0.height * drag.f) + 'px';
+              } else {
+                drag.b.style.left = (r0.left + dx) + 'px';
+                drag.b.style.top = (r0.top + dy) + 'px';
+              }
+              return;
+            }
             if (drag.rz){
               drag.f = Math.max(0.5 / drag.s0, Math.min(2 / drag.s0, (drag.w0 + dx) / drag.w0));
               drag.node.style.scale = String(drag.f);
@@ -195,7 +213,10 @@ public sealed partial class WebServerService
           });
           function up(){
             const d = drag; drag = null; layer.classList.remove('dragging');
-            if (d && d.started) finish(d.k, d.node, d.rz ? d.s0 * (d.f || 1) : d.s0);
+            if (d && d.started){
+              const scale = d.rz ? d.s0 * (d.f || 1) : d.s0;
+              if (d.ghost) finishAt(d.k, d.b.getBoundingClientRect(), scale); else finish(d.k, d.node, scale);
+            }
           }
           layer.addEventListener('pointerup', up);
           layer.addEventListener('pointercancel', up);
@@ -207,12 +228,24 @@ public sealed partial class WebServerService
             const m = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[ev.key];
             if (!m || !sel || !nodeOf(sel)) return;
             ev.preventDefault();
+            if (isGhost(sel)){
+              // Nudged from where its box is drawn, as a drag is (see isGhost).
+              const gn = nodeOf(sel), gk = sel, s = (ev.shiftKey ? 5 : 0.5) * pxPerVw();
+              const base = gn._hcGhostRect || boxes[gk].getBoundingClientRect();
+              const r = { left: base.left + m[0] * s, right: base.right + m[0] * s, top: base.top + m[1] * s, bottom: base.bottom + m[1] * s };
+              gn._hcGhostRect = r;
+              boxes[gk].style.left = r.left + 'px'; boxes[gk].style.top = r.top + 'px';
+              clearTimeout(gn._hcNudge);
+              gn._hcNudge = setTimeout(() => { gn._hcGhostRect = null; finishAt(gk, r, scaleOf(gk)); }, 350);
+              return;
+            }
             const node = nodeOf(sel), step = (ev.shiftKey ? 5 : 0.5) * pxPerVw() / zoom();
             const was = (node.style.translate || '0px 0px').split(' ').map(parseFloat);
             node.style.translate = ((was[0] || 0) + m[0] * step) + 'px ' + ((was[1] || 0) + m[1] * step) + 'px';
             paint();
             clearTimeout(node._hcNudge);
-            node._hcNudge = setTimeout(() => finish(sel, node, scaleOf(sel)), 350);
+            const k = sel;
+            node._hcNudge = setTimeout(() => finish(k, node, scaleOf(k)), 350);
           });
 
           // The window says which graphic its list picked.

@@ -77,6 +77,16 @@ internal sealed class AppUsageTracker : IDisposable
         _settings = settings;
         _context = context;
         _wasOn = IsOn;
+
+        // Opened with the box unticked but totals still on disk - closed
+        // before the tick that clears them, or settings put back by a
+        // restore: forget them now, as unticking promises.
+        if (!UsageSharing.IsOn(_settings) && _usage.Days.Count > 0)
+        {
+            _usage.Clear();
+            _usage.Save(DateTime.Now);
+        }
+
         _timer.Tick += (_, _) => Tick();
         _timer.Start();
     }
@@ -132,6 +142,11 @@ internal sealed class AppUsageTracker : IDisposable
         if (IsOn)
         {
             _usage.Flush(now, _context());
+        }
+        else if (!UsageSharing.IsOn(_settings))
+        {
+            // Unticked since the last tick: never write the old totals back.
+            _usage.Clear();
         }
 
         _usage.Save(now);

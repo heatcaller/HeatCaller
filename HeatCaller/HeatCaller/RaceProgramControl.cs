@@ -1316,18 +1316,12 @@ public sealed partial class RaceProgramControl : UserControl
             {
                 foreach (var (className, drivers) in ClassesAwaitingMains(day, _profiles))
                 {
-                    var mains = (int)Math.Ceiling(drivers / (double)Math.Max(2, HeatSize()));
-                    var format = ClassNamed(className)?.Format ?? appDefault;
-
-                    // Tonight's finals cut (12 Nov 2026, setup plan step 8),
-                    // chosen in "We're Done After This Round...".
-                    if (raceDay.FinalsOneMainFewer && mains > 1)
-                    {
-                        mains--;
-                    }
-
+                    var raceClass = ClassNamed(className);
+                    var format = raceClass?.Format ?? appDefault;
                     var length = NightPlan.LengthOf(NightPlan.Shortened(format, raceDay.FinalsMinutesShorter) ?? format);
-                    unbuilt.Add(new NightPlan.UnbuiltMains(className, mains, length, format));
+
+                    // Its shootout, Invitational or legs too - see NightPlan.UnbuiltFor.
+                    unbuilt.AddRange(NightPlan.UnbuiltFor(className, raceClass, drivers, HeatSize(), raceDay.FinalsOneMainFewer, format, length));
                 }
             }
 
@@ -3152,7 +3146,19 @@ public sealed partial class RaceProgramControl : UserControl
 
         _undo.Capture($"{undoPrefix}Build the finals for {className}", () =>
         {
-            var kept = RemoveUnrunRounds(created);
+            // The shootout's runs this build made may since have been built
+            // again for a new qualifying order (KeepShootoutRunsInStep), with
+            // new ids (bug hunt 22). Those replacements go with the build too:
+            // removing only the ids it made left the rebuilt runs on the
+            // programme with no mains to grid.
+            var builtRuns = created.Any(r => r.Kind == RoundKind.Shootout);
+            var toRemove = builtRuns
+                ? created.Concat(ShootoutRunsToday(className)
+                        .Where(r => created.All(c => c.Id != r.Id) && replaced.All(p => p.Id != r.Id)))
+                    .ToList()
+                : created;
+
+            var kept = RemoveUnrunRounds(toRemove);
 
             RestoreRounds(replaced, owners);
 

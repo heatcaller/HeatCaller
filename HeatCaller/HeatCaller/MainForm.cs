@@ -2164,7 +2164,7 @@ public partial class MainForm : Form
                     timedRace: _race.State == RaceState.Racing && !_race.IsPracticeMode && _race.Flag != FlagState.Red) is { } secondsLeft
                 && ClockEndsTheRace())
             {
-                _announcer.NotifyTimeLeft(secondsLeft);
+                _announcer.NotifyTimeLeft(secondsLeft, _race.TimeLimit - _race.ElapsedRaceTime);
             }
 
             // A crossing the journal's throttle held back, written at most a

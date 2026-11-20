@@ -194,6 +194,15 @@ public sealed partial class RaceControlControl
         };
 
         _announcer.NotifyWarning(line, warning.Action == WarningAction.BlackFlag);
+
+        // The announcer learns the car is out at once (bug hunt 22), not at
+        // its next crossing - a car brought in never crosses again, and it
+        // was named the winner at the flag on the laps it had.
+        if (warning.Action == WarningAction.BlackFlag)
+        {
+            _announcer.OnStandingUpdated(AdjustedStandingFor(standing));
+        }
+
         RenderLeaderboard();
     }
 

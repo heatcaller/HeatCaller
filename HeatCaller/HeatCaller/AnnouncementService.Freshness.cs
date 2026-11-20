@@ -386,9 +386,21 @@ public sealed partial class AnnouncementService
             return $"{quicker.DisplayName}'s {quicker.FastLapMs / 1000.0:0.000} is quicker than its {standing.FastLapMs / 1000.0:0.000}";
         }
 
-        return rows.FirstOrDefault(s => string.Equals(s.Transponder, standing.Transponder, StringComparison.OrdinalIgnoreCase)) is { FastLapMs: > 0 } own
-               && own.FastLapMs < standing.FastLapMs
-            ? $"its own {own.FastLapMs / 1000.0:0.000} has beaten its {standing.FastLapMs / 1000.0:0.000}"
+        if (rows.FirstOrDefault(s => string.Equals(s.Transponder, standing.Transponder, StringComparison.OrdinalIgnoreCase)) is not { } own)
+        {
+            return null;
+        }
+
+        if (own.FastLapMs > 0 && own.FastLapMs < standing.FastLapMs)
+        {
+            return $"its own {own.FastLapMs / 1000.0:0.000} has beaten its {standing.FastLapMs / 1000.0:0.000}";
+        }
+
+        // Its best is slower now, or gone (bug hunt 22): the lap being
+        // announced was taken off by hand - a phantom crossing - while the
+        // call waited. The board no longer has it, so neither does the room.
+        return own.FastLapMs != standing.FastLapMs
+            ? $"its {standing.FastLapMs / 1000.0:0.000} is no longer on the board (best now {(own.FastLapMs > 0 ? (own.FastLapMs / 1000.0).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) : "none")})"
             : null;
     }
 

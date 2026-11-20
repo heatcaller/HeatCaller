@@ -1760,6 +1760,13 @@ export class Relay {
   private directoryHeld: { at: number; facts: readonly DirectoryFacts[] } | undefined;
 
   /**
+   * Moved on by every Delete Everything Published (bug hunt 22): a refill
+   * already reading the clubs when a club was deleted must not hold what
+   * it read - the deleted club with it - for the next DIRECTORY_HELD_MS.
+   */
+  private directoryEpoch = 0;
+
+  /**
    * The /clubs page's lines as of now. The facts are held a few seconds,
    * but whether a club is racing is worked out from them here, as the page
    * is served, so a held copy can never show a stale "Racing now".
@@ -1769,6 +1776,7 @@ export class Relay {
     const held = this.directoryHeld;
 
     if (held === undefined || now - held.at > DIRECTORY_HELD_MS || now < held.at) {
+      const epoch = this.directoryEpoch;
       const facts: DirectoryFacts[] = [];
 
       for (const tenant of this.tenants.all()) {
@@ -1784,6 +1792,11 @@ export class Relay {
 
         const read = (channel: string) => this.store.getSnapshot(tenant.club, channel).catch(() => undefined);
         facts.push(directoryFacts(tenant, look, await read("state"), await read("programme"), await read("nextnight")));
+      }
+
+      if (epoch !== this.directoryEpoch) {
+        // A club was deleted while this was read: read again, now without it.
+        return this.directoryNow();
       }
 
       this.directoryHeld = { at: now, facts };
@@ -5499,6 +5512,7 @@ export class Relay {
         this.forgetPreviews(club);
         // Off the directory at once, not when its held copy runs out.
         this.directoryHeld = undefined;
+        this.directoryEpoch++;
       }
 
       // Its drivers' clips, kept outside the club's folder (clips.ts).
