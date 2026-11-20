@@ -201,7 +201,8 @@ public sealed class BugHunt7ListenAppTests
         // bug hunt 16) - see SendNotesClose.
         Assert.Matches(@"if \(TellTheRelayListeningIsOpen\(target, club, wanted: false, token\) && target == _target\)\s*\{\s*_listenClosePending = false;", send);
 
-        Assert.Contains("if (_listenClosePending)", SourceOf("RelayPublisher.cs"));
+        // Retried by the listen thread's pass since 19 Nov 2026 (the worker's before).
+        Assert.Contains("if (_listenClosePending)", listen);
     }
 
     private static string Between(string source, string start, string end)

@@ -255,6 +255,15 @@ public sealed partial class RelayPublisher : IDisposable
 
         RefreshStatus();
         _worker.Start();
+
+        // Listening along on a thread of its own - see RelayPublisher.Listen.
+        _listener = new Thread(ListenLoop)
+        {
+            IsBackground = true,
+            Name = "relay-listen",
+        };
+
+        _listener.Start();
     }
 
     /// <summary>
@@ -1029,6 +1038,7 @@ public sealed partial class RelayPublisher : IDisposable
 
         RefreshStatus();
         _wake.Set();
+        _listenWake.Set();
     }
 
     /// <summary>
@@ -1650,12 +1660,16 @@ public sealed partial class RelayPublisher : IDisposable
     public async Task QuiesceAsync()
     {
         CancellationTokenSource? pass;
+        CancellationTokenSource? listenPass;
         CancellationTokenSource? uploads;
 
         lock (_gate)
         {
             _quiesced = true;
             pass = _pass;
+
+            // And the listen thread's pass (19 Nov 2026) - see RelayPublisher.Listen.
+            listenPass = _listenPass;
 
             // An upload on its way - a driver's clip - is stopped too (22 Oct
             // 2026) - see RelayPublisher.Uploads.cs, _uploadStop. Never
@@ -1688,7 +1702,25 @@ public sealed partial class RelayPublisher : IDisposable
             // the same; the wait below still applies.
         }
 
-        await Task.Run(() => _idle.Wait(TimeSpan.FromSeconds(10))).ConfigureAwait(false);
+        try
+        {
+            listenPass?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Finished meanwhile, as above.
+        }
+        catch (AggregateException)
+        {
+            // As above.
+        }
+
+        await Task.Run(() =>
+        {
+            var until = Environment.TickCount64 + 10_000;
+            _idle.Wait(TimeSpan.FromSeconds(10));
+            _listenIdle.Wait(TimeSpan.FromMilliseconds(Math.Max(0, until - Environment.TickCount64)));
+        }).ConfigureAwait(false);
     }
 
     public void Dispose()
@@ -1697,7 +1729,9 @@ public sealed partial class RelayPublisher : IDisposable
         {
             _stopping.Cancel();
             _wake.Set();
+            _listenWake.Set();
             _worker.Join(TimeSpan.FromSeconds(2));
+            _listener.Join(TimeSpan.FromSeconds(2));
         }
         catch
         {
@@ -1711,7 +1745,14 @@ public sealed partial class RelayPublisher : IDisposable
         // event and the token source - a worker still inside a check-in
         // handler when the two seconds ran out used them after they were
         // freed. It is a background thread; the process exit takes them.
-        if (!_worker.IsAlive)
+        if (!_listener.IsAlive)
+        {
+            _listenHttp.Dispose();
+            _listenWake.Dispose();
+            _listenIdle.Dispose();
+        }
+
+        if (!_worker.IsAlive && !_listener.IsAlive)
         {
             _http.Dispose();
             _wake.Dispose();
@@ -1917,8 +1958,15 @@ public sealed partial class RelayPublisher : IDisposable
     private long NextSeq()
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        _lastSeq = Math.Max(now, _lastSeq + 1);
-        return _lastSeq;
+
+        // Under the lock, as every other write of it is: the listen thread
+        // numbers its lines too (19 Nov 2026), and two threads must never
+        // be handed the same number.
+        lock (_gate)
+        {
+            _lastSeq = Math.Max(now, _lastSeq + 1);
+            return _lastSeq;
+        }
     }
 
     private bool HasWork()
@@ -2059,23 +2107,15 @@ public sealed partial class RelayPublisher : IDisposable
                         SendNightsOpen(pass.Token);
                     }
 
-                    // The announcer's lines before anything else in the pass,
-                    // and again between the documents Drain sends - see
-                    // SendListenLinesWaiting for why.
-                    SendListenLinesWaiting(pass.Token);
-
+                    // Listening along is not sent from here any more: it
+                    // has a thread of its own (19 Nov 2026) - see
+                    // RelayPublisher.Listen, ListenLoop.
                     Drain(pass.Token);
 
                     if (_settings.RelayCheckInEnabled && Environment.TickCount64 >= _nextPollTick)
                     {
                         _nextPollTick = Environment.TickCount64 + (long)PollEvery.TotalMilliseconds;
                         CollectCheckIns(pass.Token);
-
-                        // Each poll is a round trip on the club's Wi-Fi, so
-                        // a stretch of the room's sound offered meanwhile
-                        // goes before the next one (19 Nov 2026) - see
-                        // SendListenLinesWaiting.
-                        SendListenLinesWaiting(pass.Token);
                     }
                     else if (!_settings.RelayCheckInEnabled)
                     {
@@ -2092,7 +2132,6 @@ public sealed partial class RelayPublisher : IDisposable
                     {
                         _nextManagePollTick = Environment.TickCount64 + (long)PollEvery.TotalMilliseconds;
                         CollectManageRequests(pass.Token);
-                        SendListenLinesWaiting(pass.Token);
                     }
                     else if (!_settings.ManagerViaRelay)
                     {
@@ -2126,39 +2165,6 @@ public sealed partial class RelayPublisher : IDisposable
                         else if (!_notesClosePending)
                         {
                             ForgetNotesTrouble();
-                        }
-                    }
-
-                    // The announcer's voice, out to anyone listening from
-                    // home - see RelayPublisher.Listen. On NO tick of its
-                    // own: a line that arrives late is worse than a line
-                    // that never arrives, so it goes on the pass it was
-                    // offered on, woken by OfferToListeners. The cost of
-                    // having no tick is paid in that file instead, by the
-                    // open flag's own backoff and by the queue being
-                    // allowed to throw work away.
-                    if (_settings.ListenAlongOnTheRelay)
-                    {
-                        Listening.Wanted = true;
-                        SendListenLines(pass.Token);
-                    }
-                    else
-                    {
-                        if (Listening.Wanted)
-                        {
-                            // Unticked while running. This is the queue
-                            // letting go of what it was holding, so a box
-                            // unticked mid-race does not send three more
-                            // lines after it.
-                            Listening.Wanted = false;
-                            ForgetListenTrouble();
-                        }
-
-                        // And the relay told, until it has taken it - see
-                        // CloseListeningOnTheRelay.
-                        if (_listenClosePending)
-                        {
-                            SendListenClose(pass.Token);
                         }
                     }
 
@@ -2403,11 +2409,6 @@ public sealed partial class RelayPublisher : IDisposable
 
                     return;
             }
-
-            // A result can be a big upload on a club's Wi-Fi. What the
-            // announcer said meanwhile goes before the snapshots - see
-            // SendListenLinesWaiting.
-            SendListenLinesWaiting(token);
         }
 
         var taken = TakeSnapshots();
@@ -2473,10 +2474,6 @@ public sealed partial class RelayPublisher : IDisposable
 
                     return;
             }
-
-            // Between one snapshot and the next - the badges' artwork alone
-            // can be most of a megabyte. See SendListenLinesWaiting.
-            SendListenLinesWaiting(token);
         }
     }
 

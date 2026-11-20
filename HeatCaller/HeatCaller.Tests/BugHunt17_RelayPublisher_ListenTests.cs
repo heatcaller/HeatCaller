@@ -37,7 +37,8 @@ public sealed class BugHunt17_RelayPublisher_ListenTests : IDisposable
         var asked = new List<string>();
         var saved = false;
 
-        var http = FieldOf(publisher, "_http");
+        // Listening's own client since 19 Nov 2026.
+        var http = FieldOf(publisher, "_listenHttp");
         ((HttpClient)http.GetValue(publisher)!).Dispose();
         http.SetValue(publisher, new HttpClient(new Answers(request =>
         {

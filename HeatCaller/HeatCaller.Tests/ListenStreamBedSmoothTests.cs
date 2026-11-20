@@ -403,37 +403,4 @@ public sealed class ListenStreamBedSmoothTests
             "music ran dry 1 time (0.30 s silent, longest 0.30 s). music held 0.10 s to 0.62 s, played slower for 24.50 s to build its lead back.",
             line);
     }
-
-    // ------------------------------------------------------------------
-    //  On the way to the relay
-    // ------------------------------------------------------------------
-
-    [Fact]
-    public void The_rooms_sound_goes_out_between_the_relay_polls_too()
-    {
-        var publisher = Source("RelayPublisher.cs");
-
-        foreach (var poll in new[] { "CollectCheckIns(pass.Token);", "CollectManageRequests(pass.Token);" })
-        {
-            var at = publisher.IndexOf(poll, StringComparison.Ordinal);
-            Assert.True(at > 0, poll);
-
-            var after = publisher.IndexOf("SendListenLinesWaiting(pass.Token);", at, StringComparison.Ordinal);
-            var close = publisher.IndexOf('}', at);
-            Assert.True(after > at && after < close, $"the sound waiting goes out after {poll}");
-        }
-    }
-
-    private static string Source(string file)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "check.cmd")))
-        {
-            dir = dir.Parent;
-        }
-
-        Assert.NotNull(dir);
-        return File.ReadAllText(Path.Combine(dir!.FullName, "HeatCaller", "HeatCaller", file));
-    }
 }
