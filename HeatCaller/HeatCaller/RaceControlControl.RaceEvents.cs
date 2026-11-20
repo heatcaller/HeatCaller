@@ -118,6 +118,7 @@ public sealed partial class RaceControlControl
         {
             if (InvokeRequired) { BeginInvoke(() => OnSplitCrossed(standing, point)); return; }
             if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => OnSplitCrossed(standing, point), _race.DeliveringAgeMs); return; }
+            if (HandScoringOn) { _announcer.WhileHandScoring(() => OnSplitCrossed(standing, point)); return; }
 
             // Its calls are timed from the split crossing (9 Nov 2026, Bug
             // hunt 15, B7) - see AnnouncementService.SplitSayBy.
@@ -137,6 +138,7 @@ public sealed partial class RaceControlControl
         {
             if (InvokeRequired) { BeginInvoke(() => OnSectorsRecorded(standing, lapIndex, sectors)); return; }
             if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => OnSectorsRecorded(standing, lapIndex, sectors), _race.DeliveringAgeMs); return; }
+            if (HandScoringOn) { _announcer.WhileHandScoring(() => OnSectorsRecorded(standing, lapIndex, sectors)); return; }
             OnSectorsRecorded(standing, lapIndex, sectors);
         };
         _race.SectorsRecorded += _sectorsRecordedHandler;
@@ -145,6 +147,11 @@ public sealed partial class RaceControlControl
         {
             if (InvokeRequired) { BeginInvoke(() => _announcer.NotifyPersonalBestLap(standing.TransponderId, standing.FastestLapMs)); return; }
             if (_race.DeliveringIsStale) { _announcer.WhileLapCallsAreStale(() => _announcer.NotifyPersonalBestLap(standing.TransponderId, standing.FastestLapMs), _race.DeliveringAgeMs); return; }
+
+            // Scored by hand (bug hunt 22): a personal best, a split or a
+            // sector is the loop's crossing too, as untrusted as the lap
+            // call LapProcessed already holds back - see HandScoring.
+            if (HandScoringOn) { _announcer.WhileHandScoring(() => _announcer.NotifyPersonalBestLap(standing.TransponderId, standing.FastestLapMs)); return; }
             _announcer.NotifyPersonalBestLap(standing.TransponderId, standing.FastestLapMs);
         };
         _race.PersonalBestLap += _personalBestHandler;
