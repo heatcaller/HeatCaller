@@ -89,6 +89,8 @@ public static class EventReportBuilder
         }
 
         WriteAMainLegs(sb, sessions, rounds, classes, profiles);
+        WritePoleShootouts(sb, sessions, rounds, classes, profiles);
+        WriteInvitationals(sb, sessions, rounds, classes, profiles);
         WriteResultsByClass(sb, sessions, rounds, classes, profiles, options, handicaps);
         WriteRecords(sb, sessions, trackLayouts, profiles);
 
@@ -691,6 +693,103 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             for (var i = 0; i < overall.Count; i++)
             {
                 var s = overall[i];
+                var name = profiles.Get(s.Transponder)?.DriverName is { Length: > 0 } profileName ? profileName : s.DriverName;
+                sb.AppendLine($"<tr><td class=\"num\">{i + 1}</td><td>{Esc(name)}</td><td class=\"num\">{Esc(s.Words())}</td><td>{Esc(s.Detail)}</td></tr>");
+            }
+
+            sb.AppendLine("</table>");
+        }
+    }
+
+    /// <summary>
+    /// Each class's Pole Shootout (19 Nov 2026): the runs in the report's
+    /// sessions, fastest first, each driver's time and qualifying place, and
+    /// who has pole. Each run's own result is in Results as an ordinary race.
+    /// </summary>
+    private static void WritePoleShootouts(StringBuilder sb, List<SessionRecord> sessions,
+        RoundDefinitionStore rounds, RaceClassStore classes, ProfileStore profiles)
+    {
+        var byClass = sessions
+            .Where(s => s.RoundId is not null)
+            .Select(s => rounds.Get(s.RoundId!))
+            .OfType<RoundDefinition>()
+            .Where(r => r is { Kind: RoundKind.Shootout, ShootoutRun: > 0 })
+            .GroupBy(r => r.ClassName, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var inReport = sessions.GroupBy(s => s.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        foreach (var group in byClass)
+        {
+            var raceClass = classes.All.FirstOrDefault(c => string.Equals(c.Name, group.Key, StringComparison.OrdinalIgnoreCase));
+            var runs = PoleShootout.RunsOf(group, group.Key);
+            var standing = PoleShootout.Standings(runs, id => inReport.GetValueOrDefault(id), PoleShootout.TimedLapsFor(raceClass), profiles.PrimaryForAlternate);
+
+            if (standing.Order.Count == 0)
+            {
+                continue;
+            }
+
+            sb.AppendLine($"<h2>{Esc(group.Key)} {Esc(PoleShootout.Name)}</h2>");
+            sb.AppendLine($"<p>{Plural.Of(standing.RunsDone, "run")} of {standing.Runs} in. {Esc(PoleShootout.NoTimeWords)}"
+                          + (standing.Complete && standing.Pole is not null ? " The order is the front of the A-Main grid." : string.Empty) + "</p>");
+            sb.AppendLine("<table><tr><th class=\"num\">Pos</th><th>Driver</th><th class=\"num\">Time</th><th class=\"num\">Qualified</th></tr>");
+
+            for (var i = 0; i < standing.Order.Count; i++)
+            {
+                var run = standing.Order[i];
+                var name = profiles.Get(run.Transponder)?.DriverName is { Length: > 0 } profileName ? profileName : run.DriverName;
+                var time = run.TimeMs > 0 ? PoleShootout.TimeWords(run.TimeMs) : "No time";
+
+                sb.AppendLine($"<tr><td class=\"num\">{i + 1}</td><td>{Esc(name)}{(i == 0 && run.TimeMs > 0 && standing.Complete ? " (pole)" : string.Empty)}</td>"
+                              + $"<td class=\"num\">{Esc(time)}</td><td class=\"num\">{run.QualifyingPlace}</td></tr>");
+            }
+
+            sb.AppendLine("</table>");
+        }
+    }
+
+    /// <summary>
+    /// Each class's Invitational (Reedy-style format) (19 Nov 2026): the
+    /// standings over the mains in the report's sessions - the final result
+    /// once every main is in - with the scoring and the tie-break printed
+    /// over it. Each main's own result is in Results as an ordinary race.
+    /// </summary>
+    private static void WriteInvitationals(StringBuilder sb, List<SessionRecord> sessions,
+        RoundDefinitionStore rounds, RaceClassStore classes, ProfileStore profiles)
+    {
+        var byClass = sessions
+            .Where(s => s.RoundId is not null)
+            .Select(s => rounds.Get(s.RoundId!))
+            .OfType<RoundDefinition>()
+            .Where(r => r is { Kind: RoundKind.Main, InvitationalMain: > 0 })
+            .GroupBy(r => r.ClassName, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var inReport = sessions.GroupBy(s => s.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        foreach (var group in byClass)
+        {
+            var raceClass = classes.All.FirstOrDefault(c => string.Equals(c.Name, group.Key, StringComparison.OrdinalIgnoreCase));
+            var series = Invitational.SeriesOf(group.MaxBy(r => r.InvitationalMain)!, group);
+            var table = Invitational.Standings(series, id => inReport.GetValueOrDefault(id), raceClass, profiles.PrimaryForAlternate,
+                t => profiles.Get(t)?.DriverName ?? t);
+
+            if (table is null)
+            {
+                continue;
+            }
+
+            sb.AppendLine($"<h2>{Esc(group.Key)} {Esc(Invitational.Name)}{(table.Final ? string.Empty : " - standings")}</h2>");
+            sb.AppendLine($"<p>{Plural.Of(table.MainsRun, "main")} of {table.Mains} run; a finish scores {Esc(Invitational.ScoringWords(raceClass))}, "
+                          + $"the best {table.Counting} count, fewest points wins. {Esc(Invitational.TieBreakWords)}</p>");
+            sb.AppendLine("<table><tr><th class=\"num\">Pos</th><th>Driver</th><th class=\"num\">Points</th><th>Each main</th></tr>");
+
+            for (var i = 0; i < table.Rows.Count; i++)
+            {
+                var s = table.Rows[i];
                 var name = profiles.Get(s.Transponder)?.DriverName is { Length: > 0 } profileName ? profileName : s.DriverName;
                 sb.AppendLine($"<tr><td class=\"num\">{i + 1}</td><td>{Esc(name)}</td><td class=\"num\">{Esc(s.Words())}</td><td>{Esc(s.Detail)}</td></tr>");
             }

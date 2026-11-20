@@ -562,6 +562,7 @@ How the mains are built:
 - The mains are added to the program **lowest first** — C, then B, then A — so a lower main has run before the one above it and its top finishers can bump up.
 - Each main except the lowest is set to receive the class's **Bump up:** number of drivers from the main below.
 - A class set to a double or triple A-main gets its A-Main as two or three legs. See [Double and triple A-mains](#double-and-triple-a-mains).
+- A class with a Pole Shootout gets its shootout runs first, before its mains, and a class run as an Invitational gets a series of mains for its whole field instead of A, B and C mains. The question says which. See [Pole Shootout and Invitational](pole-shootout-and-invitational.md).
 
 ### Double and triple A-mains
 

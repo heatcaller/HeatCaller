@@ -84,6 +84,19 @@ public enum RoundPointsScale
     Efra,
 }
 
+/// <summary>
+/// What a finish in an Invitational (Reedy-style format) main scores (19 Nov
+/// 2026). Saved as a number, so new choices go at the end.
+/// </summary>
+public enum InvitationalScoring
+{
+    /// <summary>1st = 1 point, 2nd = 2 and so on, a main not started = field + 1 - the A-main legs' scale, which the Reedy Race preset uses. Fewest wins.</summary>
+    Reedy,
+
+    /// <summary>The class's own round points scale (RoundPointsScale): the club's 1st = 1, or IFMAR's or EFRA's top finisher 0.</summary>
+    ClassScale,
+}
+
 /// <summary>A racing class (e.g. "Stock Buggy", "Mini-Z MR03") used to group drivers for heats/mains.</summary>
 public sealed class RaceClass
 {
@@ -238,6 +251,55 @@ public sealed class RaceClass
     /// best 2 of 3, best 1 of 2) - see AMainLegs.LegsCounting.
     /// </summary>
     public int AMainLegsCounted { get; set; }
+
+    /// <summary>
+    /// Run a Pole Shootout after qualifying (19 Nov 2026): the top
+    /// <see cref="PoleShootoutDrivers"/> each go out alone for a timed lap,
+    /// and the fastest takes pole - see PoleShootout. Off by default, so
+    /// every class saved before this runs exactly as it did.
+    /// </summary>
+    public bool PoleShootout { get; set; }
+
+    /// <summary>How many of the top qualifiers run the shootout (2 to 10).</summary>
+    public int PoleShootoutDrivers { get; set; } = 5;
+
+    /// <summary>How many timed laps each shootout run has after its out lap (1 to 3); the best one counts.</summary>
+    public int PoleShootoutLaps { get; set; } = 1;
+
+    /// <summary>
+    /// Run this class's finals as an Invitational (Reedy-style format) (19
+    /// Nov 2026): the whole invited field in a series of mains, points for
+    /// each finish, best N count - see Invitational. Off by default: the
+    /// class builds A/B/C mains as it always did.
+    /// </summary>
+    public bool Invitational { get; set; }
+
+    /// <summary>How many mains the Invitational runs (2 to 12).</summary>
+    public int InvitationalMains { get; set; } = 5;
+
+    /// <summary>How many of those mains count toward the result (1 to the mains run).</summary>
+    public int InvitationalCounted { get; set; } = 4;
+
+    /// <summary>The most drivers invited, or 0 for the class's whole entry.</summary>
+    public int InvitationalFieldLimit { get; set; }
+
+    /// <summary>
+    /// After main 1, put the points leader at the BACK of the grid and the
+    /// driver with the most points at the front - "invert the grid". Off:
+    /// the leader starts at the front.
+    /// </summary>
+    public bool InvitationalInvertGrid { get; set; }
+
+    /// <summary>What a finish in an Invitational main scores - see InvitationalScoring.</summary>
+    public InvitationalScoring InvitationalScoring { get; set; } = InvitationalScoring.Reedy;
+
+    /// <summary>
+    /// The seed order the desk set, by transponder - used for drivers with
+    /// no qualifying result, and for the whole field when there is no
+    /// qualifying at all. Null when nobody has set one: the class's drivers
+    /// in roster order.
+    /// </summary>
+    public List<string>? InvitationalSeed { get; set; }
 
     /// <summary>
     /// The class's colour, as ARGB. Zero means nobody has chosen one, and

@@ -43,14 +43,18 @@ public static class AMainLegs
         /// <summary>The number of the first leg in the table - 1 unless leg 1 is not among the recorded ones.</summary>
         public int FirstLeg { get; init; } = 1;
 
+        /// <summary>What one race of the series is called: "Leg" for an A-main's legs, "Main" for an Invitational's mains (19 Nov 2026).</summary>
+        public string RaceWord { get; init; } = "Leg";
+
         /// <summary>"3 pts (best 2 of 3 legs)", "2 pts (2 legs)", or "1 pt (Leg 1)" after one leg.</summary>
         public string Words()
         {
             var total = Points == 1 ? "1 pt" : $"{Points} pts";
+            var many = RaceWord.ToLowerInvariant() + "s";
 
-            return LegsRun <= 1 ? $"{total} (Leg {FirstLeg})"
-                : LegsCounted < LegsRun ? $"{total} (best {LegsCounted} of {LegsRun} legs)"
-                : $"{total} ({LegsRun} legs)";
+            return LegsRun <= 1 ? $"{total} ({RaceWord} {FirstLeg})"
+                : LegsCounted < LegsRun ? $"{total} (best {LegsCounted} of {LegsRun} {many})"
+                : $"{total} ({LegsRun} {many})";
         }
     }
 
@@ -77,8 +81,25 @@ public static class AMainLegs
     /// leg stands. <paramref name="legNumbers"/> is each of those legs' own
     /// number, for when they are not simply 1, 2, 3: with leg 2 skipped or
     /// not yet in, leg 3's result used to be printed as "Leg 2".
+    ///
+    /// 19 Nov 2026: the Invitational (Reedy-style format) scores its mains
+    /// the same way, so the same table serves it. <paramref name="scale"/>
+    /// is what a finish scores - the club's 1st = 1, as the legs always
+    /// were, or IFMAR's or EFRA's top finisher 0 (QualifyingCalculator.PlacePoints),
+    /// with each scale's score for a race not started. <paramref name="raceWord"/>
+    /// names one race of the series ("Leg", "Main"). <paramref name="entrants"/>
+    /// is the whole field when it is known (an Invitational's invited
+    /// drivers), so a driver who has not started a race yet still has a
+    /// line, and the field + 1 is counted over all of them.
     /// </summary>
-    public static List<Standing> Overall(IReadOnlyList<SessionRecord> legs, int countBest, Func<string, string?>? primaryForAlternate = null, IReadOnlyList<int>? legNumbers = null)
+    public static List<Standing> Overall(
+        IReadOnlyList<SessionRecord> legs,
+        int countBest,
+        Func<string, string?>? primaryForAlternate = null,
+        IReadOnlyList<int>? legNumbers = null,
+        RoundPointsScale scale = RoundPointsScale.Club,
+        string raceWord = "Leg",
+        IReadOnlyList<(string Transponder, string Name)>? entrants = null)
     {
         string Key(string t) => primaryForAlternate?.Invoke(t) ?? t;
 
@@ -130,8 +151,22 @@ public static class AMainLegs
             dqs.Add(dq);
         }
 
+        foreach (var (transponder, name) in entrants ?? Array.Empty<(string, string)>())
+        {
+            if (!string.IsNullOrWhiteSpace(transponder) && !GhostService.IsGhost(transponder))
+            {
+                var driver = Key(transponder);
+                names.TryAdd(driver, string.IsNullOrWhiteSpace(name) ? driver : name);
+            }
+        }
+
         var field = names.Count;
-        var missed = field + 1;
+        var missed = scale switch
+        {
+            RoundPointsScale.Ifmar => QualifyingCalculator.IfmarMissedRoundPoints,
+            RoundPointsScale.Efra => field,
+            _ => field + 1,
+        };
         var count = Math.Max(1, countBest);
         var standings = new List<Standing>();
 
@@ -140,7 +175,7 @@ public static class AMainLegs
             var finishes = orders
                 .Select(o => o.FindIndex(x => string.Equals(x.Driver, driver, StringComparison.OrdinalIgnoreCase)) + 1)
                 .ToList();
-            var points = finishes.Select(f => f > 0 ? f : missed).ToList();
+            var points = finishes.Select(f => f > 0 ? QualifyingCalculator.PlacePoints(f, scale) : missed).ToList();
 
             var counted = points
                 .Select((p, i) => (p, i))
@@ -150,7 +185,7 @@ public static class AMainLegs
                 .ToList();
 
             var detail = string.Join(", ", finishes.Select((f, i) =>
-                $"Leg {Number(i)} {(f > 0 ? Ordinal(f) : dqs[i].Contains(driver) ? "DQ" : "DNS")} ({(points[i] == 1 ? "1 pt" : $"{points[i]} pts")})"
+                $"{raceWord} {Number(i)} {(f > 0 ? Ordinal(f) : dqs[i].Contains(driver) ? "DQ" : "DNS")} ({(points[i] == 1 ? "1 pt" : $"{points[i]} pts")})"
                 + (counted.Any(c => c.i == i) ? string.Empty : " dropped")));
 
             standings.Add(new Standing(
@@ -164,6 +199,7 @@ public static class AMainLegs
                 detail)
             {
                 FirstLeg = Number(0),
+                RaceWord = raceWord,
             });
         }
 
@@ -275,7 +311,7 @@ public static class AMainLegs
                + $"{nameOf(decided.Winner)} wins the A-Main overall.";
     }
 
-    private static string Words(int n) => n switch
+    internal static string Words(int n) => n switch
     {
         1 => "one",
         2 => "two",
@@ -287,7 +323,7 @@ public static class AMainLegs
     public const string TieBreakWords =
         "Level on points goes to the better best single-leg finish, then the better finish in the last leg run.";
 
-    private static string Ordinal(int n) => (n % 100) is 11 or 12 or 13
+    internal static string Ordinal(int n) => (n % 100) is 11 or 12 or 13
         ? $"{n}th"
         : (n % 10) switch
         {

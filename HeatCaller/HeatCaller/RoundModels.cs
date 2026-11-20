@@ -5,6 +5,14 @@ public enum RoundKind
     Qualifier,
     Main,
     Practice,
+
+    /// <summary>
+    /// One run of a class's Pole Shootout (19 Nov 2026): one driver alone on
+    /// track, an out lap and one to three timed laps - see PoleShootout.
+    /// Last on purpose: a round's kind is saved as a number, and a value put
+    /// earlier would change what every saved round is.
+    /// </summary>
+    Shootout,
 }
 
 /// <summary>
@@ -97,6 +105,49 @@ public sealed class RoundDefinition
 
     /// <summary>How many legs this main's A-main has, beside <see cref="MainLeg"/>. 0 when not a leg.</summary>
     public int MainLegCount { get; set; }
+
+    /// <summary>
+    /// Which run of the class's Pole Shootout this is (19 Nov 2026): 1 for
+    /// the first car out - the slowest of the shootout's qualifiers - up to
+    /// <see cref="ShootoutRunCount"/> for the top qualifier, who goes last.
+    /// 0 for every other round. See PoleShootout.
+    /// </summary>
+    public int ShootoutRun { get; set; }
+
+    /// <summary>How many runs the shootout this run belongs to has. 0 when not a run.</summary>
+    public int ShootoutRunCount { get; set; }
+
+    /// <summary>
+    /// The driver's qualifying place when the run was built (1 = top
+    /// qualifier). A run with no time keeps this place among the shootout's
+    /// drivers, behind everyone who set one. 0 when not a run.
+    /// </summary>
+    public int ShootoutQualifyingPlace { get; set; }
+
+    /// <summary>
+    /// On a main: its grid has been put in Pole Shootout order, once, after
+    /// the shootout's last run. A grid the desk changes by hand afterwards
+    /// is then left alone.
+    /// </summary>
+    public bool ShootoutGridSet { get; set; }
+
+    /// <summary>
+    /// Which main of an Invitational (Reedy-style format) this is (19 Nov
+    /// 2026): 1 to <see cref="InvitationalMainCount"/>, or 0 for every other
+    /// round. The whole invited field runs every one, scored on points - see
+    /// Invitational.
+    /// </summary>
+    public int InvitationalMain { get; set; }
+
+    /// <summary>How many mains this round's Invitational has. 0 when not one of them.</summary>
+    public int InvitationalMainCount { get; set; }
+
+    /// <summary>
+    /// Set once this Invitational main's grid has been put in order from the
+    /// points so far, so it is done once and a grid the desk changes by hand
+    /// afterwards is left alone. Main 1 starts in seed order and never needs it.
+    /// </summary>
+    public bool InvitationalGridSet { get; set; }
 
     /// <summary>
     /// The OTHER classes sharing this heat with <see cref="ClassName"/>

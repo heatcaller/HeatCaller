@@ -376,7 +376,15 @@ public sealed class RaceClassesControl : UserControl
             : $"{method}  ·  best {raceClass.CountBestRounds} heats";
     }
 
-    private static string DescribeMains(RaceClass raceClass) =>
+    internal static string DescribeMains(RaceClass raceClass) =>
+        // 19 Nov 2026: the Invitational replaces the tiered mains, and the
+        // Pole Shootout goes in front of either.
+        (raceClass.PoleShootout ? $"{PoleShootout.Name} (top {PoleShootout.DriversFor(raceClass)})  ·  " : string.Empty)
+        + (raceClass.Invitational
+            ? $"{Invitational.ShortName}: {Plural.Of(Invitational.MainsFor(raceClass), "main")}, best {Invitational.CountingFor(raceClass)} count"
+            : DescribeTieredMains(raceClass));
+
+    private static string DescribeTieredMains(RaceClass raceClass) =>
         (raceClass.BumpUpCount <= 0
             ? $"{raceClass.MainSize} per main  ·  no bump-ups"
             : $"{raceClass.MainSize} per main  ·  top {raceClass.BumpUpCount} bump up")

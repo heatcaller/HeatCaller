@@ -872,6 +872,12 @@ public partial class MainForm : Form
         // a class is edited get it.
         _raceClasses.AppDefaultFormat = () => RaceFormat.FromSettings(_settings);
         _raceClasses.Handicaps = _handicaps;
+
+        // The Invitational's seed order, from the class editor (19 Nov 2026).
+        _raceClasses.DriversOfClass = className => _profiles.AllRaceable
+            .Where(p => p.RunsClass(className))
+            .Select(p => (p.Transponder, p.DriverName))
+            .ToList();
         _rounds = RoundDefinitionStore.Load();
         _themeStore = ThemeStore.Load();
 
@@ -1340,6 +1346,17 @@ public partial class MainForm : Form
         // correction (see ResultEditor, raceday-design.md).
         _sessionHistory.SessionEdited += record =>
         {
+            // A corrected qualifier can change who runs the Pole Shootout
+            // (19 Nov 2026) - kept in step before anything is sent.
+            try
+            {
+                _raceProgram?.KeepFinalsFormatsInStep();
+            }
+            catch
+            {
+                // Never in the way of the correction going out.
+            }
+
             PublishSessionToRelay(record);
             PublishStandingsToRelay();
 

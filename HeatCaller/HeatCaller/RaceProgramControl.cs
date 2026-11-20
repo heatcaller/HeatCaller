@@ -1707,7 +1707,8 @@ public sealed partial class RaceProgramControl : UserControl
     {
         RoundKind.Qualifier => RoundWordCapital,
         RoundKind.Practice => "Practice",
-        RoundKind.Main => round.MainTier >= 0 ? $"{round.TierLetter}-Main" : "Main (no tier)",
+        RoundKind.Main => round.InvitationalMain > 0 ? Invitational.ShortName : round.MainTier >= 0 ? $"{round.TierLetter}-Main" : "Main (no tier)",
+        RoundKind.Shootout => PoleShootout.Name,
         _ => string.Empty,
     };
 
@@ -2960,11 +2961,17 @@ public sealed partial class RaceProgramControl : UserControl
 
         var ranked = SeedingOrder(className, raceClass);
 
-        if (ranked.Count == 0)
+        // An Invitational (Reedy-style format) can be seeded without any
+        // qualifying (19 Nov 2026): by the desk's seed order, else the roster.
+        var invitationalField = raceClass is { Invitational: true } ? InvitationalField(className, raceClass, ranked) : null;
+
+        if (ranked.Count == 0 && invitationalField is not { Count: >= 2 })
         {
             return new ProgramAnswer(false, NothingToSeedFromTitle,
-                "No qualifying results for this class yet - the finals are built from the qualifying order, "
-                + "so there has to be one. Run and record at least one heat first.",
+                invitationalField is not null
+                    ? "This class's Invitational needs at least two drivers in its entry, and it has fewer. Add drivers to the class first."
+                    : "No qualifying results for this class yet - the finals are built from the qualifying order, "
+                      + "so there has to be one. Run and record at least one heat first.",
                 Offer: "Add a main by hand instead?");
         }
 
@@ -2990,11 +2997,20 @@ public sealed partial class RaceProgramControl : UserControl
 
         // An unrun main that is out on track now would be deleted by the
         // re-seed from under the race - see PlanQualifyingBuild.
-        if (OnTrackRound(existing) is { } busy)
+        if (OnTrackRound(existing.Concat(ShootoutRunsToday(className))) is { } busy)
         {
             return new ProgramAnswer(false, "A main is on track",
                 $"\"{busy.RoundLabel}\" is on track now, and building the finals again would replace it. "
                 + "Try again once it has been recorded.");
+        }
+
+        // The Invitational's own question (19 Nov 2026): one field, every main.
+        if (invitationalField is not null)
+        {
+            return new ProgramAnswer(true, ProgramCaptions.SeedMains,
+                InvitationalQuestion(className, raceClass!, invitationalField, ranked.Count > 0)
+                + ShootoutNote(className, raceClass, ranked)
+                + (existing.Count > 0 ? $"\r\n\r\n{Plural.Of(existing.Count, "existing unrun main")} will be replaced." : string.Empty));
         }
 
         // Who goes where and why (11 Nov 2026, Phase 3): each driver under
@@ -3025,6 +3041,7 @@ public sealed partial class RaceProgramControl : UserControl
             + $"Put {Plural.Of(ranked.Count, "qualified driver")} in \"{className}\" into {Plural.Of(plan.TierCount, "main")}, fastest first?"
             + $"\r\n\r\n{summary}{bumpNote}"
             + "\r\n\r\nLower mains are scheduled first so bump-ups can happen before the tier above runs."
+            + ShootoutNote(className, raceClass, ranked)
             + FinalsCutNote()
             + (existing.Count > 0 ? $"\r\n\r\n{Plural.Of(existing.Count, "existing unrun main")} will be replaced." : string.Empty));
     }
@@ -3115,7 +3132,13 @@ public sealed partial class RaceProgramControl : UserControl
 
         var existing = DayRoundsForClass(className).Where(r => r.Kind == RoundKind.Main).ToList();
 
-        var replaced = existing.ToList();
+        // The class's Pole Shootout runs (19 Nov 2026) are built with its
+        // finals, ahead of them, and replaced with them - unless one has been
+        // raced, when the shootout is under way and stays as it is.
+        var runsBefore = ShootoutRunsToday(className);
+        var keepRuns = runsBefore.Any(r => r.IsRecorded);
+
+        var replaced = existing.Concat(keepRuns ? Enumerable.Empty<RoundDefinition>() : runsBefore).ToList();
         var created = new List<RoundDefinition>();
 
         // Which race day each replaced main belonged to, so the undo can
@@ -3139,14 +3162,36 @@ public sealed partial class RaceProgramControl : UserControl
                     : string.Empty);
         });
 
-        foreach (var round in existing)
+        foreach (var round in replaced)
         {
             _rounds.Delete(round.Id);
             _events?.RemoveRound(round.Id);
         }
 
-        // A double or triple A-main (11 Nov 2026, Phase 5.3) is built as its legs.
-        created.AddRange(MainsBuilder.BuildRounds(className, plan, DayTrack(), bumpUp, raceClass?.AMainLegs ?? 1));
+        // The shootout's runs first, so they are on the programme before
+        // every main of the class.
+        if (!keepRuns && raceClass is { PoleShootout: true })
+        {
+            created.AddRange(PoleShootout.BuildRuns(
+                className,
+                PoleShootout.Field(ranked, PoleShootout.DriversFor(raceClass)),
+                PoleShootout.TimedLapsFor(raceClass),
+                raceClass.Format,
+                DayTrack()));
+        }
+
+        var runsBuilt = created.Count;
+
+        if (raceClass is { Invitational: true })
+        {
+            // The Invitational (19 Nov 2026): the whole invited field in every main.
+            created.AddRange(Invitational.BuildMains(className, InvitationalField(className, raceClass, ranked), Invitational.MainsFor(raceClass), DayTrack()));
+        }
+        else
+        {
+            // A double or triple A-main (11 Nov 2026, Phase 5.3) is built as its legs.
+            created.AddRange(MainsBuilder.BuildRounds(className, plan, DayTrack(), bumpUp, raceClass?.AMainLegs ?? 1));
+        }
 
         // Tonight's "finals N minutes shorter" (12 Nov 2026, setup plan
         // step 8): each main carries the shortened format as its own, so Race
@@ -3165,11 +3210,17 @@ public sealed partial class RaceProgramControl : UserControl
 
         _events?.AddRoundsToActive(created.Select(r => r.Id));
 
+        // A shootout already raced sets the new A-main's grid now.
+        KeepFinalsFormatsInStep(className);
+
         var legs = Math.Clamp(raceClass?.AMainLegs ?? 1, 1, AMainLegs.MaxLegs);
-        var done = $"Built {Plural.Of(created.Count, "main")} for {className}."
-                   + (legs > 1 && plan.Tiers[0].Count > 0
+        var done = $"Built {Plural.Of(created.Count - runsBuilt, "main")} for {className}."
+                   + (raceClass is { Invitational: true }
+                       ? $" The {Invitational.ShortName}: every main counts on points, the best {Invitational.CountingFor(raceClass)} count, fewest wins."
+                       : legs > 1 && plan.Tiers[0].Count > 0
                        ? $" The A-main runs as {legs} legs; the best {AMainLegs.LegsCounting(legs, raceClass?.AMainLegsCounted ?? 0)} count, fewest points wins."
-                       : string.Empty);
+                       : string.Empty)
+                   + (runsBuilt > 0 ? $" {PoleShootout.Name}: {Plural.Of(runsBuilt, "run")} before them." : string.Empty);
         _lblStatus.Text = done;
         RefreshAll();
 
