@@ -81,10 +81,10 @@ Friction:
 - **Set Up Tonight opens on Drivers when Start Tonight comes first.** The Classes step is skipped, and qualifying rounds (3 by default) are only seen by someone who thinks to press Back. Start Tonight doesn't ask either.
 - **Set Up Tonight's Format button edits only the class's one race format.** Qualifier length, drivers per main and bump-ups all need the Classes page afterwards.
 - **"Drivers per main" is 8 by default.** With 4 wanted, it has to be found inside each class's editor.
-- **Demo Mode files nothing against a heat unless "Let a demo fill in the race program" is ticked**, and it is off by default. Left off, the night never moves on, and Next Steps doesn't say why.
+- **Demo Mode files nothing against a heat unless "Let a demo fill in the race program" is ticked**, and it is off by default. Left off, the night never moves on, and Next Steps doesn't say why. Fixed in ace9b7e1: Next Steps now says so, names the setting and where it is, and has an "Open Demo Mode" button.
 - **Post the Heats has "Print the heat sheets" and "Print the marshal list" ticked by default.** That is two unticks on a laptop with no printer.
 - **Starting a heat as a demo takes 3 clicks** (right-click, menu, Yes). Holding the Next Steps Start button for a second does it in one press, but a hold reads the real mouse and could not be scripted.
-- **The Next Steps card says "Timer not connected. Laps won't be counted."** during a demo night, although the demo's laps are counted.
+- **The Next Steps card says "Timer not connected. Laps won't be counted."** during a demo night, although the demo's laps are counted. Fixed in ace9b7e1: on a night where demos fill the program it says "Demo laps only - connect the timer for real cars."
 
 ### 2. Heat to heat: 4 clicks, 0 keystrokes, app 0.3-0.9 s, start sequence 9.0 s (all 5 changeovers the same)
 
