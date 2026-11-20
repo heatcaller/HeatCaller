@@ -971,7 +971,6 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void PressWarmUp()
     {
-        AppUsageTracker.Note("warmup_flag");
         if (RefuseIfPracticeRunningForRaceStart("open a warm-up"))
         {
             return;
@@ -1000,7 +999,12 @@ public sealed partial class RaceControlControl
         if (!TryBeginWarmUp(() => _actStage?.Invoke(false, null), force: true))
         {
             StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] Warm-up: could not open one now.");
+            return;
         }
+
+        // Counted once a warm-up has opened - not a refused press, nor the
+        // second press that skips the rest of one already lit.
+        AppUsageTracker.Note("warmup_flag");
     }
 
     /// <summary>The warm-up length as the announcer should say it.</summary>
