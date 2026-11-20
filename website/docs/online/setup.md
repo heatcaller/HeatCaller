@@ -113,6 +113,7 @@ The **What gets published** card lists what's always sent: "The live race while 
 | Setting | What it does | Default |
 |---|---|---|
 | **Also publish the roster and heat line-ups (who is entered, and who is in which heat)** | Adds who is in each heat to the Schedule page, with each race's grid (slot, driver and car) when a race is tapped, and sends the list of who is entered. The relay only shows any of it if your relay admin has also allowed it for your club; until then the Schedule page shows the heats without who is in them. | Off |
+| **List this club in the HeatCaller directory** | Puts your club on the relay's **Clubs** page (the relay's address with `/clubs` on the end): the club's name, a link to its pages, **Racing now** while a race is on, and the next night you've announced. No driver names, and nothing about any driver. Your relay admin has to list your club too. See [The club directory](#the-club-directory). | Off |
 | **Give each driver their own night at a private address** | "Each driver who raced gets a page of their evening - races, finishes, best laps and moments - at an address built from the code on their check-in badge, which nobody without it can find or open." Needs online check-in set up. Unticking takes every night off the relay, with any driver requests still waiting there. See [A driver's own night](index.md#a-drivers-own-night). | Off |
 | **Let drivers send changes from their phone** | A step in, under the nights tick. From their night page a driver can ask to change their details, ask to be kept more private online, or query a result; nothing changes until the desk approves it. It also opens each driver's own Garage on their night page: the pack in their car, their packs, cars, car photos and setup sheets, which go straight into HeatCaller with no approval at the desk. Grayed out until drivers' nights and online check-in are on. Unticking throws away any requests still on the relay. See [Driver requests](driver-requests.md). | Off |
 | **Let drivers query a result** | A step in, under the requests tick. "Shows "Something wrong?" under each race on a driver's night page. Untick it and drivers ask about a result at the desk instead; their other requests still work." Grayed out until **Let drivers send changes from their phone** is ticked and can be used. See [Querying a result](driver-requests.md#querying-a-result). | On |
@@ -129,6 +130,17 @@ The roster and short names are decisions about children's names; see [Children a
 The drivers' nights, requests, night emails and captions need the relay redeployed since 22 Oct 2026. Update it before you tick them; see [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
 
 A driver's own race calls can go on their night page too, with a tick on this page's other tab: **Put each driver's clip on their own night on the club's page** on **Club Website → Recording**. See [Highlight videos](../announcer/sounds-and-music.md#highlight-videos).
+
+### The club directory
+
+The **Clubs** page lists the clubs on your relay that chose to be listed, so racers can find who is racing tonight. A club shows there only when both of these are on:
+
+- **List this club in the HeatCaller directory**, ticked on this page;
+- the relay admin's listing for your club (`"listInDirectory": true`; see [Listing a club in the directory](../admin/relay-hosting.md#listing-a-club-in-the-directory)).
+
+Each club shows its name, which links to its own pages, and the next night it has announced. **Racing now** shows only while the club's live race reached the relay in the last minute; if the laptop stops sending, the badge goes rather than staying up. While racing, the class and heat on track can show too. Never any driver.
+
+Unticking takes the club off within a few seconds. **Delete Everything Published** takes it off at once. The page keeps nothing on the phone and sets no cookies. It needs the relay updated since 19 Nov 2026; see [Updating the relay](../admin/relay-hosting.md#updating-the-relay).
 
 ### Drivers' nights by email
 
@@ -315,7 +327,7 @@ Older results stay on the laptop. If you move to a new relay, only the last 36 h
 
 ## Deleting everything published
 
-**Delete Everything Published** in the **Status** card removes everything your club has on the relay: results, standings, the live race, the schedule, achievements, tracks, the look and the online check-in list. It asks first. Nothing on the laptop is touched.
+**Delete Everything Published** in the **Status** card removes everything your club has on the relay: results, standings, the live race, the schedule, achievements, tracks, the look and the online check-in list. It also takes the club off the relay's **Clubs** page. It asks first. Nothing on the laptop is touched.
 
 Before it deletes anything, it unticks **Publish to the relay** and stops any upload that was already on its way, so the relay stays empty. Nothing goes back up, not even after a restart, until you tick **Publish to the relay** again. When you do, everything is sent again, including the last 36 hours of results.
 

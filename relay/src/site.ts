@@ -91,6 +91,13 @@ export interface Look {
    */
   readonly driverThemes: boolean;
   /**
+   * The club's half of the /clubs listing (19 Nov 2026, cross-club index
+   * phase 1): "List this club in the HeatCaller directory" on the laptop's
+   * Club Website page. Only a literal true; the relay admin's
+   * Tenant.listInDirectory is needed as well. See directory.ts.
+   */
+  readonly directory?: boolean;
+  /**
    * Links to the club's own pages elsewhere - Facebook, Instagram, its
    * website - in the order the laptop sent them. Only http(s) addresses
    * with a platform this file knows reach here; see socialFrom.
@@ -299,6 +306,7 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     checkIn: record(checkin?.body)?.["enabled"] === true,
     emailLink: record(checkin?.body)?.["enabled"] === true && record(checkin?.body)?.["emailLink"] === true,
     driverThemes: body?.["driverThemes"] !== false,
+    directory: body?.["directory"] === true,
 
     // Merged in by Relay.lookFor from a document of its own, the way
     // checkIn's own flag is above. False here is the honest default for a

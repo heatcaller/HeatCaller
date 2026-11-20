@@ -12,6 +12,7 @@ import {
   badgesPage,
   cookiesPage,
   checkinPage,
+  directoryPage,
   homePage,
   livePage,
   appShellPage,
@@ -88,6 +89,8 @@ import { isJuniorName, NO_PRIVACY_RULES, namesAJunior, PRIVACY_CHANNEL, privacyN
 import { nextNightIcs } from "./ics.js";
 import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, streamFrom, streamNightId, VIDEO_CHECK_FOR_MS, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
+import { DIRECTORY_HELD_MS, directoryEntry, directoryFacts, directoryOrder, isListed, type DirectoryEntry, type DirectoryFacts } from "./directory.js";
+import { looksLikeABot, type DirectoryVisits } from "./directoryvisits.js";
 import { addCounts, countableEvents, PAGE_COUNTS, PAGE_COUNTS_DAYS, PAGE_COUNTS_MAX_BODY, PAGE_COUNTS_PER_ADDRESS, totalsOver } from "./pagecounts.js";
 
 /** The public pages under /c/<club>/, by their last path segment. */
@@ -1167,6 +1170,8 @@ export interface RelayOptions {
    * is answered 503 and the laptop keeps it.
    */
   readonly appUsage?: AppUsageLog | undefined;
+  /** The /clubs page's daily views, relay-wide (directoryvisits.ts). Absent means none are counted. */
+  readonly directoryVisits?: DirectoryVisits | undefined;
   /**
    * The lap voice's clips (29 Oct 2026) - see lapvoice.ts. Absent, the
    * manifest lists none and the pages use the phone's own voice.
@@ -1351,6 +1356,7 @@ export class Relay {
   private readonly topUpRequests: TopUpRequests | undefined;
   private readonly usageLog: UsageLog | undefined;
   private readonly appUsage: AppUsageLog | undefined;
+  private readonly directoryVisits: DirectoryVisits | undefined;
   private readonly listings = new Map<string, Buffer>();
   /**
    * ?meta=1&limit=N cuts, keyed to the very meta listing Buffer they were
@@ -1600,6 +1606,7 @@ export class Relay {
     this.topUpRequests = options.topUpRequests;
     this.usageLog = options.usageLog;
     this.appUsage = options.appUsage;
+    this.directoryVisits = options.directoryVisits;
     this.appUsageReports = new Limiter(APP_USAGE_REPORTS_PER_DAY, 24 * 60 * 60 * 1000, () => this.now().getTime());
   }
 
@@ -1731,6 +1738,42 @@ export class Relay {
    * and all - and the whole check-in roster for each of them was work
    * anybody could make the relay do as fast as they could ask.
    */
+  /** The directory's facts (directory.ts), held DIRECTORY_HELD_MS; dropped by a club's Delete Everything Published. */
+  private directoryHeld: { at: number; facts: readonly DirectoryFacts[] } | undefined;
+
+  /**
+   * The /clubs page's lines as of now. The facts are held a few seconds,
+   * but whether a club is racing is worked out from them here, as the page
+   * is served, so a held copy can never show a stale "Racing now".
+   */
+  private async directoryNow(): Promise<DirectoryEntry[]> {
+    const now = this.now().getTime();
+    const held = this.directoryHeld;
+
+    if (held === undefined || now - held.at > DIRECTORY_HELD_MS || now < held.at) {
+      const facts: DirectoryFacts[] = [];
+
+      for (const tenant of this.tenants.all()) {
+        if (tenant.listInDirectory !== true) {
+          continue;
+        }
+
+        const { look } = await this.siteOf(tenant.club);
+
+        if (!isListed(tenant, look)) {
+          continue;
+        }
+
+        const read = (channel: string) => this.store.getSnapshot(tenant.club, channel).catch(() => undefined);
+        facts.push(directoryFacts(tenant, look, await read("state"), await read("programme"), await read("nextnight")));
+      }
+
+      this.directoryHeld = { at: now, facts };
+    }
+
+    return (this.directoryHeld?.facts ?? []).map((f) => directoryEntry(f, now)).sort(directoryOrder);
+  }
+
   /** Which club's short address this is (see A CLUB'S SHORT ADDRESS), held a minute. */
   private aliasCache: { at: number; map: Map<string, string> } | undefined;
 
@@ -2630,6 +2673,18 @@ export class Relay {
         "No club here",
         "There's no club at this address. Check the link on the club's poster or in their email.",
       ), randomBytes(16).toString("base64"));
+      return;
+    }
+
+    // The club directory (19 Nov 2026, cross-club index) - see directory.ts.
+    if (method === "GET" && segments.length === 1 && segments[0] === "clubs") {
+      // Counted here, on the server: a GET (not HEAD) from anything that
+      // does not call itself a bot. Nothing about the visitor is kept.
+      if (parsed.method === "GET" && !looksLikeABot(request.headers["user-agent"])) {
+        this.directoryVisits?.count();
+      }
+
+      sendHtml(response, 200, directoryPage(await this.directoryNow()), randomBytes(16).toString("base64"));
       return;
     }
 
@@ -5330,6 +5385,8 @@ export class Relay {
         this.forgetCheckin(club);
         this.forgetSite(club);
         this.forgetPreviews(club);
+        // Off the directory at once, not when its held copy runs out.
+        this.directoryHeld = undefined;
       }
 
       // Its drivers' clips, kept outside the club's folder (clips.ts).

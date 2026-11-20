@@ -102,6 +102,7 @@ going straight to node avoids the whole business.
 | `clubs[].name` | What the club calls itself, for page headings. |
 | `clubs[].tokenSha256` | From `npm run mint`. |
 | `clubs[].publishRoster` | **Off by default.** See below. |
+| `clubs[].listInDirectory` | **Off by default.** `true` lets the club be listed on `/clubs`, the club directory, once the club ticks it too (`src/directory.ts`). Name, link, "Racing now" and next night only, never a driver. |
 
 The relay refuses to start on a duplicate club id, a duplicate token, a
 malformed hash or an invalid club id. Every one of those is a

@@ -124,6 +124,9 @@ export async function loadConfig(path: string, env: NodeJS.ProcessEnv = process.
       tokenSha256: club.tokenSha256.toLowerCase(),
       // Opt-in, and the default matters: see the note on Tenant.
       publishRoster: club.publishRoster === true,
+      // The relay admin's half of the directory listing (directory.ts).
+      // Opt-in like the roster, and left out entirely when off.
+      ...((entry as Record<string, unknown>)["listInDirectory"] === true ? { listInDirectory: true } : {}),
       // Opt-in as well, and for a harder reason: this one spends money.
       voice: readVoicePlan((entry as Record<string, unknown>)["voice"], voice, club.club, source),
       // Opt-in as well, and for the same reason as the voice above.
