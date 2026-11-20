@@ -4,11 +4,17 @@ Reviewed at 0.52.0, and again on 10 Oct 2026 after the show round, the voice rou
 
 ## Still open
 
-Re-checked against the code on 13 Nov 2026. The installer now has a public download: release v0.62.0 (9 Nov 2026) on asherizm/HeatCaller-releases has the signed `HeatCallerApp-beta.msi`, and getting-started/install.md links to it. The short-track limit (announcer unreliable under 8 seconds a lap) was taken out of the docs and the app on 13 Nov 2026, as the announcer keeps up on short laps now; the beta terms, section 1, still mention it.
+Re-checked against the code on 13 Nov 2026, and the open table on 19 Nov 2026. The installer now has a public download: release v0.62.0 (9 Nov 2026) on asherizm/HeatCaller-releases has the signed `HeatCallerApp-beta.msi`, and getting-started/install.md links to it. The short-track limit (announcer unreliable under 8 seconds a lap) was taken out of the docs and the app on 13 Nov 2026, as the announcer keeps up on short laps now; the beta terms, section 1, still mention it.
 
 | Issue | Where it's documented |
 |---|---|
-| Nothing open. |  |
+| **Race Tools card cut off the first time Connection opens.** On a 1280-wide window the card under **RACE TOOLS** is laid out one button row short the first time the page is shown, so **Photo Finish** is hidden under the card's foot; going to another page and back lays it out right. Seen in the off-screen screenshot run, 19 Nov 2026; not yet checked on screen. | timing/decoders.md (the Race tools card) |
+| **A white scroll bar under an empty Standings table.** On **Championship → Standings** with nothing counted yet, the table's columns are wider than the card at 1280 wide and the grid shows the system's own light horizontal scroll bar, not the app's slim drawn one. Seen in the screenshot run, 19 Nov 2026. | race-control/results-and-championships.md (Championship) |
+
+## Fixed on 19 Nov 2026 (docs refresh)
+
+- **Search pages... finds the Updates and Standby PC cards.** Backup & Restore's search words now include "update", "check for updates", "version" and "standby". getting-started/install.md.
+- **The Connection page's four tiles take the look.** They were made in a field initializer, before MainForm puts the look on, so they kept the light look's white card and dark text in every look. They are made in BuildConnectionTiles now. timing/decoders.md.
 
 ## Documented states, not bugs
 

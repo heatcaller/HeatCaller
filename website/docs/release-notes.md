@@ -4,17 +4,125 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The Big Screen fits every driver on the board (19 November).** On a 720p screen the board showed six drivers, and it was cleared on every lap, so P7 and P8 of an eight-car heat were never seen.
+    - **Fit first.** When the field is bigger than the board, the rows and their writing shrink a step at a time, down to three quarters of their size. An eight-car heat on a 720p screen fits with nothing moving.
+    - **Then roll.** A field too big even for that keeps the top 3 pinned, with a line under them, and rolls the rest past a row at a time, resting at each end. One pass takes about 6 seconds however many are hidden.
+    - **The board stays put between laps.** Its rows change in place instead of the board being cleared.
+    - **A red flag** holds the board at the top. After the checkered flag and on the results it keeps rolling, so every driver sees where they finished.
+
+    See [What it shows](screens/big-screen.md#what-it-shows). Update HeatCaller on the race PC; nothing changes on the relay.
+- **Windows open faster (19 November).** Many of HeatCaller's windows were laid out again and again while they were being built, and on a busy PC the slowest took several seconds to open. Nothing in them works differently.
+    - **Built in one go.** About thirty of the slowest windows now build first and lay out once, among them the welcome wizard (5 to 9 seconds on a busy PC, now under one), **Set Up Tonight**, the driver profile, the class editor, the Track Designer, the race format, the soundscape editor, the ghost car and look editors, the **Broadcast** window, **This Month**, **About HeatCaller** and the event report.
+    - **Measured once.** Sizes the layout asks for over and over are remembered, which speeds up Race Analytics' **Pace** tab, the **Announcer screen**, printing a track, and Race Control's announcer strip while racing.
+    - **A busy PC at startup.** If getting one page ready takes longer than 3 seconds, HeatCaller stops getting the rest of their tabs ready in advance and makes each tab the first time it's opened, rather than freezing.
+
+    Update HeatCaller on the race PC; nothing changes on the relay.
+- **A fresh look for every page and window (18 November).** Nothing works differently: every button, setting and saved value is as it was.
+    - **Every page.** The 16 pages never redesigned (**Classes**, **Rentals**, **Handicaps**, **Achievements**, **Garage**, **Themes**, **Connection**, **Backup & Restore**, **Sounds**, **Ghost Cars**, **Demo Mode**, **Practice**, **Sponsors**, **Local Screens**, **Club Website** and **Voice**) now look like **Venues**: tiles across the top showing how things stand, with colored chips for anything on, off or connected; settings split into cards, each with a short hint under its name; card lists for ghost cars, sponsors' slides and backups; and empty cards that say what goes in them.
+    - **Every window.** The dialogs had the same treatment, from the welcome wizard to the message box: tiles for the window's state, fields grouped into named cards with a hint line, and a tidy row of buttons. The welcome wizard and **Set Up Tonight** share one step header with a progress bar, and the driver profile opens on a card showing who the driver is. A few windows are a little bigger to make room.
+    - **The Big Screen.** The race state is a flag-colored pill, the clock sits on a rounded plate ringed in the flag's color while a flag is out, P1's row is tinted with a bar down its edge, and the bars along the bottom are rounded. A red flag's clock shows **(PAUSED)** again, the warm-up clock is no longer cut off, and the board's scroll bar is the app's slim one, not a bright white strip.
+
+    See [Dialogs](getting-started/tour.md#dialogs). Update HeatCaller on the race PC; nothing changes on the relay.
+- **Simple and Advanced mode are gone: every setting always shows (18 November).** HeatCaller used to open in Simple mode, which hid most settings until you turned on Advanced mode. Now every page, tab, card and setting shows all the time.
+    - **Gone with them:** the **Settings mode** card's switch, the **Advanced** chips and **More settings in Advanced mode** lines on the pages, **Ask for the manager PIN to turn on Advanced mode**, the welcome wizard's line and the app tour's stop about the modes, and the six section switches that stood in for **AI Commentary**'s settings in Simple mode.
+    - **Restore Default Settings** and **Put Back Earlier Settings** stay on **Backup & Restore**, on a card now called **Default settings**. They put the tuning settings (sounds, voice, timing and the like) back to how HeatCaller ships, and never touch your drivers, classes, tracks, results or keys.
+    - **Desk View is the only locked view.** It still hands the laptop to a volunteer with **Who's Racing** only, until someone types the PIN. Who's Racing's **Roster** / **Desk mode** switch is unchanged.
+    - **Nothing you set is lost.** Settings changed in Advanced mode stay as they are, and older settings files still load.
+
+    See [Default settings](admin/backups.md#default-settings). Update HeatCaller on the race PC; nothing changes on the relay.
+- **The Stream overlays editor rebuilt, with a live picture (17 November).** **Edit** beside **Stream overlay:** on **Local Screens** opens it.
+    - **A live picture** of the real overlay in the middle, with the demo race held at the part of the night you pick: **The grid**, **Racing**, **The result** or **Between races**. **Play the night** runs through all four.
+    - **Move graphics on the picture.** Drag one to move it, drag the pink dot on its corner to resize it, or click it and nudge it with the arrow keys.
+    - **Pick a look** chooses a layout from live pictures of them all.
+    - **A preset copies itself** on your first change, so you're editing a copy of your own; **Undo** takes the copy away. **Redo** is new.
+    - **Across:**, **Down:** and **Size (%):** no longer stick: on a graphic at its usual place they start from where it is.
+    - **When it shows** is a row of pill buttons (18 November): **Auto**, **The grid**, **Racing**, **The result** and **Between races**. Pink is on, and a dashed pill marks a part **Auto** would show it in. The last part stays on; the graphic's eye in the list is what turns it off.
+
+    See [Make your own layout](screens/stream-overlays.md#make-your-own-layout). Update HeatCaller on the race PC; nothing changes on the relay.
+- **Next Steps is the night's run sheet (17 November).** On **Race Day → Next Steps**:
+    - **The run sheet** in place of the program grid: each race at its clock time, named class first ("Stock · Q1 Heat 1"), with how many of its drivers are here ("4 of 5 here"), its length and a status pill (ready, drivers missing, **Recorded** or **Not built**). Earlier races fold into one row. A cyan line marks now and a dashed red line the out-by time, the mains still to build are listed, and a **Racing done** row says when racing ends, in red when that's late.
+    - **The next race opens up in place** with its facts, a warning above **Start** if the timer needs one, **Start** (still hold it for a demo), **Call to the Stand** and **Skip ▾**.
+    - **Running late.** A strip shows past 10 minutes late, amber, and red past 30. **Get back on time** lists the night plan's fixes as tick boxes, and ticking one previews it on the sheet. **Apply** makes all the ticked changes as one undo, and **Tell the Drivers** announces them.
+    - **Go / no-go** checks the timer, check-in, the night's setup, the phones and the caller; only a problem gets a color and a button to fix it. Those buttons (**Connect**, **Set Up**) are no longer cut off at the bottom.
+    - **Along the foot:** **Drivers' Meeting**, **Edit Drivers**, **+ Add Race**, **Standings**, **Marshals**, **More ▾** (the day's other tools and the program's commands) and **Undo**. The clock and the day's line are in the tab row.
+    - **Gone:** the splitter, the **Ready to race** card and the five tiles. Start a race by double-clicking it or with right-click → **Start This Round**. Right-click, drag to reorder and the class filter work as before.
+
+    See [Race Day → Next Steps](race-day/program-and-mains.md#race-day-next-steps). Update HeatCaller on the race PC; nothing changes on the relay.
+- **Setup → Tonight as summary cards (17 November).** On **Race Day → Setup**, the **Tonight** tab:
+    - **A banner** with the night's name, kind, championship and number of classes, and **Next night on phones:** as a colored pill (green while taking entries, amber once called off) beside **Announce** and **Call It Off**.
+    - **Each card says what's set.** **Change** opens its fields in place and **Done** folds them away. **Times** is four tiles, **Entries**, **First race**, **Breaks** and **Out by**, with **Not set** in a quieter color. Classes show as pills.
+    - **Two columns** on a wide window: **Times** and **The night** on the left, **Heats**, **Money** and **Running the night** on the right.
+    - **A time with no value** says **Not set**, with **Set a time**, and **Clear** once it has one, in place of a grayed-out time and a tick box. A template's **Edit Template** window works the same way.
+
+    See [The night and its times](race-day/events-and-entries.md#about-the-day). Update HeatCaller on the race PC; nothing changes on the relay.
+- **The Desk View banner is a small card at the top center of the screen (17 November).** It reads **Desk view is on** beside **Unlock**, has no title bar, and still can't be closed while the desk is locked. See [Race Day → Who's Racing](race-day/events-and-entries.md#race-day-whos-racing). Update HeatCaller on the race PC; nothing changes on the relay.
+- **Edit Result from the race program (17 November).** Right-click a round that's been raced and choose **Edit Result**: its race opens in **Race History** with **Edit Result** open, however many races have run since. It's grayed out for a round not raced yet. Race Control's own **Edit Result** still reaches only the race just run. See [Correcting a saved result](race-control/corrections-and-recovery.md#correcting-a-saved-result). Update HeatCaller on the race PC; nothing changes on the relay.
+- **Sending your details shows it worked (17 November).** In **Change my details** on Me, the button reads **Sending…** while it sends (a double tap sends once), then a green **Sent ✓** until the next change. The line saying it went, "Sent - the desk will check it", is above the button now, in bolder type. See [Your details](online/index.md#your-details). Update the relay; nothing changes on the race PC.
+- **The Inbox rebuilt for working through it fast (16 November).** Every control and key it had is still there.
+    - **Along the top:** a pill saying how things stand, and **Room vote** and **Rules** as cards that pop over the list. While the room votes, the vote button shows the time left.
+    - **Filters down the left** with their counts and keys <kbd>1</kbd> to <kbd>7</kbd>, then **Room vote** (<kbd>V</kbd>) and **Done** (<kbd>H</kbd>). On a narrower window they fold to their keys; docked, they're chips.
+    - **The list in groups:** **Holding up** the next race, **Any time tonight** and **Later**, with amber and red tags for how long each has waited.
+    - **The picked one** in a panel: how long it's waited, the request in a sentence, what the driver's phone will say to each answer, the answers with their keys, the club's quick replies as chips, and **Undo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd>).
+    - **Several at once:** the buttons say **Approve both** or **Approve all** and the count. The **Decline** menu takes <kbd>1</kbd> to <kbd>9</kbd> and <kbd>O</kbd>, and it and the sign-up turn-down menu now wear the app's look.
+    - **Done** is a view of its own, answers in green and red; <kbd>Esc</kbd> goes back. While done ones are hidden, the window no longer leaves an empty gap where their list was.
+    - **The vote card** has live tally bars.
+    - **Docked:** two-line rows, a bar of answers, and **Details** opens the picked one over the list.
+
+    See [What's in the window](race-control/inbox.md#whats-in-the-window). Update HeatCaller on the race PC; nothing changes on the relay.
+- **Holding Skip skips On Air (16 November).** Holding **Skip** in the flag row while On Air played did nothing, and the opening, the driver introductions and pit lane played on. It now does what holding <kbd>0</kbd> does: skips On Air and stages the race, and the strip says "Keep holding to skip On Air and stage now". At other times holding it still ends the recap show, and a click still skips the line on air. See [Press and hold](race-control/running-a-race.md#press-and-hold). Update HeatCaller on the race PC; nothing changes on the relay.
+- **Me's Tonight, trimmed (16 November).**
+    - **Up next has a car bar:** tonight's car in full under the race, with its setup in words, amber **No setup today** or green **Setup logged** and the time, and one button: **Log setup** while none is logged, **Garage** once it is. It takes the setup tile's place, so the tiles are the pack and the transponder, two across. At big text sizes the button drops under the car's name, and the tiles stack instead of spilling out (15 November).
+    - **Racing now, the result and your night** show tonight's car as a chip beside their heading; tapping it opens **Garage**.
+    - **No Pack in the car, Car tonight or Transponder tiles** under Me's four tabs any more.
+    - **Home's next race night** shows **Dismiss** in place of **Coming?** once you've said **I'm coming** on Me, and once dismissed it stays gone for that night.
+    - **Your details** no longer says "Sign in to change" at the top of the card while signed out.
+
+    See [Me on a phone](online/index.md#me-on-a-phone). Update the relay; nothing changes on the race PC.
+- **Children's privacy (15 November).** Protections for junior drivers across the app and the club's pages. HeatCaller's terms changed with it (revision 2), so you're asked to accept them again once.
+    - **Junior and age** are on the driver profile: **Junior:** **Under 18**, with **Under 13** or **13-17** (not set counts as under 13), so clubs that don't check waivers can set them.
+    - **Juniors' own words come only from the desk.** The **Juniors can send notes from their phone** switch is gone: a junior's notes and about line are typed at the desk, their phone's details form offers only the announcer name, and an under-13's crew names are desk-only. The desk can send juniors only fixed replies, and juniors are left out of driver-to-driver marshal swaps.
+    - **Names online** are always shortened for juniors ("Mia K"), whatever the club's setting, and pages naming a junior aren't indexed by search engines. Juniors can't be followed by name, only through family links.
+    - **On stream:** for each junior, **Shortened (Mia K)** or **Not at all**, and a tick for **A parent or guardian agreed to them appearing on the stream**. **Not at all** keeps their name off the overlays and captions, out of the lines for listeners at home and out of the night-before preview; the PA in the room still says it.
+    - **Sailor-mouth** plays clean with a junior in the race.
+    - **Kept for less time:** alert and follow sign-ups end after 180 days unused, a junior's sign-in on their phone after 30 days, and **Unpublish results older than (years):** on the **Club Website** page takes old results down.
+    - **Backups** are locked whole with the backup password, and copies in the cloud need one. Freeze dumps are deleted after 14 days.
+    - **Forget or export a driver.** Driver Hub's menu has **Forget Driver...**, which erases them on the laptop and the relay, ghost cars chasing them included (their results stay, as "Removed driver"), and **Export Driver's Data...**, one HTML file of everything held about them. With a driver picked, both use their name.
+    - **Voices:** **Ask ElevenLabs not to keep our lines** on **Voice**, on by default, and **Offline voices for juniors**, which says lines naming a junior with the Kokoro voice and the model built into HeatCaller.
+    - **About HeatCaller** lists every package that ships, with the licences and a source offer for LibVLC.
+
+    See [Privacy](admin/security-and-privacy.md#privacy) and [Offline voices for juniors](announcer/voice.md#offline-voices-for-juniors). Update HeatCaller on the race PC and redeploy the relay (`fly deploy --ha=false`).
+- **A Cookies page for every club (15 November).** **Cookies** in the footer of every club page opens the club's cookie policy, written for drivers, parents and visitors: the one cookie, everything kept on the phone and for how long, what reaches the relay, YouTube, and children.
+    - **Two things kept on phones are gone.** The visit count behind the home-screen offer (the offer now waits 45 seconds on the page instead), and clubs in the phone's list where no driver signed in on Me.
+    - **The terms** (Part 3) point to the policy, so you're asked to accept them again once.
+
+    See [What's published, and what never is](online/index.md#whats-published-and-what-never-is). Update HeatCaller on the race PC and redeploy the relay (`fly deploy --ha=false`).
+- **Change your details as one sheet with tabs (15 November).** On Me's **Tonight**, under **Your details**:
+    - **The card** shows what's on file in four groups (how you're called, email, online privacy and your crew), a signed-in chip in place of **Forget my PIN**, and **Waiting for the desk** on a line sent from this phone until the desk answers it. Its button is **Change my details**.
+    - **The sheet** asks for a personal PIN first, then has the tabs **Called**, **Email**, **Privacy** and **Crew** (Crew only when the club has crews on). What you type is kept across tabs, and a dot marks a tab with changes not sent.
+    - **One Send** at the foot counts the changes ("Send 3 changes"). If the desk's side turns part of it down, it says which and turns to that tab.
+    - Locked rows for what only the desk changes, character counters, and real switches for privacy and the night's email.
+
+    See [Your details](online/index.md#your-details). Update the relay; nothing changes on the race PC.
+- **The pay banner follows you round the club's pages (15 November).** While the driver signed in on the phone owes tonight's entry:
+    - **Every club page** (Home, Live, Schedule, Results and the rest) shows the fee banner under the header, stuck at the top as the page scrolls, as a link to Me. The page's own sticky bars stop under it.
+    - **On Me** the banner stays at the top as you scroll, with the four tabs (**Tonight**, **Races**, **Garage**, **Stats**) right under it.
+    - **It shakes and flashes** for about 6 seconds every other minute, unless the phone is set to reduce motion.
+    - **Once paid** it reads "Paid ✓ - thank you!".
+    - **On a phone** every page starts a little lower, so the browser's faded top edge no longer covers the title.
+
+    See [Me on a phone](online/index.md#me-on-a-phone). Update the relay, and HeatCaller on the race PC for the "thank you".
+- **A room vote on anything (15 November).** The Inbox's **Room vote** card has **New vote**: type a question and its answers, one a line, 2 to 16, and press **Open voting**.
+    - **Phones** on the club Wi-Fi and the relay's Live card ask your question, "Tap your answer.", instead of who wins.
+    - **No race closes or judges it,** the announcer never says how it came out, and it stops itself after 20 minutes. Replacing a vote that has votes in asks first.
+    - **Also:** quick replies open with the cursor at the end and nothing selected. On Me, **Need 5 more minutes** and **Car broken** ask on Me's own sheet, not the browser's box. The text size, contrast and **Look** buttons fit on one row, and the Look sheet's **Done** no longer hides under the home-screen app's bar. Sailor-mouth swears more like a pit lane, still within the swear dial, aimed at the track and never at a driver.
+
+    See [The room vote](race-control/inbox.md#the-room-vote). Update HeatCaller on the race PC and redeploy the relay (`fly deploy --ha=false`).
 - **Choose the leaderboard's columns from its headings (15 November).** Right-click a column heading on Race Control and a list of every column drops down, the board's columns first and ticked, the rest under **Hidden**.
     - **Tick or untick** to show or hide a column, and use the **▲ ▼** arrows on a row (or <kbd>Ctrl</kbd>+<kbd>Up</kbd> / <kbd>Ctrl</kbd>+<kbd>Down</kbd>) to move it left or right. The board changes as you go; the last column can't be hidden.
     - **Restore default columns** and **More column options...** (the full picker, with what each column shows) are at the foot. **Undo** takes back the whole visit in one step.
     - **The full picker** for Practice, the Big Screen, the OBS overlay and the club website uses the same list: an unticked column moves down under **Hidden**, and a ticked one joins the end of the board.
 
     See [Running a race](race-control/running-a-race.md). Update HeatCaller on the race PC; nothing changes on the relay.
-
-## 0.63.0
-
-Released 15 Nov 2026. Everything since 0.62.0, newest first.
-
 - **The Inbox (15 November).** One window, **Inbox**, for everything waiting for the desk. It replaces **Driver Requests**, **Tonight's club notes**, **Tonight's room vote** and **Online Sign-ups**.
     - **One list, in order.** Whatever holds up the next race comes first (**More time**, **Skip my race**, a marshal swap, a query in its protest window), then the oldest. **Waited** turns amber, then red. Chips narrow it: **All**, **Race-blocking**, **Requests**, **Result queries**, **Crew and notes**, **Club notes** and **Sign-ups**.
     - **Opening it.** Race Control's cyan button is now **Inbox** (was **Requests**), there while anything is waiting, with a badge that's red only while something holds up the next race. **Notes** and **Votes** in the **Broadcast** window open it on its club notes and its vote. On **Who's Racing** the buttons are **Inbox: Requests** and **Inbox: Sign-ups**.
@@ -25,6 +133,7 @@ Released 15 Nov 2026. Everything since 0.62.0, newest first.
     - **Dock in the main window** puts it in a panel down the right of Race Control, with a splitter.
 
     See [The Inbox](race-control/inbox.md). Update HeatCaller on the race PC; nothing changes on the relay.
+- **Check for updates yourself (15 November).** A new **Updates** card on **Backup & Restore** says which version this PC is on, for example "This PC is on HeatCaller 0.63.0.", with **Check for Updates**. It says in one line whether you're up to date, it couldn't reach the update server, or the update will install next time HeatCaller opens or once no race day is open and no race is on. **Look for updates by itself every few hours** is the switch for the automatic check, which had none on screen. Updates are still never offered mid-meeting, and a backup is taken first. See [Updates](getting-started/install.md#updates). Update HeatCaller on the race PC; nothing changes on the relay.
 - **Drivers pick their own look (15 November).**
     - **A Look button** at the foot of every club page, next to the text size and contrast buttons, opens a picker: **Club colours**, **Night**, **Daylight**, **Pit Lane**, **Paddock**, **Carbon**, or a **Team colour** on night or daylight. The button then names the look, for example **Look: Pit Lane**.
     - **Kept on that phone only.** High contrast still wins, and every look keeps text at 4.5:1 or better. The page opens in the look with no flash.
@@ -38,6 +147,11 @@ Released 15 Nov 2026. Everything since 0.62.0, newest first.
     - **Family links** show only on **Tonight**.
 
     See [Me on a phone](online/index.md#me-on-a-phone). Update the relay; nothing changes on the race PC.
+
+## 0.63.0
+
+Released 15 Nov 2026. Everything since 0.62.0, newest first.
+
 - **A bigger leaderboard on Race Control (15 November).**
     - **Fold the column under the clock.** A small **▴** in the clock's corner slides the buttons and level meters under the clock away to the right. The clock shrinks to the height of the Race Control card beside it, and the leaderboard widens across the page under them, keeping its place. **▾** brings them back, and the choice is remembered.
     - **Expand** at the foot of the leaderboard folds both sides at once: the sidebar narrows to its icons and the column under the clock folds away. It then reads **Restore**.
@@ -297,8 +411,8 @@ Released 15 Nov 2026. Everything since 0.62.0, newest first.
 
 Released 9 Nov 2026. Everything since 0.61.0, newest first.
 
-- **The position report is corrected when the order changes (9 November).** If a car it names changes place while the report is being read out, the report stops after a beat and a short correction is said next, with the new order by places: "Hold on - Sam takes the lead! So it's Sam leads, Bill second, Frank third." Before, the report always finished, and the next one could be several laps away. A car crossing the line without changing place doesn't stop it. For a change of lead the correction is the lead change call, so it isn't said twice. A penalty or another correction by hand gets "And with that ruling…". A report dropped before it starts, because the order moved while it was being prepared, is now queued once more, worded from the board as it stands then, so you aren't left waiting laps for the next one. See [On a short track](announcer/voice.md#on-a-short-track). Update HeatCaller on the race PC; nothing changes on the relay.
-- **Short tracks are called out (9 November).** The announcer is least accurate where laps average under 8 seconds: calls are skipped, can be a lap old when heard, and the commentary can mix up close lap times. Timing and scoring aren't affected. The user guide says so under [On a short track](announcer/voice.md#on-a-short-track), and so do the beta terms, so HeatCaller asks you to accept them again the next time it opens. HeatCaller also warns you: an amber line under the **Session** card on **Race Control** while the track picked is a short one, judged by its real laps once 10 have been raced, or the average typed on **Track Layouts**, where the same warning shows as you type it.
+- **The position report is corrected when the order changes (9 November).** If a car it names changes place while the report is being read out, the report stops after a beat and a short correction is said next, with the new order by places: "Hold on - Sam takes the lead! So it's Sam leads, Bill second, Frank third." Before, the report always finished, and the next one could be several laps away. A car crossing the line without changing place doesn't stop it. For a change of lead the correction is the lead change call, so it isn't said twice. A penalty or another correction by hand gets "And with that ruling…". A report dropped before it starts, because the order moved while it was being prepared, is now queued once more, worded from the board as it stands then, so you aren't left waiting laps for the next one. See [On a short track](announcer/voice.md). Update HeatCaller on the race PC; nothing changes on the relay.
+- **Short tracks are called out (9 November).** The announcer is least accurate where laps average under 8 seconds: calls are skipped, can be a lap old when heard, and the commentary can mix up close lap times. Timing and scoring aren't affected. The user guide says so under [On a short track](announcer/voice.md), and so do the beta terms, so HeatCaller asks you to accept them again the next time it opens. HeatCaller also warns you: an amber line under the **Session** card on **Race Control** while the track picked is a short one, judged by its real laps once 10 have been raced, or the average typed on **Track Layouts**, where the same warning shows as you type it.
 - **Three character tones for the commentary (8 November).** **Writing tone:** on **AI Commentary** adds **Villain**, **Pirate** and **Town crier**. Each one changes the words of every line, the recap, the segments between races and the pit-lane interviews. Each is still told to keep every name, position and number exactly as given, and to keep it family-friendly. With an ElevenLabs v3 voice, each tone has its own audio tags (a laugh, a shout) under **Give the lines their tone's delivery when they're spoken**, which was **Mark the lines excited**. See [Character tones](announcer/commentary.md#character-tones).
 - **A Desk button on Race Control (7 November).** While drivers' requests from their phones are waiting, a cyan **Desk** button appears on the flag row with a red badge counting them. Click it to open **Driver Requests**. It goes when none are waiting, and the row re-spaces itself as it comes and goes. See [Running a race](race-control/running-a-race.md).
 - **The achievements reader gets the AI too (7 November).** With commentary on, the AI writes what the achievements reader says, as it does for the Technical Lead and the Team Principal. It's given what each achievement is for, how rare it is at the club, and whether it's a driver's first, and it leads with the biggest one. HeatCaller checks that each achievement goes to the driver who earned it and that nobody is left out. A read that fails the check goes out as HeatCaller's own read instead, as does one that isn't ready in time. See [The achievements read](announcer/commentary.md#the-achievements-read).
@@ -572,8 +686,8 @@ Released 7 Nov 2026. Everything since 0.60.0, newest first.
     - **Their night by email**: **Offer drivers their night by email** on the Club Website page, with **Email Tonight's Nights** or an automatic send when the race day closes, for drivers who ticked **Email them their night**. See [Drivers' nights by email](online/setup.md#drivers-nights-by-email).
     - **Captions**: the announcer's words as text on the club's live page (**Captions on the club's live page**), on the Big Screen (press <kbd>C</kbd>), and on the Wi-Fi pages and stream with `?captions=1`. See [Captions](online/index.md#captions).
     - **Penalties explained**: the Wi-Fi follow view shows a driver's warnings and penalties with the reason, and the public results show a "+5s" or "1 warning" chip, numbers only.
-    - **On the Wi-Fi follow view**: a "STAGED - GO TO THE DRIVER STAND" call-up with a second buzz, about when the race should start, and **Check my transponder**. See [Follow a driver](screens/phone-and-web.md#follow-a-driver).
-    - **A pit board** on the coach page: last lap, position, laps, gap ahead and gap to target, full screen, keeping the phone awake. See [The pit board](screens/phone-and-web.md#the-pit-board).
+    - **On the Wi-Fi follow view**: a "STAGED - GO TO THE DRIVER STAND" call-up with a second buzz, about when the race should start, and **Check my transponder**. See [Follow a driver](online/index.md#following-a-driver).
+    - **A pit board** on the coach page: last lap, position, laps, gap ahead and gap to target, full screen, keeping the phone awake. See [The pit board](screens/phone-and-web.md).
     - **Two cars on one night**: a driver who raced a second transponder as a car of its own now finds those races on their own night page, in a section of their own ("Second car · RC10 B7") with its own report card, improvement and progress, instead of on a page nobody could open. The night email does the same, and goes to them once. See [Two cars on one night](online/index.md#two-cars-on-one-night).
     - **Club admins: redeploy the relay before switching any of this on.** The relay has changes for these features. Get the new relay code, then from the relay folder run `npm test`, then `fly deploy --ha=false`. See [Updating the relay](admin/relay-hosting.md#updating-the-relay). Until then the laptop reports that the relay needs redeploying, and the night page looks as it did before.
 - **Tidier pages throughout.** Every page's fields now line up in one column down the page (Imaging, Ambience, Season rules, Sponsors, Club Website, Local Screens, Venues and the Voice tab had cards out of line), a few drop-downs that could cut their text short now size to it, and the gray hint text has been shortened and de-duplicated everywhere - nothing a setting does has changed.
@@ -635,7 +749,7 @@ Released 7 Nov 2026. Everything since 0.60.0, newest first.
   - **Race Control:** pressing a lap-breakdown drawer button twice quickly counts both presses, and a double-click is only taken for the driver it was meant for.
   - **Smaller ones:** the director's own **Coming up next** segment no longer gets show music the club didn't tick. Pasted tables with damaged accents are repaired far more often. Undoing both sidebar groupings in a row keeps Race Day and Race Control where they were.
 
-- **Say my lap time on the coach page.** The phone coach page (`/coach`) has a **Say my lap time** tick: the phone reads out that driver's own lap time after every lap ("nine point two one", and "best lap" on a new best), and nobody else's, in the phone's own voice so it never waits for the PA. Remembered on the phone. See [Coach](screens/phone-and-web.md#coach).
+- **Say my lap time on the coach page.** The phone coach page (`/coach`) has a **Say my lap time** tick: the phone reads out that driver's own lap time after every lap ("nine point two one", and "best lap" on a new best), and nobody else's, in the phone's own voice so it never waits for the PA. Remembered on the phone. See [Coach](screens/phone-and-web.md).
 - **A new best beeps on an iPhone.** iPhones can't buzz for a web page, so the coach page now beeps there instead, once the page has been tapped.
 - **Chase their best from the board.** Race Control's **Coach *name*** menu now has **Chase *name*'s best (ghost)**, the same own-best ghost as the Practice page's **Chase a Best Lap...**.
 - **Gap to their ghost.** **Coach *name*** → **Gap to their ghost** (once they have an own-best ghost running) has the announcer say where the ghost is on the track as the driver crosses the line: "Two tenths behind your ghost.", "A tenth ahead of your ghost." It's the new **Gap to their ghost (coach)** line on **Voice → Announcements**, on in practice and off in races until ticked.
@@ -653,7 +767,7 @@ Released 22 Oct 2026. Everything since 0.59.0, newest first.
   - **Consistency**: every five clean laps (adjustable), how far apart they were, "Last five within a tenth - that's your rhythm.", and whether that's tighter or looser than before.
   - **Tones instead of words**: a short, quiet tone at the line and the split. High is quicker, low is slower, and two rising notes mean a new best. Tones play the moment the car crosses, never queued behind the announcer. The consistency line is still spoken, since a tone can't say a spread.
   - The two new lines, **Target lap (coach)** and **Consistency (coach)**, are on in practice and off in races until you tick them on **Voice → Announcements**.
-  - **Coach page on phones**: `/coach` on the club's Wi-Fi shows one driver's laps as they come in, the last lap against their best and their target, their last ten laps, a flash and buzz on a new best, and their report card. See [Coach](screens/phone-and-web.md#coach).
+  - **Coach page on phones**: `/coach` on the club's Wi-Fi shows one driver's laps as they come in, the last lap against their best and their target, their last ten laps, a flash and buzz on a new best, and their report card. See [Coach](screens/phone-and-web.md).
   - **Report card**: a few lines of arithmetic about a driver's night (best and ideal lap, consistency, the sector that costs most, against last time on the layout, what tonight's setup change did, and the gap to the quickest driver they raced with). It's on the coach page, on the driver's own night page online, and in Race History's and Driver Hub's right-click (**Report Card for *name*...**). The setup line is only on their own night page and on the club's laptop, and names online are shortened as your public pages are. The online card needs the relay redeployed (`fly deploy --ha=false`).
   - **Chase a Best Lap...** on the Practice page's ghost cars card: a ghost of a driver's own best lap, "Sam's best", at their best tonight on the layout (or ever, before tonight's). Pick the same driver again to bring it up to their new best. A new ghost pace source, **A driver's best tonight (or ever, before tonight's)**, does the same in the ghost editor. See [Chase your own best](race-control/practice-and-ghosts.md#chase-your-own-best).
 - **Hearing the splits (22 Oct).** With a split loop, the announcer can now read the split loop's times. See [Hearing the splits](timing/decoders.md#hearing-the-splits).

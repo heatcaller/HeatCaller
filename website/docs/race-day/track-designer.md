@@ -4,7 +4,7 @@ The Track Designer lets you draw an RCP-style tile track: lay the tiles with the
 
 On the **Track Layouts** page, select a layout and click **Track Designer**, or click it with nothing selected to draw a new track. See [Track Layouts](drivers-and-classes.md#track-layouts).
 
-![The Track Designer with a 12 by 7 tile plan: rail tiles round the edge, pink outer curve tiles in the corners, a divider, a finish line and grid boxes, and a dashed blue racing line with arrows. The tools run down the left with Pieces in hand, the pieces in a bar over the board, and the Parts section open on the right](../assets/images/track-designer.png)
+![The Track Designer with Drift 2.0, a 12 by 7 tile plan: rail tiles round the edge, pink outer curve tiles in the corners, dividers, a finish line, grid boxes, a custom tile and a dashed blue racing line with arrows. The tools run down the left with Pieces in hand, the pieces in a bar over the board, and the Plan section open on the right](../assets/images/track-designer.png)
 
 The window has four parts:
 
@@ -106,10 +106,10 @@ Each card shows the layout's picture, its lap length and size, and the tiles and
 
 ## What the club owns
 
-The **Parts** section checks the plan against the track your club actually has. Click **Edit what we own** and enter it once:
+The **Parts** section checks the plan against the track your club actually has. Click **Edit what we own** and enter it once in the **What the club owns** window. Tiles across its top add it up: the boxed sets, and the loose pieces of each size (**30 cm loose**, **50 cm loose**).
 
-- **Boxed sets:** how many of each of RCP's sets.
-- **Loose pieces:** each tile as it is, with its rail on, since the rails stay on between race nights: plain and blank tiles, rail tiles, finish rail tiles, arched rail tiles, outer curve tiles and inner corner tiles. Then the rail parts that aren't on a tile: loose straight rails, loose turn rails, loose corner pieces and end caps. 30 cm and 50 cm pieces are entered separately, because the two sizes don't mix.
+- **Boxed sets**: how many of each of RCP's sets.
+- **Loose parts**: pieces not in a box, such as blank tiles, a lane widening kit or spares. Count each tile as it is, with its rail on, since the rails stay on between race nights: plain and blank tiles, rail tiles, finish rail tiles, arched rail tiles, outer curve tiles and inner corner tiles. Then the rail parts that aren't on a tile: loose straight rails, loose turn rails, loose corner pieces and end caps. **30 cm** and **50 cm** switch between the two sizes, which are counted separately because they don't mix.
 
 A boxed set counts as the pieces it makes: each straight rail on a tile, each turn rail on its outer curve tile and each corner piece on its inner corner tile. A box with more straight rails than tiles to put them on keeps the rest as loose rails, and the section says so. A cupboard entered before the rails went on the tiles is turned into pieces when HeatCaller opens it: each straight rail paired with a plain tile, and anything left over kept as it is.
 
@@ -178,7 +178,7 @@ To name a tile, for example "Pit lane" or "Marshal", pick **Tile label** at the 
 
 Click **3D** on the top bar, or press <kbd>V</kbd>, to see the track tipped and turned, as you would standing at the end of the hall. The floor shows its joints, the rails stand up at their real height with their shadows, each on its own tile, and the turn rails, markings and racing line are all there. The outer curve tile is a quarter circle and the arched rail stands up in its arch. **Play** drives the car round it too.
 
-![The same track in the angled view: the floor tipped and turned, the rails standing up round it, and the racing line drawn on the floor. The 3D button is lit](../assets/images/track-designer-angled.png)
+![The same track in the angled view: the floor tipped and turned with its rails and pink curves round it, and the racing line drawn on the floor as a dashed blue line. The 3D button is lit](../assets/images/track-designer-angled.png)
 
 - Drag to turn the track round and tip it, from straight down to a low angle.
 - Use the mouse wheel to go closer or further away.
@@ -194,7 +194,7 @@ The markings include **Split 1 loop**, **Split 2 loop** and **Split 3 loop**: a 
 
 The **Plan**, **Room**, **Lap** and **Auto** sections, and the **Photo** tool, have:
 
-![The Plan section open: the track name with Show this plan as the track's main picture, Start from a kit, the tile size set to 50 cm, and Check against a kit. The Select tool is in hand with the whole plan picked up, its bar over the board offering Turn, Flip across, Flip down, Duplicate and Remove](../assets/images/track-designer-plan.png)
+![The Plan section open: the track name Drift 2.0 with Show this plan as the track's main picture ticked, Start from a kit, the tile size set to 50 cm, and Check against a kit. The Select tool is in hand with nothing picked up yet, so Turn, Flip across, Flip down, Duplicate and Remove are grayed out](../assets/images/track-designer-plan.png)
 
 - **Track name** (Plan), with **Show this plan as the track's main picture** under it — required before you can save.
 - **Tile size** (Plan) — **30 cm**, **50 cm**, or any size in mm.

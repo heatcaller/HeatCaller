@@ -4,7 +4,7 @@ HeatCaller can email each racer their personal check-in PIN (see [Personal PINs]
 
 You set this up once in the **Email (for racer PINs)** card on the **Club Website** page.
 
-The same mailbox also sends drivers their night after racing, when the club offers it, and a note to a driver's old address when the desk approves a new one from their phone. See [Drivers' nights by email](setup.md#drivers-nights-by-email) and [Driver requests](driver-requests.md#approving-a-change-to-their-details).
+The same mailbox also sends drivers their night after racing, when the club offers it, a link to their own page when a driver asks for one from **Me** (with **Let drivers email themselves a link to their page (uses the club's email, below)** ticked on the **Online check-in** card), and a note to a driver's old address when the desk approves a new one from their phone. See [Drivers' nights by email](setup.md#drivers-nights-by-email), [Opening your night with your PIN](index.md#opening-your-night-with-your-pin) and [Driver requests](driver-requests.md#approving-a-change-to-their-details).
 
 ## Before you start
 

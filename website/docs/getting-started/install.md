@@ -108,12 +108,12 @@ The tour is a short look around the app. A small card in the bottom-right corner
 
 - Tick **Show me around the app now (about two minutes)** on the wizard's last step to start it when setup finishes.
 - Press <kbd>Shift</kbd>+<kbd>T</kbd> any time to take it again.
-- **Next** and **Back** (or the arrow keys) move between stops. **Skip tour** or <kbd>Esc</kbd> closes it.
+- The first card, "A quick look around", has **Start**. After that, **Next** and **Back** (or the arrow keys) move between stops, and the last stop's button is **Done**. **Skip tour** or <kbd>Esc</kbd> closes it at any point. The top of the card counts the stops, for example "App tour · 3 of 15".
 - The app keeps working while the card is open, so you can try a page before moving on.
 
 ## Other things you might see at startup
 
-**Would you like a hand setting up a race night?** Once, straight after the first-run wizard (or on a later start, if you took the tour), when no race day is open, HeatCaller offers the **Set Up Tonight** wizard, which starts your first race day in the **Start Tonight** window and then walks through the classes, the drivers, who has turned up and the program. A new install doesn't open a race day by itself, so this (or **Start Tonight...** on **Next Steps**) is how the first one is started. Say no and it isn't offered again; it's always on **Race Day → Setup → Templates** as **Walk me through it...**, and <kbd>Shift</kbd>+<kbd>S</kbd> opens it. See [The Set Up Tonight wizard](../race-day/events-and-entries.md#the-set-up-tonight-wizard).
+**Would you like a hand setting up a race night?** Once, straight after the first-run wizard (or on a later start, if you took the tour), when no race day is open, HeatCaller offers the **Set Up Tonight** wizard, which starts your first race day in the **Start Tonight** window and then walks through the classes, the drivers, who has turned up and the program. A new install doesn't open a race day by itself, so this (or **Start Tonight** on **Next Steps**) is how the first one is started. Say no and it isn't offered again; it's always on **Race Day → Setup → Templates** as **Walk me through it**, and <kbd>Shift</kbd>+<kbd>S</kbd> opens it. See [The Set Up Tonight wizard](../race-day/events-and-entries.md#the-set-up-tonight-wizard).
 
 **Restore the unfinished race?** If HeatCaller was closed or crashed while a race was running, it offers to bring that race back. See [Corrections and recovery](../race-control/corrections-and-recovery.md).
 
@@ -151,7 +151,7 @@ When it asks, the window names both versions and gives three answers:
 
 - **Update now** backs up your data, then installs the update and restarts HeatCaller. It takes a few seconds.
 - **After tonight** keeps the download and installs it the next time HeatCaller is opened (again, only if nothing is in progress). Nothing changes in the meantime. Choose this if there's any chance of racing tonight.
-- **Not now** does nothing. You'll be asked again the next time HeatCaller starts.
+- **Not now** does nothing. You'll be asked again the next time HeatCaller starts, or when you press **Check for Updates**.
 
 Closing the window or pressing <kbd>Esc</kbd> counts as **Not now**.
 
@@ -159,9 +159,19 @@ A few things to know:
 
 - **A backup is always made first.** It's saved as a manual backup in `Documents\HeatCaller Backups`, so automatic pruning never deletes it. If the backup fails, the update isn't installed and the console says so.
 - **Your data isn't touched by an update.** Drivers, results and settings live in `%AppData%\HeatCaller` (below), not in the program folder.
-- **Checks are silent.** With no internet, or if a check fails, nothing is shown. A failed download is tried again later.
+- **Automatic checks are silent.** With no internet, or if a check fails, nothing is shown. A failed download is tried again later. **Check for Updates** (below) does say what happened.
 - **Rehearsal never updates.** The **HeatCaller Rehearsal** copy doesn't check.
-- **To turn update checks off**, close HeatCaller, open `settings.json` in `%AppData%\HeatCaller`, change `"UpdateChecksOn": true` to `"UpdateChecksOn": false` and save it. There's no switch for it on screen yet.
+- **To turn the automatic checks off**, untick **Look for updates by itself every few hours** on the **Updates** card of the **Backup & Restore** page.
+
+### Checking for updates yourself
+
+The **Updates** card on the **Backup & Restore** page says which version this PC is on ("This PC is on HeatCaller ..."). **Check for Updates** looks straight away, whether or not the automatic checks are on, and says what it found under the button, for example "You're up to date - ... is the newest version." or "Couldn't reach the update server - check this PC is online and try again." If there's a new version, it downloads it and asks the same question as above, under the same rules: never while a race day is open or a race is on, and always with a backup first. It asks again even about a version you answered **Not now** earlier.
+
+**Look for updates by itself every few hours** turns the automatic checks on and off. It's ticked to begin with.
+
+In **HeatCaller Rehearsal**, the button says "Updates are off in a rehearsal - close it and check from the real app." A copy that wasn't installed with the installer says it can't update itself.
+
+<!-- screenshot: Backup & Restore page, Updates card after Check for Updates, showing the "You're up to date" line -->
 
 ### Installing a newer .msi over an existing install
 

@@ -63,7 +63,7 @@ Everything on race night (check-ins, tech, the program, the timetable) is filed 
 
 Nights start on the **Templates** tab of **Race Day → Setup** (see [Start a race day](../race-day/events-and-entries.md#start-a-race-day)). A new install doesn't have a race day until you start one.
 
-1. Open **Race Day → Setup**. With no race day open it shows the **Templates** tab. On your first night the banner offers **Something different...**: click **Choose...** and the **Start Tonight** window opens.
+1. Open **Race Day → Setup**. With no race day open it shows the **Templates** tab. On your first night the banner offers **Something different...**: click **Choose** and the **Start Tonight** window opens.
 2. On your first night it asks two questions. Choose **Race day - heats, then finals** (or **Club night - just races** if your club just races, with no finals), tick the classes running tonight, and click **Start Tonight**. From the second night on, the **Templates** tab also has a **Like last time** card for your last race day, which starts tonight exactly like it in one press of **Start Tonight**, and a card for each night template you've saved.
 3. The new day is current straight away and Setup moves to its **Tonight** tab, named with today's date. Type a better **Name:** if you like.
 4. Set **Track layout:**.
@@ -72,7 +72,7 @@ Nights start on the **Templates** tab of **Race Day → Setup** (see [Start a ra
 
 There's no Save button: every change on **Setup** saves itself.
 
-Would you rather be walked through it? Click **Walk me through it...** on the **Templates** banner instead (the **Set Up Tonight** wizard;  HeatCaller also offers it when the first-run wizard finishes). With no race day open, it opens the same **Start Tonight** window first, then takes you through the day, tonight's classes, who's here and the program, one step at a time, and covers steps 4 to 6 of this walkthrough too.
+Would you rather be walked through it? Click **Walk me through it** on the **Templates** banner instead (the **Set Up Tonight** wizard;  HeatCaller also offers it when the first-run wizard finishes). With no race day open, it opens the same **Start Tonight** window first, then takes you through the day, tonight's classes, who's here and the program, one step at a time, and covers steps 4 to 6 of this walkthrough too.
 
 Full detail: [Events and entries](../race-day/events-and-entries.md).
 
@@ -90,12 +90,12 @@ Full detail: [Events and entries](../race-day/events-and-entries.md).
 
 1. Open **Race Day → Next Steps**.
 2. The card at the top tells you what's next. With classes ticked and drivers entered, it says "Nothing is scheduled yet." and offers **Build tonight's heats**. Click it.
-3. Look over the heats. If they look lopsided, right-click the list and choose **Move Drivers Between Heats...**.
-4. The card now says "Tonight's heats are built - post them next." Click **Post the heats...**, then **Post the Heats**. It prints the heat sheets and the marshal list for the board and tells the room. If the card lists a car the loop hasn't heard tonight, get it out on the track before the first race. See [Post the heats](../race-day/program-and-mains.md#post-the-heats).
+3. Look over the heats. If they look lopsided, right-click the run sheet and choose **Move Drivers Between Heats...**.
+4. The card now says "Tonight's heats are built - post them next." Click **Post the heats**, then **Post the Heats**. It prints the heat sheets and the marshal list for the board and tells the room. If the card lists a car the loop hasn't heard tonight, get it out on the track before the first race. See [Post the heats](../race-day/program-and-mains.md#post-the-heats).
 
-If the card says something else comes first, its button does that instead. For "No race day is open." its **Start Tonight...** button opens the **Start Tonight** window from step 4.
+If the card says something else comes first, its button does that instead. For "No race day is open." its **Start Tonight** button opens the **Start Tonight** window from step 4.
 
-Optional: click **Timetable** under the program for a timed running order. It fills itself from the program and ticks itself off as heats are recorded; **Fill In the Times...** on its **More** menu puts a time against every line.
+Optional: choose **Timetable...** on **More** along the foot of **Next Steps** for a timed running order. It fills itself from the program and ticks itself off as heats are recorded; **Fill In the Times...** on its **More** menu puts a time against every line.
 
 Full detail: [Program and mains](../race-day/program-and-mains.md).
 
@@ -111,7 +111,7 @@ If no round is picked, the check uses whoever is already on the leaderboard.
 
 ## Step 8: Run the first heat
 
-1. On **Race Day → Next Steps**, the card now reads "Next up: ..." (for example, the first qualifying heat) with a **Start** button for it, such as **Start Q1 Heat 1**. Click it. Or select a round in the program and click **Start Selected**.
+1. On **Race Day → Next Steps**, the card for the next race shows it (for example "Stock · Q1 Heat 1") with a **Start** button for it, such as **Start Stock Q1 Heat 1**. Click it, or double-click the race on the run sheet.
 2. HeatCaller switches to **Race Control** and starts the race. With **Start:** set to **On Air**, as it is on a new install, it goes **On Air** first: the soundscape's jingle or sweeper, the opening and a bumper. Then it runs the start sequence: **Stage**, then **Countdown**, then **Green**. By default each step follows on from the last once the announcer has finished speaking. See [On Air](../race-control/running-a-race.md#on-air).
 3. Race. Laps appear on the leaderboard as cars cross the line.
 4. Use the flag buttons if you need them: **Yellow**, **Red**, and **Green** to resume. **Red** has to be pressed and held for about a second, so a stray click can't stop the race. You can also use <kbd>F1</kbd> to <kbd>F6</kbd>, which act on a single press (see [Keyboard shortcuts](../reference/keyboard-shortcuts.md)).

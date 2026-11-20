@@ -2,7 +2,7 @@
 
 HeatCaller has one main window with a sidebar of pages on the left and the current page on the right. This page shows you how to move around, find a setting, tidy the sidebar, change the app's look, and read the app's log.
 
-![The HeatCaller window between races: the sidebar on the left with Race Control selected, and the Race Control page with its Session card, the Now and Next bar with Hold and Start Next, the Race Control and Leaderboard cards with Start races and Auto start, and the clock column on the right](../assets/images/race-control-idle.png)
+![The HeatCaller window between races: the sidebar on the left with Race Control selected, and the Race Control page with its Session card, the Now and Next bar with Hold and Start Next, the flag row from Warm-up to Reset with Inbox, the empty Leaderboard with Auto on, and the clock column on the right](../assets/images/race-control-idle.png)
 
 ## The title bar
 
@@ -61,13 +61,13 @@ How you leave it is remembered, so a club that prefers the rail gets it at every
 | **Voice** | Everything the app says, in tabs: **Voice**, **Cast**, **Race Calls** (with **Rivalries** at its end) and **AI Commentary**. The announcer's own screen is a window, opened from **Race Control**. See [Voice announcements](../announcer/voice.md). |
 | **Sounds** | Everything else you hear, in tabs: **Mixer**, **Soundscapes** (voice and sound presets you can switch between), **Imaging**, **Effects**, **Ambience**, **Music** and **Lap Beeps**. See [Sounds and music](../announcer/sounds-and-music.md). |
 | **Connection** | Connecting to your decoder, **Mission Control**, the finish camera, the split loop and the Developer Console. See [Decoders](../timing/decoders.md). |
-| **Backup & Restore** | Manual and automatic backups, the **Default settings** card (**Restore Default Settings** and **Put Back Earlier Settings**), and the **Getting help** card. See [Backups](../admin/backups.md). |
+| **Backup & Restore** | Manual and automatic backups, cloud copies and the backup password, the **Standby PC** card, the **Default settings** card (**Restore Default Settings** and **Put Back Earlier Settings**), the **Getting help** card (**Save Support Info**, **About HeatCaller**, **License and Privacy**) and the **Updates** card (**Check for Updates**). See [Backups](../admin/backups.md). |
 
 #### Club Tools
 
 | Page | What it's for |
 |---|---|
-| **Race Day** | Today's event, in tabs: **Next Steps** (what to do next, and tonight's program), **Setup** (the race day itself) and **Who's Racing** (check-in and scrutineering). The timetable and the scrutineering log open in windows of their own. See [Events and entries](../race-day/events-and-entries.md) and [Program and mains](../race-day/program-and-mains.md). |
+| **Race Day** | Today's event, in tabs: **Next Steps** (what to do next, and tonight's program), **Who's Racing** (check-in and scrutineering, and **Desk View...** to lock the laptop to the desk for a volunteer) and **Setup** (the race day itself). The timetable and the scrutineering log open in windows of their own. See [Events and entries](../race-day/events-and-entries.md) and [Program and mains](../race-day/program-and-mains.md). |
 | **Championship** | The season, in two tabs: **Standings** (championships, points and results) and **Calendar** (events and their rounds). See [Results and championships](../race-control/results-and-championships.md). |
 | **Rentals** | Club transponders on loan. The sidebar shows a count next to **Rentals** while any are still out. |
 | **Handicaps** | Time or lap credits to even out a mixed-ability grid. See [Practice, ghosts and demo](../race-control/practice-and-ghosts.md). |
@@ -110,7 +110,7 @@ The search also finds tabs. Typing a tab's name, or a word filed under it, opens
 |---|---|
 | `trends` | **Race Analytics → Trends** |
 | `personal bests`, `pb` | **Race Analytics → Personal Bests** |
-| `run sheet`, `timetable` | **Race Day → Next Steps** (the **Timetable** button is under the program) |
+| `run sheet`, `timetable` | **Race Day → Next Steps** (the **Timetable...** item on **More** along the foot) |
 | `tech log`, `check-in` | **Race Day → Who's Racing** |
 | `mixer` | **Sounds → Mixer** |
 | `recording`, `clips`, `highlights` | **Club Website → Recording** |
@@ -210,7 +210,7 @@ HeatCaller doesn't use pop-up notifications. Status is shown in these places:
 
 - **Connection status**: a colored dot and a **Status:** line on the **Connection** page. Gray means disconnected, amber connecting, green connected, and red an error.
 - **The Next Up bar** on **Race Control**: what's running **NOW**, what's **NEXT**, and how the **DAY** is going. During a race it also shows **TIMING** warnings, in red, when laps may not be being counted. See [Timing warnings](../race-control/running-a-race.md#timing-warnings).
-- **The next-step card** on **Race Day → Next Steps**, which tells you the next step and gives you a button for it, and banners such as "No race day is open." on **Race Day → Who's Racing**.
+- **The card for the next race** on **Race Day → Next Steps**, which tells you what to do next and gives you a button for it, and banners such as "No race day is open." on **Race Day → Who's Racing**.
 - **The Rentals count** in the sidebar, while any rental transponder is still out.
 - **The Driver Hub count** in the sidebar, and a banner on **Driver Hub** (and on **Race Control** between races), when a transponder no driver owns has crossed the line. See [Unknown transponders](../timing/transponders.md#unknown-transponders).
 - **The allowance line** at the foot of the sidebar, which turns amber and then red as a monthly allowance runs down.

@@ -369,7 +369,10 @@ public partial class MainForm
     // --- The tiles (17 Nov 2026, page jazz-up) ---------------------------------------
 
     /// <summary>The page at a glance, over the cards: the decoder, its status, the split loop and the passes heard.</summary>
-    private readonly StatTile[] _connectionTiles = { new(), new(), new(), new() };
+    // Made in BuildConnectionTiles, not here: a field initializer runs before
+    // MainForm's constructor puts the look on (AppTheme.UseLook), so tiles
+    // made here kept the light look's white card and dark text in every look.
+    private StatTile[] _connectionTiles = Array.Empty<StatTile>();
 
     private static readonly string[] ConnectionTileCaptions = { "Decoder", "Status", "Split loop", "Passes heard" };
 
@@ -394,6 +397,8 @@ public partial class MainForm
     /// </summary>
     private void BuildConnectionTiles()
     {
+        _connectionTiles = new StatTile[] { new(), new(), new(), new() };
+
         for (var i = 0; i < _connectionTiles.Length; i++)
         {
             _connectionTextSize.Wear(_connectionTiles[i].Value, () => AppTheme.TitleFont);

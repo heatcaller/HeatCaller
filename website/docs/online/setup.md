@@ -6,7 +6,18 @@ You can also reach this page from **Local Screens**, which shows a one-line rela
 
 The page has two tabs. Everything below is on the first, **Website**. The second, **Recording**, holds the race recordings, the drivers' clips and their highlight videos on the **Recording the night** card, and the pieces the commentary writes from the evening on the **Written from the night** card. It moved here from **Sounds** on 26 October 2026; see [Race recordings](../announcer/sounds-and-music.md#race-recordings) and [Written from the night](../announcer/commentary.md#written-from-the-night).
 
-![Club Website page, Website tab: the Relay card filled in with the address, Club id and a hidden Publish token, and What gets published below](../assets/images/club-website.png)
+![Club Website page, Website tab: Online, the club, last published 9 seconds ago and Phone check-in On across the top, the Relay card with Publish to the relay ticked, the address, Club id and a hidden Publish token, and the Share card with the club's link below](../assets/images/club-website.png)
+
+At the top of the **Website** tab, four tiles give the state of things at a glance, updated every second:
+
+| Tile | What it shows |
+|---|---|
+| **Publishing** | **Online** (green) while publishing gets through, **Offline** or **Waiting** when it doesn't yet, **Not set up**, **Check settings** after a restored backup (see [Status](#status)), or **Off**. |
+| **Club** | Your club id. |
+| **Last published** | How long ago something last reached the relay. |
+| **Phone check-in** | **On** or **Off**: whether [online check-in](check-in.md) is switched on. |
+
+Under them the cards run in this order: **Relay**, **Share**, **What gets published**, **Look**, **Your first night guide** and **Club updates** (side by side when the window is wide enough), **Online check-in**, **Personal PINs**, **Email (for racer PINs)**, **Race-day manager**, **Race video (YouTube)**, **Room & Web** and **Status**. Each card starts with a line saying what it's for.
 
 ## Before you start
 
@@ -111,6 +122,7 @@ The **What gets published** card lists what's always sent: "The live race while 
 | **Captions on the club's live page** | "What the announcer says, as text on the live page, for anyone who can't hear the PA - no sound needed. Lines about drivers who asked to be shown by initials are left out." See [Captions](index.md#captions). Unticking takes the captions back off the relay, and lines said while it was off are never sent later. | Off |
 | **Shorten published names to a first name and an initial** | Shows "Dana S" instead of "Dana Sloane" everywhere online. Only the last name is shortened, and a one-word name is left alone. Affects what's sent from now on: standings and the last 36 hours of results are re-sent with the new names, but older results already on the relay keep the names they were sent with. It also shortens names in announcer lines sent to the HeatCaller voice or ElevenLabs; the Kokoro voice still says them in full (see [Shortened names on the paid voices](../announcer/voice.md#fix-a-line-that-came-out-wrong)). | On |
 | **Say full names aloud with the online voices** | Just under it, and only while it's ticked. The announcer says full names with the HeatCaller voice and ElevenLabs too, so those names are sent to them. The club's pages and captions still show the short name, and a line that says a full name isn't sent to people listening along at home. | Off |
+| **Unpublish results older than (years):** | At the foot of the card. "0 keeps every year online. 2 keeps this year and last: older results, and their year on the Results page, are taken off the club's pages and not sent again. They stay on this PC." See [How long results stay online](index.md#how-long-results-stay-online). | 0 |
 
 The roster and short names are decisions about children's names; see [Children and privacy](index.md#children-and-privacy). Each driver can also be kept more private online than the club's settings, from their profile; see [Online privacy](../race-day/drivers-and-classes.md#online-privacy).
 
@@ -153,11 +165,15 @@ With **Send automatically when the race day closes** ticked, the emails go by th
 
 ## Look
 
-The **Look** card holds the welcome line, the **New here?** card and the club's links. Changes reach the pages within a few seconds, and there's no Save button.
+The **Look** card ("How the club's pages greet people: the welcome line, the newcomers' note and the club's links.") holds the welcome line, the club's short address and home-screen name, the **New here?** card and the club's links. Changes reach the pages within a few seconds, and there's no Save button.
 
-<!-- screenshot: Club Website page, Look card with the Welcome line box, Club links and the Open Themes button -->
+<!-- screenshot: Club Website page, Look card with the Welcome line, Short address and Name under the icon boxes, Club links and the Open Themes button -->
 
 **Welcome line:** One line of plain text, up to 160 characters, shown under the club's name on the home page, for example "Racing every Tuesday from 6pm - all welcome". It's also the description used when the pages are added to a phone's home screen. Leave it blank for the standard line.
+
+**Short address:** an easier address for posters, up to 32 characters, for example `acme`. `https://your-relay.fly.dev/c/acme` then sends phones on to your club's own pages, with the rest of the link kept. Lowercase letters, digits and single hyphens, at least 3 characters. It can never be another club's id, and if two clubs on the relay choose the same short address, the first one listed in the relay's settings keeps it. Leave it empty for none. It needs the relay redeployed since 14 Nov 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)).
+
+**Name under the icon:** the name a phone shows under the club's icon once the pages are added to its home screen, up to 12 characters, for example "Upstate MZ". Every club's icon is the same HeatCaller sun, so this is what tells them apart. Left empty, it's your club's name, cut to 12 characters (see [Add to Home Screen](index.md#add-to-home-screen)).
 
 **New here? card:** three lines for somebody who has found the club but never raced there, shown as a card on the club's home page to any phone that doesn't remember a driver. **Where we race:** and **When we race:** take up to 160 characters each, **How to join:** up to 300. **When we race** also shows under "No racing right now" between nights. Leave all three empty for no card.
 
@@ -215,7 +231,7 @@ A few things follow from sharing the relay:
 
 These three cards set up drivers checking themselves in from their own phones:
 
-- **Online check-in** turns it on and sets the staff PIN. See [Online check-in](check-in.md).
+- **Online check-in** turns it on, sets the staff PIN, and can let drivers email themselves a link to their own page. See [Online check-in](check-in.md).
 - **Personal PINs** gives every racer a six-digit PIN of their own. See [Personal PINs](check-in.md#personal-pins).
 - **Email (for racer PINs)** sets up the club's mailbox for emailing those PINs. See [Emailing racer PINs](email.md).
 
@@ -238,9 +254,13 @@ The relay keeps a separate allowance for the manager's requests and answers, so 
 
 The laptop keeps its answers to the relay's manager requests through changes on this page, such as a new token, **Test Connection**, or switching the manager or publishing off and on again, so a request whose answer hasn't reached the relay yet isn't run a second time. They're only dropped when the relay address or the club changes, or after **Delete Everything Published**.
 
+## Race video (YouTube)
+
+The **Race video (YouTube)** card puts each race's moment in your club's YouTube stream on the drivers' pages. See [Race video on YouTube](race-video.md).
+
 ## Share
 
-The **Share** card shows your club's home page address once an address and club id are saved. It's the address to hand out: it works from anywhere, on any network.
+The **Share** card, right under **Relay**, shows your club's home page address once an address and club id are saved. It's the address to hand out: it works from anywhere, on any network.
 
 - **Open** opens it in your browser.
 - **Copy Link** copies it to the clipboard.
@@ -248,7 +268,7 @@ The **Share** card shows your club's home page address once an address and club 
 
 ## Room & Web
 
-The **Room & Web** card, under **Share**, holds what the people in the room, and people at home, can send in or hear through the club's Wi-Fi and web page. Everything on it is off until you switch it on, and none of it needs AI commentary: with commentary off, you read the notes and the vote out yourself.
+The **Room & Web** card, under **Race video (YouTube)**, holds what the people in the room, and people at home, can send in or hear through the club's Wi-Fi and web page. Everything on it is off until you switch it on, and none of it needs AI commentary: with commentary off, you read the notes and the vote out yourself.
 
 | Part | Switches | See |
 |---|---|---|

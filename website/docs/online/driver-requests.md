@@ -31,29 +31,40 @@ All of this is on the driver's night page, which only their badge code opens. Se
 
 ### Your details
 
-On **Me**, under **Tonight**, a **Your details** card lists what's on file now, a line each: **Name**, **Announcer**, **Pronouns**, **About you**, **Email** (partly hidden), **Night email** (On or Off) and **Online** (which privacy choices are on, or "Shown as normal"). **Ask the desk to change** under it opens **Change your details** from the bottom of the screen, which says "Nothing changes until the timing desk checks it." A driver with a personal PIN signs in there first. The form shows what's on file, so the driver changes only what they need, then taps **Send to the desk**, or **Done** to close it. (Until 6 November the form opened inside the card, under **Change how you are called and shown**.)
+On **Me**, under **Tonight**, a **Your details** card shows what's on file now, in groups:
 
-| Field | What it's for | Longest |
-|---|---|---|
-| **Name** | Shown, not changed: "the desk changes this one." | |
-| **Announcer name** | "How the announcer should say your name - spell it the way it sounds." | 40 characters |
-| **Pronouns** | "For example she/her, he/him or they/them. Leave it empty for none." | 24 characters |
-| **About you** | "One line the commentary can use, like "races a red buggy and loves the hairpin"." | 120 characters |
-| **Email** | The address on file, masked, for example "On file: s•••@gmail.com", or "No email on file." | |
-| **New email address** | Only for a driver signed in with their personal PIN: "Only if it has changed. The desk lets your old address know." Without the PIN the card says "Changing your email needs your personal PIN - ask at the desk." | 120 characters |
-| **Email me my night after racing** | Whether they're sent their night by email, when the club sends them (see [Drivers' nights by email](setup.md#drivers-nights-by-email)). Grayed out with no address on file. | |
-| **Online privacy** | Three ticks: **Leave my photo off the web pages**, **Leave me out of podium videos online** and **Show only my initials online**, under "These change the club's web pages only. In the room - the PA, the big screen and the club's Wi-Fi pages - nothing changes." | |
+- **How you're called**: **Name** (marked "desk only"), **Announcer**, **Pronouns** and **About you**.
+- **Email**: **On file** (partly hidden, for example "s•••@gmail.com", or "None on file") and **Night email** (On or Off).
+- **Online privacy**: **Online**, the privacy choices that are on ("No photo", "Not in videos", "Initials only"), or "Shown as normal".
+- **My crew**, when the club lets drivers pick their crew and the driver has a personal PIN: **Principal** and **Tech lead**, or "Club's own" (see [My crew](#my-crew)).
 
-**For a junior** (under 18 on their profile), the form offers only **Announcer name**. In place of **Pronouns**, **About you** and **Email** it says "Ask at the desk - a parent fills this in with you." Type those on their profile in the Driver Hub with the parent there. Their **About you** line on the card says "Set at the desk" until a parent has agreed on the profile that it can be said (see [Juniors](../announcer/commentary.md#drivers-own-crew)).
-| **I'm a parent or guardian making this change** | A tick the desk sees with the request. | |
+A line the driver has sent a change for from this phone says "Waiting for the desk" until the desk answers. For a driver signed in with their personal PIN, "Signed in · **Sign out**" sits beside the card's heading.
 
-**Send to the desk** sends only what was changed. The card answers "Sent - the desk will check it (ref A1B2C3)", where the reference is the one the desk sees in the **Ref** column once it's answered (under **Show done** in the Inbox). If nothing was changed, it says "Nothing has changed yet."
+**Change my details**, under the groups, opens **Change your details** from the bottom of the screen ("Nothing changes until the desk checks it." is under the button). A driver with a personal PIN signs in first (see [Signing in with a personal PIN](#signing-in-with-a-personal-pin)). The sheet then has a tab each for **Called**, **Email**, **Privacy** and, when the club lets drivers pick their crew, **Crew**. What's typed is kept while they move between tabs, and a tab with a change not sent yet has a dot. The **×** at the top closes the sheet. (From 6 to 15 November the sheet was one long form; until 6 November it opened inside the card.)
 
-**Privacy can only be turned up from a phone.** A privacy tick that's already on shows "On - ask at the desk to undo." and can't be unticked there. Turning one off is a change only the desk can make, on the driver's profile (see [Online privacy](../race-day/drivers-and-classes.md#online-privacy)).
+| Tab | Field | What it's for | Longest |
+|---|---|---|---|
+| **Called** | **Name** | Shown, not changed: "desk only". | |
+| **Called** | **Announcer name** | "Spell it the way it sounds." | 40 characters |
+| **Called** | **Pronouns** | "Leave it empty for none." For example she/her, he/him or they/them. | 24 characters |
+| **Called** | **About you** | "One line the commentary can use." For example "races a red buggy and loves the hairpin". | 120 characters |
+| **Email** | **On file** | The address on file, masked, or "None on file". | |
+| **Email** | **New email address** | Only for a driver signed in with their personal PIN: "The desk lets your old address know." Without the PIN the tab says "Changing your email needs your personal PIN - ask at the desk." | 120 characters |
+| **Email** | **Email me my night after racing** | A switch: whether they're sent their night by email, when the club sends them (see [Drivers' nights by email](setup.md#drivers-nights-by-email)). Grayed out with no address on file. | |
+| **Privacy** | Three switches | **Leave my photo off the web pages**, **Leave me out of podium videos online** and **Show only my initials online**, under "These change the club's web pages only. In the room - the PA, the big screen and the club's Wi-Fi pages - nothing changes." | |
+| **Crew** | Their crew and notes | See [My crew](#my-crew). | |
+
+The box counters show how many characters are used. Under every tab sits **I'm a parent or guardian making this change**, a tick the desk sees with the details request.
+
+**For a junior** (under 18 on their profile), the sheet offers only **Announcer name**. **Pronouns**, **About you** and **New email** are locked rows marked "desk only" that say "Ask at the desk - a parent fills this in with you." Type those on their profile in the Driver Hub with the parent there. Their **About you** line on the card says "Set at the desk" until a parent has agreed on the profile that it can be said (see [Juniors](../announcer/commentary.md#drivers-own-crew)).
+
+**One Send for every tab.** The button at the foot of the sheet counts what's changed, for example **Send 2 changes**, and sends only that: a details request, and a separate crew request when the crew was changed. While it goes it reads **Sending...**, then **Sent ✓** until the next change, so a second tap sends nothing. The line above it answers, for example "Sent - the desk will check it (ref A1B2C3)", where the reference is the one the desk sees in the **Ref** column once it's answered (under **Show done** in the Inbox). If one of the two requests is refused, the line says which, and the sheet turns to its tab. If nothing was changed, it says "Nothing has changed yet."
+
+**Privacy can only be turned up from a phone.** A privacy switch that's already on says "On · ask at the desk to undo" and can't be turned off there ("Once one is on, only the desk can turn it off again."). Turning one off is a change only the desk can make, on the driver's profile (see [Online privacy](../race-day/drivers-and-classes.md#online-privacy)).
 
 #### Signing in with a personal PIN
 
-A driver who has a personal PIN has to sign in with it before the details form appears: "You have a personal PIN, so sign in with it before changing your details. This phone remembers it only until you close this tab." They type it in **Your personal PIN** and tap **Sign in**. The PIN itself is never kept. Closing the tab signs them out, and **Forget my PIN on this phone** under the form signs them out straight away.
+A driver who has a personal PIN signs in with it before the tabs appear: the sheet opens on the PIN alone, with "You have a personal PIN, so sign in with it before changing your details. This phone remembers it only until you close this tab." They type it in **Your personal PIN** (4 to 8 digits) and tap **Sign in**. The PIN itself is never kept. Closing the tab signs them out, and **Sign out** beside the card's heading signs them out straight away. (It replaced **Forget my PIN on this phone** on 15 November 2026.) A driver who signed in on **Me** with their PIN is already signed in here for as long as the tab is open.
 
 A driver with no personal PIN can send everything except an email change with their badge code alone. That's why an email change needs the PIN: a badge code can be on a lanyard or in a photo, but the PIN arrives in the driver's own inbox.
 
@@ -70,10 +81,10 @@ The PIN is only for **Your details**. A query, the pack in the car and everythin
 
 When HeatCaller has battery packs of the driver's own, they can say which one is in the car. The badge code is enough; no PIN is needed, and nobody at the desk has to approve it. See [A driver's batteries](../race-day/drivers-and-classes.md#a-drivers-batteries).
 
-- On **Me**, the **Tonight** tiles have **Pack in the car**, with the pack in now (or "None set") and "Tap to swap". Tapping it opens **Pack in the car** from the bottom of the screen: a button for each of their packs and **No pack**, with "Every race you run is recorded on the pack in the car." Tapping one sends it, and the phone says, for example, "Red 2S #3 is in the car - HeatCaller will have it in a few seconds".
+- On **Me**, the **Up next** card at the top has a **Pack** tile, with the pack in now (or "None set"). Tapping it opens **Pack in the car** from the bottom of the screen: a button for each of their packs and **No pack**, with "Every race you run is recorded on the pack in the car." Tapping one sends it, and the phone says, for example, "Red 2S #3 is in the car - HeatCaller will have it in a few seconds".
 - A few seconds later, once HeatCaller has taken it, the phone buzzes and says "HeatCaller has it: Red 2S #3 is in the car", or "HeatCaller did not take the pack swap - *why*" if it couldn't (for example "That pack isn't one of yours any more.").
 - With no packs of theirs in HeatCaller yet, the sheet says "No packs of yours in HeatCaller yet. Add them in Garage." with **Open Garage**.
-- On a night with no live card, **Your details** also starts with **Your battery pack**: **The pack in your car now**, a list of their packs and **No pack**, and **Save**. It answers "Sent - HeatCaller will have it in a few seconds (ref D4E5F6)".
+- **Your battery pack**, with **The pack in your car now** (a list of their packs and **No pack**) and **Save**, is on the **Alerts** card on a race night, and at the start of **Your details** on a night with no live card. It answers "Sent - HeatCaller will have it in a few seconds (ref D4E5F6)".
 
 ### Their garage
 
@@ -93,22 +104,22 @@ Each qualifying round of a class, once all its heats are in, and each main can b
 
 ### More time, or skip my race
 
-While their race is next up, the **Up next** card on **Me** has two buttons:
+While **Up next** is on the card at the top of **Me**, its foot has two buttons:
 
-- **Need 5 more minutes** asks the desk to hold their next race for 5 minutes, for a battery still charging or a quick fix.
-- **Car broken - skip me** asks the desk to take them out of their next race.
+- **5 more minutes** ("Hold my race") asks the desk to hold their next race for 5 minutes, for a battery still charging or a quick fix. A sheet asks **Need 5 more minutes?**, "Ask the desk to hold your next race for 5 more minutes? The desk answers here.", with **Yes, hold my race** and **Never mind**.
+- **Skip me** ("Car broken") asks the desk to take them out of their next race. The sheet asks **Car broken?**, "Ask the desk to take you out of your next race? The desk answers here.", with **Yes, skip my next race** and **Never mind**.
 
-Each asks "Ask the desk to...?" first, and the request then shows under the driver's requests as **More time** or **Skip my race**. The desk approves it (see [More time and skip my race at the desk](#more-time-and-skip-my-race-at-the-desk)), and the phone shows what happened.
+Once sent, the button says "Waiting" until the desk answers, and the request shows under the driver's requests as **More time** or **Skip my race**. The desk approves it (see [More time and skip my race at the desk](#more-time-and-skip-my-race-at-the-desk)), and the card at the top shows the answer, for example "Yes, 5 more minutes" or "You're out of your race", with **OK** to put it away.
 
 ### My crew
 
-When the club has ticked **Drivers can pick their own crew** (see [Drivers' own crew](../announcer/commentary.md#drivers-own-crew)), **Your details** has a **My crew** part. It needs their personal PIN: a driver without one sees "Ask the desk for a personal PIN to pick your crew."
+When the club has ticked **Drivers can pick their own crew** (see [Drivers' own crew](../announcer/commentary.md#drivers-own-crew)), **Change your details** has a **Crew** tab. It needs their personal PIN: a driver without one sees "Ask the desk for a personal PIN to pick your crew."
 
-For their **Team Principal** and **Technical Lead** they can type a made-up name and pick a voice, with **Play** to hear it. Under **Your notes for the commentary** are **Tonight's goal**, **Thanks / shout-out** and **Your car's story**. **Send my crew** sends what changed. A voice they pick changes straight away; names and notes wait for the desk. Under the button it says "What you send may be said over the PA and on the club's stream. By sending, you let your club and HeatCaller use it in the announcer's commentary." For a junior there are no note boxes ("Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk."): a junior's notes and about line are always typed at the desk. Each note the desk has set is listed there instead - its words once a parent has agreed on the profile, "Set at the desk" until then. An under-13's crew names are typed at the desk too; see [Drivers' own crew](../announcer/commentary.md#drivers-own-crew).
+The tab says "Voice picks change straight away. Names and notes wait for the desk to check them." For their **Team Principal** and **Technical Lead**, each on a small card of its own, they can type a made-up **Name** and pick a **Voice**, with **Play** to hear it. Under **Notes for the commentary** are **Tonight's goal** ("Said before your race tonight only.", 80 characters), **Thanks / shout-out** (80) and **Your car's story** (120). The sheet's one Send sends what changed, as a crew request of its own (see [Your details](#your-details)). At the foot of the tab it says "What you send may be said over the PA and on the club's stream. By sending, you let your club and HeatCaller use it in the announcer's commentary." For a junior there are no note boxes ("Your notes are filled in at the desk, with a parent or guardian there. Ask at the desk."): a junior's notes and about line are always typed at the desk. Each note the desk has set is listed there instead - its words once a parent has agreed on the profile, "Set at the desk" until then. An under-13's crew names are typed at the desk too: the tab has no name boxes, only voices, and says "Your crew's names are picked at the desk, with a parent there." See [Drivers' own crew](../announcer/commentary.md#drivers-own-crew).
 
 ### How each request is getting on
 
-Once a driver has sent something, the **Right now** card on their night page lists **Your requests to the desk**, for up to a day afterward, folded to a count such as **Your requests to the desk (2, 1 answered)**. Each line gives the reference, how it stands, and any answer:
+Once a driver has sent something, the **Alerts** card on **Tonight** lists **Your requests to the desk**, for up to a day afterward, folded to a count such as **Your requests to the desk (2, 1 answered)**. Each line gives the reference, how it stands, and any answer:
 
 - "Your details (ref A1B2C3) - waiting for the desk"
 - "Battery pack (ref D4E5F6) - approved: Pack Red 2S #3 is in the car"
@@ -116,6 +127,8 @@ Once a driver has sent something, the **Right now** card on their night page lis
 - "Your details (ref A1B2C3) - declined: *the desk's reason*"
 
 A setup change shows as "Setup log", and a change to their packs or cars as "Request".
+
+The desk's answer to their details, a query, **More time**, **Skip my race** or a marshal swap also shows on the card at the top of **Me** for fifteen minutes, with **OK** to put it away (see [Me on a phone](index.md#me-on-a-phone)).
 
 ### Messages a driver might see
 
@@ -171,9 +184,9 @@ What's waiting is listed with whatever holds up the next race first, then oldest
 | **What** | Each change, with what it is now, for example "Announcer name: 'Zhock' (was 'Jacques')", "No photo online: yes (was no)", "Battery pack: 'Red 2S #3' (was 'Blue 2S #1')" or "Query about Q1 Heat 2: "...". |
 | **Note** | "Checked by their personal PIN" or "Checked by their badge code", "A parent or guardian sent it", and for a query "Not in that race" or "A race this laptop doesn't have" when it applies. |
 
-The line under the list shows the picked request in full. Under it are **Approve**, **Noted**, **Decline**, **Later** and **Discard**. Double-clicking a row, or pressing <kbd>Enter</kbd>, does the same as **Approve** (or **Noted** for a query). The keys <kbd>A</kbd>, <kbd>D</kbd>, <kbd>N</kbd> and <kbd>S</kbd> are **Approve**, **Decline**, **Noted** and **Later**. You can pick several requests of one kind and answer them together, and most answers can be undone for 10 seconds from the line under the buttons. See [Answering](../race-control/inbox.md#answering).
+Pick a request and the right-hand side of the Inbox shows it in full, with **THEIR PHONE WILL SAY**: the words the driver's phone shows for the main answer, and what a decline would say instead. Under that are the answers, the main one first: **Approve**, **Noted**, **Decline**, **Later**, and **Discard** for a request from a badge nobody on this laptop has (see [The picked item](../race-control/inbox.md#the-picked-item)). Double-clicking a row, or pressing <kbd>Enter</kbd>, does the same as **Approve** (or **Noted** for a query). The keys <kbd>A</kbd>, <kbd>D</kbd>, <kbd>N</kbd> and <kbd>S</kbd> are **Approve**, **Decline**, **Noted** and **Later**. You can pick several requests of one kind and answer them together, and most answers can be undone for 10 seconds with **Undo** under the buttons, or <kbd>Ctrl</kbd>+<kbd>Z</kbd>. See [Answering](../race-control/inbox.md#answering).
 
-**Show done (n)** at the foot of the Inbox lists the requests you've answered, kept 30 days, newest first, with **Sent**, **Kind**, **From**, **What**, **Answer** and **Ref** (the reference the driver's phone shows). **Answer** is "Approved", "Noted", "Declined: *reason*" or "Replaced by a newer request".
+**Done** (<kbd>H</kbd>), under **TONIGHT** on the Inbox's left, lists the requests you've answered, kept 30 days, newest first, with **Sent**, **Kind**, **From**, **What**, **Answer** and **Ref** (the reference the driver's phone shows). **Answer** is "Approved", "Noted", "Declined: *reason*" or "Replaced by a newer request".
 
 When a driver sends a new details request while an older one is still waiting, the older one is replaced: the desk sees "Replaced by a newer request", and the driver's phone sees "declined: Replaced by your newer request."
 

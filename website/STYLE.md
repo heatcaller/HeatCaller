@@ -24,28 +24,31 @@ file names of source code, or implementation details a user can't see — except
 names/paths/commands are what the reader needs.
 
 ## Navigation (exact sidebar page names in the app, in order)
-Race Control, Race Day (tabs: Next Steps, Setup, Who's Racing), Championship (tabs: Standings, Calendar),
+Race Control, Race Day (tabs: Next Steps, Who's Racing, Setup), Championship (tabs: Standings, Calendar),
 Driver Hub, Classes, Rentals, Handicaps, Track Layouts, Race History,
 Race Analytics (Overview, Personal Bests, Lap Times, Head to Head, Trends, Pace), Achievements, Garage,
-Practice, Ghost Cars, Demo Mode, Venues, Themes (no tabs: Looks, Club logo and Appearance cards), Sponsors, Local Screens,
+Practice, Ghost Cars, Demo Mode, Venues, Themes (no tabs: Looks, Crowd screens, Club logo and Appearance cards), Sponsors, Local Screens,
 Club Website (Website, Recording), Voice (Voice, Cast, Race Calls with Rivalries at its end, AI Commentary),
 Sounds (Mixer, Soundscapes, Imaging, Effects, Ambience, Music, Lap Beeps), Connection, Backup & Restore.
-There's a "Search pages..." box and "Manage Navigation..." to reorder/hide pages.
+There's a "Search pages..." box, and at the foot of the sidebar three icon buttons (Manage Navigation, Mute, Undo;
+their names show as tooltips). Manage Navigation reorders/hides pages.
 The sidebar shows the pages in groups: ESSENTIALS, then CLUB TOOLS (Race Day, Championship, Rentals, Handicaps, Venues,
 Sponsors, Local Screens, Club Website), each in the order above; while a race day is open, TONIGHT (Race Day, Race Control,
-Championship) sits on top. Every page and tab shows (Simple and Advanced mode were taken out on 18 Nov 2026);
-the "not yet tested" tick keeps Championship, Garage, Handicaps, Rentals and Venues out of the sidebar.
+Championship, in that order) sits on top. Every page and tab shows: Simple and Advanced mode were taken out on
+18 Nov 2026 (Desk View, with its PIN, is the only locked view), and the "not yet tested" tick that kept some pages
+out of the sidebar was retired on 14 Nov 2026 (#201). Never mention either on a user page.
 Batteries is not a page: a driver's packs are on Driver Hub, the club's on Garage (Club Batteries).
-(Checked against the code on 2 Nov 2026: MainForm.Pages.cs `_navItems`, NavTiers.cs, SimpleMode.cs and each page's
-TabPages. "Voice Announcements" was renamed "Voice", "Setup Log" became "Garage", Themes' Announcer Style became
-Sounds → Soundscapes, and Recording moved from Sounds to Club Website on 26 Oct 2026.)
-Some things are windows, not tabs: the **Timetable** (the race day's run sheet, from the program's **Timetable** button),
+(Checked against the code on 19 Nov 2026: MainForm.Pages.cs `BuildNavItems` (`_navItems`), NavTiers.cs and each
+page's TabPages. Race Day's Setup tab moved after Who's Racing on 14 Nov 2026. "Voice Announcements" was renamed
+"Voice", "Setup Log" became "Garage", Themes' Announcer Style became Sounds → Soundscapes, and Recording moved from
+Sounds to Club Website on 26 Oct 2026.)
+Some things are windows, not tabs: the **Timetable** (the race day's run sheet, from **More → Timetable...** along the foot of Next Steps),
 the **Scrutineering log** (from **Scrutineering Log** on Who's Racing), the **Announcer screen** (from **Announcer
 Screen** on Race Control), the **Broadcast** window (from **Broadcast** on Race Control: Hold, Play again, Skip,
 Notes and Votes, which were a row under the Next Up bar until 25 Oct 2026), **Mission Control** (Race Control and
 Connection), **Photo Finish** (Connection), **This Month** (the allowance chip at the foot of the sidebar) and
-**Driver Requests**.
-Refer to pages as **Race Control** page, and paths as **Race Day → Entries** (bold, with →).
+the **Inbox** (driver requests, result queries, crew picks, club notes, the room vote and sign-ups in one window since 15 Nov 2026; it replaced the Driver Requests, club notes, room vote and Online Sign-ups windows).
+Refer to pages as **Race Control** page, and paths as **Race Day → Who's Racing** (bold, with →).
 
 ## Voice and style
 - Plain, friendly, confident English. Second person ("you"). Short paragraphs. American spelling for the site
@@ -72,11 +75,13 @@ docs/getting-started/index.md                  What HeatCaller does, what you ne
 docs/getting-started/install.md                Installing/running, updates, where data lives, first-run wizard
 docs/getting-started/tour.md                   Tour of the window: sidebar, pages, search, Manage Navigation, themes, console, tray icon
 docs/getting-started/first-race-night.md       A walkthrough from empty install to first race (links out)
+docs/getting-started/switching-from-livetime.md Coming from LiveTime: where each LiveTime idea lives in HeatCaller
 docs/race-day/drivers-and-classes.md           Driver Hub (incl. a driver's batteries), Classes, Rentals, Venues, Track Layouts, Garage (incl. club batteries)
 docs/race-day/track-designer.md               The Track Designer: drawing, lanes, the lap, stock, Build me a track, print and share, the angled view
 docs/race-day/events-and-entries.md            Race Day → Setup, Who's Racing, Calendar; the set-up wizard; check-in desk; Scrutineering log; readiness check; QR check-ins
 docs/race-day/program-and-mains.md             Race Day → Next Steps and its program, the Timetable window, rounds, heats, qualifying, mains, bump-ups, marshals, heat sheets
 docs/race-control/running-a-race.md            Race Control page: On Air → staging → countdown → green → flags → checkered; press and hold; start types; limits; Mission Control; photo finish
+docs/race-control/inbox.md                     The Inbox window: requests, result queries, crew and club notes, room vote, sign-ups, invites, rules, docking
 docs/race-control/corrections-and-recovery.md  Lap adjust, penalties, undo, crash recovery journal, closing mid-race, restarts
 docs/race-control/practice-and-ghosts.md       Practice, Ghost Cars, Demo Mode, Handicaps
 docs/race-control/results-and-championships.md Race History, exports, event report, results card, Championship (incl. DNF), Race Analytics, Achievements, tonight's standings
@@ -88,15 +93,18 @@ docs/timing/transponders.md                    Transponder handling, unknown tra
 docs/screens/big-screen.md                     Big Screen window, leaderboard columns (KPIs), Sponsors
 docs/screens/phone-and-web.md                  Local Screens page: LAN server, live page, overlay, remote, check-in page, PINs, firewall/URL ACL
 docs/screens/looks-and-logo.md                 Themes page: built-in and custom looks, app vs crowd-screen look, club logo, Appearance options
+docs/screens/stream-overlays.md                OBS/stream overlays: presets, the overlay editor, alerts, family links
 docs/online/index.md                           What the online relay is; pages it serves; what's published and what never is
 docs/online/setup.md                           Club Website page: address, club, token, test connection, what's published, Look (welcome line), Share/posters
 docs/online/check-in.md                        Online check-in: QR check-ins/QR, staff PIN, personal PINs, rotation, photos switch, the racer's view
 docs/online/email.md                           Emailing racer PINs: Gmail/iCloud app passwords, settings, test, automatic sending, troubleshooting
 docs/online/sign-up.md                         Driver sign-up: invites, the racer's form, approving a sign-up, what it creates
-docs/online/driver-requests.md                 Driver requests: turning it on, what the driver sees, answering requests at the desk (Driver Requests window), troubleshooting
+docs/online/driver-requests.md                 Driver requests: turning it on, what the driver sees, answering requests in the Inbox, troubleshooting
+docs/online/race-video.md                      Race video on YouTube: the stream link, what phones show, troubleshooting
 docs/admin/relay-hosting.md                    Hosting the relay on Fly.io end to end (install flyctl, mint, config, volume, deploy, probe, day-to-day, moving/forwarder)
 docs/admin/security-and-privacy.md             Security model: secrets encryption, tokens, PINs, rate limits, what's public, children's data, LAN server hardening
 docs/admin/backups.md                          Backup & Restore page, automatic backups, backup password, restoring on a new PC, unreadable files
+docs/admin/standby-pc.md                       A second laptop kept in step as a standby, and taking over from it
 docs/admin/data-files.md                       Where data lives (%AppData%\HeatCaller), what each file is, logs, crash.log, moving to a new laptop
 docs/admin/troubleshooting.md                  Symptom → cause → fix, across the app and relay
 docs/reference/keyboard-shortcuts.md
