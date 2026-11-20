@@ -507,7 +507,7 @@ A club's roster (who is entered and who is checked in) and its heat line-ups (wh
 
 ### Listing a club in the directory
 
-The relay's **Clubs** page (`/clubs`) lists a club only if **both** the club ticks **List this club in the HeatCaller directory** on its **Club Website** page **and** its entry in `relay.config.json` has `"listInDirectory": true`. Like the roster, mint never turns it on and keeps it when a token is re-minted; add the line by hand, then run `fly-set-config.cmd`. The page shows the club's name, a link to its pages, **Racing now** and its next night, never a driver. The relay admin's Clubs snapshot (`admin-snapshot`) reports `listInDirectory` for each club.
+The relay's **Clubs** page (`/clubs`) lists a club only if **both** the club ticks **List this club in the HeatCaller directory** on its **Club Website** page **and** its entry in `relay.config.json` has `"listInDirectory": true`. Like the roster, mint never turns it on and keeps it when a token is re-minted; add the line by hand, then run `fly-set-config.cmd`. The page shows the club's name, a link to its pages, **Racing now** and its next night, never a driver. The relay admin's Clubs snapshot (`admin-snapshot`) reports `listInDirectory` for each club, and `directoryVisits`: how many times a day the **Clubs** page was opened, for the whole relay, over the last 90 days. A view is counted on the relay when the page is served; HEAD requests and bots, crawlers, link previews and monitors are left out. Only the day and the number are kept, in `.directory-visits` on the volume.
 
 ### Removing a club
 

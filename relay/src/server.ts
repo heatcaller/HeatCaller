@@ -90,6 +90,7 @@ import { nextNightIcs } from "./ics.js";
 import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, streamFrom, streamNightId, VIDEO_CHECK_FOR_MS, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
 import { DIRECTORY_HELD_MS, directoryEntry, directoryFacts, directoryOrder, isListed, type DirectoryEntry, type DirectoryFacts } from "./directory.js";
+import { looksLikeABot, type DirectoryVisits } from "./directoryvisits.js";
 import { addCounts, countableEvents, PAGE_COUNTS, PAGE_COUNTS_DAYS, PAGE_COUNTS_MAX_BODY, PAGE_COUNTS_PER_ADDRESS, totalsOver } from "./pagecounts.js";
 
 /** The public pages under /c/<club>/, by their last path segment. */
@@ -1169,6 +1170,8 @@ export interface RelayOptions {
    * is answered 503 and the laptop keeps it.
    */
   readonly appUsage?: AppUsageLog | undefined;
+  /** The /clubs page's daily views, relay-wide (directoryvisits.ts). Absent means none are counted. */
+  readonly directoryVisits?: DirectoryVisits | undefined;
   /**
    * The lap voice's clips (29 Oct 2026) - see lapvoice.ts. Absent, the
    * manifest lists none and the pages use the phone's own voice.
@@ -1353,6 +1356,7 @@ export class Relay {
   private readonly topUpRequests: TopUpRequests | undefined;
   private readonly usageLog: UsageLog | undefined;
   private readonly appUsage: AppUsageLog | undefined;
+  private readonly directoryVisits: DirectoryVisits | undefined;
   private readonly listings = new Map<string, Buffer>();
   /**
    * ?meta=1&limit=N cuts, keyed to the very meta listing Buffer they were
@@ -1602,6 +1606,7 @@ export class Relay {
     this.topUpRequests = options.topUpRequests;
     this.usageLog = options.usageLog;
     this.appUsage = options.appUsage;
+    this.directoryVisits = options.directoryVisits;
     this.appUsageReports = new Limiter(APP_USAGE_REPORTS_PER_DAY, 24 * 60 * 60 * 1000, () => this.now().getTime());
   }
 
@@ -2673,6 +2678,12 @@ export class Relay {
 
     // The club directory (19 Nov 2026, cross-club index) - see directory.ts.
     if (method === "GET" && segments.length === 1 && segments[0] === "clubs") {
+      // Counted here, on the server: a GET (not HEAD) from anything that
+      // does not call itself a bot. Nothing about the visitor is kept.
+      if (parsed.method === "GET" && !looksLikeABot(request.headers["user-agent"])) {
+        this.directoryVisits?.count();
+      }
+
       sendHtml(response, 200, directoryPage(await this.directoryNow()), randomBytes(16).toString("base64"));
       return;
     }

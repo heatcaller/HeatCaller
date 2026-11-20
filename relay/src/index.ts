@@ -14,6 +14,7 @@ import { LAP_VOICE_DIR, LapVoiceLibrary } from "./lapvoice.js";
 import { TopUpRequests } from "./topuprequests.js";
 import { UsageLog } from "./usagelog.js";
 import { AppUsageLog } from "./appusage.js";
+import { DirectoryVisits } from "./directoryvisits.js";
 import { PushService } from "./push.js";
 import { askYouTube } from "./video.js";
 import { ADMIN_COMMANDS, voiceAdmin, type AdminCommand } from "./voiceadmin.js";
@@ -151,8 +152,12 @@ async function serve(): Promise<number> {
           log: (line) => console.log(line),
         });
 
+  // The /clubs page's daily views, relay-wide, for the admin snapshot - see directoryvisits.ts.
+  const directoryVisits = new DirectoryVisits({ dataDir: config.dataDir, log: (line) => console.log(line) });
+
   const relay = new Relay({
     store,
+    directoryVisits,
     tenants,
     maxBodyBytes: config.maxBodyBytes,
     redirectOrigin,
@@ -220,7 +225,8 @@ async function serve(): Promise<number> {
   for (const signal of ["SIGTERM", "SIGINT"] as const) {
     process.on(signal, () => {
       console.log(`[relay] ${signal} - closing`);
-      server.close(() => process.exit(0));
+      // The directory's views still in memory go to the disk first.
+      server.close(() => void directoryVisits.flush().finally(() => process.exit(0)));
     });
   }
 

@@ -7,6 +7,7 @@ import { isActive, isValidClubId } from "./tenancy.js";
 import { readUsageLog, USAGE_LOG_PAGE } from "./usagelog.js";
 import { APP_USAGE_PAGE, forgetAppUsage, readAppUsage } from "./appusage.js";
 import { PAGE_COUNTS } from "./pagecounts.js";
+import { readDirectoryVisits } from "./directoryvisits.js";
 import { FileStore } from "./store.js";
 import { checkKeys } from "./keycheck.js";
 import { checkVoiceAccount, type VoiceAccountCheck } from "./voiceaccount.js";
@@ -807,6 +808,8 @@ export async function adminSnapshot(
   readonly capabilities: readonly string[];
   readonly autoTopUps: readonly ({ readonly club: string } & AutoGiven)[];
   readonly voiceAccount: VoiceAccountCheck;
+  /** The /clubs page's views a day, oldest first, last 90 days, days with none left out. */
+  readonly directoryVisits: readonly { readonly day: string; readonly views: number }[];
 }> {
   // Started first and awaited last, so ElevenLabs answers while the files are read.
   const account = checkVoiceAccount(env["RELAY_VOICE_KEY"] ?? "", fetchImpl);
@@ -863,6 +866,10 @@ export async function adminSnapshot(
       (await autoGiven(config.dataDir, tenant.club, monthOf(now))).map((given) => ({ club: tenant.club, ...given }))))).flat()
       .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)),
     voiceAccount: await account,
+    // The /clubs page's views a day, relay-wide (19 Nov 2026,
+    // directoryvisits.ts): oldest first, the last 90 days, days with none
+    // left out. Added, so version stays 1.
+    directoryVisits: await readDirectoryVisits(config.dataDir, now),
   };
 }
 
