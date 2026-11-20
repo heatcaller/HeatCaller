@@ -82,6 +82,7 @@ public sealed partial class RelaySettingsControl : UserControl
     private readonly TextBox _txtToken = new();
     private readonly CheckBox _chkShowToken = new ThemedCheckBox();
     private readonly CheckBox _chkRoster = new ThemedCheckBox();
+    private readonly CheckBox _chkDirectory = new ThemedCheckBox();
     private readonly CheckBox _chkDriverNights = new ThemedCheckBox();
     private readonly CheckBox _chkAbbreviate = new ThemedCheckBox();
     private readonly CheckBox _chkFullNamesAloud = new ThemedCheckBox();
@@ -668,6 +669,29 @@ public sealed partial class RelaySettingsControl : UserControl
             + "relay also withholds the roster unless the club is set up to allow it. With this off, the schedule "
             + "shows the heats but not who is in them.");
 
+        // THE CLUB DIRECTORY (19 Nov 2026, cross-club index phase 1): the
+        // club's name, a link, "Racing now" and its next night on the
+        // relay's /clubs page. Sent with the look (RelayDocuments.Site), so
+        // unticking takes the club off within a few seconds.
+        _chkDirectory.Text = "List this club in the HeatCaller directory";
+        _chkDirectory.AutoSize = true;
+        _chkDirectory.CheckedChanged += (_, _) =>
+        {
+            if (_loading)
+            {
+                return;
+            }
+
+            _settings.RelayListInDirectory = _chkDirectory.Checked;
+            _settings.Save();
+            _publisher.SettingsChanged();
+        };
+
+        var lblDirectoryHint = HintLabel(
+            "Off by default. Puts the club's name, a link to its pages, \"Racing now\" and its next night on the "
+            + "relay's Clubs page. No driver names. The relay also has to be set up to list the club. Delete "
+            + "Everything Published takes it off.");
+
         _chkDriverNights.Text = "Give each driver their own night at a private address";
         _chkDriverNights.AutoSize = true;
         _chkDriverNights.CheckedChanged += (_, _) =>
@@ -785,6 +809,8 @@ public sealed partial class RelaySettingsControl : UserControl
         card.Add(lblBoardColumns);
         card.Add(_chkRoster, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblRosterHint);
+        card.Add(_chkDirectory, stretch: false, gapBelow: UiLayout.HintGap);
+        card.Add(lblDirectoryHint);
         card.Add(_chkDriverNights, stretch: false, gapBelow: UiLayout.HintGap);
         card.Add(lblNightsHint);
 
@@ -3146,6 +3172,7 @@ public sealed partial class RelaySettingsControl : UserControl
 
             _chkEnabled.Checked = _settings.RelayEnabled;
             _chkRoster.Checked = _settings.RelayPublishRoster;
+            _chkDirectory.Checked = _settings.RelayListInDirectory;
             _chkDriverNights.Checked = _settings.PublishDriverNightsToTheRelay;
             _chkAbbreviate.Checked = _settings.RelayAbbreviateNames;
             _chkFullNamesAloud.Checked = _settings.SayFullNamesWithOnlineVoices;

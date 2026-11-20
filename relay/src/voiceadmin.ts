@@ -754,6 +754,8 @@ export interface ClubSnapshot {
   readonly name: string;
   readonly active: boolean;
   readonly publishRoster: boolean;
+  /** The relay admin's half of the /clubs listing (19 Nov 2026). An added field, so `version` stays 1. */
+  readonly listInDirectory: boolean;
   readonly voice: MeterStanding;
   readonly commentary: MeterStanding;
 }
@@ -826,6 +828,7 @@ export async function adminSnapshot(
     name: tenant.name,
     active: isActive(tenant),
     publishRoster: tenant.publishRoster,
+    listInDirectory: tenant.listInDirectory === true,
     voice: meter(voice.find((standing) => standing.club === tenant.club)),
     commentary: meter(commentary.find((standing) => standing.club === tenant.club)),
   }));

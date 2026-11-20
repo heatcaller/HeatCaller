@@ -505,6 +505,10 @@ The club's published data isn't affected. Publishing pauses between step 2 and s
 
 A club's roster (who is entered and who is checked in) and its heat line-ups (who is in each heat, on the Schedule page) are only served if **both** the club ticks the roster option on its **Club Website** page **and** the relay's config has `"publishRoster": true` for that club. Without it, the relay takes the names out of the schedule before storing it, and the Schedule page shows the heats without who is in them. Mint never turns it on. To allow it, edit that club's entry in `relay.config.json` by hand, then run `fly-set-config.cmd`. Many drivers are children; turn this on only when the club has decided to.
 
+### Listing a club in the directory
+
+The relay's **Clubs** page (`/clubs`) lists a club only if **both** the club ticks **List this club in the HeatCaller directory** on its **Club Website** page **and** its entry in `relay.config.json` has `"listInDirectory": true`. Like the roster, mint never turns it on and keeps it when a token is re-minted; add the line by hand, then run `fly-set-config.cmd`. The page shows the club's name, a link to its pages, **Racing now** and its next night, never a driver. The relay admin's Clubs snapshot (`admin-snapshot`) reports `listInDirectory` for each club.
+
 ### Removing a club
 
 Ask the club to click **Delete Everything Published** on its **Club Website** page first; that erases everything the club has on the relay. Then remove the club's entry from `relay.config.json` and run `fly-set-config.cmd`. Removing the entry alone stops the club publishing but leaves its files on the volume.

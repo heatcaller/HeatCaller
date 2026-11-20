@@ -340,6 +340,7 @@ internal static class SettingsTable
             // card, Personal PINs, the Email card, Room & Web.
             nameof(AppSettings.RelayBaseUrl),
             nameof(AppSettings.RelayPublishRoster),
+            nameof(AppSettings.RelayListInDirectory),
             nameof(AppSettings.RelayAbbreviateNames),
             nameof(AppSettings.RelayUnpublishAfterYears),
             nameof(AppSettings.PublishDriverNightsToTheRelay),

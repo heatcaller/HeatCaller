@@ -783,6 +783,14 @@ internal static class RelayDocuments
             document["logoPlate"] = Looks.ToHex(plateColor);
         }
 
+        // The club directory (19 Nov 2026, cross-club index phase 1): only
+        // when ticked, so a club that never lists sends what it always did.
+        // Unticked, the key goes and the relay takes the club off /clubs.
+        if (settings.RelayListInDirectory)
+        {
+            document["directory"] = true;
+        }
+
         // The club's Facebook, Instagram, website... Only addresses that
         // passed RelaySocial's checks; the relay checks them again.
         var social = RelaySocial.ForSite(settings);

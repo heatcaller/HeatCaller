@@ -42,6 +42,16 @@ export interface Tenant {
    */
   readonly publishRoster: boolean;
   /**
+   * Whether this club may be listed on the relay's club directory, /clubs
+   * (19 Nov 2026, cross-club index phase 1).
+   *
+   * The relay admin's half of a two-key switch, like the roster: the club
+   * also has to tick "List this club in the HeatCaller directory" on its
+   * Club Website page (the site document's `directory`). Absent is off, so
+   * no club configured before the directory existed is listed.
+   */
+  readonly listInDirectory?: boolean;
+  /**
    * What this club may do with the HeatCaller voice - ElevenLabs spoken
    * through this relay, on HeatCaller's account rather than the club's.
    *

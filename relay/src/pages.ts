@@ -23,6 +23,7 @@ import { ME_BODY_END, ME_BODY_TOP, ME_COMING, ME_CSS, ME_JS, OWE_CSS } from "./m
 import { CLOCK_JS, clockAttr, tzAttr } from "./clock.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { COOKIE_POLICY_HTML } from "./cookies.js";
+import type { DirectoryEntry } from "./directory.js";
 
 /** What a page needs to know beyond its club: how the club looks, and where it is being served from. */
 export interface PageContext {
@@ -20257,6 +20258,55 @@ export function pausedPage(club: string, clubName: string, _context: PageContext
   return heatcallerNotice(`${name} - paused`, `<p class="wordmark hcword">Heat<span class="hcc">Caller</span></p>
   <h1>${name}</h1>
   <p>This club's pages are paused for now. Results, schedules and live timing will be back here when the club returns.</p>`);
+}
+
+/**
+ * THE CLUB DIRECTORY, /clubs (19 Nov 2026, cross-club index phases 1 and
+ * 2 - see directory.ts): the listed clubs, each a tile to its own pages,
+ * with "Racing now" and its next night. Never a driver. HeatCaller's own
+ * default look and the Pit Wall kit's tiles and pills; no script, so
+ * nothing is kept in the browser. It reloads itself every 30 seconds so a
+ * "Racing now" left open does not outlive the race by much.
+ */
+export function directoryPage(entries: readonly DirectoryEntry[]): string {
+  const tiles = entries.map((entry) => {
+    const badge = entry.racingNow ? ' <span class="pill running">Racing now</span>' : "";
+    const racing = entry.racingNow && entry.racing !== "" ? `<span>${escapeHtml(entry.racing)}</span>` : "";
+    const next = entry.next !== "" ? `<span>Next night: ${escapeHtml(entry.next)}</span>` : "";
+    return `<li><a class="tile" href="/c/${escapeHtml(entry.club)}"><b>${escapeHtml(entry.name)}${badge}</b>${racing}${next}</a></li>`;
+  }).join("");
+
+  const body = entries.length === 0
+    ? '<div class="card dirnone"><p>No clubs are listed here yet.</p></div>'
+    : `<ul class="dirs">${tiles}</ul>`;
+
+  return `<!doctype html>
+<html lang="en" class="${DEFAULT_LOOK.light ? "light" : "dark"} synthwave">
+<head>
+<meta charset="utf-8">
+${NO_ZOOM_HEAD}
+<meta http-equiv="refresh" content="30">
+<meta name="color-scheme" content="${DEFAULT_LOOK.light ? "light" : "dark"}">
+<meta name="theme-color" content="${DEFAULT_LOOK.themeColor}">
+<meta name="description" content="HeatCaller clubs, who is racing now, and when each races next.">
+<title>Clubs on HeatCaller</title>
+<style>${STYLE}
+.dirs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.dirs .tile { display: flex; flex-direction: column; gap: 4px; min-height: 64px; padding: 14px 16px; }
+.dirs .tile b { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 1.1rem; }
+.dirs .tile span:not(.pill) { font-size: 0.9rem; }
+.dirnone { padding: 4px 16px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><div class="hcname"><div class="hchead"><h1>Clubs <span>on HeatCaller</span></h1></div></div></header>
+  ${body}
+  <footer><span>Clubs choose to be listed. Tap a club for its own pages.</span><a class="hcmark" href="https://heatcaller.com" aria-label="What's HeatCaller?">${HC_SUN}${HC_WORD}</a></footer>
+</div>
+</body>
+</html>
+`;
 }
 
 
