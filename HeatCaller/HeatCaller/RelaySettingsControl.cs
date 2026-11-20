@@ -34,6 +34,7 @@ public sealed partial class RelaySettingsControl : UserControl
 
     /// <summary>The drop-downs' widths as last measured - see Pieces.PickerWidth. Their choices are put in once, as the page is built.</summary>
     private (Font Font, int Count, int Width)? _rotationWidth;
+    private (Font Font, int Count, int Width)? _zoneWidth;
     private (Font Font, int Count, int Width)? _presetWidth;
 
     /// <summary>
@@ -494,7 +495,9 @@ public sealed partial class RelaySettingsControl : UserControl
         Fit(_txtTagline, address);
         Fit(_txtClubAlias, UiLayout.AtTextSize(ClubWidth));
         Fit(_txtShortName, UiLayout.AtTextSize(ClubWidth));
-        Fit(_cmbTimeZone, address);
+        // As wide as the longest zone name ("(UTC+01:00) Amsterdam, Berlin,
+        // ..."), never narrower than the address boxes.
+        Fit(_cmbTimeZone, Math.Max(address, Pieces.PickerWidth(_cmbTimeZone, ref _zoneWidth)));
         Fit(_txtNewcomerWhere, address);
         Fit(_txtNewcomerWhen, address);
         Fit(_txtNewcomerJoin, address);
