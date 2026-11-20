@@ -375,6 +375,22 @@ internal static class ProgramNextStep
         //    start it.
         var next = dayRounds.FirstOrDefault(r => !r.IsRecorded);
 
+        // 6a. Qualifying is over and the next race is a final, but another
+        //     class has qualified with no finals yet: seed those first.
+        //     WHY (20 Nov 2026, head-to-head baseline): seeding one class
+        //     made its A-Main the next race, so the banner said "Start
+        //     A-Main" and the other classes' finals stayed unbuilt until
+        //     that main had run - their B-Mains then queued behind it. The
+        //     rule in 7 (never jump ahead of another class's heats) still
+        //     holds: this only fires once no qualifier is left to run.
+        if (next is { Kind: RoundKind.Main }
+            && !clubNight
+            && !dayRounds.Any(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
+            && ClassToSeed(classes, dayRounds) is { } waiting)
+        {
+            return waiting;
+        }
+
         if (next is not null)
         {
             var run = dayRounds.Count(r => r.IsRecorded);
@@ -401,7 +417,33 @@ internal static class ProgramNextStep
         //    would jump the queue ahead of another class's heats.
         //    Not on a club night: there are no finals to seed, so a night
         //    whose races have all been run is finished, not half-done.
-        foreach (var raceClass in clubNight ? Enumerable.Empty<RacingClass>() : classes)
+        if (!clubNight && ClassToSeed(classes, dayRounds) is { } seed)
+        {
+            return seed;
+        }
+
+        // 8. Nothing left. Said plainly rather than left blank, because a
+        //    banner that goes quiet reads as broken. With it, how the night
+        //    ran (11 Nov 2026, night pace) - the moment a director has time
+        //    to read it, and the number that says whether tonight was quick.
+        return new ProgramStep(
+            ProgramStage.Complete,
+            "The program is complete.",
+            (dayRounds.Count == 1
+                ? "The one round on today's program has been run and recorded."
+                : $"All {dayRounds.Count} rounds on today's program have been run and recorded.")
+            + PaceNote(dayRounds, history, raceEvent),
+
+            // There is no TQ on a club night, so the same list is just
+            // tonight's order. Same form either way, different word for it.
+            clubNight ? "Tonight's Standings..." : "Qualifying Standings...",
+            ClassName: classes.Count > 0 ? classes[0].Name : string.Empty);
+    }
+
+    /// <summary>The first class that has run a qualifier and has no finals yet, as the step that seeds them - or null.</summary>
+    private static ProgramStep? ClassToSeed(IReadOnlyList<RacingClass> classes, IReadOnlyList<RoundDefinition> dayRounds)
+    {
+        foreach (var raceClass in classes)
         {
             var rounds = dayRounds
                 // A shared heat is one of this class's qualifiers too
@@ -426,22 +468,7 @@ internal static class ProgramNextStep
                 ClassName: raceClass.Name);
         }
 
-        // 8. Nothing left. Said plainly rather than left blank, because a
-        //    banner that goes quiet reads as broken. With it, how the night
-        //    ran (11 Nov 2026, night pace) - the moment a director has time
-        //    to read it, and the number that says whether tonight was quick.
-        return new ProgramStep(
-            ProgramStage.Complete,
-            "The program is complete.",
-            (dayRounds.Count == 1
-                ? "The one round on today's program has been run and recorded."
-                : $"All {dayRounds.Count} rounds on today's program have been run and recorded.")
-            + PaceNote(dayRounds, history, raceEvent),
-
-            // There is no TQ on a club night, so the same list is just
-            // tonight's order. Same form either way, different word for it.
-            clubNight ? "Tonight's Standings..." : "Qualifying Standings...",
-            ClassName: classes.Count > 0 ? classes[0].Name : string.Empty);
+        return null;
     }
 
     /// <summary>
