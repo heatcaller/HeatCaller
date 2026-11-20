@@ -96,8 +96,12 @@ function clockWords(value: string, clock24: boolean | undefined): string {
   return `${hour % 12 === 0 ? 12 : hour % 12}:${minute}${hour < 12 ? "am" : "pm"}`;
 }
 
-/** The next night's line - "Thu 21 Nov from 7:00pm" - or undefined with none to show. */
-export function nextNightWords(body: unknown, clock24: boolean | undefined): { words: string; until: number } | undefined {
+/**
+ * The next night's line - "Thu 21 Nov from 7:00pm EST" - or undefined with
+ * none to show. The page lists clubs anywhere, so a time names the club's
+ * zone whenever the laptop said it.
+ */
+export function nextNightWords(body: unknown, clock24: boolean | undefined, timeZone?: string): { words: string; until: number } | undefined {
   const b = record(body);
   const day = typeof b?.["day"] === "string" ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(b["day"]) : null;
   const until = typeof b?.["until"] === "string" ? Date.parse(b["until"]) : NaN;
@@ -118,10 +122,27 @@ export function nextNightWords(body: unknown, clock24: boolean | undefined): { w
     return { words: `${dayWords}: called off`, until };
   }
 
-  const time = clockWords(tidy(b["firstRace"], 5), clock24);
+  const clock = clockWords(tidy(b["firstRace"], 5), clock24);
+  const zone = clock === "" ? "" : zoneWord(date, timeZone);
+  const time = zone === "" ? clock : `${clock} ${zone}`;
   const title = tidy(b["title"], 60);
   const words = [`${dayWords}${time === "" ? "" : ` from ${time}`}`, title].filter((part) => part !== "").join(" · ");
   return { words, until };
+}
+
+/** "EST" or "GMT+13" for the zone on that day (noon UTC), or nothing for no zone or one Node does not know. */
+function zoneWord(day: Date, timeZone: string | undefined): string {
+  if (timeZone === undefined || timeZone === "") {
+    return "";
+  }
+
+  try {
+    const noon = new Date(day.getTime() + 12 * 60 * 60 * 1000);
+    const part = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "short" }).formatToParts(noon).find((p) => p.type === "timeZoneName");
+    return part?.value ?? "";
+  } catch {
+    return "";
+  }
 }
 
 /** The class and heat on track, from the schedule's running line - its class and description only. */
@@ -155,7 +176,7 @@ export function directoryFacts(
     name: tenant.name,
     liveAt: live ? at : undefined,
     racing: live ? racingWords(programme?.body) : "",
-    next: nextNightWords(nextnight?.body, look.clock24),
+    next: nextNightWords(nextnight?.body, look.clock24, look.timeZone),
   };
 }
 

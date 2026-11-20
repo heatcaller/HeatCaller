@@ -3434,7 +3434,7 @@ function touched() {
   if (stamp) {
     // While a page is drawn from copies, the time they were read.
     const at = warm && warmAt > 0 ? new Date(warmAt) : new Date();
-    stamp.textContent = 'Updated ' + at.toLocaleTimeString([], { hour12: HC_H12, hour: '2-digit', minute: '2-digit' });
+    stamp.textContent = 'Updated ' + at.toLocaleTimeString([], { hour12: HC_H12, hour: '2-digit', minute: '2-digit' }) + (typeof hcZoneWord === 'function' ? hcZoneWord(at) : '');
   }
 }
 
@@ -11711,7 +11711,10 @@ function nextNightHtml(answer) {
   const times = [
     word(b.entriesClose) ? esc('Entries close ' + hcHm(word(b.entriesClose))) : '',
     word(b.firstRace) ? esc('First race ' + hcHm(word(b.firstRace))) : '',
-  ].filter(Boolean).join(' &middot; ');
+  ].filter(Boolean).join(' &middot; ') +
+    // "NZDT" once after the times, only when the phone is somewhere else.
+    (typeof hcZoneWord === 'function' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(word(b.day)) && (word(b.entriesClose) || word(b.firstRace))
+      ? esc(hcZoneWord(new Date(word(b.day) + 'T12:00:00Z'))) : '');
   const title = word(b.title);
   // Taking entries: the card is a way in to say so (12 Nov 2026, Asher:
   // "theres no way to say you're coming to the next race... when you tap it
