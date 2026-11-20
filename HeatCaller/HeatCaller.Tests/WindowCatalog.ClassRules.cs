@@ -34,5 +34,35 @@ internal static partial class WindowCatalog
         ("Sanctioning preset (a format of its own)", () => new SanctioningPresetForm(
             new RaceClass { Name = "Stock Buggy", Format = RaceFormat.FromSettings(new AppSettings()) },
             RaceFormat.FromSettings(new AppSettings()))),
+
+        // 19 Nov 2026: the Pole Shootout and the Invitational (Reedy-style
+        // format) - both off, as a class starts; both on with every setting
+        // at its widest, a seed order set and a long class name.
+        ("Finals Formats", () => new FinalsFormatsForm(new RaceClass { Name = "Stock Buggy" }, "Stock Buggy")),
+
+        ("Finals Formats (both on, a seed order set)", () => new FinalsFormatsForm(
+            new RaceClass
+            {
+                Name = "Kyosho Mini-Z AWD Rally Sport - Visiting Club Invitational (Seniors)",
+                PoleShootout = true,
+                PoleShootoutDrivers = 10,
+                PoleShootoutLaps = 3,
+                Invitational = true,
+                InvitationalMains = 12,
+                InvitationalCounted = 10,
+                InvitationalFieldLimit = 60,
+                InvitationalScoring = InvitationalScoring.ClassScale,
+                InvitationalInvertGrid = true,
+                InvitationalSeed = Enumerable.Range(1, 24).Select(i => $"T{i}").ToList(),
+                LowerMainsInLegs = true,
+            },
+            "Kyosho Mini-Z AWD Rally Sport - Visiting Club Invitational (Seniors)")),
+
+        ("Seed Order", () => new FinalsFormatsForm.SeedOrderForm(
+            "Stock Buggy",
+            Enumerable.Range(1, 30).Select(i => ($"T{i}", $"Driver With A Fairly Long Name Number {i}")).ToList())),
+
+        ("Seed Order (nobody in the class)", () => new FinalsFormatsForm.SeedOrderForm(
+            "Stock Buggy", new List<(string, string)>())),
     };
 }

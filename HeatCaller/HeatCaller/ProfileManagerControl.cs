@@ -136,6 +136,14 @@ public sealed partial class ProfileManagerControl : UserControl
     /// </summary>
     public Action<string>? SpeakName { get; set; }
 
+    /// <summary>
+    /// The voices a driver may pick for their crew, as their phone is
+    /// offered them, for the profile dialog's voice drop-downs (19 Nov 2026);
+    /// null, or a null answer, leaves the drop-downs off. Wired to
+    /// MainForm.CrewVoicesForDesk.
+    /// </summary>
+    internal Func<IReadOnlyList<CrewVoiceOption>?>? CrewVoices { get; set; }
+
     public ProfileManagerControl(
         ProfileStore store,
         RaceClassStore classStore,
@@ -2227,7 +2235,7 @@ public sealed partial class ProfileManagerControl : UserControl
 
     private void AddNew()
     {
-        using var form = new ProfileForm(existing: null, _classStore, undo: _undo, profiles: _store, speakName: SpeakName);
+        using var form = new ProfileForm(existing: null, _classStore, undo: _undo, profiles: _store, speakName: SpeakName, crewVoices: CrewVoices?.Invoke());
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             // TryAdd, not Upsert: Upsert replaces whatever is stored under
@@ -2262,7 +2270,7 @@ public sealed partial class ProfileManagerControl : UserControl
         // puts back, and the live profile can be changed in place elsewhere.
         var before = ProfileStore.Snapshot(existing);
 
-        using var form = new ProfileForm(existing, _classStore, fixedTransponder: transponder, undo: _undo, profiles: _store, speakName: SpeakName);
+        using var form = new ProfileForm(existing, _classStore, fixedTransponder: transponder, undo: _undo, profiles: _store, speakName: SpeakName, crewVoices: CrewVoices?.Invoke());
         if (form.ShowDialog(this) == DialogResult.OK)
         {
             var afterPhoto = form.Result.PhotoFileName;

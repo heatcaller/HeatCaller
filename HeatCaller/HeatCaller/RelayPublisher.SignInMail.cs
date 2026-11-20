@@ -95,6 +95,39 @@ public sealed partial class RelayPublisher
     /// </summary>
     internal Func<string, string, string, Task<MailResult>>? SendSignInMail { get; set; }
 
+    /// <summary>How long a failed sign-in email stays on Mission Control once nothing has sent since.</summary>
+    internal static readonly TimeSpan SignInMailProblemFor = TimeSpan.FromHours(6);
+
+    /// <summary>The last sign-in email that didn't send, and when; null once one sends.</summary>
+    private volatile SignInMailFailure? _signInMailFailure;
+
+    internal sealed record SignInMailFailure(DateTime Utc, string Why);
+
+    /// <summary>A send's outcome: a failure is kept for Mission Control, a success clears it.</summary>
+    internal void NoteSignInMail(string? failedBecause) =>
+        _signInMailFailure = failedBecause is null ? null : new SignInMailFailure(DateTime.UtcNow, failedBecause);
+
+    /// <summary>
+    /// The line Mission Control's Website tile adds when a driver's sign-in
+    /// email didn't send (19 Nov 2026, driver phone plan item 17: "if it's on
+    /// but mail isn't working, the Health page says so"). It used to be in the
+    /// console only. Null when none failed, or the last failure is old.
+    /// </summary>
+    internal string? SignInMailProblem(DateTime nowUtc) =>
+        SignInMailProblemText(_signInMailFailure, nowUtc);
+
+    internal static string? SignInMailProblemText(SignInMailFailure? failure, DateTime nowUtc)
+    {
+        if (failure is null || nowUtc - failure.Utc > SignInMailProblemFor)
+        {
+            return null;
+        }
+
+        var why = failure.Why.Trim().TrimEnd('.');
+        return $"A driver's sign-in email didn't send at {failure.Utc.ToLocalTime():h:mm tt}" + (why.Length > 0 ? $": {why}." : ".")
+            + " Check the club's email on the Club Website page.";
+    }
+
     /// <summary>The collected emails, one at a time, off the worker thread. Never throws.</summary>
     private async Task SendSignInMailsAsync(IReadOnlyList<(string To, string Subject, string Body)> mails)
     {
@@ -112,10 +145,12 @@ public sealed partial class RelayPublisher
                 Log?.Invoke(sent.Ok
                     ? "[relay] Emailed a driver the link to their page, as they asked on Me."
                     : $"[relay] Couldn't email a driver the link to their page: {sent.Message}");
+                NoteSignInMail(sent.Ok ? null : sent.Message);
             }
             catch (Exception ex)
             {
                 Log?.Invoke($"[relay] Couldn't email a driver the link to their page: {Plain(ex)}");
+                NoteSignInMail(Plain(ex));
             }
         }
     }

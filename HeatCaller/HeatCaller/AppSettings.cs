@@ -2375,6 +2375,15 @@ public sealed class AppSettings
     public bool RelayPublishRoster { get; set; }
 
     /// <summary>
+    /// List this club on the relay's club directory, /clubs (19 Nov 2026,
+    /// cross-club index phase 1): the club's name, a link to its pages,
+    /// "Racing now" and its next night - never a driver. Off by default.
+    /// Sent with the club's look (RelayDocuments.Site); the relay admin has
+    /// to allow it too, as with the roster.
+    /// </summary>
+    public bool RelayListInDirectory { get; set; }
+
+    /// <summary>
     /// How a junior driver's name shows on the stream's graphics and captions
     /// (14 Nov 2026, stream overlay plan 7.5, Asher: first name and initial
     /// by default): "initial" (Mia K), "first" (Mia) or "full". A stream is
@@ -2489,6 +2498,14 @@ public sealed class AppSettings
     /// Empty: the club's name cut short.
     /// </summary>
     public string RelayShortName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The club's time zone for its phone pages, as a Windows zone id
+    /// ("Eastern Standard Time"), or empty for this PC's own (19 Nov 2026,
+    /// driver phone plan item 15). The PC's zone is right while the laptop is
+    /// at the track; this is for a laptop set up somewhere else.
+    /// </summary>
+    public string RelayTimeZone { get; set; } = string.Empty;
 
     /// <summary>
     /// Drivers may pick their own look for the club's pages on their phones

@@ -47,7 +47,7 @@ describe("the home-screen icon (items 5 and 11)", () => {
       await call(h, "POST", "/api/v1/c/acme-rc/publish/site?seq=1", { token: ACME_TOKEN, json: { shortName: "Acme" } });
       const m = (await call(h, "GET", "/c/acme-rc/manifest.webmanifest")).body;
       assert.equal(m.short_name, "Acme");
-      assert.deepEqual(m.icons.map((i: { purpose: string }) => i.purpose), ["any", "maskable"]);
+      assert.deepEqual(m.icons.map((i: { purpose: string }) => i.purpose), ["any", "maskable", "any", "maskable"]);
       assert.deepEqual(m.shortcuts.map((s: { url: string }) => s.url), ["/c/acme-rc/live", "/c/acme-rc/mynight", "/c/acme-rc/results"]);
       assert.equal(m.orientation, "portrait", "still portrait only (7 Nov 2026)");
     } finally {

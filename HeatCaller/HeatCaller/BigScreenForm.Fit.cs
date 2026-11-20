@@ -3,7 +3,8 @@ namespace HeatCaller;
 /// <summary>
 /// Every driver on the board, however big the field (19 Nov 2026).
 ///
-/// WHY: the board's rows are 64 pixels at the normal size, so a 720p wall
+/// WHY: the board's rows were 64 pixels at the normal size (50 since the
+/// open items of 19 Nov 2026 - see FullRowDesignHeight), so a 720p wall
 /// had room for six drivers and an eight-car heat put P7 and P8 below the
 /// edge. Scrolling didn't save them either: the board was cleared and
 /// filled again on every lap, which sent it back to the top. Now:
@@ -95,7 +96,7 @@ public sealed partial class BigScreenForm
     private void BuildFit()
     {
         _grid.SizeChanged += (_, _) => FitTheBoard();
-        _scrollTimer.Tick += (_, _) => RollTheBoard();
+        _scrollTimer.Tick += (_, _) => { if (!RollByHandForTests) RollTheBoard(); };
         _grid.RowPostPaint += PaintPinnedLine;
         Disposed += (_, _) =>
         {
@@ -285,6 +286,32 @@ public sealed partial class BigScreenForm
     /// <summary>The board's writing at the normal size, in points before the window's scale.</summary>
     private const float BoardPoints = 24F;
 
+    /// <summary>
+    /// A board row's height at the normal size, in pixels before the
+    /// window's scale (ApplyScale). 50, not the 64 it was (open items, 19 Nov
+    /// 2026): at 64, with the bands above it, a 1080p TV had room for six of
+    /// an eight-car heat at full size, and the fit shrank the writing to get
+    /// the rest on. 50 still holds the 24-point line with RowPadDesign above
+    /// and below, so eight fit at full size, with the up-next bar showing.
+    /// </summary>
+    internal const int FullRowDesignHeight = 50;
+
+    /// <summary>The board cells' padding above and below the writing at the normal size.</summary>
+    internal const int RowPadDesign = 2;
+
+    /// <summary>The board's headings band at the normal size: room for its 12-point line and no more.</summary>
+    internal const int HeadingsDesignHeight = 30;
+
+    /// <summary>The board's writing at the normal size, for the tests.</summary>
+    internal const float BoardPointsForTests = BoardPoints;
+
+    /// <summary>The board's room under its headings now, in pixels - for the tests.</summary>
+    internal int BoardRoomForTests => _grid.ClientSize.Height - (_grid.ColumnHeadersVisible ? _grid.ColumnHeadersHeight : 0);
+
+    /// <summary>The board's line of writing with its padding, against a row's height now - for the tests.</summary>
+    internal (int Line, int Row) BoardLineForTests =>
+        ((_grid.DefaultCellStyle.Font?.Height ?? 0) + _grid.DefaultCellStyle.Padding.Vertical, _fit.RowHeight);
+
     /// <summary>How the board fits, for the tests.</summary>
     internal (int RowHeight, float FontShare, int Pinned, int Hidden) BoardFitForTests =>
         (_fit.RowHeight, _fit.FontShare, _fit.Pinned, _fit.Hidden);
@@ -312,4 +339,12 @@ public sealed partial class BigScreenForm
 
     /// <summary>How many rows the board holds, for the tests.</summary>
     internal int BoardRowsForTests => _grid.Rows.Count;
+
+    /// <summary>
+    /// For the tests: the roll's timer steps nothing, and the test steps it
+    /// with RollTheBoardForTests (open items, 19 Nov 2026). With shorter rows
+    /// a rolling field hides more, so the timer's steps came quicker than the
+    /// tests' pauses and moved the board under them.
+    /// </summary>
+    internal bool RollByHandForTests { get; set; }
 }

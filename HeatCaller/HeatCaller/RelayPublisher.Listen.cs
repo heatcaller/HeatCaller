@@ -36,8 +36,41 @@ namespace HeatCaller;
 /// </summary>
 public sealed partial class RelayPublisher
 {
-    /// <summary>How many lines go out in one pass, so one slow upload cannot hold up check-in, the vote or the results queue.</summary>
-    private const int ListenLinesPerPass = 3;
+    // ON A THREAD OF ITS OWN (19 Nov 2026, the music "skips or drops").
+    // Lines and stretches of the room's sound went out on the publisher's
+    // worker, first in each pass and between the documents it sent - but a
+    // stretch offered while a document was uploading still waited for that
+    // upload (up to a minute on a slow uplink) or for a poll, and a stretch
+    // is thrown away after ListenAlong.SegmentGoesStale. Now listening has
+    // its own thread and its own client, so nothing the worker does can
+    // hold it up. What it shares with the worker it shares carefully:
+    //  - the target, read once per send, as the worker reads it;
+    //  - the gates the worker passes through - publishing on, set up, not
+    //    quiesced (Delete Everything Published), not backing off - so it
+    //    never sends where the worker would not;
+    //  - the backoff itself, under _gate: a relay that cannot be reached
+    //    from here backs the worker off too, and the other way round, so
+    //    the two never take turns hammering a relay that is down;
+    //  - the seq numbers, under _gate (NextSeq).
+
+    /// <summary>Listening's own client, so a document upload on the worker's never holds a stretch up. The same rules as the worker's: no redirects, a small answer.</summary>
+    private readonly HttpClient _listenHttp = new(new HttpClientHandler { AllowAutoRedirect = false })
+    {
+        Timeout = TimeSpan.FromSeconds(60),
+        MaxResponseContentBufferSize = 64 * 1024,
+    };
+
+    /// <summary>Set when a line or stretch is offered, or the switch changes.</summary>
+    private readonly ManualResetEventSlim _listenWake = new(false);
+
+    /// <summary>Set whenever the listen thread is between passes. See QuiesceAsync.</summary>
+    private readonly ManualResetEventSlim _listenIdle = new(true);
+
+    /// <summary>The listen thread's current pass, so QuiesceAsync can cut it short. Guarded by _gate.</summary>
+    private CancellationTokenSource? _listenPass;
+
+    /// <summary>The listen thread - see the comment above. Started by the constructor, stopped by Dispose.</summary>
+    private readonly Thread _listener;
 
     /// <summary>
     /// How long before the open flag is tried again after it failed.
@@ -170,7 +203,7 @@ public sealed partial class RelayPublisher
         {
             // Woken rather than left to the next 500ms tick: half a second
             // on top of the encode is already most of a word.
-            _wake.Set();
+            _listenWake.Set();
         }
 
         return verdict;
@@ -190,18 +223,133 @@ public sealed partial class RelayPublisher
 
         if (verdict == ListenAlong.Verdict.Held)
         {
-            _wake.Set();
+            _listenWake.Set();
         }
 
         return verdict;
     }
 
     /// <summary>
+    /// The listen thread (19 Nov 2026 - see the comment on _listenHttp):
+    /// woken when a line or a stretch is offered or the switch changes, and
+    /// every half second besides, it does what the worker's pass used to do
+    /// for listening - and nothing else, so nothing else can hold it up.
+    /// Through the same gates as the worker's pass: publishing on, set up,
+    /// not backing off, not quiesced.
+    /// </summary>
+    private void ListenLoop()
+    {
+        var token = _stopping.Token;
+
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                var backingOff = BackoffRemaining();
+
+                _listenWake.Wait(backingOff > TimeSpan.Zero ? backingOff : TimeSpan.FromMilliseconds(500), token);
+                _listenWake.Reset();
+
+                if (token.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                if (!_settings.RelayEnabled || !IsConfigured() || BackoffRemaining() > TimeSpan.Zero)
+                {
+                    continue;
+                }
+
+                CancellationTokenSource? pass = null;
+
+                lock (_gate)
+                {
+                    if (!_quiesced)
+                    {
+                        pass = CancellationTokenSource.CreateLinkedTokenSource(token);
+                        _listenPass = pass;
+                        _listenIdle.Reset();
+                    }
+                }
+
+                if (pass is null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    ListenPass(pass.Token);
+                }
+                finally
+                {
+                    lock (_gate)
+                    {
+                        _listenPass = null;
+                    }
+
+                    _listenIdle.Set();
+                    pass.Dispose();
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                break;
+            }
+            catch
+            {
+                // Never worth the thread: the next wake tries again.
+            }
+        }
+
+        try
+        {
+            _listenIdle.Set();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Disposed on the way out; nobody is waiting on it.
+        }
+    }
+
+    /// <summary>
+    /// One pass of the listen thread. On NO tick of its own: a line that
+    /// arrives late is worse than a line that never arrives, so it goes the
+    /// moment it is offered. The cost of having no tick is paid by the open
+    /// flag's own backoff, the shared backoff, and the queue being allowed
+    /// to throw work away.
+    /// </summary>
+    private void ListenPass(CancellationToken token)
+    {
+        if (_settings.ListenAlongOnTheRelay)
+        {
+            Listening.Wanted = true;
+            SendListenLines(token);
+            return;
+        }
+
+        if (Listening.Wanted)
+        {
+            // Unticked while running. This is the queue letting go of what
+            // it was holding, so a box unticked mid-race does not send three
+            // more lines after it.
+            Listening.Wanted = false;
+            ForgetListenTrouble();
+        }
+
+        // And the relay told, until it has taken it - see
+        // CloseListeningOnTheRelay.
+        if (_listenClosePending)
+        {
+            SendListenClose(token);
+        }
+    }
+
+    /// <summary>
     /// Tells the relay whether this club is letting people listen, and
-    /// sends whatever the announcer has said since the last pass.
-    ///
-    /// On the publisher's own background pass, like every other route
-    /// here, so nothing on this path touches the UI thread.
+    /// sends whatever is waiting, oldest first, until the queue is empty or
+    /// a send fails. On the listen thread, so nothing on this path touches
+    /// the UI thread or waits on the worker.
     /// </summary>
     private void SendListenLines(CancellationToken token)
     {
@@ -224,13 +372,8 @@ public sealed partial class RelayPublisher
             return;
         }
 
-        for (var sent = 0; sent < ListenLinesPerPass; sent++)
+        while (!token.IsCancellationRequested)
         {
-            if (token.IsCancellationRequested)
-            {
-                return;
-            }
-
             // Nothing to send is not the relay working again (22 Oct 2026,
             // bug hunt): stale lines leave the queue empty while the relay
             // is still down, and this logged "working again" between every
@@ -265,39 +408,33 @@ public sealed partial class RelayPublisher
         }
     }
 
-    /// <summary>
-    /// Sends the announcer's lines that are waiting, if any - called at the
-    /// start of the worker's pass and between the documents Drain sends, as
-    /// well as at the end of the pass where SendListenLines always ran.
-    /// </summary>
-    /// <remarks>
-    /// WHY (26 Oct 2026, asked for by Asher: "can't hear the heat reminders
-    /// that fire between races by listening through the relay"): the lines
-    /// went LAST in a pass - after the night's switches, a queued result,
-    /// every changed snapshot, and the check-in, manager and notes polls - and
-    /// three at most. During a race a pass is a live frame and little else,
-    /// so that was a second or so. Between races it is the busiest pass of
-    /// the evening: the result, its results index, every driver's night, and
-    /// whichever of the standings, the programme and the badges (with their
-    /// artwork) the race changed, each one an upload over the club's Wi-Fi. A line offered then waited behind all
-    /// of it, and ListenAlong throws away a line that has waited longer than
-    /// GoesStale, or that six newer lines have pushed off the front - so
-    /// the reminders and the post-race calls, which are exactly what is said
-    /// between races, were the lines that never reached anybody listening.
-    /// Live audio that arrives late is not audio (see ListenAlong), so it
-    /// now goes ahead of everything that is still true in a minute's time,
-    /// and a line waits for one document at most rather than a whole pass.
-    /// Costs nothing when nobody is listening: a switch and a count.
-    /// </remarks>
-    private void SendListenLinesWaiting(CancellationToken token)
+    /// <summary>One request on listening's own client, with the worker's time limit for its size (see SendAsync).</summary>
+    private HttpResponseMessage SendListen(HttpRequestMessage request, CancellationToken token)
     {
-        if (!_settings.ListenAlongOnTheRelay || token.IsCancellationRequested || Listening.Waiting == 0)
-        {
-            return;
-        }
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(token);
+        limit.CancelAfter(TimeoutFor(request));
 
-        SendListenLines(token);
+        return _listenHttp.SendAsync(request, limit.Token).GetAwaiter().GetResult();
     }
+
+    /// <summary>
+    /// The relay answered listening: whatever backoff the two threads were
+    /// in is over. The worker's last error is left for its own next send to
+    /// clear - it may be about a document, not about reaching the relay.
+    /// </summary>
+    private void ListenReached()
+    {
+        lock (_gate)
+        {
+            _failures = 0;
+            _nextAttemptTick = 0;
+            _online = true;
+            _lastSuccessUtc = DateTime.UtcNow;
+        }
+    }
+
+    /// <summary>The relay could not be reached, or failed in itself (5xx): both threads back off - see <see cref="Failed"/>.</summary>
+    private void ListenUnreachable() => Failed();
 
     /// <summary>What became of one line on the wire. See <see cref="SendOneListenLine"/>.</summary>
     private enum ListenSend
@@ -355,14 +492,20 @@ public sealed partial class RelayPublisher
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", target.Token);
             request.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
-            using var response = Send(request, token);
+            using var response = SendListen(request, token);
 
             if (response.IsSuccessStatusCode)
             {
+                ListenReached();
                 return ListenSend.Sent;
             }
 
             var code = (int)response.StatusCode;
+
+            if (code >= 500)
+            {
+                ListenUnreachable();
+            }
 
             ListenTrouble(code switch
             {
@@ -400,6 +543,7 @@ public sealed partial class RelayPublisher
         catch (Exception ex)
         {
             ListenTrouble($"Could not reach the relay with a line for listeners: {Plain(ex)}");
+            ListenUnreachable();
             return ListenSend.TryAgain;
         }
     }
@@ -442,7 +586,16 @@ public sealed partial class RelayPublisher
             request.Content = new StringContent(
                 JsonSerializer.Serialize(new { open = wanted }), Encoding.UTF8, "application/json");
 
-            using var response = Send(request, token);
+            using var response = SendListen(request, token);
+
+            if ((int)response.StatusCode >= 500)
+            {
+                ListenUnreachable();
+            }
+            else
+            {
+                ListenReached();
+            }
 
             if (!wanted && IsGoneForAClose(response))
             {
@@ -484,6 +637,7 @@ public sealed partial class RelayPublisher
         catch (Exception ex)
         {
             ListenTrouble($"Could not reach the relay about listening along: {Plain(ex)}");
+            ListenUnreachable();
             return false;
         }
     }
@@ -503,8 +657,9 @@ public sealed partial class RelayPublisher
     /// on a thread of its own and forget the answer, so an untick during a
     /// Wi-Fi blip left the relay open all night. It also sent nothing when
     /// this run had not opened it yet, when a previous run had. Now it is
-    /// marked here and the worker's pass tries it - with the open flag's
-    /// own backoff - until the relay takes it.
+    /// marked here and the listen thread's pass (the worker's, before 19 Nov
+    /// 2026) tries it - with the open flag's own backoff - until the relay
+    /// takes it.
     /// </summary>
     public void CloseListeningOnTheRelay()
     {
@@ -513,11 +668,11 @@ public sealed partial class RelayPublisher
         Listening.Wanted = false;
 
         _listenClosePending = true;
-        _wake.Set();
+        _listenWake.Set();
     }
 
     /// <summary>
-    /// The close, from the worker's pass while the box is unticked. Clears
+    /// The close, from the listen thread's pass while the box is unticked. Clears
     /// <see cref="_listenClosePending"/> only once the relay has it.
     /// </summary>
     private void SendListenClose(CancellationToken token)

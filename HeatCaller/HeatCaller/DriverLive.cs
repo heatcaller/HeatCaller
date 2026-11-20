@@ -365,6 +365,16 @@ internal static class DriverLive
             if (callUps.TryGetValue(main, out var callUp))
             {
                 entry["next"] = NextOf(callUp);
+
+                // Their races after the next, with when each should go (19
+                // Nov 2026, driver phone plan item 10 step 4): for "Add my
+                // races" on their own page, which makes the calendar file on
+                // the phone. Only races with an estimate; the title and the
+                // time, nothing about anyone else.
+                if (LaterOf(byMain, main) is { Count: > 0 } later)
+                {
+                    entry["later"] = later;
+                }
             }
 
             if (marshals.TryGetValue(main, out var marshal))
@@ -486,6 +496,47 @@ internal static class DriverLive
             ["at"] = Iso(RoundDown(AsUtc(inputs.NowUtc), TimeSpan.FromMinutes(1))),
             ["drivers"] = InBadgeOrder(drivers),
         });
+    }
+
+    /// <summary>The most later races one driver's entry carries.</summary>
+    internal const int MostLater = 6;
+
+    /// <summary>
+    /// A driver's races after their next one (the first in the list they're
+    /// on), each with its estimate: race title and eta. Races with no
+    /// estimate are left out - a calendar entry needs a time.
+    /// </summary>
+    internal static List<Dictionary<string, object?>> LaterOf(IReadOnlyList<UpcomingRace> byMain, string main)
+    {
+        var later = new List<Dictionary<string, object?>>();
+        var first = -1;
+
+        for (var i = 0; i < byMain.Count; i++)
+        {
+            if (byMain[i].Grid.Contains(main, StringComparer.OrdinalIgnoreCase))
+            {
+                first = i;
+                break;
+            }
+        }
+
+        for (var i = first < 0 ? byMain.Count : first + 1; i < byMain.Count && later.Count < MostLater; i++)
+        {
+            var race = byMain[i];
+
+            if (race.OnTrack || race.EtaUtc is not { } eta || !race.Grid.Contains(main, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            later.Add(new Dictionary<string, object?>
+            {
+                ["race"] = race.Title,
+                ["eta"] = Iso(RoundToMinute(AsUtc(eta))),
+            });
+        }
+
+        return later;
     }
 
     /// <summary>The "next" object: the call-up, in the phone's words too.</summary>
@@ -805,6 +856,13 @@ internal static class DriverLive
                 {
                     one["s"] = sample.AbsoluteUri;
                 }
+                else if (v.OnRelay)
+                {
+                    // A HeatCaller or Kokoro sample rendered on this PC and
+                    // kept on the relay under the voice's key (19 Nov 2026):
+                    // the phone asks the relay for it by that key.
+                    one["h"] = true;
+                }
 
                 return one;
             })
@@ -851,11 +909,13 @@ internal static class DriverLive
             ["principal"] = new Dictionary<string, object?>
             {
                 ["name"] = DriverCrew.Clean(profile.CrewPrincipalName),
+                ["say"] = DriverCrew.Clean(profile.CrewPrincipalSaidAs),
                 ["voice"] = KeyFor(profile.CrewPrincipalVoice),
             },
             ["tech"] = new Dictionary<string, object?>
             {
                 ["name"] = DriverCrew.Clean(profile.CrewTechName),
+                ["say"] = DriverCrew.Clean(profile.CrewTechSaidAs),
                 ["voice"] = KeyFor(profile.CrewTechVoice),
             },
         };

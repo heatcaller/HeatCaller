@@ -195,10 +195,36 @@ public sealed partial class AnnouncementService
             _pendingBatchCancellation[key] = cts;
         }
 
+        Interlocked.Increment(ref _lapCallsSettling);
         _ = FlushPerLapBatchAfterDelayAsync(key, maxPerLap, cts);
     }
 
+    /// <summary>
+    /// Per-lap batches and field windows still waiting to decide (open
+    /// items, 19 Nov 2026). Counted up as each is scheduled and down once it
+    /// has queued its winners - a field window is counted before the batch
+    /// that offers to it lets go - so 0 means every call offered so far has
+    /// been said or dropped. For the tests, which waited a fixed 3 s for that
+    /// and failed on a loaded machine.
+    /// </summary>
+    private int _lapCallsSettling;
+
+    /// <summary>Whether every lap call offered so far has been decided - see _lapCallsSettling.</summary>
+    internal bool LapCallsSettledForTests => Volatile.Read(ref _lapCallsSettling) == 0;
+
     private async Task FlushPerLapBatchAfterDelayAsync(string key, int maxPerLap, CancellationTokenSource cts)
+    {
+        try
+        {
+            await FlushPerLapBatchAfterDelayCoreAsync(key, maxPerLap, cts);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _lapCallsSettling);
+        }
+    }
+
+    private async Task FlushPerLapBatchAfterDelayCoreAsync(string key, int maxPerLap, CancellationTokenSource cts)
     {
         try
         {

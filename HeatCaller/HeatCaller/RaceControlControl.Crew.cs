@@ -22,6 +22,13 @@ public sealed partial class RaceControlControl
     /// </summary>
     internal Func<CrewVoicePick, bool>? CrewVoiceStillThere { get; set; }
 
+    /// <summary>
+    /// The voices a driver may pick for their crew, for the Edit Driver
+    /// dialog's voice drop-downs (19 Nov 2026, MainForm.CrewVoicesForDesk).
+    /// Null, or a null answer, leaves them off.
+    /// </summary>
+    internal Func<IReadOnlyList<CrewVoiceOption>?>? CrewVoices { get; set; }
+
     /// <summary>The Team Principal (or, with <paramref name="principal"/> false, the Technical Lead) of the driver with this transponder.</summary>
     private CrewMember CrewOf(string? transponder, bool principal)
     {
@@ -42,6 +49,11 @@ public sealed partial class RaceControlControl
             reserved,
             CrewVoiceStillThere);
 
-        return new CrewMember(DriverCrew.NameFor(own, clubsName), voice, why);
+        // Said as spelled for the ear (19 Nov 2026): their name's "said as"
+        // spelling when it has one, as a driver's announcer name is - the
+        // name the model is given is the one the voice will read.
+        var saidAs = !allowed ? null : principal ? profile?.CrewPrincipalSaidAs : profile?.CrewTechSaidAs;
+
+        return new CrewMember(DriverCrew.SpokenNameFor(own, saidAs, clubsName), voice, why);
     }
 }

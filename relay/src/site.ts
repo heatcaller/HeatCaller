@@ -83,6 +83,8 @@ export interface Look {
   readonly checkIn: boolean;
   /** Whether a driver may email themselves a sign-in link on Me (14 Nov 2026, signinmail.ts). */
   readonly emailLink: boolean;
+  /** Whether the club takes sign-ups just now, for Home's "Not on the list? Sign up" (19 Nov 2026, item 22). Undefined is no. */
+  readonly signupOpen?: boolean | undefined;
   /**
    * Whether drivers may pick their own look for the club's pages on their
    * phones (15 Nov 2026, driver themes; Asher: "club driver can change the
@@ -90,6 +92,13 @@ export interface Look {
    * false, so a club on an older app has it too.
    */
   readonly driverThemes: boolean;
+  /**
+   * The club's half of the /clubs listing (19 Nov 2026, cross-club index
+   * phase 1): "List this club in the HeatCaller directory" on the laptop's
+   * Club Website page. Only a literal true; the relay admin's
+   * Tenant.listInDirectory is needed as well. See directory.ts.
+   */
+  readonly directory?: boolean;
   /**
    * Links to the club's own pages elsewhere - Facebook, Instagram, its
    * website - in the order the laptop sent them. Only http(s) addresses
@@ -299,6 +308,7 @@ export function lookFrom(site: StoredDocument | undefined, checkin: StoredDocume
     checkIn: record(checkin?.body)?.["enabled"] === true,
     emailLink: record(checkin?.body)?.["enabled"] === true && record(checkin?.body)?.["emailLink"] === true,
     driverThemes: body?.["driverThemes"] !== false,
+    directory: body?.["directory"] === true,
 
     // Merged in by Relay.lookFor from a document of its own, the way
     // checkIn's own flag is above. False here is the honest default for a

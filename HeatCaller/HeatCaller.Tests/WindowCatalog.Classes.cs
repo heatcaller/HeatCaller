@@ -62,6 +62,10 @@ internal static partial class WindowCatalog
             TechCheckItems = Checks(12),
             Format = new RaceFormat { TimeLimitMinutes = 8, StartType = RaceStartType.StaggeredGrid },
             QualifierFormat = new RaceFormat { TimeLimitMinutes = 5, StartType = RaceStartType.Qualifier },
+
+            // 19 Nov 2026: both finals formats on, so the A-main tile reads "Invitational".
+            PoleShootout = true,
+            Invitational = true,
         };
 
         // A club's classes, set up the ways a club sets them up.

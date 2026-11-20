@@ -1363,7 +1363,7 @@ public sealed partial class CheckInControl : UserControl
         switch (column)
         {
             case "driver":
-                if (DriverEditDialog.Edit(this, profile.Transponder, _raceClasses, _undo, _profiles))
+                if (DriverEditDialog.Edit(this, profile.Transponder, _raceClasses, _undo, _profiles, CrewVoices?.Invoke()))
                 {
                     RefreshDriverList();
                 }

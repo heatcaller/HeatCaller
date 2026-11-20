@@ -499,6 +499,13 @@ public static class EventSpine
             return false;
         }
 
+        // A Pole Shootout run (19 Nov 2026) is one car alone against the
+        // clock - no finishing order to score, so never a championship race.
+        if (round?.Kind == RoundKind.Shootout)
+        {
+            return false;
+        }
+
         if (season.MainsOnly && round?.Kind != RoundKind.Main)
         {
             return false;

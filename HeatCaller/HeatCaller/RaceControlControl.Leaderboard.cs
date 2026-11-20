@@ -1940,7 +1940,7 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        if (DriverEditDialog.Edit(this, transponder, _raceClasses, _undo, _profiles))
+        if (DriverEditDialog.Edit(this, transponder, _raceClasses, _undo, _profiles, CrewVoices?.Invoke()))
         {
             RenderLeaderboard();
         }

@@ -75,10 +75,13 @@ public sealed class BigScreenBoardFitTests
         Assert.Equal(8, seen.Item2);
     }
 
+    // Sixteen cars, not twelve, since the rows went from 64 to 50 at the
+    // normal size (open items, 19 Nov 2026): twelve now fit a 720p wall
+    // at three quarters' size, so they no longer roll.
     [Fact]
-    public void Twelve_cars_roll_past_the_top_three_until_every_one_has_been_on_the_board()
+    public void Sixteen_cars_roll_past_the_top_three_until_every_one_has_been_on_the_board()
     {
-        var seen = OnABigScreen(cars: 12, (form, race) =>
+        var seen = OnABigScreen(cars: 16, (form, race) =>
         {
             var fit = form.BoardFitForTests;
             var everShown = new HashSet<int>(form.RowsShowingForTests());
@@ -99,14 +102,14 @@ public sealed class BigScreenBoardFitTests
 
         Assert.Equal(BigScreenForm.PinnedRows, seen.fit.Pinned);
         Assert.True(seen.fit.Hidden > 0);
-        Assert.Equal(12, seen.Count);
+        Assert.Equal(16, seen.Count);
         Assert.True(seen.topThreeAlways);
     }
 
     [Fact]
     public void A_lap_does_not_send_a_rolled_board_back_to_the_top()
     {
-        var seen = OnABigScreen(cars: 12, (form, race) =>
+        var seen = OnABigScreen(cars: 16, (form, race) =>
         {
             form.RollTheBoardForTests();
             form.RollTheBoardForTests();
@@ -119,14 +122,14 @@ public sealed class BigScreenBoardFitTests
             return (before, after: form.RowsShowingForTests().Last(), rows: form.BoardRowsForTests);
         });
 
-        Assert.Equal(12, seen.rows);
+        Assert.Equal(16, seen.rows);
         Assert.Equal(seen.before, seen.after);
     }
 
     [Fact]
     public void A_red_flag_holds_the_board_at_the_top()
     {
-        var seen = OnABigScreen(cars: 12, (form, race) =>
+        var seen = OnABigScreen(cars: 16, (form, race) =>
         {
             var top = form.RowsShowingForTests().Last();
 
@@ -152,13 +155,52 @@ public sealed class BigScreenBoardFitTests
         Assert.Equal(seen.top, seen.stillHeld);
     }
 
+    // ==================== A 1080p TV (open items, 19 Nov 2026) ====================
+
+    [Fact]
+    public void Eight_cars_all_show_on_a_1080p_tv_at_full_size_without_rolling()
+    {
+        // The board showed six of eight at 1080p: the bands above it and
+        // 64-pixel rows left room for six, and the fit then shrank the
+        // writing to get the rest on. Tighter bands and rows give room
+        // for eight with the writing at its full size.
+        var seen = OnABigScreen(cars: 8, (form, _) => (Fit: form.BoardFitForTests, Showing: form.RowsShowingForTests().Count, Room: form.BoardRoomForTests, Client: form.ClientSize), 1920, 1080);
+
+        Assert.True(seen.Fit.FontShare == 1f, $"writing at {seen.Fit.FontShare:0.00} of full size; room {seen.Room}, rows {seen.Fit.RowHeight}, window {seen.Client}");
+        Assert.Equal(0, seen.Fit.Hidden);
+        Assert.Equal(8, seen.Showing);
+    }
+
+    [Fact]
+    public void Eight_cars_and_the_up_next_bar_all_show_on_a_1080p_tv_at_full_size()
+    {
+        var seen = OnABigScreen(cars: 8, (form, _) => (Fit: form.BoardFitForTests, Showing: form.RowsShowingForTests().Count, Room: form.BoardRoomForTests, Client: form.ClientSize, Line: form.BoardLineForTests), 1920, 1080, upNext: () => "Up next: Stock Buggy Heat 3");
+
+        Assert.True(seen.Fit.FontShare == 1f, $"writing at {seen.Fit.FontShare:0.00} of full size; room {seen.Room}, rows {seen.Fit.RowHeight}, window {seen.Client}");
+        Assert.Equal(0, seen.Fit.Hidden);
+        Assert.Equal(8, seen.Showing);
+
+        // And the writing isn't cut: its line and padding fit the row.
+        Assert.True(seen.Line.Line <= seen.Line.Row, $"a {seen.Line.Line}-pixel line in a {seen.Line.Row}-pixel row");
+    }
+
+    [Fact]
+    public void The_board_writing_keeps_its_full_size_and_its_row_has_room_for_it()
+    {
+        Assert.Equal(24f, BigScreenForm.BoardPointsForTests);
+
+        // 24 points is 32 pixels at the design size; with the cell padding
+        // above and below, the row still holds Segoe UI's line (about 1.33 em).
+        Assert.True(BigScreenForm.FullRowDesignHeight - 2 * BigScreenForm.RowPadDesign >= (int)Math.Ceiling(32 * 1.34));
+    }
+
     // ==================== Helpers ====================
 
     private static void Cross(RaceTiming race, string car, uint at) =>
         race.ProcessLapEvent(new DirectLapEvent { TransponderId = car, DeviceTimeMs = at, SignalHits = 5, SignalStrength = 100 });
 
-    /// <summary>A Big Screen the size of a 720p wall, with a race of <paramref name="cars"/> cars each one lap in.</summary>
-    private static T OnABigScreen<T>(int cars, Func<BigScreenForm, RaceTiming, T> look) =>
+    /// <summary>A Big Screen the size of a 720p wall (or <paramref name="width"/> x <paramref name="height"/>), with a race of <paramref name="cars"/> cars each one lap in.</summary>
+    private static T OnABigScreen<T>(int cars, Func<BigScreenForm, RaceTiming, T> look, int width = 1280, int height = 720, Func<string>? upNext = null) =>
         StaThread.Run(() =>
         {
             using var data = new TempAppData();
@@ -174,10 +216,11 @@ public sealed class BigScreenBoardFitTests
 
             var announcer = new AnnouncementService(ProfileStore.Load(), VoiceSettingsStore.Load(), SoundEffectsStore.Load());
 
-            using var form = new BigScreenForm(race, announcer, ProfileStore.Load(), settings: new AppSettings());
+            using var form = new BigScreenForm(race, announcer, ProfileStore.Load(), settings: new AppSettings(), upNext: upNext);
 
+            form.RollByHandForTests = true;
             form.Show();
-            form.ClientSize = new Size(UiLayout.AtDpi(1280), UiLayout.AtDpi(720));
+            form.ClientSize = new Size(UiLayout.AtDpi(width), UiLayout.AtDpi(height));
             Pump();
 
             var seen = look(form, race);

@@ -243,6 +243,13 @@ public sealed class RaceClassStore
     /// by MainForm, for the same two-doors reason as AppDefaultFormat.
     /// </summary>
     public HandicapStore? Handicaps { get; set; }
+
+    /// <summary>
+    /// A class's drivers by name (19 Nov 2026), for the Invitational's seed
+    /// order in the class editor. Set once at start-up by MainForm, which
+    /// owns the profiles; null leaves the seed order with only what is set.
+    /// </summary>
+    public Func<string, IReadOnlyList<(string Transponder, string Name)>>? DriversOfClass { get; set; }
 }
 
 /// <summary>

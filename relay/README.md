@@ -102,6 +102,7 @@ going straight to node avoids the whole business.
 | `clubs[].name` | What the club calls itself, for page headings. |
 | `clubs[].tokenSha256` | From `npm run mint`. |
 | `clubs[].publishRoster` | **Off by default.** See below. |
+| `clubs[].listInDirectory` | **Off by default.** `true` lets the club be listed on `/clubs`, the club directory, once the club ticks it too (`src/directory.ts`). Name, link, "Racing now" and next night only, never a driver. |
 
 The relay refuses to start on a duplicate club id, a duplicate token, a
 malformed hash or an invalid club id. Every one of those is a
@@ -1382,6 +1383,17 @@ Driver phone plan items 15 and 10.
   four hours long, a reminder two hours before. A night called off is the
   same event marked cancelled. `404` with no night to offer. Home's next
   race night card has the button.
+- **Every night, subscribed to once** (19 Nov 2026). `GET /c/:club/nights.ics`:
+  each night the club announced (kept by the relay in `nightsfeed` from every
+  `nextnight` publish, never served as it is), a called-off night cancelled,
+  a moved one taken out, nights over 60 days gone let go. Same UIDs as
+  `nextnight.ics`. An empty calendar before the first night. Home links it as
+  `webcal://`. The club's zone can be picked on Club Website (default: the
+  PC's).
+- **Add my races** (19 Nov 2026), on the Alerts card of a driver's own page:
+  their next race, the later ones the laptop estimates (`later` in their
+  driverlive entry) and their marshal duty, as a calendar file made on the
+  phone. No address with a badge code in it.
 
 ### Zoom, text size, high contrast, social links (14 Nov 2026)
 
@@ -1502,8 +1514,19 @@ Anonymous counts per club per day of a fixed list of events
 address or IP is kept, and names not on the list are dropped. A page sends
 at most one of each per load, once a minute and when it is hidden. One
 address may send a club 120 reports in five minutes. Kept 90 days in
-`pagecounts`, never served to the public. Nothing shows them yet: they are
-read with the club's token.
+`pagecounts`, never served to the public. The laptop reads them every ten
+minutes with the club's token and says what the last seven days came to on
+Club Website's Status card (19 Nov 2026).
+
+### Short address check (token)
+
+```
+GET  /api/v1/c/:club/alias?name=x   token; -> {state: "yours" | "free" | "taken" | "bad"}
+```
+
+Whether a short address goes to this club, is free, or is another club's id
+or claimed first by another club (19 Nov 2026). Never says which club. The
+laptop asks when the Short address box is left and says so under it.
 
 ### Sponsor counts (public; reading them needs a token)
 

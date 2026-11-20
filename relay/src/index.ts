@@ -9,11 +9,13 @@ import { FileStore } from "./store.js";
 import { TenantRegistry } from "./tenancy.js";
 import { removeLeftoverVideos } from "./oldvideos.js";
 import { DiskClipVault } from "./clips.js";
+import { DiskCrewSampleVault } from "./crewsamples.js";
 import { ElevenLabsLogging, elevenLabsRenderer, elevenLabsStreamer, migrateVoiceFolder, noLoggingFromEnv, VoiceService } from "./voice.js";
 import { LAP_VOICE_DIR, LapVoiceLibrary } from "./lapvoice.js";
 import { TopUpRequests } from "./topuprequests.js";
 import { UsageLog } from "./usagelog.js";
 import { AppUsageLog } from "./appusage.js";
+import { DirectoryVisits } from "./directoryvisits.js";
 import { PushService } from "./push.js";
 import { askYouTube } from "./video.js";
 import { ADMIN_COMMANDS, voiceAdmin, type AdminCommand } from "./voiceadmin.js";
@@ -151,14 +153,20 @@ async function serve(): Promise<number> {
           log: (line) => console.log(line),
         });
 
+  // The /clubs page's daily views, relay-wide, for the admin snapshot - see directoryvisits.ts.
+  const directoryVisits = new DirectoryVisits({ dataDir: config.dataDir, log: (line) => console.log(line) });
+
   const relay = new Relay({
     store,
+    directoryVisits,
     tenants,
     maxBodyBytes: config.maxBodyBytes,
     redirectOrigin,
     voice,
     // Drivers' own race clips - see clips.ts (22 Oct 2026, driver experience).
     clips: new DiskClipVault(config.dataDir),
+    // Crew voice samples from the club's PC - see crewsamples.ts (19 Nov 2026).
+    crewSamples: new DiskCrewSampleVault(config.dataDir),
     brain,
     topUpRequests: new TopUpRequests({ dataDir: config.dataDir, log: (line) => console.log(line) }),
     // One line per voice and commentary request, for the relay admin app's
@@ -220,7 +228,8 @@ async function serve(): Promise<number> {
   for (const signal of ["SIGTERM", "SIGINT"] as const) {
     process.on(signal, () => {
       console.log(`[relay] ${signal} - closing`);
-      server.close(() => process.exit(0));
+      // The directory's views still in memory go to the disk first.
+      server.close(() => void directoryVisits.flush().finally(() => process.exit(0)));
     });
   }
 

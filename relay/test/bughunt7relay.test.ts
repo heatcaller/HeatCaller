@@ -686,13 +686,23 @@ describe("bug hunt 7: the brain's two at once", () => {
     let running = 0;
     let most = 0;
 
+    // Each write is held until both slots' writes have started (open items,
+    // 19 Nov 2026). It used to sleep 30 ms, and under load the second
+    // request's count on disk took longer than that, so the first had
+    // finished before the second began and only one was ever seen in
+    // flight. The backstop only lets a broken cap fail rather than hang.
+    let bothIn: () => void = () => {};
+    const gate = new Promise<void>((open) => { bothIn = open; });
+    const backstop = setTimeout(() => bothIn(), 5000);
+
     const brain = new BrainService({
       config: CONFIG,
       dataDir: await brainDir(),
       write: async () => {
         running += 1;
         most = Math.max(most, running);
-        await new Promise((done) => setTimeout(done, 30));
+        if (running >= 2) bothIn();
+        await gate;
         running -= 1;
         return "A line.";
       },
@@ -702,6 +712,7 @@ describe("bug hunt 7: the brain's two at once", () => {
     const all = await Promise.all(
       Array.from({ length: 8 }, () => brain.write("acme-rc", plenty, "You are a race announcer.", "Dave won.", 40, 0.7)),
     );
+    clearTimeout(backstop);
 
     assert.equal(most, 2);
     assert.equal(all.filter((one) => one.ok).length, 2);

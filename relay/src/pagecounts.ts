@@ -58,6 +58,8 @@ export const PAGE_COUNT_EVENTS: readonly string[] = [
   "theme_paddock",
   "theme_carbon",
   "theme_team",
+  // Item 22: Home opened from the poster's QR code (?from=poster).
+  "poster_opened",
   // Item 17: a phone that forgot its driver.
   "storage_forgot",
   // Item 18: the back button.

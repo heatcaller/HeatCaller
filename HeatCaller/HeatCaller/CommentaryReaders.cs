@@ -3257,7 +3257,8 @@ public static partial class CommentaryReaders
         string? className,
         DateTime? nowLocal = null,
         IReadOnlySet<string>? withinRoundIds = null,
-        int aMainLegsCounted = 0)
+        int aMainLegsCounted = 0,
+        RaceClass? invitational = null)
     {
         var layout = Typed(layoutName);
         var cls = Typed(className);
@@ -3276,6 +3277,7 @@ public static partial class CommentaryReaders
         // (AMainLegs) - see MainWinner for why the meeting's winner is not
         // simply whoever won the last of them.
         var legOf = new Dictionary<string, (int Leg, int Legs)>(StringComparer.Ordinal);
+        var invitationalMains = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var round in rounds.All)
         {
@@ -3294,6 +3296,13 @@ public static partial class CommentaryReaders
             if (round.MainTier <= 0 && round.MainLeg > 0)
             {
                 legOf[round.Id] = (round.MainLeg, round.MainLegCount);
+            }
+            else if (round.InvitationalMain > 0)
+            {
+                // An Invitational's mains (19 Nov 2026) are scored together
+                // the same way, its own count and scale - see MainWinner.
+                legOf[round.Id] = (round.InvitationalMain, round.InvitationalMainCount);
+                invitationalMains.Add(round.Id);
             }
         }
 
@@ -3401,7 +3410,7 @@ public static partial class CommentaryReaders
             // that run tonight" would follow "Sam wins the A-Main overall"
             // in one recap. There is no true line to hand it, so none.
             if (!string.Equals(
-                    MainWinner(topTonight, legOf, profiles, aMainLegsCounted),
+                    MainWinner(topTonight, legOf, profiles, aMainLegsCounted, invitationalMains, invitational),
                     WinnerIn(topTonight.MaxBy(one => one.EndedAtUtc)!, profiles),
                     StringComparison.OrdinalIgnoreCase))
             {
@@ -3425,7 +3434,7 @@ public static partial class CommentaryReaders
 
         foreach (var sessions in meetings)
         {
-            var winner = MainWinner(sessions, legOf, profiles, aMainLegsCounted);
+            var winner = MainWinner(sessions, legOf, profiles, aMainLegsCounted, invitationalMains, invitational);
 
             if (winner.Length == 0)
             {
@@ -3488,7 +3497,9 @@ public static partial class CommentaryReaders
         IReadOnlyList<SessionRecord> sessions,
         IReadOnlyDictionary<string, (int Leg, int Legs)> legOf,
         ProfileStore profiles,
-        int aMainLegsCounted)
+        int aMainLegsCounted,
+        IReadOnlySet<string>? invitationalMains = null,
+        RaceClass? invitational = null)
     {
         // Each leg once, by its latest filing, in leg order.
         var legs = sessions
@@ -3504,7 +3515,11 @@ public static partial class CommentaryReaders
         }
 
         var legCount = Math.Max(legs.Count, legs.Max(session => legOf[session.RoundId!].Legs));
-        var table = AMainLegs.Overall(legs, AMainLegs.LegsCounting(legCount, aMainLegsCounted));
+        // An Invitational's mains (19 Nov 2026): its own count and scale.
+        var table = invitationalMains is not null && legs.All(session => invitationalMains.Contains(session.RoundId!))
+            ? AMainLegs.Overall(legs, Invitational.Counting(legCount, invitational?.InvitationalCounted ?? Invitational.DefaultCounted),
+                scale: Invitational.ScaleFor(invitational), raceWord: "Main")
+            : AMainLegs.Overall(legs, AMainLegs.LegsCounting(legCount, aMainLegsCounted));
 
         if (table.Count(row => AchievementEvaluator.CanHoldTrackRecord(Typed(row.Transponder), profiles)) < LeastCarsForAWin
             || table[0].BestFinish <= 0)

@@ -371,6 +371,19 @@ public sealed class RaceClassEditForm : Form
             }
         };
 
+        // The Pole Shootout and the Invitational (Reedy-style format) (19 Nov
+        // 2026): a window of their own, like the warnings - see FinalsFormatsForm.
+        var btnFinals = new Button { Text = "Finals Formats..." };
+        btnFinals.Click += (_, _) =>
+        {
+            using var form = new FinalsFormatsForm(Result, _txtName.Text, _store?.DriversOfClass);
+
+            if (form.ShowDialog(this) == DialogResult.OK)
+            {
+                ShowTiles();
+            }
+        };
+
         var btnSave = new Button { Text = "Save" };
         btnSave.Click += BtnSave_Click;
         var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
@@ -511,7 +524,7 @@ public sealed class RaceClassEditForm : Form
         // On the page itself, not in a card: on a 1280x720 screen a card's
         // caption, hint and insets took another 80px from the settings over
         // them, which already scroll there (layout pictures, 18 Nov 2026).
-        page.Add(new ButtonBar().With(btnTechList, btnFormat, btnQualFormat, btnColour, btnPreset, btnWarnings), gapBelow: UiLayout.RowGap);
+        page.Add(new ButtonBar().With(btnTechList, btnFormat, btnQualFormat, btnColour, btnPreset, btnWarnings, btnFinals), gapBelow: UiLayout.RowGap);
 
         // Against the right-hand edge, Cancel furthest right, as they were -
         // and Tab still reaches Save first: the bar takes them right to
@@ -637,7 +650,8 @@ public sealed class RaceClassEditForm : Form
 
         _tiles[0].Value.Text = method;
         _tiles[1].Value.Text = ((int)_numMainSize.Value).ToString(System.Globalization.CultureInfo.CurrentCulture);
-        _tiles[2].Value.Text = legs;
+        // An Invitational's mains replace the A-main (19 Nov 2026).
+        _tiles[2].Value.Text = Result.Invitational ? Invitational.ShortName : legs;
 
         // Unticked, the class pays the race day's usual fee.
         _tiles[3].Value.Text = _chkOwnFee.Checked

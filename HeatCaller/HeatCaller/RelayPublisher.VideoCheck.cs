@@ -8,11 +8,20 @@ namespace HeatCaller;
 /// tonight's YouTube videos with YouTube, and drops one that is private,
 /// removed or has embedding turned off. This asks the relay which, every ten
 /// minutes while video is on, so the Race video card can say "YouTube won't
-/// play this one" beside that piece.
+/// play this one" beside that piece. While one is refused it asks every two
+/// minutes (open items, 19 Nov 2026): the relay asks YouTube again after 2,
+/// 5, 15 and 60 minutes, and asking the relay is what sets that off, so a
+/// stream made public is picked up and the warning goes the same night.
 /// </summary>
 public sealed partial class RelayPublisher
 {
     private static readonly TimeSpan VideoCheckEvery = TimeSpan.FromMinutes(10);
+
+    /// <summary>How often while the relay says a video is refused.</summary>
+    internal static readonly TimeSpan VideoCheckWhileDeadEvery = TimeSpan.FromMinutes(2);
+
+    /// <summary>The wait before the next ask: sooner while a video is refused.</summary>
+    internal static TimeSpan VideoCheckWait(int deadCount) => deadCount > 0 ? VideoCheckWhileDeadEvery : VideoCheckEvery;
 
     private long _nextVideoCheckTick;
 
@@ -54,7 +63,7 @@ public sealed partial class RelayPublisher
             return;
         }
 
-        _nextVideoCheckTick = Environment.TickCount64 + (long)VideoCheckEvery.TotalMilliseconds;
+        _nextVideoCheckTick = Environment.TickCount64 + (long)VideoCheckWait(DeadVideos.Count).TotalMilliseconds;
         var target = _target;
 
         if (!IsSafeForToken(target.Root))
@@ -78,6 +87,7 @@ public sealed partial class RelayPublisher
                 }
 
                 DeadVideos = dead;
+                _nextVideoCheckTick = Environment.TickCount64 + (long)VideoCheckWait(dead.Count).TotalMilliseconds;
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)

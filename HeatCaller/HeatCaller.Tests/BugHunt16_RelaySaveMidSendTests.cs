@@ -54,9 +54,7 @@ public sealed class BugHunt16_RelaySaveMidSendTests : IDisposable
         var publisher = new RelayPublisher(settings);
         var saved = false;
 
-        var field = FieldOf(publisher, "_http");
-        ((HttpClient)field.GetValue(publisher)!).Dispose();
-        field.SetValue(publisher, new HttpClient(new Answers(request =>
+        var answers = new Answers(request =>
         {
             var path = request.RequestUri!.AbsolutePath;
             asked.Add(path);
@@ -72,7 +70,15 @@ public sealed class BugHunt16_RelaySaveMidSendTests : IDisposable
             {
                 Content = new StringContent("{}", Encoding.UTF8, "application/json"),
             };
-        })));
+        });
+
+        // The worker's client and listening's own (19 Nov 2026).
+        foreach (var name in new[] { "_http", "_listenHttp" })
+        {
+            var field = FieldOf(publisher, name);
+            ((HttpClient)field.GetValue(publisher)!).Dispose();
+            field.SetValue(publisher, new HttpClient(answers, disposeHandler: false));
+        }
 
         return publisher;
     }

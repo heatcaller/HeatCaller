@@ -329,6 +329,18 @@ public partial class MainForm
                 // redrawing a page must never stop that.
             }
 
+            // A Pole Shootout's runs and grid, and the next Invitational
+            // main's grid, follow the race just filed (19 Nov 2026). It
+            // catches its own faults; this is for anything it did not.
+            try
+            {
+                _raceProgram?.KeepFinalsFormatsInStep();
+            }
+            catch
+            {
+                // As above: never in the way of the filing.
+            }
+
             RefreshActiveRoundCombo();
             RefreshCurrentPage();
         };
@@ -442,6 +454,7 @@ public partial class MainForm
         // voice is not available, and Hear It is not built at all, which is
         // deliberate: a dead button reads as a broken feature.
         driverProfiles.SpeakName = text => _announcer.SpeakTest(text, _voiceStore.Current.Speed);
+        driverProfiles.CrewVoices = CrewVoicesForDesk;
         WireUnknownTransponders();
     }
 
@@ -621,6 +634,7 @@ public partial class MainForm
 
         // Who said from their phone they're coming tonight (setup plan C1).
         checkIn.ComingTonightList = ComingTonightList;
+        checkIn.CrewVoices = CrewVoicesForDesk;
         _preEntries.Changed += () =>
         {
             if (!checkIn.IsDisposed)

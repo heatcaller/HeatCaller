@@ -86,16 +86,16 @@ describe("club social links: on the pages", () => {
 
     // An icon, not the word (5 Nov 2026, Asher: "replace the socials labels
     // with icons"); the name stays as its accessible label and tooltip.
-    assert.match(home.text, /<div class="social"><a class="soc" href="https:\/\/www\.facebook\.com\/acmerc\?ref=a&amp;b=%22c%22"[^>]*rel="noopener noreferrer me" aria-label="Facebook" title="Facebook"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">[\s\S]*?<\/svg><\/a><\/div>/);
+    assert.match(home.text, /<div class="social"><a class="soc" href="https:\/\/www\.facebook\.com\/acmerc\?ref=a&amp;b=%22c%22"[^>]*rel="noopener noreferrer me" aria-label="[^"]+ on Facebook" title="Facebook"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">[\s\S]*?<\/svg><\/a><\/div>/);
     assert.doesNotMatch(home.text, />Facebook<\/a>/, "no word on the button");
     assert.doesNotMatch(home.text, /href="javascript:/);
     // No link drawn for it - the page's own script names Instagram (the
     // in-app browser help, 14 Nov 2026), so the check is on the link itself.
-    assert.doesNotMatch(home.text, /aria-label="Instagram"/);
+    assert.doesNotMatch(home.text, /aria-label="[^"]*Instagram"/);
 
     const live = await call(harness, "GET", "/c/acme-rc/live");
 
-    assert.match(live.text, /<span class="links"[^>]*><a class="soc" href="https:\/\/www\.facebook\.com\/acmerc[^"]*"[^>]*aria-label="Facebook"/);
+    assert.match(live.text, /<span class="links"[^>]*><a class="soc" href="https:\/\/www\.facebook\.com\/acmerc[^"]*"[^>]*aria-label="[^"]+ on Facebook"/);
     assert.doesNotMatch(live.text, /class="social"/);
   });
 });

@@ -784,6 +784,7 @@ export function asDriverAsk(value: unknown): DriverAskBody | undefined {
  * present "" asks to clear it:
  *
  *   pName, tName       the Team Principal's and Technical Lead's made-up names
+ *   pSay, tSay         how each name is said, when not as spelled (19 Nov 2026)
  *   pVoice, tVoice     "" (the club's own voice) or a voice key off driverme
  *   goal, thanks, car  the three broadcast notes
  *
@@ -795,6 +796,8 @@ export function asDriverAsk(value: unknown): DriverAskBody | undefined {
  */
 
 export const ASK_MAX_CREW_NAME = 24;
+/** A crew name's "said as" spelling (19 Nov 2026): pSay, tSay. The same letters as a name. */
+export const ASK_MAX_CREW_SAY = 40;
 export const ASK_MAX_CREW_GOAL = 80;
 export const ASK_MAX_CREW_THANKS = 80;
 export const ASK_MAX_CREW_CAR = 120;
@@ -840,7 +843,7 @@ function crewAskFrom(input: Record<string, unknown>, withPin: boolean, junior: b
 
   const out: Record<string, string | boolean> = {};
 
-  for (const name of ["pName", "tName"]) {
+  for (const name of ["pName", "tName", "pSay", "tSay"]) {
     const value = input[name];
 
     if (value === undefined) {
@@ -851,14 +854,18 @@ function crewAskFrom(input: Record<string, unknown>, withPin: boolean, junior: b
       return refuse(400, "That request could not be read.");
     }
 
-    const cleaned = cleanAskText(value, ASK_MAX_CREW_NAME + 1);
+    const say = name === "pSay" || name === "tSay";
+    const max = say ? ASK_MAX_CREW_SAY : ASK_MAX_CREW_NAME;
+    const cleaned = cleanAskText(value, max + 1);
 
-    if (cleaned.length > ASK_MAX_CREW_NAME) {
-      return refuse(400, `Keep a crew name under ${ASK_MAX_CREW_NAME} characters.`);
+    if (cleaned.length > max) {
+      return refuse(400, say ? `Keep a "said as" under ${max} characters.` : `Keep a crew name under ${max} characters.`);
     }
 
     if (!CREW_NAME.test(cleaned)) {
-      return refuse(400, "A crew name can only have letters, spaces, hyphens and apostrophes.");
+      return refuse(400, say
+        ? 'A "said as" can only have letters, spaces, hyphens and apostrophes.'
+        : "A crew name can only have letters, spaces, hyphens and apostrophes.");
     }
 
     if (crewRude(cleaned)) {
@@ -924,7 +931,7 @@ function crewAskFrom(input: Record<string, unknown>, withPin: boolean, junior: b
   // An under-13's crew names come only from the desk, with a parent there
   // (15 Nov 2026, children's privacy plan 2.1). Voices and clearing a name
   // are fine: neither puts a child's words on the PA.
-  if (under13 && ["pName", "tName"].some((name) => typeof out[name] === "string" && out[name] !== "")) {
+  if (under13 && ["pName", "tName", "pSay", "tSay"].some((name) => typeof out[name] === "string" && out[name] !== "")) {
     return refuse(403, CREW_UNDER13_NAMES);
   }
 
@@ -942,14 +949,21 @@ function crewAskFrom(input: Record<string, unknown>, withPin: boolean, junior: b
 /** One role's crew member as driverme has it. */
 export interface CrewMember {
   readonly name: string;
+  /** How the name is said, when not as spelled (19 Nov 2026); absent for as spelled. */
+  readonly say?: string;
   readonly voice: string;
 }
 
-/** A voice the driver may pick: key, display name, and an https sample clip when there is one. */
+/**
+ * A voice the driver may pick: key, display name, and an https sample clip
+ * when there is one - or h, when the club's PC left a sample of it on this
+ * relay under its key (19 Nov 2026, crewsamples.ts).
+ */
 export interface CrewVoice {
   readonly k: string;
   readonly n: string;
   readonly s?: string;
+  readonly h?: true;
 }
 
 /** driverme's optional crew, as the relay hands it to a phone (voices from the document's crewVoices). */
@@ -989,7 +1003,11 @@ function crewMemberFrom(value: unknown): CrewMember | undefined {
     return undefined;
   }
 
-  return { name: cleanAskText(v["name"], ASK_MAX_CREW_NAME), voice };
+  // A laptop from before "said as" sends none, and "" is as spelled: left out.
+  const say = typeof v["say"] === "string" ? cleanAskText(v["say"], ASK_MAX_CREW_SAY) : "";
+  const name = cleanAskText(v["name"], ASK_MAX_CREW_NAME);
+
+  return say !== "" && CREW_NAME.test(say) ? { name, say, voice } : { name, voice };
 }
 
 function sampleFrom(value: unknown): string | undefined {
@@ -1041,7 +1059,7 @@ export function crewVoicesFrom(value: unknown): CrewVoice[] {
 
     seen.add(k);
     const s = sampleFrom(e["s"]);
-    voices.push(s === undefined ? { k, n } : { k, n, s });
+    voices.push(s !== undefined ? { k, n, s } : e["h"] === true ? { k, n, h: true } : { k, n });
   }
 
   return voices;
