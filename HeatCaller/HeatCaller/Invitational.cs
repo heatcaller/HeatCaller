@@ -248,17 +248,44 @@ public static class Invitational
     }
 
     /// <summary>
-    /// The next main still to run after <paramref name="justRun"/> that has
-    /// not had its grid set yet, or null - the last main, or the next one
-    /// already gridded (or raced).
+    /// The next main still to run after <paramref name="justRun"/> whose
+    /// grid may be set from the points, or null: the last main; the next
+    /// one raced, or out on track (<paramref name="onTrackId"/>); or one
+    /// whose grid was set and then changed by hand. A grid set and left as
+    /// it was is offered again (19 Nov 2026), so a corrected result of an
+    /// earlier main re-grids it - SetGrid then says whether anything moved.
     /// </summary>
-    public static RoundDefinition? NextToGrid(RoundDefinition justRun, IReadOnlyList<RoundDefinition> series) =>
+    public static RoundDefinition? NextToGrid(RoundDefinition justRun, IReadOnlyList<RoundDefinition> series, string? onTrackId = null) =>
         series
             .Where(r => r.InvitationalMain > justRun.InvitationalMain && !r.IsRecorded)
             .OrderBy(r => r.InvitationalMain)
-            .FirstOrDefault() is { InvitationalGridSet: false } next
+            .FirstOrDefault() is { } next
+        && !string.Equals(next.Id, onTrackId, StringComparison.Ordinal)
+        && (!next.InvitationalGridSet || GridUntouched(next))
             ? next
             : null;
+
+    /// <summary>The main's drivers are still exactly the grid the points gave it.</summary>
+    public static bool GridUntouched(RoundDefinition main) =>
+        main.InvitationalGridAsSet is { } given
+        && given.SequenceEqual(main.AssignedTransponders, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gives <paramref name="main"/> <paramref name="grid"/> as its grid from
+    /// the points, remembered as given. True when anything changed - a first
+    /// grid, or a different order after a correction.
+    /// </summary>
+    public static bool SetGrid(RoundDefinition main, IReadOnlyList<string> grid)
+    {
+        var changed = !main.InvitationalGridSet
+                      || !grid.SequenceEqual(main.AssignedTransponders, StringComparer.OrdinalIgnoreCase);
+
+        main.AssignedTransponders = grid.ToList();
+        main.InvitationalGridAsSet = grid.ToList();
+        main.InvitationalGridSet = true;
+
+        return changed;
+    }
 
     /// <summary>
     /// The call after a main: "After main 2 of 5, Sam leads the

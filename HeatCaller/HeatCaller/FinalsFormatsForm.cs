@@ -36,6 +36,7 @@ public sealed class FinalsFormatsForm : Form
     private readonly NumericUpDown _numField = new();
     private readonly ComboBox _cmbScoring = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly CheckBox _chkInvert = new ThemedCheckBox();
+    private readonly CheckBox _chkLowerLegs = new ThemedCheckBox();
     private readonly Button _btnSeed = new() { Text = "Seed Order..." };
     private readonly Label _lblSeed = new() { AutoSize = true };
     private readonly Label _lblMains;
@@ -151,13 +152,29 @@ public sealed class FinalsFormatsForm : Form
         shootoutCard.Add(Hint("The top qualifiers run alone against the clock for pole."));
         shootoutCard.Add(shootout, gapBelow: 0);
 
+        // --- Lower mains in legs (19 Nov 2026) ---
+        _chkLowerLegs.Text = "Run the lower mains in legs too";
+        _chkLowerLegs.AutoSize = true;
+        _chkLowerLegs.Checked = raceClass.LowerMainsInLegs;
+
+        var lowerLegs = new FieldGrid();
+        lowerLegs.AddWide(_chkLowerLegs, stretch: false);
+        lowerLegs.AddWide(Hint(
+            "Each lower main runs as many legs as the A-Main, with the same number counting - set by A-main: in the "
+            + "class settings, so it does nothing with a single A-main. A main's bump-ups go up from its overall "
+            + "result once all its legs are in, into every leg of the main above. The lower legs run first."));
+
+        var lowerLegsCard = new Section("Lower mains in legs");
+        lowerLegsCard.Add(Hint("The B, C and lower mains run in legs like the A-Main."));
+        lowerLegsCard.Add(lowerLegs, gapBelow: 0);
+
         var invitationalCard = new Section(Invitational.Name);
         invitationalCard.Add(Hint("A series of mains for the whole field, scored on points, best ones counting."));
         invitationalCard.Add(invitational, gapBelow: 0);
 
         var lblIntro = new Label
         {
-            Text = "Two ways to run this class's finals beyond the usual mains. Both are off until ticked, and both can run together.",
+            Text = "More ways to run this class's finals beyond the usual mains. Each is off until ticked, and they can run together.",
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -170,7 +187,8 @@ public sealed class FinalsFormatsForm : Form
         var body = DialogFit.Body(page);
         body.Add(lblIntro, gapBelow: UiLayout.RowGap);
         body.Add(shootoutCard);
-        body.Add(invitationalCard, gapBelow: 0);
+        body.Add(invitationalCard);
+        body.Add(lowerLegsCard, gapBelow: 0);
 
         page.Add(new ButtonBar(alignRight: true).With(cancel, ok), gapBelow: 0);
         ok.TabIndex = 0;
@@ -186,7 +204,7 @@ public sealed class FinalsFormatsForm : Form
         AppTheme.ApplyRecursively(this);
         AppTheme.StyleButton(ok, AppTheme.ButtonKind.Primary);
 
-        FieldGrid.LineUp(new[] { shootout, invitational });
+        FieldGrid.LineUp(new[] { shootout, invitational, lowerLegs });
         SizeFields();
 
         DialogFit.Keep(this, page, width: DialogWidth, body: body);
@@ -291,6 +309,7 @@ public sealed class FinalsFormatsForm : Form
         _raceClass.InvitationalScoring = ScoringChoices[Math.Clamp(_cmbScoring.SelectedIndex, 0, ScoringChoices.Length - 1)].Scoring;
         _raceClass.InvitationalInvertGrid = _chkInvert.Checked;
         _raceClass.InvitationalSeed = _seed;
+        _raceClass.LowerMainsInLegs = _chkLowerLegs.Checked;
 
         DialogResult = DialogResult.OK;
         Close();

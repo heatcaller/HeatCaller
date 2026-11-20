@@ -843,11 +843,11 @@ public sealed partial class RaceControlControl
 
                 if (aMainOverall is { } decided)
                 {
-                    var overallLine = AMainLegs.OverallCall(SpokenDriverName(decided.Winner.Transponder), decided.Counting, decided.Legs);
+                    var overallLine = AMainLegs.OverallCall(SpokenDriverName(decided.Winner.Transponder), decided.Counting, decided.Legs, decided.Letter);
                     // "Unnamed driver" for a car with no profile, as the recap's own result lines have it - never a blank name.
                     aMainOverallFact = AMainLegs.OverallFact(decided, s => RelayDocuments.PublicNameOrUnnamed(SpokenDriverName(s.Transponder), s.Transponder));
                     resultRead = resultRead is null ? overallLine : $"{resultRead} {overallLine}";
-                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] A-Main overall: {decided.Winner.DriverName}, {decided.Winner.Words()}.");
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] {decided.Letter}-Main overall: {decided.Winner.DriverName}, {decided.Winner.Words()}.");
                 }
             }
             catch (Exception ex)

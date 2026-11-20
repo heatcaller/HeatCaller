@@ -1860,6 +1860,42 @@ public partial class MainForm
             };
         }
 
+        // A leg of any main run in legs (19 Nov 2026, with lower mains in
+        // legs): that main's overall so far, from its second leg on.
+        if (round is { Kind: RoundKind.Main, MainLeg: > 0 })
+        {
+            var legs = AMainLegs.LegsOf(round, day).Where(r => r.MainLeg <= round.MainLeg).ToList();
+            var filed = legs
+                .Select(r => (Leg: r, Result: ReferenceEquals(r, round) ? session : r.LinkedSessionId is { } id ? Upto(id) : null))
+                .Where(x => x.Result is not null)
+                .ToList();
+
+            if (filed.Count < 2)
+            {
+                return null;
+            }
+
+            var legCount = Math.Max(round.MainLegCount, filed.Count);
+            var counting = AMainLegs.LegsCounting(legCount, raceClass?.AMainLegsCounted ?? 0);
+            var table = AMainLegs.Overall(filed.Select(x => x.Result!).ToList(), counting, _profiles.PrimaryForAlternate, filed.Select(x => x.Leg.MainLeg).ToList());
+            var names = Shown(table.Select(s => (s.Transponder, s.DriverName)).ToList());
+
+            return new RelayStandings
+            {
+                Title = filed.Count >= legCount
+                    ? $"{round.TierLetter}-Main overall result"
+                    : $"{round.TierLetter}-Main overall after {Plural.Of(filed.Count, "leg")} of {legCount}",
+                Note = $"1st = 1 point; the best {counting} of {legCount} legs count, fewest points wins.",
+                Rows = table.Select((s, i) => new RelayStandingRow
+                {
+                    Pos = i + 1,
+                    Name = names[i],
+                    Value = s.Points == 1 ? "1 pt" : $"{s.Points} pts",
+                    Detail = s.Detail,
+                }).ToList(),
+            };
+        }
+
         return null;
     }
 

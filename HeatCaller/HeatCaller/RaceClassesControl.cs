@@ -390,7 +390,7 @@ public sealed class RaceClassesControl : UserControl
             : $"{raceClass.MainSize} per main  ·  top {raceClass.BumpUpCount} bump up")
         // 11 Nov 2026, Phase 5.3: a double or triple A-main says so.
         + (raceClass.AMainLegs > 1
-            ? $"  ·  A-main in {raceClass.AMainLegs} legs (best {AMainLegs.LegsCounting(raceClass.AMainLegs, raceClass.AMainLegsCounted)})"
+            ? $"  ·  {(raceClass.LowerMainsInLegs ? "every main" : "A-main")} in {raceClass.AMainLegs} legs (best {AMainLegs.LegsCounting(raceClass.AMainLegs, raceClass.AMainLegsCounted)})"
             : string.Empty);
 
     /// <summary>

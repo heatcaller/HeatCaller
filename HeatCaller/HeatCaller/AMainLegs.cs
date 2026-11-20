@@ -71,7 +71,10 @@ public static class AMainLegs
     }
 
     /// <summary>What a leg is called on the program: "A-Main Leg 2".</summary>
-    public static string LegLabel(int leg) => $"A-Main Leg {leg}";
+    public static string LegLabel(int leg) => LegLabel(0, leg);
+
+    /// <summary>A leg of any main, for lower mains run in legs (19 Nov 2026): "B-Main Leg 2".</summary>
+    public static string LegLabel(int tier, int leg) => $"{MainsBuilder.SeedPlan.LetterFor(Math.Max(0, tier))}-Main Leg {leg}";
 
     /// <summary>
     /// The overall result. <paramref name="legs"/> is each RECORDED leg's
@@ -217,6 +220,45 @@ public static class AMainLegs
     {
         /// <summary>The overall winner - the top of the table.</summary>
         public Standing Winner => Table[0];
+
+        /// <summary>Which main this is: 0 for the A-main, 1 for the B-main and so on (19 Nov 2026, lower mains in legs).</summary>
+        public int Tier { get; init; }
+
+        /// <summary>"A", "B"... - the main's letter.</summary>
+        public string Letter => MainsBuilder.SeedPlan.LetterFor(Tier);
+    }
+
+    /// <summary>A main's tier, an untiered main read as the top one - the reading the legs have always used.</summary>
+    private static int TierOf(RoundDefinition round) => round.MainTier <= 0 ? 0 : round.MainTier;
+
+    /// <summary>
+    /// Every leg of the main <paramref name="leg"/> is a leg of, among
+    /// <paramref name="rounds"/>, in leg order: one round per leg number of
+    /// the same class and tier, and where there are several the one built
+    /// nearest <paramref name="leg"/> (a main's legs are made together) -
+    /// <paramref name="leg"/> itself for its own number. Just
+    /// <paramref name="leg"/> when it is not a leg.
+    /// </summary>
+    public static List<RoundDefinition> LegsOf(RoundDefinition leg, IEnumerable<RoundDefinition> rounds)
+    {
+        if (leg.MainLeg <= 0)
+        {
+            return new List<RoundDefinition> { leg };
+        }
+
+        return rounds
+            .Where(r => r.Kind == RoundKind.Main
+                        && r.MainLeg > 0
+                        && TierOf(r) == TierOf(leg)
+                        && r.MainLeg != leg.MainLeg
+                        && (leg.MainLegCount <= 0 || r.MainLeg <= leg.MainLegCount)
+                        && !string.Equals(r.Id, leg.Id, StringComparison.Ordinal)
+                        && string.Equals(r.ClassName, leg.ClassName, StringComparison.OrdinalIgnoreCase))
+            .GroupBy(r => r.MainLeg)
+            .Select(g => g.MinBy(r => (r.CreatedAtUtc - leg.CreatedAtUtc).Duration())!)
+            .Append(leg)
+            .OrderBy(r => r.MainLeg)
+            .ToList();
     }
 
     /// <summary>
@@ -236,7 +278,9 @@ public static class AMainLegs
         int countedSetting,
         Func<string, string?>? primaryForAlternate = null)
     {
-        if (justRun is not { Kind: RoundKind.Main, MainTier: <= 0, MainLeg: > 0 })
+        // Any tier since 19 Nov 2026 (lower mains in legs): the legs of the
+        // main this one is a leg of.
+        if (justRun is not { Kind: RoundKind.Main, MainLeg: > 0 })
         {
             return null;
         }
@@ -247,17 +291,7 @@ public static class AMainLegs
         // open the scope is every round there is, and the class's legs from
         // an earlier meeting were taken as legs of tonight's: six legs scored
         // into tonight's winner, or no winner at all if an old one never ran.
-        var siblings = roundsInScope
-            .Where(r => r.Kind == RoundKind.Main
-                        && r.MainTier <= 0
-                        && r.MainLeg > 0
-                        && r.MainLeg != justRun.MainLeg
-                        && (justRun.MainLegCount <= 0 || r.MainLeg <= justRun.MainLegCount)
-                        && !string.Equals(r.Id, justRun.Id, StringComparison.Ordinal)
-                        && string.Equals(r.ClassName, justRun.ClassName, StringComparison.OrdinalIgnoreCase))
-            .GroupBy(r => r.MainLeg)
-            .Select(g => g.MinBy(r => (r.CreatedAtUtc - justRun.CreatedAtUtc).Duration())!)
-            .ToList();
+        var siblings = LegsOf(justRun, roundsInScope).Where(r => !ReferenceEquals(r, justRun)).ToList();
 
         var legs = new List<(int Leg, SessionRecord Result)> { (justRun.MainLeg, justRunResult) };
 
@@ -284,7 +318,7 @@ public static class AMainLegs
         var counting = LegsCounting(legCount, countedSetting);
         var table = Overall(ordered, counting, primaryForAlternate, inOrder.Select(l => l.Leg).ToList());
 
-        return table.Count == 0 ? null : new Decided(table, counting, legCount);
+        return table.Count == 0 ? null : new Decided(table, counting, legCount) { Tier = TierOf(justRun) };
     }
 
     /// <summary>
@@ -292,13 +326,14 @@ public static class AMainLegs
     /// overall, best two of three legs." <paramref name="winner"/> is the
     /// name as it is said.
     /// </summary>
-    public static string OverallCall(string winner, int counting, int legs)
+    public static string OverallCall(string winner, int counting, int legs, string letter = "A")
     {
         var how = counting < legs
             ? $"best {Words(counting)} of {Words(legs)} legs"
             : $"across all {Words(legs)} legs";
 
-        return $"{winner.Trim()} wins the A-Main overall, {how}.";
+        // The main's own letter (19 Nov 2026): "wins the B-Main overall".
+        return $"{winner.Trim()} wins the {letter}-Main overall, {how}.";
     }
 
     /// <summary>The recap's fact line for the overall result: winner, points and the next two.</summary>
@@ -306,9 +341,9 @@ public static class AMainLegs
     {
         var top = decided.Table.Take(3).Select((s, i) => $"{i + 1}. {nameOf(s)} {s.Words()}");
 
-        return $"This was the last leg of the A-Main, which is scored over {Words(decided.Legs)} legs with the best "
+        return $"This was the last leg of the {decided.Letter}-Main, which is scored over {Words(decided.Legs)} legs with the best "
                + $"{Words(decided.Counting)} counting. Overall: {string.Join(", ", top)}. "
-               + $"{nameOf(decided.Winner)} wins the A-Main overall.";
+               + $"{nameOf(decided.Winner)} wins the {decided.Letter}-Main overall.";
     }
 
     internal static string Words(int n) => n switch

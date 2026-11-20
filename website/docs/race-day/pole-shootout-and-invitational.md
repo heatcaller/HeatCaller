@@ -1,10 +1,10 @@
 # Pole Shootout and Invitational
 
-Two extra ways to run a class's finals. A **Pole Shootout** sends the top qualifiers out one at a time to fight for pole. An **Invitational (Reedy-style format)** races the whole field in a series of mains scored on points. Both are off until you turn them on, and a class can use both.
+Extra ways to run a class's finals. A **Pole Shootout** sends the top qualifiers out one at a time to fight for pole. An **Invitational (Reedy-style format)** races the whole field in a series of mains scored on points. **Lower mains in legs** runs the B, C and lower mains in legs like a double or triple A-Main. Each is off until you turn it on.
 
 ## Before you start
 
-Both are set per class. On the **Classes** page, edit the class and click **Finals Formats** in the row of buttons under its settings. Tick **Run a Pole Shootout after qualifying**, **Run the finals as an Invitational**, or both, and click **OK**. Like the other buttons there, the change is kept when you click **Save** on the class.
+All three are set per class. On the **Classes** page, edit the class and click **Finals Formats** in the row of buttons under its settings. Tick **Run a Pole Shootout after qualifying**, **Run the finals as an Invitational** or **Run the lower mains in legs too**, and click **OK**. Like the other buttons there, the change is kept when you click **Save** on the class.
 
 The runs and mains are built when you build the class's finals: **Build the finals from qualifying** on **Race Day → Next Steps**, or **Build the Finals from Qualifying...** on **More**. See [Seed the mains](program-and-mains.md#seed-the-mains).
 
@@ -77,7 +77,7 @@ Ties are broken by the best finish in any single main, then by the better finish
 
 - The mains are added to the program as **Invitational Main 1**, **Invitational Main 2** and so on. The **Kind** column says **Invitational**.
 - Main 1 starts in seed order. When a main is recorded, the next main's grid is set from the points so far: the leader at the front, or at the back with **Invert the grid** ticked.
-- Each grid is set once. If you change a main's drivers by hand after that, HeatCaller leaves your change alone.
+- When a main is recorded, the next main's grid is set from the points. If an earlier main's result is corrected later, the next main's grid is set again, as long as that main hasn't started and nobody has changed its drivers by hand. Once you change a main's drivers by hand, HeatCaller leaves your grid alone.
 - There are no bump-ups: the whole field is already in every main.
 
 ### What the announcer says
@@ -89,6 +89,17 @@ After each main the announcer says who leads, for example "After main 2 of 5, Sa
 - Each main's own result is in **Results** like any race.
 - The event report has an **Invitational (Reedy-style format)** table for the class: each driver's points and their place and points in every main, with any dropped main marked. It says **standings** until the last main is in.
 - On the club website, each main's result shows the standings with that main in, and the final result after the last one.
+
+## Lower mains in legs
+
+With a double or triple A-Main (**A-main:** in the class settings), tick **Run the lower mains in legs too** to run the B-Main, C-Main and the rest in legs as well. Each lower main runs the same number of legs as the A-Main and counts the same number of them. With a single A-Main, or with the Invitational on, it does nothing. It's off unless you tick it.
+
+- The legs are added as **B-Main Leg 1**, **B-Main Leg 2** and so on. Every leg of a main runs before the main above it: all the C-Main's legs, then all the B-Main's, then the A-Main's.
+- Each lower main is scored like the A-Main legs: 1st scores 1 point, a leg not started or a DQ scores the field plus one, the best legs count and fewest points wins. Ties go to the best single-leg finish, then the last leg. See [Double and triple A-mains](program-and-mains.md#double-and-triple-a-mains).
+- Bump-ups come from a main's overall result, once every one of its legs is in. **Move the Top Finishers Up...** names the main's overall result ("Bump 2 drivers from the B-Main overall up into..."), and the drivers go into every leg of the main above that hasn't run, the way bump-ups into the A-Main legs work. Until the last leg is in, the bump-up says which leg hasn't run yet.
+- Once a main's last leg is recorded, the announcer says who won it overall, for example "Sam wins the B-Main overall, best two of three legs."
+- The event report has a **B-Main overall** table (and one for each main run in legs) beside **A-Main overall**.
+- On the club website, from a main's second leg on, each leg's result shows that main's overall standings so far. This is the same for the A-Main's legs.
 
 ## Tips
 

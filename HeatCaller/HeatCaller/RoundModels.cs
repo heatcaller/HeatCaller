@@ -150,6 +150,15 @@ public sealed class RoundDefinition
     public bool InvitationalGridSet { get; set; }
 
     /// <summary>
+    /// The grid this Invitational main was given from the points, as it was
+    /// given. While the main's drivers are still exactly this - nobody has
+    /// changed them by hand - a corrected result of an earlier main sets the
+    /// grid again; once they differ, the desk's grid stands. Null before a
+    /// grid is set, and on a main gridded before this was kept.
+    /// </summary>
+    public List<string>? InvitationalGridAsSet { get; set; }
+
+    /// <summary>
     /// The OTHER classes sharing this heat with <see cref="ClassName"/>
     /// (11 Nov 2026, race-night build plan, Phase 4.1: mixed-class heats) -
     /// "Mod" on a Stock heat that 3 Stock and 4 Mod run together.

@@ -3190,7 +3190,7 @@ public sealed partial class RaceProgramControl : UserControl
         else
         {
             // A double or triple A-main (11 Nov 2026, Phase 5.3) is built as its legs.
-            created.AddRange(MainsBuilder.BuildRounds(className, plan, DayTrack(), bumpUp, raceClass?.AMainLegs ?? 1));
+            created.AddRange(MainsBuilder.BuildRounds(className, plan, DayTrack(), bumpUp, raceClass?.AMainLegs ?? 1, raceClass?.LowerMainsInLegs ?? false));
         }
 
         // Tonight's "finals N minutes shorter" (12 Nov 2026, setup plan
@@ -3219,6 +3219,7 @@ public sealed partial class RaceProgramControl : UserControl
                        ? $" The {Invitational.ShortName}: every main counts on points, the best {Invitational.CountingFor(raceClass)} count, fewest wins."
                        : legs > 1 && plan.Tiers[0].Count > 0
                        ? $" The A-main runs as {legs} legs; the best {AMainLegs.LegsCounting(legs, raceClass?.AMainLegsCounted ?? 0)} count, fewest points wins."
+                         + (raceClass?.LowerMainsInLegs == true && plan.TierCount > 1 ? " So do the lower mains, each bumping up on its overall result." : string.Empty)
                        : string.Empty)
                    + (runsBuilt > 0 ? $" {PoleShootout.Name}: {Plural.Of(runsBuilt, "run")} before them." : string.Empty);
         _lblStatus.Text = done;
@@ -5350,7 +5351,7 @@ public sealed partial class RaceProgramControl : UserControl
         // 17 Oct 2026, Bug Hunt 8, A24-1: the same feeder the blocker check
         // passed - see MainsBuilder.FeederFor.
         var feeder = MainsBuilder.FeederFor(target, mains)!;
-        var feederResults = _sessionHistory.Get(feeder.LinkedSessionId!)!;
+        var feederResults = FeederResultsFor(feeder, mains);
 
         // Anyone already in the target cannot be promoted again - usually
         // because they were moved up by hand. The confirmation used to list
@@ -5374,7 +5375,7 @@ public sealed partial class RaceProgramControl : UserControl
                 : string.Empty;
 
             return new BumpUpsAnswer(true, "Nothing to bump",
-                $"Nothing to bump up - every qualifying finisher from {feeder.RoundLabel} is already in {target.RoundLabel}.{who}"
+                $"Nothing to bump up - every qualifying finisher from {FeederName(feeder)} is already in {target.RoundLabel}.{who}"
                 + $"\r\n\r\nBump-ups for {into} are marked as done, so the program can move on.",
                 target, feeder, true);
         }
@@ -5386,8 +5387,8 @@ public sealed partial class RaceProgramControl : UserControl
             : string.Empty;
 
         return new BumpUpsAnswer(true, ProgramCaptions.BumpUps.TrimEnd('.'),
-            $"Bump {Plural.Of(movable.Count, "driver")} from {feeder.RoundLabel} up into {into}?\r\n\r\n{names}{skipped}"
-            + $"\r\n\r\n{(legsTaking.Count > 1 ? "Each leg grows" : target.RoundLabel + " grows")} to take them - nobody is moved down into {feeder.RoundLabel}, "
+            $"Bump {Plural.Of(movable.Count, "driver")} from {FeederName(feeder)} up into {into}?\r\n\r\n{names}{skipped}"
+            + $"\r\n\r\n{(legsTaking.Count > 1 ? "Each leg grows" : target.RoundLabel + " grows")} to take them - nobody is moved down into {FeederName(feeder)}, "
             + "which has already run.",
             target, feeder, false);
     }
@@ -5418,7 +5419,7 @@ public sealed partial class RaceProgramControl : UserControl
         // 17 Oct 2026, Bug Hunt 8, A24-1: the same feeder the blocker check
         // passed - see MainsBuilder.FeederFor.
         var feeder = MainsBuilder.FeederFor(target, mains)!;
-        var feederResults = _sessionHistory.Get(feeder.LinkedSessionId!)!;
+        var feederResults = FeederResultsFor(feeder, mains);
 
         // EVERY LEG AT ONCE (11 Nov 2026): a double or triple A-main's legs
         // share the grid, so the bump-ups go into each leg still to run in

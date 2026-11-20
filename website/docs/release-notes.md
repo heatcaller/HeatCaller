@@ -4,10 +4,11 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
-- **Pole Shootout and Invitational (19 November).** Two new ways to run a class's finals, both off until you turn them on with **Finals Formats** in the class settings.
+- **Pole Shootout, Invitational and lower mains in legs (19 November).** New ways to run a class's finals, each off until you turn it on with **Finals Formats** in the class settings.
     - **Pole Shootout.** After qualifying, the top 5 (or the number you choose) each run alone, slowest first: an out lap, then one timed lap (up to 3, best counts). The fastest takes pole, and the shootout sets the front of the A-Main grid. The announcer calls each run and the pole.
     - **Invitational (Reedy-style format).** The whole field races a series of mains (5 unless you choose), scored 1st = 1 point or on the class's points scale, with the best 4 counting. Later grids follow the points, or are inverted. The announcer says who leads after each main.
-    - Both show in the program, the event report and on the club website's results.
+    - **Lower mains in legs.** With a double or triple A-Main, the B, C and lower mains can run in legs too. Each bumps up on its overall result once all its legs are in, into every A-Main leg.
+    - All three show in the program, the event report and on the club website's results.
 
     See [Pole Shootout and Invitational](race-day/pole-shootout-and-invitational.md). Update HeatCaller on the race PC, and deploy the relay for the standings on the website.
 - **Anonymous usage totals, and new terms (19 November).** HeatCaller asks you to accept its terms again (revision 3) the next time it opens. The one change: while the relay is on, HeatCaller can send us a few totals once a day (which pages and tabs were used and for how long, the version, and whether a race day was open or Desk View on) so we know what to improve. Nothing about your drivers, nothing typed, no results or keys. **Send HeatCaller anonymous usage totals** on **Backup & Restore** starts ticked where Windows is set to the United States and unticked everywhere else. See [Usage totals](admin/backups.md#usage-totals). Update HeatCaller on the race PC.

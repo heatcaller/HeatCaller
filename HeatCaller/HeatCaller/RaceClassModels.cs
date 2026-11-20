@@ -253,6 +253,15 @@ public sealed class RaceClass
     public int AMainLegsCounted { get; set; }
 
     /// <summary>
+    /// Run the lower mains - B, C and on down - in legs too (19 Nov 2026),
+    /// with the A-main's leg count and its rule for how many count. Only
+    /// means anything with a double or triple A-main. A lower main's bump-ups
+    /// go up from its overall result once all its legs are in. Off by
+    /// default, so a class saved before this runs its lower mains once.
+    /// </summary>
+    public bool LowerMainsInLegs { get; set; }
+
+    /// <summary>
     /// Run a Pole Shootout after qualifying (19 Nov 2026): the top
     /// <see cref="PoleShootoutDrivers"/> each go out alone for a timed lap,
     /// and the fastest takes pole - see PoleShootout. Off by default, so

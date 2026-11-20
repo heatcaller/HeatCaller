@@ -306,6 +306,141 @@ public sealed class PoleShootoutAndInvitationalTests
         Assert.Equal("Invitational", Invitational.ShortName);
     }
 
+    // ---------------------------------------------------------------- lower mains in legs
+
+    private static readonly string[] TwentyQualifiers = Enumerable.Range(1, 20).Select(i => $"q{i}").ToArray();
+
+    [Fact]
+    public void Lower_mains_in_legs_are_built_lowest_first_every_leg_of_a_tier_before_the_tier_above()
+    {
+        var rounds = MainsBuilder.BuildRounds("Stock", MainsBuilder.PlanSeeding(TwentyQualifiers, 8), "Club", 2, aMainLegs: 2, lowerMainsInLegs: true);
+
+        Assert.Equal(
+            new[] { "C-Main Leg 1", "C-Main Leg 2", "B-Main Leg 1", "B-Main Leg 2", "A-Main Leg 1", "A-Main Leg 2" },
+            rounds.Select(r => r.RoundLabel));
+        Assert.Equal(new[] { 2, 2, 1, 1, 0, 0 }, rounds.Select(r => r.MainTier));
+        Assert.All(rounds, r => Assert.Equal(2, r.MainLegCount));
+        Assert.Equal(TwentyQualifiers.Skip(8).Take(8), rounds[2].AssignedTransponders);
+    }
+
+    [Fact]
+    public void Off_or_with_a_single_a_main_the_lower_mains_run_once()
+    {
+        var off = MainsBuilder.BuildRounds("Stock", MainsBuilder.PlanSeeding(TwentyQualifiers, 8), "Club", 2, aMainLegs: 3);
+        Assert.Equal(new[] { "C-Main", "B-Main", "A-Main Leg 1", "A-Main Leg 2", "A-Main Leg 3" }, off.Select(r => r.RoundLabel));
+
+        var single = MainsBuilder.BuildRounds("Stock", MainsBuilder.PlanSeeding(TwentyQualifiers, 8), "Club", 2, aMainLegs: 1, lowerMainsInLegs: true);
+        Assert.Equal(new[] { "C-Main", "B-Main", "A-Main" }, single.Select(r => r.RoundLabel));
+    }
+
+    [Fact]
+    public void A_lower_main_bumps_up_on_its_overall_result_into_every_a_leg()
+    {
+        var rounds = MainsBuilder.BuildRounds("Stock", MainsBuilder.PlanSeeding(TwentyQualifiers.Take(12).ToArray(), 8), "Club", 2, aMainLegs: 2, lowerMainsInLegs: true);
+
+        for (var i = 0; i < rounds.Count; i++)
+        {
+            rounds[i].Order = i;
+        }
+
+        var bLegs = rounds.Where(r => r.MainTier == 1).ToList();
+        var aLegs = rounds.Where(r => r.MainTier == 0).ToList();
+
+        // Both legs count: q9 1st + 2nd = 3, q11 3rd + 1st = 4, q10 2nd +
+        // 4th = 6, q12 4th + 3rd = 7. q10 was 2nd in leg 1 but is 3rd overall.
+        var sessions = new Dictionary<string, SessionRecord>
+        {
+            ["b1"] = Finish("q9", "q10", "q11", "q12"),
+            ["b2"] = Finish("q11", "q9", "q12", "q10"),
+        };
+        bLegs[0].LinkedSessionId = "b1";
+        bLegs[1].LinkedSessionId = "b2";
+
+        var feeder = MainsBuilder.FeederFor(aLegs[0], rounds)!;
+        Assert.Same(bLegs[1], feeder);
+        Assert.Equal(new[] { bLegs[0], bLegs[1] }, AMainLegs.LegsOf(feeder, rounds));
+
+        var overall = MainsBuilder.FeederResults(feeder, rounds, id => sessions.GetValueOrDefault(id), 2)!;
+        Assert.Equal(new[] { "q9", "q11", "q10", "q12" }, overall.Results.Select(r => r.Transponder));
+
+        var plan = MainsBuilder.PlanBumpUp(aLegs[0], overall, null);
+        Assert.Equal(new[] { "q9", "q11" }, plan.Movable.Select(p => p.Transponder));
+
+        // Into every A leg at once, as the A legs' bump-ups always went.
+        Assert.Equal(aLegs, MainsBuilder.BumpUpTargets(aLegs[0], rounds));
+
+        // With a leg still to run there is no overall to bump from.
+        bLegs[1].LinkedSessionId = null;
+        Assert.Null(MainsBuilder.FeederResults(feeder, rounds, id => sessions.GetValueOrDefault(id), 2));
+    }
+
+    [Fact]
+    public void The_last_lower_leg_names_its_own_main_overall()
+    {
+        var rounds = MainsBuilder.BuildRounds("Stock", MainsBuilder.PlanSeeding(TwentyQualifiers.Take(12).ToArray(), 8), "Club", 2, aMainLegs: 2, lowerMainsInLegs: true);
+        var bLegs = rounds.Where(r => r.MainTier == 1).ToList();
+        var sessions = new Dictionary<string, SessionRecord> { ["b1"] = Finish("q9", "q10") };
+        bLegs[0].LinkedSessionId = "b1";
+
+        var decided = AMainLegs.AfterLastLeg(bLegs[1], Finish("q10", "q9"), rounds, id => sessions.GetValueOrDefault(id), 0)!;
+
+        Assert.Equal(1, decided.Tier);
+        Assert.Equal("B", decided.Letter);
+        Assert.Equal("Sam wins the B-Main overall, best one of two legs.", AMainLegs.OverallCall("Sam", decided.Counting, decided.Legs, decided.Letter));
+        Assert.Contains("last leg of the B-Main", AMainLegs.OverallFact(decided, s => s.DriverName));
+
+        // The A legs are not scored into it.
+        Assert.Null(AMainLegs.AfterLastLeg(rounds.First(r => r.MainTier == 0), Finish("q1"), rounds, id => sessions.GetValueOrDefault(id), 0));
+    }
+
+    [Fact]
+    public void A_class_saved_before_lower_legs_runs_its_lower_mains_once()
+    {
+        Assert.False(JsonSerializer.Deserialize<RaceClass>("{\"Name\":\"Stock\",\"AMainLegs\":3}")!.LowerMainsInLegs);
+        Assert.True(JsonSerializer.Deserialize<RaceClass>(JsonSerializer.Serialize(new RaceClass { LowerMainsInLegs = true }))!.LowerMainsInLegs);
+        Assert.Equal("8 per main  ·  top 2 bump up  ·  every main in 3 legs (best 2)",
+            RaceClassesControl.DescribeMains(new RaceClass { AMainLegs = 3, LowerMainsInLegs = true }));
+    }
+
+    // ---------------------------------------------------------------- Invitational re-grid after a correction
+
+    [Fact]
+    public void A_corrected_main_re_grids_the_next_main_while_its_grid_is_as_the_points_gave_it()
+    {
+        var series = Invitational.BuildMains("Stock", new[] { "a", "b", "c" }, 3, "Club");
+        series[0].LinkedSessionId = "m1";
+
+        Assert.True(Invitational.SetGrid(series[1], new[] { "c", "b", "a" }));
+        Assert.False(Invitational.SetGrid(series[1], new[] { "c", "b", "a" }));
+
+        // Untouched: offered again, and a new order is taken.
+        Assert.Same(series[1], Invitational.NextToGrid(series[0], series));
+        Assert.True(Invitational.SetGrid(series[1], new[] { "b", "c", "a" }));
+        Assert.Equal(new[] { "b", "c", "a" }, series[1].AssignedTransponders);
+
+        // On track now: left alone.
+        Assert.Null(Invitational.NextToGrid(series[0], series, onTrackId: series[1].Id));
+
+        // Changed by hand: the desk's grid stands.
+        series[1].AssignedTransponders = new List<string> { "a", "b", "c" };
+        Assert.Null(Invitational.NextToGrid(series[0], series));
+
+        // Raced: the main after it is next.
+        series[1].LinkedSessionId = "m2";
+        Assert.Same(series[2], Invitational.NextToGrid(series[0], series));
+    }
+
+    [Fact]
+    public void A_grid_set_before_the_grid_was_remembered_is_left_alone()
+    {
+        var series = Invitational.BuildMains("Stock", new[] { "a", "b" }, 2, "Club");
+        series[0].LinkedSessionId = "m1";
+        series[1].InvitationalGridSet = true;
+
+        Assert.Null(Invitational.NextToGrid(series[0], series));
+        Assert.Null(JsonSerializer.Deserialize<RoundDefinition>("{\"InvitationalMain\":2,\"InvitationalGridSet\":true}")!.InvitationalGridAsSet);
+    }
+
     // ---------------------------------------------------------------- saved files
 
     [Fact]

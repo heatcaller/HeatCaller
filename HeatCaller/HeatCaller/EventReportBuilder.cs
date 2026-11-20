@@ -673,20 +673,23 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             .Where(s => s.RoundId is not null)
             .Select(s => (Session: s, Round: rounds.Get(s.RoundId!)))
             .Where(x => x.Round is { Kind: RoundKind.Main, MainLeg: > 0 } && x.Round.LinkedSessionId == x.Session.Id)
-            .GroupBy(x => x.Round!.ClassName, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            // Per class AND main (19 Nov 2026): lower mains run in legs too.
+            .GroupBy(x => (Class: x.Round!.ClassName.ToUpperInvariant(), Tier: Math.Max(0, x.Round!.MainTier)))
+            .OrderBy(g => g.Key.Class, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(g => g.Key.Tier)
             .ToList();
 
         foreach (var group in legs)
         {
-            var raceClass = classes.All.FirstOrDefault(c => string.Equals(c.Name, group.Key, StringComparison.OrdinalIgnoreCase));
+            var className = group.First().Round!.ClassName;
+            var raceClass = classes.All.FirstOrDefault(c => string.Equals(c.Name, className, StringComparison.OrdinalIgnoreCase));
             var ordered = group.OrderBy(x => x.Round!.MainLeg).Select(x => x.Session).ToList();
             var legCount = Math.Max(group.Max(x => x.Round!.MainLegCount), ordered.Count);
             var counting = AMainLegs.LegsCounting(legCount, raceClass?.AMainLegsCounted ?? 0);
             var overall = AMainLegs.Overall(ordered, counting, profiles.PrimaryForAlternate,
                 group.OrderBy(x => x.Round!.MainLeg).Select(x => x.Round!.MainLeg).ToList());
 
-            sb.AppendLine($"<h2>{Esc(group.Key)} A-Main overall</h2>");
+            sb.AppendLine($"<h2>{Esc(className)} {MainsBuilder.SeedPlan.LetterFor(group.Key.Tier)}-Main overall</h2>");
             sb.AppendLine($"<p>{Plural.Of(ordered.Count, "leg")} of {legCount} run; the best {counting} count, fewest points wins. {Esc(AMainLegs.TieBreakWords)}</p>");
             sb.AppendLine("<table><tr><th class=\"num\">Pos</th><th>Driver</th><th class=\"num\">Points</th><th>Each leg</th></tr>");
 

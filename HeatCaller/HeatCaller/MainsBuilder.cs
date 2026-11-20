@@ -60,7 +60,12 @@ public static class MainsBuilder
     /// feeder is the same B-main, which runs before all of them), and run
     /// last, one after another. AMainLegs scores them together.
     /// </param>
-    public static List<RoundDefinition> BuildRounds(string className, SeedPlan plan, string trackLayoutName, int bumpUpCount, int aMainLegs = 1)
+    /// <param name="lowerMainsInLegs">
+    /// 19 Nov 2026: the lower mains run in the same number of legs too -
+    /// "B-Main Leg 1", "Leg 2"... - all of a tier's legs before the tier above,
+    /// so a lower main's overall result is in before any bump-up goes up.
+    /// </param>
+    public static List<RoundDefinition> BuildRounds(string className, SeedPlan plan, string trackLayoutName, int bumpUpCount, int aMainLegs = 1, bool lowerMainsInLegs = false)
     {
         var rounds = new List<RoundDefinition>();
         var legs = Math.Clamp(aMainLegs, 1, AMainLegs.MaxLegs);
@@ -68,21 +73,21 @@ public static class MainsBuilder
         // Iterate from the lowest tier upward so Order ascends with run order.
         for (var tier = plan.TierCount - 1; tier >= 0; tier--)
         {
-            if (tier == 0 && legs > 1)
+            if (legs > 1 && (tier == 0 || lowerMainsInLegs))
             {
                 for (var leg = 1; leg <= legs; leg++)
                 {
                     rounds.Add(new RoundDefinition
                     {
                         ClassName = className,
-                        RoundLabel = AMainLegs.LegLabel(leg),
+                        RoundLabel = AMainLegs.LegLabel(tier, leg),
                         Kind = RoundKind.Main,
-                        MainTier = 0,
+                        MainTier = tier,
                         MainLeg = leg,
                         MainLegCount = legs,
                         BumpUpCount = bumpUpCount,
                         TrackLayoutName = trackLayoutName,
-                        AssignedTransponders = plan.Tiers[0].ToList(),
+                        AssignedTransponders = plan.Tiers[tier].ToList(),
                     });
                 }
 
@@ -192,14 +197,80 @@ public static class MainsBuilder
             return "There's no main below this one to bump up from.";
         }
 
-        if (!feeder.IsRecorded)
+        // A lower main run in legs (19 Nov 2026) bumps up on its overall
+        // result, so every one of its legs has to be in first.
+        foreach (var leg in feeder.MainLeg > 0 ? AMainLegs.LegsOf(feeder, allMains) : new List<RoundDefinition> { feeder })
         {
-            return $"{feeder.RoundLabel} hasn't been run yet.";
+            if (!leg.IsRecorded)
+            {
+                return $"{leg.RoundLabel} hasn't been run yet.";
+            }
+
+            if (history.Get(leg.LinkedSessionId!) is null)
+            {
+                return $"{leg.RoundLabel}'s results couldn't be found.";
+            }
         }
 
-        return history.Get(feeder.LinkedSessionId!) is null
-            ? $"{feeder.RoundLabel}'s results couldn't be found."
-            : null;
+        return null;
+    }
+
+    /// <summary>
+    /// The result a bump-up from <paramref name="feeder"/> is read from: its
+    /// own, or - for a main run in legs (19 Nov 2026) - its overall result
+    /// across the legs (AMainLegs.Overall), as one result in that order, so
+    /// PlanBumpUp moves the top of the overall standings. A driver who did
+    /// not finish any leg is left out of it: like a DQ, that earns no place.
+    /// Null while a leg is still to run, or its result can't be found.
+    /// </summary>
+    public static SessionRecord? FeederResults(
+        RoundDefinition feeder,
+        IReadOnlyList<RoundDefinition> allMains,
+        Func<string, SessionRecord?> sessionById,
+        int countedSetting,
+        Func<string, string?>? primaryForAlternate = null)
+    {
+        if (feeder.MainLeg <= 0)
+        {
+            return feeder.LinkedSessionId is { } id ? sessionById(id) : null;
+        }
+
+        var legs = AMainLegs.LegsOf(feeder, allMains);
+        var results = new List<SessionRecord>();
+
+        foreach (var leg in legs)
+        {
+            if (leg.LinkedSessionId is not { } id || sessionById(id) is not { } result)
+            {
+                return null;
+            }
+
+            results.Add(result);
+        }
+
+        var legCount = Math.Max(legs.Count, legs.Max(l => l.MainLegCount));
+        var table = AMainLegs.Overall(results, AMainLegs.LegsCounting(legCount, countedSetting), primaryForAlternate, legs.Select(l => l.MainLeg).ToList());
+
+        return new SessionRecord
+        {
+            Id = results[^1].Id,
+            SessionType = RaceSessionType.Race,
+            Label = $"{feeder.TierLetter}-Main overall",
+            RoundId = feeder.Id,
+            StartedAtUtc = results[0].StartedAtUtc,
+            EndedAtUtc = results[^1].EndedAtUtc,
+            Results = table
+                .Where(s => s.BestFinish > 0)
+                .Select((s, i) => new SessionResultEntry
+                {
+                    Position = i + 1,
+                    Transponder = s.Transponder,
+                    DriverName = s.DriverName,
+                    Laps = 1,
+                    Status = "active",
+                })
+                .ToList(),
+        };
     }
 
     /// <summary>

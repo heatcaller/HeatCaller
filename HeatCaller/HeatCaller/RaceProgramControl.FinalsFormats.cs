@@ -11,6 +11,19 @@ namespace HeatCaller;
 /// </summary>
 public sealed partial class RaceProgramControl
 {
+    /// <summary>
+    /// What a bump-up from <paramref name="feeder"/> reads: its result, or a
+    /// lower main run in legs' overall result (19 Nov 2026) - see
+    /// MainsBuilder.FeederResults. Only asked once DescribeBumpUpBlocker has
+    /// passed, so every leg is in.
+    /// </summary>
+    private SessionRecord FeederResultsFor(RoundDefinition feeder, IReadOnlyList<RoundDefinition> mains) =>
+        MainsBuilder.FeederResults(feeder, mains, _sessionHistory.Get, ClassByName(feeder.ClassName)?.AMainLegsCounted ?? 0, _profiles.PrimaryForAlternate)!;
+
+    /// <summary>A feeder as the bump-up question names it: its label, or "the B-Main overall" for a main run in legs.</summary>
+    private static string FeederName(RoundDefinition feeder) =>
+        feeder.MainLeg > 0 ? $"the {feeder.TierLetter}-Main overall" : feeder.RoundLabel;
+
     /// <summary>The class's Pole Shootout runs on tonight's programme, in running order.</summary>
     private List<RoundDefinition> ShootoutRunsToday(string className) =>
         PoleShootout.RunsOf(DayRoundsForClass(className), className);
@@ -191,7 +204,7 @@ public sealed partial class RaceProgramControl
         {
             var series = Invitational.SeriesOf(filed, classRounds);
 
-            if (Invitational.NextToGrid(filed, series) is not { } next)
+            if (Invitational.NextToGrid(filed, series, RoundOnTrackId?.Invoke()) is not { } next)
             {
                 continue;
             }
@@ -208,10 +221,17 @@ public sealed partial class RaceProgramControl
                 continue;
             }
 
-            next.AssignedTransponders = Invitational.NextGrid(table, next.AssignedTransponders, raceClass?.InvitationalInvertGrid ?? false, _profiles.PrimaryForAlternate);
-            next.InvitationalGridSet = true;
+            var again = next.InvitationalGridSet;
+
+            if (!Invitational.SetGrid(next, Invitational.NextGrid(table, next.AssignedTransponders, raceClass?.InvitationalInvertGrid ?? false, _profiles.PrimaryForAlternate)))
+            {
+                continue;
+            }
+
             _rounds.Update(next);
-            _lblStatus.Text = $"{next.RoundLabel}: grid set by the points so far{(raceClass?.InvitationalInvertGrid == true ? ", inverted" : string.Empty)}.";
+            _lblStatus.Text = again
+                ? $"{next.RoundLabel}: grid set again from the corrected points."
+                : $"{next.RoundLabel}: grid set by the points so far{(raceClass?.InvitationalInvertGrid == true ? ", inverted" : string.Empty)}.";
         }
     }
 }

@@ -54,6 +54,7 @@ internal static partial class WindowCatalog
                 InvitationalScoring = InvitationalScoring.ClassScale,
                 InvitationalInvertGrid = true,
                 InvitationalSeed = Enumerable.Range(1, 24).Select(i => $"T{i}").ToList(),
+                LowerMainsInLegs = true,
             },
             "Kyosho Mini-Z AWD Rally Sport - Visiting Club Invitational (Seniors)")),
 
