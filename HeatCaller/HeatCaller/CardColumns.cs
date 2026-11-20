@@ -52,10 +52,47 @@ internal sealed class CardColumns : Panel
         column.Add(card);
         Controls.Add(card);
 
-        card.Layout += (_, _) => PerformLayout();
+        card.Layout += (_, _) =>
+        {
+            PerformLayout();
+            ArrangeAgainAfterward();
+        };
         card.VisibleChanged += (_, _) => PerformLayout();
 
         return card;
+    }
+
+    /// <summary>Set while a second look is waiting in the message queue, so a burst of layouts asks for one.</summary>
+    private bool _againQueued;
+
+    /// <summary>
+    /// The columns placed once more after the card has finished laying
+    /// itself out (19 Nov 2026). A card's Layout event comes at the START of
+    /// its layout, so the height asked for straight away can be the one
+    /// from before a row inside it wraps: Connection's Race tools card was
+    /// given room for its buttons on one line the first time the page was
+    /// shown, and Photo Finish, wrapped onto a second line, was cut off
+    /// until something laid the page out again. Nothing moves if the height
+    /// was right the first time (Arrange only sets bounds that differ).
+    /// </summary>
+    private void ArrangeAgainAfterward()
+    {
+        if (_againQueued || !IsHandleCreated || IsDisposed)
+        {
+            return;
+        }
+
+        _againQueued = true;
+
+        BeginInvoke(() =>
+        {
+            _againQueued = false;
+
+            if (!IsDisposed)
+            {
+                PerformLayout();
+            }
+        });
     }
 
     public override Size GetPreferredSize(Size proposedSize)

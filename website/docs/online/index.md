@@ -72,7 +72,7 @@ A few more pages are never in the tabs, because each is for one person:
 
 The club's links from the **Look** card (website, Facebook, Instagram and so on) are under "Find us" on Home and at the foot of every other page (see [Look](setup.md#look)).
 
-![The Schedule page on a phone: a Today card for the club night with its venue and track, a Next race in 1:35 countdown, the class filter and Find your name box, then the running order with a Running 4 min behind banner, three Done heats with the times they really started, the next heat marked Next with its estimated time, the races still to come and a break, and the tab bar along the bottom](../assets/images/online-schedule-page-phone.png)
+![The Schedule page on a phone: the club name and logo, a Today card for Race Day 13 Nov 2026 with its venue and track, the class filter and Find your name box, then the running order, each heat with its estimated time and how many drivers, the first marked Next, and the tab bar along the bottom](../assets/images/online-schedule-page-phone.png)
 
 ### Getting around
 
@@ -571,7 +571,7 @@ Since 15 November 2026 a driver can pick a look for the club's pages on their ow
 
 The button then says which look is on, for example **Look: Pit Lane**, or **Look: Teal on Daylight** for a team colour.
 
-![The Look picker on a phone, in Pit Lane: Club colours, Night, Daylight, Pit Lane (ticked), Paddock and Carbon, each with an Aa swatch, then Team colour with eight colours On Night and On Daylight](../assets/images/look-picker.jpg)
+![The Look picker on a phone over the Schedule page: "Just on this phone. High contrast still wins when it is on.", Club colours (ticked), Night, Daylight, Pit Lane, Paddock and Carbon, each with an Aa swatch, then Team colour with eight colours On Night, and Done](../assets/images/look-picker.jpg)
 
 - **It's kept on that phone only.** It doesn't follow the driver to another phone, and signing out on **Me** doesn't clear it.
 - **The pages open in it straight away**, with no flash of the club's colors first.
