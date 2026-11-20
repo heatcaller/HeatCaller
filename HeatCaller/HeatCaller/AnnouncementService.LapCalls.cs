@@ -1132,16 +1132,24 @@ public sealed partial class AnnouncementService
         try
         {
             // The same field the report was built from: no muted ghosts.
+            // The board as of the last crossing, not _standings itself: this
+            // runs on a timer or the voice thread while the timing thread
+            // writes _standings (6 Nov 2026, Bug hunt 11b - see LapCrossingBook).
+            var board = _lapCrossings.Board;
+
+            // For the winner's lines: no ghost, and no black-flagged car
+            // either (bug hunt 22) - neither can win.
+            HashSet<string>? outOfIt = noGhosts
+                ? board.Where(s => s.BlackFlagged).Select(s => s.Transponder).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : null;
+
             Func<string, bool>? leaveOut = noGhosts
-                ? transponder => GhostService.IsGhost(transponder)
+                ? transponder => GhostService.IsGhost(transponder) || outOfIt!.Contains(transponder)
                 : AnnounceGhostsProvider?.Invoke() == false
                     ? transponder => MutedGhost(transponder)
                     : null;
 
-            // The board as of the last crossing, not _standings itself: this
-            // runs on a timer or the voice thread while the timing thread
-            // writes _standings (6 Nov 2026, Bug hunt 11b - see LapCrossingBook).
-            var ranked = PositionReportOrder.Rank(_lapCrossings.Board, leaveOut);
+            var ranked = PositionReportOrder.Rank(board, leaveOut);
 
             return PositionReportOrder.Read(ranked, depth, CrossingMs);
         }

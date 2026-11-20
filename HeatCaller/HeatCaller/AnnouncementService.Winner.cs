@@ -130,18 +130,26 @@ public sealed partial class AnnouncementService
     {
         var leader = _currentLeaderTransponder;
 
-        if (leader is null || !GhostService.IsGhost(leader))
+        // Nor does a black-flagged car (bug hunt 22): the engine still counts
+        // its laps, so it can lead the announcer's order to the flag while
+        // the result puts it last, disqualified.
+        if (leader is null || !CannotWin(leader))
         {
             return leader;
         }
 
         return _standings.Values
-            .Where(s => !GhostService.IsGhost(s.Transponder))
+            .Where(s => !GhostService.IsGhost(s.Transponder) && !s.BlackFlagged)
             .OrderByDescending(s => s.Laps)
             .ThenBy(s => s.ElapsedMs)
             .Select(s => s.Transponder)
             .FirstOrDefault();
     }
+
+    /// <summary>A ghost, or a car shown the black flag: never named the winner.</summary>
+    private bool CannotWin(string transponder) =>
+        GhostService.IsGhost(transponder)
+        || (_standings.TryGetValue(transponder, out var standing) && standing.BlackFlagged);
 
     /// <summary>Whether the lines made ahead are the finish call's own - see WinnerLines. Under _winnerCallsLock.</summary>
     private bool _winnerCallsAreTheFinish;

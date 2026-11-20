@@ -26,6 +26,13 @@ public sealed class RaceStanding
     public int LapsLed { get; init; }
 
     /// <summary>
+    /// Shown the black flag (RacerStanding.IsBlackFlagged): disqualified, so
+    /// never the winner the announcer names, however many laps it has (bug
+    /// hunt 22) - the result puts it last.
+    /// </summary>
+    public bool BlackFlagged { get; init; }
+
+    /// <summary>
     /// Penalty race control has given this car so far (jump start, penalty
     /// buttons, warning time) - RacerStanding.PenaltyMs, already inside
     /// ElapsedMs. Zero from a source that does not carry it.
