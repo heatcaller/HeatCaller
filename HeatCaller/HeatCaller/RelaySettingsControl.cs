@@ -1858,7 +1858,11 @@ public sealed partial class RelaySettingsControl : UserControl
     private static Bitmap DrawIconPreview(string name, Font font)
     {
         var icon = UiLayout.AtTextSize(56);
-        var width = UiLayout.AtTextSize(96);
+        // Wide enough for the whole name (12 letters at most): at a fixed
+        // 96 the preview cut "Upstate Mini" to "Upstate Mi..." right above
+        // the line saying phones show "Upstate Mini".
+        var width = Math.Max(UiLayout.AtTextSize(96),
+            TextRenderer.MeasureText(name.Length == 0 ? " " : name, font, Size.Empty, TextFormatFlags.NoPrefix).Width + UiLayout.AtTextSize(8));
         var line = TextRenderer.MeasureText("Ag", font).Height;
         var bitmap = new Bitmap(width, icon + 6 + line);
 
