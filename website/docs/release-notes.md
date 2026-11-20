@@ -4,6 +4,11 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Two layout fixes (19 November).**
+    - **Connection's Race tools card shows Photo Finish the first time.** On a 1280-wide window, the first time the **Connection** page opened, the **Race tools** card left room for its finish-camera buttons on one line. They wrap onto two, so **Photo Finish** was hidden under the card until you went to another page and back. The card is now as tall as its buttons from the start.
+    - **A table wider than its card scrolls with the app's slim bar.** When a table's columns are wider than the card it sits in, for example **Championship → Standings** at 1280 wide with nothing counted yet, Windows' own white scroll bar showed along its foot. It's now the app's slim drawn bar, and dragging it scrolls the table sideways.
+
+    See [Choosing a connection type](timing/decoders.md#choosing-a-connection-type) and [Championship](race-control/results-and-championships.md#championship). Update HeatCaller on the race PC; nothing changes on the relay.
 - **Anonymous usage totals, and new terms (19 November).** HeatCaller asks you to accept its terms again (revision 3) the next time it opens. The one change: while the relay is on, HeatCaller can send us a few totals once a day (which pages and tabs were used and for how long, the version, and whether a race day was open or Desk View on) so we know what to improve. Nothing about your drivers, nothing typed, no results or keys. **Send HeatCaller anonymous usage totals** on **Backup & Restore** starts ticked where Windows is set to the United States and unticked everywhere else. See [Usage totals](admin/backups.md#usage-totals). Update HeatCaller on the race PC.
 - **The Big Screen fits every driver on the board (19 November).** On a 720p screen the board showed six drivers, and it was cleared on every lap, so P7 and P8 of an eight-car heat were never seen.
     - **Fit first.** When the field is bigger than the board, the rows and their writing shrink a step at a time, down to three quarters of their size. An eight-car heat on a 720p screen fits with nothing moving.
