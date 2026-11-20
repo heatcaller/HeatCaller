@@ -283,7 +283,13 @@ public static class PoleShootout
             .ThenBy(t => t.QualifyingPlace)
             .ToList();
 
-        return new Standing(order, done, runs.Count);
+        // How many runs the shootout has, from the runs themselves: a caller
+        // holding only the runs raced so far (the event report, which sees
+        // only its own sessions) must not take those as all of them and
+        // call a half-run shootout complete, with a pole (bug hunt 22).
+        var runCount = runs.Count == 0 ? 0 : Math.Max(runs.Count, runs.Max(r => r.ShootoutRunCount));
+
+        return new Standing(order, done, runCount);
     }
 
     /// <summary>
