@@ -13,13 +13,26 @@ import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js"
 const CODE = "a1b2c3d4e5f60718293a";
 const ME = "hg-me-acme-rc";
 
+/**
+ * The tests' clock, and the page's: nine in the evening, local, today (open
+ * items, 19 Nov 2026). It was the real time, and a race "started 40
+ * minutes ago" run between 06:00 and 06:40 belonged to the night before,
+ * since the night turns over at six - so "racing done for tonight" failed.
+ * Today's date, so the page's own calendar-day checks agree with it.
+ */
+const NOW = (() => {
+  const d = new Date();
+  d.setHours(21, 0, 0, 0);
+  return d.getTime();
+})();
+
 /** Tonight, as the page names a race night: six in the morning to six the next. */
 function tonight(): string {
-  const d = new Date(Date.now() - 6 * 3600000);
+  const d = new Date(NOW - 6 * 3600000);
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
 }
 
-const snap = (body: unknown) => ({ status: 200, body: { publishedAt: new Date().toISOString(), body } });
+const snap = (body: unknown) => ({ status: 200, body: { publishedAt: new Date(NOW).toISOString(), body } });
 
 interface Night {
   lines?: unknown[];
@@ -46,7 +59,7 @@ function relay(night: Night = {}): Answerer {
         : { status: 404, body: {} };
     }
 
-    if (path === "/collection/resultsindex?meta=1") return { status: 200, body: { items: [{ id: "2026", publishedAt: new Date().toISOString(), bytes: 9 }] } };
+    if (path === "/collection/resultsindex?meta=1") return { status: 200, body: { items: [{ id: "2026", publishedAt: new Date(NOW).toISOString(), bytes: 9 }] } };
     if (path === "/collection/resultsindex/2026") return { status: 200, body: { id: "2026", body: index } };
     if (path.startsWith("/collection/results?ids=")) {
       return {
@@ -67,7 +80,7 @@ function relay(night: Night = {}): Answerer {
     }
 
     if (path === "/snapshot/tracks") {
-      return snap({ tracks: [{ name: "Long", record: { ms: 7412, holder: "Jo Rivera", setUtc: new Date().toISOString() } }] });
+      return snap({ tracks: [{ name: "Long", record: { ms: 7412, holder: "Jo Rivera", setUtc: new Date(NOW).toISOString() } }] });
     }
 
     if (path === "/snapshot/programme" && night.lines) return snap({ lines: night.lines });
@@ -82,7 +95,7 @@ function relay(night: Night = {}): Answerer {
 async function open(answer: Answerer, remember = false): Promise<FakePage> {
   const { html, script } = pageParts(homePage("acme-rc", "Acme RC", DEFAULT_CONTEXT));
   const page = new FakePage(html, answer, {});
-  page.clock = Date.now();
+  page.clock = NOW;
   page.get("now").dataset = { when: "" };
   if (remember) page.eval(`localStorage.setItem(${JSON.stringify(ME)}, ${JSON.stringify(CODE)})`);
   page.run(script);
@@ -90,7 +103,7 @@ async function open(answer: Answerer, remember = false): Promise<FakePage> {
   return page;
 }
 
-const ago = (minutes: number) => new Date(Date.now() - minutes * 60000).toISOString();
+const ago = (minutes: number) => new Date(NOW - minutes * 60000).toISOString();
 
 function hm(iso: string): string {
   const d = new Date(iso);
@@ -177,7 +190,7 @@ describe("Your next race carries the rest of the night", () => {
     const answer = relay();
     const { html, script } = pageParts(homePage("acme-rc", "Acme RC", DEFAULT_CONTEXT));
     const page = new FakePage(html, answer, {});
-  page.clock = Date.now();
+  page.clock = NOW;
     page.get("now").dataset = { when: "" };
     page.eval(`localStorage.setItem(${JSON.stringify(ME)}, ${JSON.stringify(CODE)})`);
     page.eval(`localStorage.setItem("hg-charge-acme-rc", JSON.stringify({ until: Date.now() + 12 * 60000 }))`);

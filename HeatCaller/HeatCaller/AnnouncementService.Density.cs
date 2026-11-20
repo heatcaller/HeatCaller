@@ -537,7 +537,21 @@ public sealed partial class AnnouncementService
             generation = _fieldGeneration;
         }
 
-        _ = FlushTheFieldAfterTheWindowAsync(generation);
+        // Counted before the batch offering these lets go - see _lapCallsSettling.
+        Interlocked.Increment(ref _lapCallsSettling);
+        _ = FlushTheFieldAfterTheWindowCountedAsync(generation);
+    }
+
+    private async Task FlushTheFieldAfterTheWindowCountedAsync(int generation)
+    {
+        try
+        {
+            await FlushTheFieldAfterTheWindowAsync(generation);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _lapCallsSettling);
+        }
     }
 
     private async Task FlushTheFieldAfterTheWindowAsync(int generation)

@@ -1084,14 +1084,16 @@ public sealed partial class BigScreenForm : Form
             _lblElapsed.Width = Sized(320);
             _hcBug.Width = _lblElapsed.Width;
 
-            _grid.ColumnHeadersHeight = Math.Max(1, Sized(38));
-            _grid.DefaultCellStyle.Padding = new Padding(Sized(18), Sized(4), Sized(8), Sized(4));
+            _grid.ColumnHeadersHeight = Math.Max(1, Sized(HeadingsDesignHeight));
+            _grid.DefaultCellStyle.Padding = new Padding(Sized(18), Sized(RowPadDesign), Sized(8), Sized(RowPadDesign));
             // The normal row height at this size; FitTheBoard, run below once
             // the window is laid out, makes the rows shorter for a field too
             // big for the board.
-            _fullRowHeight = Math.Max(1, Sized(64));
+            _fullRowHeight = Math.Max(1, Sized(FullRowDesignHeight));
 
-            _pnlOnDeck.Height = Sized(62);
+            // 58, not 62 (open items, 19 Nov 2026): the board's eighth row
+            // at full size on a 1080p TV, with a little to spare.
+            _pnlOnDeck.Height = Sized(58);
             _lblWarning.Height = Sized(84);
 
             // Taller than the On Deck bar and shorter than the warning: a
