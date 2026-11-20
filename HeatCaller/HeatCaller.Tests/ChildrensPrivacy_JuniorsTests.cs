@@ -15,8 +15,15 @@ public sealed class ChildrensPrivacy_JuniorsTests : IDisposable
     private readonly TempAppData _data = new();
     private readonly PublicPrivacy _was = PublicPrivacy.Current;
 
+    // A car an earlier test said by its number ("Sam", named "Sam") would
+    // withhold this class's Sam Parker lines from listen-along: each test
+    // starts with none, and the run's set goes back after.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte>? _spokenByNumber =
+        AnnouncementService.SwapCarsSpokenByNumberForTests(null);
+
     public void Dispose()
     {
+        AnnouncementService.SwapCarsSpokenByNumberForTests(_spokenByNumber);
         PublicPrivacy.Current = _was;
         _data.Dispose();
     }
