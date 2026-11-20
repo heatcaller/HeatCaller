@@ -88,7 +88,7 @@ These run through our server, the "relay". The club decides what to record and p
 - **What it does:** serves each club's public pages (results, live race, schedule, standings, badges, check-in) and the drivers' private phone pages. It takes requests, sign-ups and shout-outs and holds them for the laptop. It forwards commentary prompts to Anthropic and speech to ElevenLabs with our keys, and sends Web Push alerts.
 - **Logs:**
   - A usage log (counts and timings only, no words or names) kept 24 months.
-  - Anonymous page counts kept 90 days.
+  - Anonymous page counts kept 90 days (named events; since 19 Nov 2026 also which page was opened, by name, and a visit's length in three bands - no driver, device or address).
   - An admin audit log, written only by our admin commands over `fly ssh`.
   - IP addresses are used in memory for rate limits and not logged. **[CHECK]** whether Fly.io's own edge logs record them.
 - **Backups:** `relay/backup.cmd` copies the whole `/data` disk, every club, down to the operator's PC as a dated `relay-data.tgz` under `relay-backups\`. These copies are **not encrypted**. See question 7.12.
@@ -173,7 +173,13 @@ The code is written by the owner with heavy use of AI coding assistants (Claude 
   - Names are removed on a best-effort basis.
   - Names not in the driver list, and free text, may remain.
   - Freeze dumps are excluded.
-- **Nothing from the laptop otherwise:** the desktop app has no telemetry, crash upload or analytics.
+- **Usage totals from the laptop (added 19 Nov 2026, Terms revision 3):** while the relay is on, once a day, per club per day: which pages and tabs were opened, how many times, active and on-screen seconds, the app version and text size setting, and whether a race day was open or Desk View on. No driver data, no typed text, no click order. Sent with the club's relay token, so identified by club. Controlled by **Send HeatCaller anonymous usage totals** on **Backup & Restore**:
+  - **US: opt-out.** Ticked to begin with on a PC whose Windows region is the US or a US territory (PR, GU, VI, AS, MP, UM).
+  - **Everywhere else: opt-in.** Unticked to begin with, and nothing is sent unless the club ticks it. HeatCaller asks no country, so the Windows region is the only sign used; a club's own choice, once made, is kept whatever the region.
+  - **No clubs yet.** As of 19 Nov 2026 no club is running HeatCaller, so no install has sent or accepted anything under the earlier wording.
+
+  The notice is the Terms change itself (every install must accept revision 3 before the app opens again) and the box's own description; there is no separate banner. Kept 13 months. See `plans/app-usage-analytics-plan.md`.
+- **Nothing else from the laptop:** no crash upload and no other analytics.
 
 ### 4.4 In visitors' browsers (the cookie policy)
 
@@ -230,13 +236,13 @@ Full detail is in `plans/children-privacy-and-ip-plan.md` (the status table) and
 - **Export and Forget:** Export gives a driver's data; Forget deletes it from the laptop and the relay.
 - **Vendors:** we ask ElevenLabs not to log, and clubs can turn on offline voices for juniors.
 
-**Paperwork:** the in-app Terms (revision 2) say all of this and replace the separate beta agreement.
+**Paperwork:** the in-app Terms (revision 3) say all of this and replace the separate beta agreement.
 
 ## 6. Documents to review, in order
 
 All paths are in the repository.
 
-1. `HeatCaller/HeatCaller/Assets/Legal/HeatCaller-Terms.md`: the in-app licence and privacy notice (revision 2). Every install must accept it. **The most important.**
+1. `HeatCaller/HeatCaller/Assets/Legal/HeatCaller-Terms.md`: the in-app licence and privacy notice (revision 3). Every install must accept it. **The most important.**
 2. `website/legal-drafts/driver-crew-children.md`: the children's memo (COPPA, UK and EU, US states, safeguarding, streams, vendors, retention, checklist, parent consent form).
 3. `website/legal-drafts/dpia.md`: data protection impact assessment.
 4. `website/legal-drafts/security-program.md`: COPPA §312.8-style security program.
@@ -291,6 +297,10 @@ Retired, no review needed:
 **General**
 17. **Liability.** Is limitation of liability to US$50, New York law and an as-is warranty enforceable as drafted for clubs outside New York? Should paid plans change it?
 18. **Outside the US.** For the UK, EU, Canada and Australia, what is the minimum before clubs there use the beta? The cookie policy tells visitors the relay is in the US: does the transfer need a named mechanism?
+18a. **Usage totals: opt-out in the US, opt-in elsewhere.** The laptop sends daily page-and-tab usage totals, identified by club (section 4.3). In the US the box on Backup & Restore starts ticked; everywhere else it starts unticked until the club ticks it. The notice is the Terms change, which every install must accept before the app opens, plus the box's own description; there is no banner. No club is running HeatCaller yet (19 Nov 2026). Questions:
+    - Is opt-out with that notice enough in the US, including states with their own privacy laws?
+    - Is the Windows region a good enough way to tell a US club, or should the app ask the club's country (for example in first-run setup)?
+    - For UK and EU clubs, is an unticked box the club ticks itself valid consent under ePrivacy Art. 5(3) / PECR reg. 6, and does the box's description say enough? Once you're satisfied, can any non-US region be moved to opt-out?
 
 **Cookies and browser storage** (detail in `cookie-policy-questions.md`)
 

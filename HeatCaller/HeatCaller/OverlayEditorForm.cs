@@ -195,6 +195,7 @@ public sealed class OverlayEditorForm : Form
 
     public OverlayEditorForm(OverlayStore store, Func<string, string> addressOf, string? pick = null, AppSettings? clubSettings = null)
     {
+        AppUsageTracker.Note("overlay_editor_opened");
         _store = store;
         _addressOf = addressOf;
         _settings = clubSettings;

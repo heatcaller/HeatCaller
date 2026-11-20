@@ -51,6 +51,7 @@ public partial class MainForm
     /// <summary>Opens the Photo Finish window, or brings it to the front when it is open already.</summary>
     internal void ShowPhotoFinish()
     {
+        AppUsageTracker.Note("photo_finish_opened");
         if (_photoFinishForm is { IsDisposed: false } open)
         {
             if (open.WindowState == FormWindowState.Minimized)

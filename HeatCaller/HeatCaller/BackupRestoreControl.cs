@@ -39,6 +39,9 @@ public sealed partial class BackupRestoreControl : UserControl
     /// </summary>
     public event Action? SupportInfoRequested;
 
+    /// <summary>Raised by See What's Sent. The host (MainForm) holds the usage totals - see AppUsageTracker.</summary>
+    public event Action? UsagePreviewRequested;
+
     /// <summary>
     /// Asked before a restore starts: true while a race (or practice) is
     /// under way. Set by the host (MainForm), which knows the race state;
@@ -271,6 +274,12 @@ public sealed partial class BackupRestoreControl : UserControl
     /// wrong. On this page because it is where the app's files are looked
     /// after; the crash dialog and the console's menu point here too.
     /// </summary>
+    /// <summary>What the usage box sends, in the same words as the privacy notice (Terms, Part 2).</summary>
+    internal const string ShareUsageHint =
+        "Once a day, through your club's relay: which pages and tabs were opened and for how long, the HeatCaller version and text size "
+        + "and whether a race day or Desk View was on. Never driver names, anything typed, results or keys. Nothing is sent without the relay. "
+        + "Ticked to begin with only where Windows is set to the United States.";
+
     private Section BuildSupportCard()
     {
         var btnSupport = new Button { Text = "Save Support Info..." };
@@ -317,11 +326,49 @@ public sealed partial class BackupRestoreControl : UserControl
 
         _textSize.Wear(lblHint, () => AppTheme.SmallFont);
 
+        // The choice about anonymous usage totals (19 Nov 2026) - ticked to
+        // begin with in the US, unticked elsewhere (UsageSharing), described
+        // in the privacy notice (License and Privacy, just above). Beside
+        // Save Support Info because both are about what this PC tells
+        // HeatCaller.
+        var chkShare = new ThemedCheckBox
+        {
+            Text = "Send HeatCaller anonymous usage totals",
+            AutoSize = true,
+            Checked = UsageSharing.IsOn(_settings),
+        };
+
+        chkShare.CheckedChanged += (_, _) =>
+        {
+            // Saved as the club's own choice from the first change on, so the
+            // region default never overrides it again.
+            if (_settings.ShareUsageStats != chkShare.Checked)
+            {
+                _settings.ShareUsageStats = chkShare.Checked;
+                _settings.Save();
+            }
+        };
+
+        var lblShareHint = new Label
+        {
+            Text = ShareUsageHint,
+            AutoSize = true,
+            ForeColor = AppTheme.TextMuted,
+        };
+
+        _textSize.Wear(lblShareHint, () => AppTheme.SmallFont);
+
         var card = new Section("Getting help");
 
         card.Add(new ButtonBar().With(btnSupport, btnAbout, btnTerms));
         card.Add(lblHint);
-        card.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail), gapBelow: 0);
+        card.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail), gapBelow: UiLayout.RowGap);
+        var btnSeeSent = new Button { Text = "See What's Sent..." };
+        btnSeeSent.Click += (_, _) => UsagePreviewRequested?.Invoke();
+
+        card.Add(chkShare, stretch: false, gapBelow: 0);
+        card.Add(lblShareHint, gapBelow: UiLayout.HintGap);
+        card.Add(new ButtonBar().With(btnSeeSent), gapBelow: 0);
 
         return card;
     }

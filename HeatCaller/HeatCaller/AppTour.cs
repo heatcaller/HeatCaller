@@ -169,7 +169,11 @@ public sealed class AppTour : Form
 
         _btnSkip.Text = "Skip tour";
         _btnSkip.Width = SkipLeast;
-        _btnSkip.Click += (_, _) => Close();
+        _btnSkip.Click += (_, _) =>
+        {
+            AppUsageTracker.Note("tour_skipped");
+            Close();
+        };
 
         _btnBack.Text = "Back";
         _btnBack.Width = BackLeast;
@@ -336,6 +340,7 @@ public sealed class AppTour : Form
     {
         if (_index >= Stops.Length - 1)
         {
+            AppUsageTracker.Note("tour_finished");
             Close();
             return;
         }

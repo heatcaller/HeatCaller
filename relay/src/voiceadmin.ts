@@ -3,8 +3,11 @@ import { lchown, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { BRAIN_DIR, brainTopUpPath, brainUsagePath } from "./brain.js";
 import { loadConfig, type RelayConfig } from "./config.js";
-import { isActive } from "./tenancy.js";
+import { isActive, isValidClubId } from "./tenancy.js";
 import { readUsageLog, USAGE_LOG_PAGE } from "./usagelog.js";
+import { APP_USAGE_PAGE, forgetAppUsage, readAppUsage } from "./appusage.js";
+import { PAGE_COUNTS } from "./pagecounts.js";
+import { FileStore } from "./store.js";
 import { checkKeys } from "./keycheck.js";
 import { checkVoiceAccount, type VoiceAccountCheck } from "./voiceaccount.js";
 import { autoGiven, type AutoGiven } from "./autotopup.js";
@@ -55,6 +58,9 @@ export const ADMIN_COMMANDS = [
   "topup-decline",
   "admin-snapshot",
   "usage-log",
+  "app-usage",
+  "app-usage-forget",
+  "page-counts",
   "audit-append",
   "audit-log",
   "key-check",
@@ -551,6 +557,86 @@ export async function voiceAdmin(
     }
 
     out(JSON.stringify(await readUsageLog(config.dataDir, since, limit)) + "\n");
+    return 0;
+  }
+
+  if (command === "app-usage") {
+    // app-usage [--json] [--since <ISO time>] [--limit <n>]: the laptops'
+    // daily usage totals that arrived after a moment, oldest first, as JSON -
+    // read by the relay admin app's Product page, which asks again from the
+    // last one it has. See appusage.ts.
+    let since: string | undefined;
+    let limit = APP_USAGE_PAGE;
+
+    for (let i = 0; i < args.length; i += 1) {
+      const arg = args[i] as string;
+
+      if (arg === "--json") {
+        continue;
+      }
+
+      if (arg === "--since" && args[i + 1] !== undefined && !Number.isNaN(Date.parse(args[i + 1] as string))) {
+        since = new Date(Date.parse(args[i + 1] as string)).toISOString();
+        i += 1;
+        continue;
+      }
+
+      if (arg === "--limit" && /^\d{1,6}$/.test(args[i + 1] ?? "") && Number(args[i + 1]) > 0) {
+        limit = Math.min(Number(args[i + 1]), APP_USAGE_PAGE);
+        i += 1;
+        continue;
+      }
+
+      err("Usage: app-usage [--json] [--since 2026-11-01T00:00:00Z] [--limit 1000]\n");
+      return 1;
+    }
+
+    out(JSON.stringify(await readAppUsage(config.dataDir, since, limit)) + "\n");
+    return 0;
+  }
+
+  if (command === "page-counts") {
+    // page-counts [--json]: every club's anonymous page counts (pagecounts.ts)
+    // by day, as JSON - read by the relay admin app. Read only.
+    if (args.some((arg) => arg !== "--json")) {
+      err("Usage: page-counts [--json]\n");
+      return 1;
+    }
+
+    const store = new FileStore(config.dataDir);
+    const clubs: Record<string, unknown> = {};
+
+    for (const tenant of config.tenants) {
+      try {
+        const held = await store.getSnapshot(tenant.club, PAGE_COUNTS);
+        const days = typeof held?.body === "object" && held.body !== null ? (held.body as Record<string, unknown>)["days"] : undefined;
+
+        if (typeof days === "object" && days !== null) {
+          clubs[tenant.club] = days;
+        }
+      } catch {
+        // A club whose counts won't read is left out, not fatal.
+      }
+    }
+
+    out(JSON.stringify({ version: 1, clubs }) + "\n");
+    return 0;
+  }
+
+  if (command === "app-usage-forget") {
+    // app-usage-forget <club> [--json]: deletes every usage total the club
+    // sent - for a club that has left, or asks. See appusage.ts.
+    const json = args.includes("--json");
+    const rest = args.filter((arg) => arg !== "--json");
+    const club = rest[0];
+
+    if (rest.length !== 1 || club === undefined || !isValidClubId(club)) {
+      err("Usage: app-usage-forget <club> [--json]\n");
+      return 1;
+    }
+
+    const removed = await forgetAppUsage(config.dataDir, club);
+    out(json ? JSON.stringify({ ok: true, club, removed }) + "\n" : `Removed ${removed} day(s) of usage totals for ${club}.\n`);
     return 0;
   }
 

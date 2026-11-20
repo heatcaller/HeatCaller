@@ -1,6 +1,6 @@
 # HeatCaller beta terms
 
-**Beta version of 15 November 2026 (revision 2).** These terms cover the HeatCaller beta. This revision replaces the first version of the same date. It adds rules for juniors, your content and music, a licence for the open-source video player, and how long information is kept. They will be revised again before HeatCaller is generally released, and HeatCaller will ask you to accept the revised version before it opens again.
+**Beta version of 19 November 2026 (revision 3).** These terms cover the HeatCaller beta. This revision replaces revision 2 of 15 November 2026. It adds **anonymous usage totals**: once a day, through your club's relay, HeatCaller tells us which of its pages were used and for how long, so we know what to improve. No driver information goes with them. They are on to begin with in the United States and off elsewhere, and you can change that on **Backup & Restore** (see **Usage totals** in Part 2). Revision 2 added rules for juniors, your content and music, a licence for the open-source video player, and how long information is kept. They will be revised again before HeatCaller is generally released, and HeatCaller will ask you to accept the revised version before it opens again.
 
 There are three parts. **Part 1** is the license agreement for the software. **Part 2** is the privacy notice: what HeatCaller does with information about drivers, and where it sends it. **Part 3** covers the cookies on your club's online pages: where the cookie policy for your drivers is, and your part in it. You must accept all three to install and use HeatCaller.
 
@@ -149,7 +149,7 @@ Transponder numbers and email addresses are never published.
 
 **Streams.** Overlays, captions and listen-along show or say a junior's name only as their **On stream** setting allows: shortened, or not at all.
 
-The relay also sees the internet address of every phone or computer that opens the club's pages. It holds it in memory for ten minutes at most, only to limit PIN guessing and floods of requests, and does not write it down. The pages send a few anonymous daily counts of how they are used (for example how often a phone lost its signal), with no driver, phone or address in them, kept 90 days. What the pages keep in the browser is set out in the cookie policy (Part 3).
+The relay also sees the internet address of every phone or computer that opens the club's pages. It holds it in memory for ten minutes at most, only to limit PIN guessing and floods of requests, and does not write it down. The pages send a few anonymous daily counts of how they are used (for example how often a phone lost its signal, which pages were opened, and how long visits lasted, in three bands), with no driver, phone or address in them, kept 90 days. What the pages keep in the browser is set out in the cookie policy (Part 3).
 
 **ElevenLabs** (a speech service), only if the club uses the HeatCaller voice or its own ElevenLabs account. **Each announcer line is sent to ElevenLabs to be turned into speech, and a line that names a driver carries that driver's name.** Names are sent in the short form ("Billy S") while **Shorten published names** is on, unless the club ticks **Say full names aloud with the online voices**. While **Ask ElevenLabs not to keep our lines** is on (it is by default), each request asks ElevenLabs not to log or keep the line, where ElevenLabs offers that on the account in use. With **Offline voices for juniors** on, a line that names a junior is written and spoken on the club's computer instead, and sent to neither ElevenLabs nor Anthropic. The free Kokoro voice runs on the club's computer and sends nothing anywhere.
 
@@ -159,6 +159,8 @@ The relay also sees the internet address of every phone or computer that opens t
 
 **Updates.** HeatCaller checks GitHub for new versions. This sends no driver information.
 
+**Usage totals.** Only if the club uses the online relay, and only while **Send HeatCaller anonymous usage totals** on **Backup & Restore** is ticked. It is ticked to begin with only on a computer whose Windows region is the United States (or a US territory). Everywhere else it starts unticked, and nothing is sent unless the club ticks it. Once a day, HeatCaller sends us, through the club's relay, a few totals for each day it was used: which of its pages and tabs were opened, how many times, and for how long; the HeatCaller version and its text size setting; and whether a race day was open and whether Desk View was on. We use them only to decide what to improve in HeatCaller. They carry the club's relay name, because they go with the club's relay sign-in, but never a driver's name or anything else about a driver, nothing typed into HeatCaller, no results, no keys, and not the order in which anything was done. Unticking the box stops them from the next day; nothing is sent while the relay is off.
+
 **Email.** Check-in PIN emails and drivers' nights by email are sent from the club's own mailbox, not by us.
 
 We do not sell driver information or use it for advertising.
@@ -167,6 +169,7 @@ We do not sell driver information or use it for advertising.
 
 - **On the club's computer:** until the club deletes it, or forgets the driver. Race recordings and highlight videos are kept for the number of race nights the club chooses on **Club Website > Recording**.
 - **Freeze reports** (saved if HeatCaller stops responding): 14 days, then deleted.
+- **Usage totals on the relay:** 13 months, then deleted, and deleted with the rest of a club's relay data when the club leaves.
 - **Podium highlight videos on the relay:** one week, then deleted.
 - **Online check-ins on the relay:** ignored after 12 hours.
 - **Online sign-ups on the relay:** 14 days. The club's own record stays on its computer.
@@ -183,6 +186,7 @@ We do not sell driver information or use it for advertising.
 
 - **Shorten published names** is on by default, and also applies to the names sent to the online voices. Juniors' names are shortened online whatever it is set to.
 - A club can keep the roster, photos and full names off the internet, publish nothing at all, or use **Delete Everything Published** to erase everything it has on the relay at once.
+- A club can stop sending usage totals, or start them outside the United States, with **Send HeatCaller anonymous usage totals** on **Backup & Restore**.
 - Each driver's profile has **Online privacy** choices: leave their photo out, no podium videos of them, and initials only. A junior's profile also has **On stream**.
 - A driver can clear any of their crew names or notes from their phone, and the club can delete them on the driver's profile. A club can turn off **Drivers can pick their own crew** at any time; their crews are then not heard.
 - **A copy of a driver's information:** **Export** on the driver's menu in Driver Hub saves everything HeatCaller holds about them in one file, for the club to give the driver or their parent.

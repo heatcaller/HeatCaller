@@ -630,6 +630,9 @@ public partial class MainForm
     /// </summary>
     private readonly HashSet<string> _pageShownBefore = new(StringComparer.Ordinal);
 
+    /// <summary>Usage totals (AppUsageTracker): told each page as it comes on screen. Set in the constructor.</summary>
+    private readonly AppUsageTracker _usageTracker;
+
     private void ShowPage(string name)
     {
         // The desk view keeps to Who's Racing (12 Nov 2026, setup plan D8).
@@ -738,6 +741,23 @@ public partial class MainForm
             if (_navRefreshHooks.TryGetValue(name, out var refresh))
             {
                 refresh();
+            }
+
+            // Usage totals (19 Nov 2026): after the refresh, so the tab it
+            // reads is the one the page settled on. Counting must never stop
+            // a page opening.
+            try
+            {
+                if (txtNavSearch.Text.Length > 0)
+                {
+                    _usageTracker.Count("nav_search_used");
+                }
+
+                _usageTracker.PageShown(name, item.Page);
+            }
+            catch (Exception ex)
+            {
+                SessionLog.Write($"[usage] {ex.GetType().Name} counting a page; carrying on.");
             }
 
             // BROKEN DOWN, BECAUSE ONE NUMBER NEVER SAID WHERE IT WENT
@@ -1570,6 +1590,7 @@ public partial class MainForm
 
     private void BtnManageNav_Click(object? sender, EventArgs e)
     {
+        AppUsageTracker.Note("manage_navigation_opened");
         var toggleable = _navItems.Where(i => i.Name != "Connection").Select(i => i.Name).ToList();
         // The club's own order, NOT what the sidebar is showing. During a
         // race night the sidebar leads with Race Day and Race Control

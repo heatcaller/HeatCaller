@@ -13,6 +13,7 @@ import { ElevenLabsLogging, elevenLabsRenderer, elevenLabsStreamer, migrateVoice
 import { LAP_VOICE_DIR, LapVoiceLibrary } from "./lapvoice.js";
 import { TopUpRequests } from "./topuprequests.js";
 import { UsageLog } from "./usagelog.js";
+import { AppUsageLog } from "./appusage.js";
 import { PushService } from "./push.js";
 import { askYouTube } from "./video.js";
 import { ADMIN_COMMANDS, voiceAdmin, type AdminCommand } from "./voiceadmin.js";
@@ -163,6 +164,9 @@ async function serve(): Promise<number> {
     // One line per voice and commentary request, for the relay admin app's
     // charts - see usagelog.ts.
     usageLog: new UsageLog({ dataDir: config.dataDir, log: (line) => console.log(line) }),
+    // The laptops' daily usage totals, for the admin app's Product page -
+    // see appusage.ts.
+    appUsage: new AppUsageLog({ dataDir: config.dataDir, log: (line) => console.log(line) }),
     // The lap voice's clips, from relay/lap-voice beside dist/ (in the
     // image, /app/lap-voice) - see lapvoice.ts.
     lapVoice: LapVoiceLibrary.load(fileURLToPath(new URL(`../../${LAP_VOICE_DIR}/`, import.meta.url)), (line) => console.log(line)),

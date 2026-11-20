@@ -81,6 +81,7 @@ import { LapVoiceLibrary } from "./lapvoice.js";
 import { STREAM_FORMAT, VOICE_PLAN_OFF, type MeterUsage, type VoicePlan, type VoiceService } from "./voice.js";
 import { isMeterName, type TopUpRequests } from "./topuprequests.js";
 import type { UsageLog } from "./usagelog.js";
+import { APP_USAGE_MAX_BODY, APP_USAGE_REPORTS_PER_DAY, cleanAppUsage, type AppUsageLog } from "./appusage.js";
 import { BROADCAST_TTL_SECONDS, FOLLOW_CHANNEL, followIdOf, followNameFrom, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { isJuniorName, NO_PRIVACY_RULES, namesAJunior, PRIVACY_CHANNEL, privacyNameKey, privacyRulesFrom, resultTakenDown, ROBOTS_TXT, UNKNOWN_PRIVACY_RULES, yearTakenDown, type PrivacyRules } from "./privacy.js";
@@ -1161,6 +1162,12 @@ export interface RelayOptions {
    */
   readonly usageLog?: UsageLog | undefined;
   /**
+   * Where a laptop's daily usage totals are kept for the relay admin app's
+   * Product page (see appusage.ts). Absent means none are taken: a report
+   * is answered 503 and the laptop keeps it.
+   */
+  readonly appUsage?: AppUsageLog | undefined;
+  /**
    * The lap voice's clips (29 Oct 2026) - see lapvoice.ts. Absent, the
    * manifest lists none and the pages use the phone's own voice.
    */
@@ -1266,6 +1273,8 @@ export class Relay {
   private readonly sponsorTraffic: Limiter;
   /** Page counts one address may send a club (see pagecounts.ts): a flood brake. */
   private readonly countTraffic: Limiter;
+  /** Usage reports one club may send in a day (see appusage.ts): a brake on a laptop in a loop. */
+  private readonly appUsageReports: Limiter;
   /** Sign-in link asks per connection and per email address (signinmail.ts). */
   private readonly signinMailTraffic: Limiter;
   /** One laptop rendering lines: a race night's worth in a burst when Prepare Lines runs, and a trickle after that. */
@@ -1341,6 +1350,7 @@ export class Relay {
   private readonly brain: BrainService | undefined;
   private readonly topUpRequests: TopUpRequests | undefined;
   private readonly usageLog: UsageLog | undefined;
+  private readonly appUsage: AppUsageLog | undefined;
   private readonly listings = new Map<string, Buffer>();
   /**
    * ?meta=1&limit=N cuts, keyed to the very meta listing Buffer they were
@@ -1589,6 +1599,8 @@ export class Relay {
     this.brain = options.brain;
     this.topUpRequests = options.topUpRequests;
     this.usageLog = options.usageLog;
+    this.appUsage = options.appUsage;
+    this.appUsageReports = new Limiter(APP_USAGE_REPORTS_PER_DAY, 24 * 60 * 60 * 1000, () => this.now().getTime());
   }
 
   /**
@@ -3024,6 +3036,13 @@ export class Relay {
     // anonymous counts per day, sent by the pages, read with the token.
     if (method === "POST" && rest.length === 1 && rest[0] === "count") {
       await this.pageCount(request, response, club);
+      return;
+    }
+
+    // Which parts of the desktop app the club uses (19 Nov 2026): the
+    // laptop's daily totals, with its token, when the club's box is ticked.
+    if (method === "POST" && rest.length === 1 && rest[0] === "app-usage") {
+      await this.appUsageReport(request, response, club);
       return;
     }
 
@@ -9830,6 +9849,55 @@ export class Relay {
     }
 
     sendJson(response, 200, { ok: true });
+  }
+
+  /**
+   * A laptop's daily usage totals (see appusage.ts): {days: [...]}, with
+   * the publish token. Whatever doesn't fit the shape is dropped and the
+   * rest kept; a report with nothing left is still a 204, so a newer app
+   * is never told off. 503 when they couldn't be kept, so the laptop holds
+   * them and tries again.
+   */
+  private async appUsageReport(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    if (this.appUsage === undefined) {
+      sendJson(response, 503, { ok: false, error: "Usage totals aren't taken here." });
+      return;
+    }
+
+    if (this.appUsageReports.blocked(club)) {
+      sendJson(response, 429, { ok: false, error: "Enough reports for today." });
+      return;
+    }
+
+    this.appUsageReports.hit(club);
+    const body = await readBody(request, response, APP_USAGE_MAX_BODY);
+
+    if (body === "too-big" || body === "unreadable" || !isPlainObject(body)) {
+      sendJson(response, 400, { ok: false, error: "That could not be read." });
+      return;
+    }
+
+    const at = this.now();
+
+    if (!(await this.appUsage.record(club, cleanAppUsage(body, at), at))) {
+      sendJson(response, 503, { ok: false, error: "Try again later." });
+      return;
+    }
+
+    response.writeHead(204, BASE_HEADERS);
+    response.end();
   }
 
   /**

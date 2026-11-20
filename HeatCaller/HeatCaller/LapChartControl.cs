@@ -1037,6 +1037,7 @@ public sealed class LapChartControl : UserControl
 
     private void ExportChart()
     {
+        AppUsageTracker.Note("chart_exported");
         if (_currentSession is null || CheckedDrivers().Count == 0)
         {
             AppDialog.Show(this, "Select a session and tick at least one driver first.", "Nothing to export",

@@ -4,6 +4,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Anonymous usage totals, and new terms (19 November).** HeatCaller asks you to accept its terms again (revision 3) the next time it opens. The one change: while the relay is on, HeatCaller can send us a few totals once a day (which pages and tabs were used and for how long, the version, and whether a race day was open or Desk View on) so we know what to improve. Nothing about your drivers, nothing typed, no results or keys. **Send HeatCaller anonymous usage totals** on **Backup & Restore** starts ticked where Windows is set to the United States and unticked everywhere else. See [Usage totals](admin/backups.md#usage-totals). Update HeatCaller on the race PC.
 - **The Big Screen fits every driver on the board (19 November).** On a 720p screen the board showed six drivers, and it was cleared on every lap, so P7 and P8 of an eight-car heat were never seen.
     - **Fit first.** When the field is bigger than the board, the rows and their writing shrink a step at a time, down to three quarters of their size. An eight-car heat on a 720p screen fits with nothing moving.
     - **Then roll.** A field too big even for that keeps the top 3 pinned, with a line under them, and rolls the rest past a row at a time, resting at each end. One pass takes about 6 seconds however many are hidden.
