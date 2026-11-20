@@ -2070,6 +2070,12 @@ public sealed partial class RelayPublisher : IDisposable
                     {
                         _nextPollTick = Environment.TickCount64 + (long)PollEvery.TotalMilliseconds;
                         CollectCheckIns(pass.Token);
+
+                        // Each poll is a round trip on the club's Wi-Fi, so
+                        // a stretch of the room's sound offered meanwhile
+                        // goes before the next one (19 Nov 2026) - see
+                        // SendListenLinesWaiting.
+                        SendListenLinesWaiting(pass.Token);
                     }
                     else if (!_settings.RelayCheckInEnabled)
                     {
@@ -2086,6 +2092,7 @@ public sealed partial class RelayPublisher : IDisposable
                     {
                         _nextManagePollTick = Environment.TickCount64 + (long)PollEvery.TotalMilliseconds;
                         CollectManageRequests(pass.Token);
+                        SendListenLinesWaiting(pass.Token);
                     }
                     else if (!_settings.ManagerViaRelay)
                     {
