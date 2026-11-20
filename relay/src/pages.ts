@@ -17206,8 +17206,8 @@ function ydSummary() {
   // Their own crew (15 Nov 2026), behind the personal PIN as its form is.
   if (crewOn() && me.pin === true) {
     const crew = group('My crew');
-    line(crew, 'Principal', crewLine('principal'), "Club's own", wait(['pName', 'pVoice']), 'wait');
-    line(crew, 'Tech lead', crewLine('tech'), "Club's own", wait(['tName', 'tVoice']), 'wait');
+    line(crew, 'Principal', crewLine('principal'), "Club's own", wait(['pName', 'pSay', 'pVoice']), 'wait');
+    line(crew, 'Tech lead', crewLine('tech'), "Club's own", wait(['tName', 'tSay', 'tVoice']), 'wait');
   }
   return wrap;
 }
@@ -17733,7 +17733,17 @@ function crewVoices() {
 function crewMember(role) {
   const m = me.crew[role] && typeof me.crew[role] === 'object' ? me.crew[role] : {};
   const voice = typeof m.voice === 'string' && crewVoices().some((v) => v.k === m.voice) ? m.voice : '';
-  return { name: cleanText(m.name), voice: voice };
+  return { name: cleanText(m.name), say: cleanText(m.say), voice: voice };
+}
+
+// Where a voice's sample plays from: its own https clip (an ElevenLabs
+// preview), or the one the club's PC rendered and left on the relay under
+// the voice's key (19 Nov 2026, h). Empty for none.
+function crewSampleUrl(v) {
+  if (!v) return '';
+  if (typeof v.s === 'string' && /^https:\\/\\//.test(v.s)) return v.s;
+  if (v.h === true && CREW_KEY.test(v.k)) return '/api/v1/c/' + encodeURIComponent(CLUB) + '/crew/sample/' + v.k + '.mp3';
+  return '';
 }
 
 function crewVoiceName(k) {
@@ -17775,6 +17785,16 @@ function crewRole(parent, title, role, junior, namesHere = true) {
     lockedRow(card, 'Name', m.name || "The club's own name", 'desk only');
   }
 
+  // How the name sounds (19 Nov 2026), as an announcer name is: waits for
+  // the desk with the name.
+  let say = null;
+  if (namesHere) {
+    say = textField(card, 'Said as', 'Optional. Spell it how it sounds, if the announcer might get it wrong.', m.say, 40, false,
+      { count: true, hide: title, placeholder: 'As spelled' });
+  } else if (m.say !== '') {
+    lockedRow(card, 'Said as', m.say, 'desk only');
+  }
+
   const row = el('div', 'yd-vrow');
   const label = el('label', 'f');
   const lr = el('span', 'lr');
@@ -17796,10 +17816,7 @@ function crewRole(parent, title, role, junior, namesHere = true) {
   row.appendChild(label);
   card.appendChild(row);
 
-  const sample = () => {
-    const v = crewVoices().find((x) => x.k === String(pick.value || ''));
-    return v && typeof v.s === 'string' && /^https:\\/\\//.test(v.s) ? v.s : '';
-  };
+  const sample = () => crewSampleUrl(crewVoices().find((x) => x.k === String(pick.value || '')));
 
   // The <audio> is made here, on the tap, and not before: nothing is
   // fetched from the voice's host until they ask to hear it.
@@ -17826,7 +17843,7 @@ function crewRole(parent, title, role, junior, namesHere = true) {
     markEdited();
   });
 
-  return { name: name, pick: pick, base: m };
+  return { name: name, say: say, pick: pick, base: m };
 }
 
 // The Crew tab: the form when signed in with the personal PIN (the sheet
@@ -17876,7 +17893,7 @@ function crewPane(pane) {
 
   // What they have now, to send only what has changed. Notes only where
   // there are boxes for them.
-  const base = { pName: p.base.name, pVoice: p.base.voice, tName: t.base.name, tVoice: t.base.voice };
+  const base = { pName: p.base.name, pSay: p.base.say, pVoice: p.base.voice, tName: t.base.name, tSay: t.base.say, tVoice: t.base.voice };
   if (notesHere) Object.assign(base, { goal: noteText(c.goal), thanks: noteText(c.thanks), story: noteText(c.car) });
 
   return {
@@ -17886,6 +17903,7 @@ function crewPane(pane) {
       const now = {
         pName: p.name ? cleanText(p.name.value) : base.pName, pVoice: String(p.pick.value || ''),
         tName: t.name ? cleanText(t.name.value) : base.tName, tVoice: String(t.pick.value || ''),
+        pSay: p.say ? cleanText(p.say.value) : base.pSay, tSay: t.say ? cleanText(t.say.value) : base.tSay,
         goal: goal ? cleanText(goal.value) : base.goal, thanks: thanks ? cleanText(thanks.value) : base.thanks, story: car ? cleanText(car.value) : base.story,
       };
       const f = {};
@@ -17898,6 +17916,11 @@ function crewPane(pane) {
         if (f[k] === undefined) continue;
         if (f[k].length > 24) return { tab: 'crew', words: 'Keep a crew name under 24 characters.' };
         if (!CREW_NAME.test(f[k])) return { tab: 'crew', words: CREW_NAME_WORDS };
+      }
+      for (const k of ['pSay', 'tSay']) {
+        if (f[k] === undefined) continue;
+        if (f[k].length > 40) return { tab: 'crew', words: 'Keep a \\u201csaid as\\u201d under 40 characters.' };
+        if (!CREW_NAME.test(f[k])) return { tab: 'crew', words: 'A \\u201csaid as\\u201d can only have letters, spaces, hyphens and apostrophes.' };
       }
       if ((f.goal !== undefined && f.goal.length > 80) || (f.thanks !== undefined && f.thanks.length > 80) || (f.story !== undefined && f.story.length > 120)) {
         return { tab: 'crew', words: 'One of those is too long - the box stops you at its limit.' };

@@ -805,6 +805,13 @@ internal static class DriverLive
                 {
                     one["s"] = sample.AbsoluteUri;
                 }
+                else if (v.OnRelay)
+                {
+                    // A HeatCaller or Kokoro sample rendered on this PC and
+                    // kept on the relay under the voice's key (19 Nov 2026):
+                    // the phone asks the relay for it by that key.
+                    one["h"] = true;
+                }
 
                 return one;
             })
@@ -851,11 +858,13 @@ internal static class DriverLive
             ["principal"] = new Dictionary<string, object?>
             {
                 ["name"] = DriverCrew.Clean(profile.CrewPrincipalName),
+                ["say"] = DriverCrew.Clean(profile.CrewPrincipalSaidAs),
                 ["voice"] = KeyFor(profile.CrewPrincipalVoice),
             },
             ["tech"] = new Dictionary<string, object?>
             {
                 ["name"] = DriverCrew.Clean(profile.CrewTechName),
+                ["say"] = DriverCrew.Clean(profile.CrewTechSaidAs),
                 ["voice"] = KeyFor(profile.CrewTechVoice),
             },
         };

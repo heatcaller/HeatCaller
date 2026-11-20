@@ -395,11 +395,17 @@ public sealed class DriverProfile
     /// <summary>What the announcer calls their Team Principal. Blank: the club's name, or the role alone.</summary>
     public string CrewPrincipalName { get; set; } = string.Empty;
 
+    /// <summary>How <see cref="CrewPrincipalName"/> is said, when not as spelled (19 Nov 2026). Blank: as typed.</summary>
+    public string CrewPrincipalSaidAs { get; set; } = string.Empty;
+
     /// <summary>The voice their Team Principal speaks in, for one engine. Null: the club's.</summary>
     public CrewVoicePick? CrewPrincipalVoice { get; set; }
 
     /// <summary>What the announcer calls their Technical Lead. Blank: the club's name, or the role alone.</summary>
     public string CrewTechName { get; set; } = string.Empty;
+
+    /// <summary>How <see cref="CrewTechName"/> is said, when not as spelled (19 Nov 2026). Blank: as typed.</summary>
+    public string CrewTechSaidAs { get; set; } = string.Empty;
 
     /// <summary>The voice their Technical Lead speaks in, for one engine. Null: the club's.</summary>
     public CrewVoicePick? CrewTechVoice { get; set; }

@@ -95,8 +95,96 @@ public sealed partial class MainForm
         }
 
         return _crewForPhone is { } listed && listed.Engine == engine
-            ? listed
+            ? listed with { Voices = CrewSamples.Marked(listed.Voices, _crewSamplesOnRelay) }
             : new DriverLive.CrewForPhone(engine, Array.Empty<CrewVoiceOption>());
+    }
+
+    /// <summary>
+    /// The voices the desk may pick for a driver's crew on their profile (19
+    /// Nov 2026): the same list their phone is offered, or null with drivers'
+    /// crews off or nothing listed yet.
+    /// </summary>
+    internal IReadOnlyList<CrewVoiceOption>? CrewVoicesForDesk() =>
+        CrewForPhoneNow() is { Voices.Count: > 0 } crew ? crew.Voices : null;
+
+    /// <summary>The keys of the crew samples the relay has (CrewSamples), or null before it has been asked. Swapped whole, never changed in place.</summary>
+    private volatile IReadOnlySet<string>? _crewSamplesOnRelay;
+
+    /// <summary>Set while samples are being sent, so a second pass is not started on top of it.</summary>
+    private int _crewSampling;
+
+    /// <summary>The last sample problem said in the console, so the same one is not said again and again.</summary>
+    private string? _crewSampleProblemSaid;
+
+    /// <summary>
+    /// Sends the relay a sample of each HeatCaller or Kokoro voice drivers
+    /// may pick that it does not have yet (19 Nov 2026, CrewSamples): fetched
+    /// or rendered once on this PC and kept, then sent once. In the
+    /// background after each listing; a failure is said once and tried again
+    /// at the next listing.
+    /// </summary>
+    private async Task SendCrewSamplesAsync(DriverLive.CrewForPhone listed)
+    {
+        if (!CrewSamples.MadeHere(listed.Engine) || !_relayPublisher.CanSendCrewSamples
+            || Interlocked.Exchange(ref _crewSampling, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await _relayPublisher.CrewSampleKeysAsync() is not { } onRelay)
+            {
+                return;
+            }
+
+            _crewSamplesOnRelay = onRelay.ToHashSet(StringComparer.Ordinal);
+            var sent = 0;
+            string? problem = null;
+
+            foreach (var voice in CrewSamples.StillToSend(listed.Voices, onRelay).Take(CrewSamples.MostPerPass))
+            {
+                try
+                {
+                    var mp3 = await CrewSamples.SampleOfAsync(
+                        voice.Pick,
+                        (id, cancel) => _heatCallerVoice.SampleAsync(id, cancel),
+                        (id, line, cancel) => KokoroSpeech.RenderAsync(new VoiceProfile { KokoroVoiceName = id }, line, cancel, renderingAhead: true));
+
+                    var key = DriverCrew.KeyOf(voice.Pick);
+
+                    if (await _relayPublisher.UploadCrewSampleAsync(key, mp3) is { } refused)
+                    {
+                        problem ??= refused;
+                        continue;
+                    }
+
+                    onRelay.Add(key);
+                    _crewSamplesOnRelay = onRelay.ToHashSet(StringComparer.Ordinal);
+                    sent++;
+                }
+                catch (Exception ex)
+                {
+                    problem ??= $"\"{voice.Pick.Name}\": {ex.Message}";
+                }
+            }
+
+            if (sent > 0)
+            {
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [crew] Sent the relay {Plural.Of(sent, "voice sample")} for drivers' phones.");
+            }
+
+            // Said once, not every ten minutes while it keeps failing the same way.
+            if (problem is not null && !string.Equals(problem, _crewSampleProblemSaid, StringComparison.Ordinal))
+            {
+                _crewSampleProblemSaid = problem;
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [crew] A voice sample for drivers' phones could not be sent - {problem}. Tried again later.");
+            }
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _crewSampling, 0);
+        }
     }
 
     /// <summary>
@@ -125,6 +213,9 @@ public sealed partial class MainForm
             _crewListedFor = engine;
             _crewListFailed = false;
             _crewListedUtc = DateTime.UtcNow;
+
+            // Samples for the phones' Play buttons, where the engine has none of its own (19 Nov 2026).
+            _ = SendCrewSamplesAsync(_crewForPhone);
         }
         catch (Exception ex)
         {

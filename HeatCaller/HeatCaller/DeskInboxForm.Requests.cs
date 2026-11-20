@@ -125,29 +125,28 @@ internal sealed partial class DeskInboxForm
 
                 break;
 
-            // Their own crew and notes (15 Nov 2026): the words, all at
-            // once - the voices have applied by themselves already.
+            // Their own crew and notes (15 Nov 2026): the words - the voices
+            // have applied by themselves already. A tick and a box for each
+            // since 19 Nov 2026 (ApproveCrewRequestForm), so the desk can
+            // take some, and reword one, without declining the lot.
             case DriverAsk.Crew:
                 if (desk.DriverOf(one) is not { } crewDriver)
                 {
                     return;
                 }
 
-                if (AppDialog.Show(this,
-                        $"{desk.NameFor(one)} asks for:{Environment.NewLine}{Environment.NewLine}"
-                        + string.Join(Environment.NewLine, desk.Describe(one))
-                        + Environment.NewLine + Environment.NewLine
-                        + (crewDriver.IsJunior ? DriverRequestDesk.JuniorCrewWarning + Environment.NewLine + Environment.NewLine : string.Empty)
-                        + "These are words the announcer will say. Approve them?",
-                        "Crew and notes", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                using (var form = new ApproveCrewRequestForm(desk, one, crewDriver, _speakName))
                 {
-                    return;
-                }
+                    if (form.ShowDialog(this) != DialogResult.OK || form.Result is not { } chosen)
+                    {
+                        return;
+                    }
 
-                if (!desk.ApplyCrew(one, out refusal))
-                {
-                    AppDialog.Show(this, refusal, "Not applied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
+                    if (!desk.ApplyCrew(one, chosen, out refusal))
+                    {
+                        AppDialog.Show(this, refusal, "Not applied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
                 }
 
                 break;

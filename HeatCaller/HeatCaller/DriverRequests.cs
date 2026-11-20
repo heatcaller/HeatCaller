@@ -815,6 +815,7 @@ internal sealed class DriverRequestStore
 
         // 15 Nov 2026, their own crew and notes (DriverAsk.Crew).
         "pName" or "tName" => DriverCrew.NameMaxChars,
+        "pSay" or "tSay" => DriverCrew.SaidAsMaxChars,
         "pVoice" or "tVoice" => 12,
         "goal" => DriverCrew.GoalMaxChars,
         "thanks" => DriverCrew.ThanksMaxChars,

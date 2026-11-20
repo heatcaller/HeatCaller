@@ -47,6 +47,7 @@ public partial class MainForm
         // A driver's crew voice that has gone from the account since they
         // picked it is swapped for the club's when it is spoken (15 Nov 2026).
         raceControl.CrewVoiceStillThere = CrewVoiceStillOffered;
+        raceControl.CrewVoices = CrewVoicesForDesk;
         commentary.PlayGap = lines =>
         {
             foreach (var line in lines)

@@ -74,7 +74,7 @@ internal static partial class WindowCatalog
         // The window as its caller opens it, on a class store holding
         // classNames and with the badges earned by the transponder it shows.
         // What it adds is taken away again when the window is disposed.
-        static ProfileForm Window(DriverProfile? existing, string? fixedTransponder, string[] classNames, string[] badges)
+        static ProfileForm Window(DriverProfile? existing, string? fixedTransponder, string[] classNames, string[] badges, IReadOnlyList<CrewVoiceOption>? crewVoices = null)
         {
             var classes = RaceClassStore.Load();
             var addedClasses = new List<string>();
@@ -119,7 +119,7 @@ internal static partial class WindowCatalog
 
             try
             {
-                var form = new ProfileForm(existing, classes, fixedTransponder, profiles: ProfileStore.Load());
+                var form = new ProfileForm(existing, classes, fixedTransponder, profiles: ProfileStore.Load(), crewVoices: crewVoices);
                 form.Disposed += (_, _) => Tidy();
 
                 return form;
@@ -150,6 +150,21 @@ internal static partial class WindowCatalog
                     AchievementCatalogue.TenRaces,
                     AchievementCatalogue.FirstWin,
                 });
+            }),
+            // Crew voices picked at the desk (19 Nov 2026): the drop-downs, a
+            // long voice name among them, and a pick no longer on the list.
+            ("Driver Profile (crew voices)", () =>
+            {
+                var driver = Everything();
+                driver.CrewPrincipalName = "Gravel Jones";
+                driver.CrewPrincipalSaidAs = "Grah vel Jones";
+                driver.CrewTechVoice = new CrewVoicePick { Engine = "elevenlabs", Id = "gone-id", Name = "Rachel - warm and calm, for narration and long reads" };
+
+                var voices = new[] { "Emma (British, female)", "Michael (American, male)", "Isabella (British, female) - the club's long-form announcer voice" }
+                    .Select((name, i) => new CrewVoiceOption(new CrewVoicePick { Engine = "kokoro", Id = "v" + i, Name = name }, string.Empty))
+                    .ToList();
+
+                return Window(driver, driver.Transponder, ClubClasses(withLongName: true), Array.Empty<string>(), voices);
             }),
             ("Driver Profile (fixed transponder)", () => Window(null, "8812345", ClubClasses(withLongName: true), new[]
             {
