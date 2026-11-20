@@ -152,3 +152,19 @@ export function sunIcon(): Buffer {
   icon ??= encodePng(SUN_ICON_SIZE, SUN_ICON_SIZE, sunPixels(SUN_ICON_SIZE));
   return icon;
 }
+
+/**
+ * THE SMALL ICON (19 Nov 2026, driver phone plan item 11): 192 px, drawn at
+ * that size rather than the 512 px one scaled down by the phone - Android's
+ * launcher and the install prompt ask for 192, and a cheap phone scaling 512
+ * spent its memory on it and blurred the floor's lines. Same drawing, so
+ * the same version.
+ */
+export const SUN_SMALL_ICON_SIZE = 192;
+
+let smallIcon: Buffer | undefined;
+
+export function sunSmallIcon(): Buffer {
+  smallIcon ??= encodePng(SUN_SMALL_ICON_SIZE, SUN_SMALL_ICON_SIZE, sunPixels(SUN_SMALL_ICON_SIZE));
+  return smallIcon;
+}

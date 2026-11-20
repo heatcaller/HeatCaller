@@ -65,7 +65,8 @@ internal static class MissionControl
         RelayStatus? Relay,
         bool VoiceMuted,
         CloudBackupStatus.State? CloudBackup = null,
-        AllowanceState? Allowances = null);
+        AllowanceState? Allowances = null,
+        string? SignInMailProblem = null);
 
     /// <summary>
     /// The allowances the Allowances tile judges: every meter the store has
@@ -199,7 +200,26 @@ internal static class MissionControl
         : new("health", "Transponders", $"{i.Fading.Count} fading",
             $"{string.Join("; ", i.Fading.Take(2))}{More(i.Fading.Count, 2)}. Check batteries and mounts.", Level.Watch);
 
-    private static Tile Website(Inputs i) => Website(i.Relay);
+    private static Tile Website(Inputs i) => WithSignInMail(Website(i.Relay), i.SignInMailProblem);
+
+    /// <summary>
+    /// A driver's sign-in email that didn't send (19 Nov 2026, driver phone
+    /// plan item 17), added to the Website tile: worth a look, never a
+    /// problem - racing and results are fine, one driver didn't get a link.
+    /// </summary>
+    internal static Tile WithSignInMail(Tile website, string? problem)
+    {
+        if (string.IsNullOrWhiteSpace(problem) || website.Level == Level.Off)
+        {
+            return website;
+        }
+
+        return website with
+        {
+            Detail = website.Detail + " " + problem,
+            Level = website.Level == Level.Problem ? Level.Problem : Level.Watch,
+        };
+    }
 
     /// <summary>
     /// The website check on its own, from the relay's status - for Race

@@ -272,6 +272,28 @@ internal static class RelayDocuments
         return TimeZoneInfo.TryConvertWindowsIdToIanaId(id, out var iana) ? iana : null;
     }
 
+    /// <summary>
+    /// The zone the club picked on Club Website (AppSettings.RelayTimeZone,
+    /// 19 Nov 2026), or this PC's own when it picked none or one this PC
+    /// doesn't know.
+    /// </summary>
+    internal static TimeZoneInfo PickedTimeZone(string? picked)
+    {
+        if (!string.IsNullOrWhiteSpace(picked))
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(picked.Trim());
+            }
+            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+            {
+                // Not on this PC: its own zone, as before.
+            }
+        }
+
+        return TimeZoneInfo.Local;
+    }
+
     private static string? PublicCar(ProfileStore profiles, string transponder)
     {
         var car = profiles.CarModelFor(transponder).Trim();
@@ -768,7 +790,7 @@ internal static class RelayDocuments
             // club's way wherever the phone is. This PC's own zone - the
             // laptop is at the track. Left out when Windows' zone has no
             // IANA name, and the phones keep their own.
-            ["timeZone"] = ClubTimeZone(),
+            ["timeZone"] = ClubTimeZone(PickedTimeZone(settings.RelayTimeZone)),
             // A short address and the name under the icon (14 Nov 2026,
             // driver phone plan item 5). The relay checks both again.
             ["alias"] = settings.RelayClubAlias.Trim().ToLowerInvariant(),

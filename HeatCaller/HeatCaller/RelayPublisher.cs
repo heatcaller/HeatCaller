@@ -2250,6 +2250,11 @@ public sealed partial class RelayPublisher : IDisposable
                     // What phones saw of the sponsors on Live (5 Nov 2026) -
                     // see RelayPublisher.Sponsors. Its own three-minute tick.
                     CollectSponsorViewsPass(pass.Token);
+
+                    // How drivers use the pages (19 Nov 2026, driver phone
+                    // plan item 20) - see RelayPublisher.PageCounts. Its own
+                    // ten-minute tick.
+                    CollectPageCountsPass(pass.Token);
                 }
                 finally
                 {

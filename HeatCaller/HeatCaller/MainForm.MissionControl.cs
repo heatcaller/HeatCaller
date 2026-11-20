@@ -174,7 +174,8 @@ public partial class MainForm
             Relay: _relayPublisher.Status,
             VoiceMuted: _announcer.Muted,
             CloudBackup: CloudBackupLight(),
-            Allowances: UsageForMissionControl());
+            Allowances: UsageForMissionControl(),
+            SignInMailProblem: _relayPublisher.SignInMailProblem(DateTime.UtcNow));
     }
 
     /// <summary>The cloud backup light as last worked out, and when (Environment.TickCount64). UI thread.</summary>

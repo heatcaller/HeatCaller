@@ -60,17 +60,21 @@ export function zonedToUtc(year: number, month: number, dayOfMonth: number, hour
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const CLOCK = /^(\d{1,2}):(\d{2})$/;
 
-/**
- * The next race night as a calendar file, or undefined when there is no
- * night to offer (none published, withdrawn, or past).
- */
-export function nextNightIcs(club: string, clubName: string, body: unknown, timeZone: string | undefined, now: Date): string | undefined {
-  if (typeof body !== "object" || body === null) return undefined;
-  const b = body as Record<string, unknown>;
-  const day = typeof b["day"] === "string" ? DAY.exec(b["day"]) : null;
-  const until = typeof b["until"] === "string" ? Date.parse(b["until"]) : NaN;
 
-  if (day === null || !Number.isFinite(until) || now.getTime() > until) return undefined;
+/** A UTC instant as an iCalendar date-time: 20261118T230000Z. */
+function icsUtc(at: Date): string {
+  return at.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+/**
+ * One race night as a VEVENT's lines, from a nextnight document's fields,
+ * or undefined when it has no day. Shared by nextnight.ics and nights.ics,
+ * with the same UID, so a night added from one and then seen in the other is
+ * the same event in the calendar, not two.
+ */
+function nightEvent(club: string, clubName: string, b: Record<string, unknown>, timeZone: string | undefined, stamp: string): string[] | undefined {
+  const day = typeof b["day"] === "string" ? DAY.exec(b["day"]) : null;
+  if (day === null) return undefined;
 
   const word = (v: unknown) => (typeof v === "string" ? v.trim() : "");
   const ymd = `${day[1]}${day[2]}${day[3]}`;
@@ -79,14 +83,8 @@ export function nextNightIcs(club: string, clubName: string, body: unknown, time
   const venue = word(b["venue"]);
   const classes = (Array.isArray(b["classes"]) ? b["classes"] : []).map(word).filter((c) => c !== "");
   const off = b["off"] === true;
-  const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 
   const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//HeatCaller//Race night//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
     "BEGIN:VEVENT",
     `UID:${ymd}-${club}@heatcaller`,
     `DTSTAMP:${stamp}`,
@@ -99,7 +97,7 @@ export function nextNightIcs(club: string, clubName: string, body: unknown, time
     // needs a VTIMEZONE block (RFC 5545 3.2.19), which Outlook insists on.
     // Else a floating time, which a calendar reads in the phone's own zone.
     const utc = timeZone ? zonedToUtc(Number(day[1]), Number(day[2]), Number(day[3]), Number(hh), Number(clock[2]), timeZone) : undefined;
-    lines.push(utc !== undefined ? `DTSTART:${utc.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")}` : `DTSTART:${start}`);
+    lines.push(utc !== undefined ? `DTSTART:${icsUtc(utc)}` : `DTSTART:${start}`);
     lines.push("DURATION:PT4H");
   } else {
     lines.push(`DTSTART;VALUE=DATE:${ymd}`);
@@ -115,6 +113,115 @@ export function nextNightIcs(club: string, clubName: string, body: unknown, time
     lines.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsText(`Race night at ${clubName}`)}`, "TRIGGER:-PT2H", "END:VALARM");
   }
 
-  lines.push("END:VEVENT", "END:VCALENDAR");
+  lines.push("END:VEVENT");
+  return lines;
+}
+
+const CALENDAR_HEAD = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//HeatCaller//Race night//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
+
+/**
+ * The next race night as a calendar file, or undefined when there is no
+ * night to offer (none published, withdrawn, or past).
+ */
+export function nextNightIcs(club: string, clubName: string, body: unknown, timeZone: string | undefined, now: Date): string | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  const b = body as Record<string, unknown>;
+  const until = typeof b["until"] === "string" ? Date.parse(b["until"]) : NaN;
+
+  if (!Number.isFinite(until) || now.getTime() > until) return undefined;
+
+  const event = nightEvent(club, clubName, b, timeZone, icsUtc(now));
+  if (event === undefined) return undefined;
+
+  return [...CALENDAR_HEAD, ...event, "END:VCALENDAR"].map(icsFold).join("\r\n") + "\r\n";
+}
+
+// ------------------------------------------------------------ every night
+
+/**
+ * EVERY NIGHT, AS A FEED (19 Nov 2026, driver phone plan item 10 step 3).
+ * The laptop only ever announces the next night, so the relay keeps its own
+ * short list of the nights it has been told about (the "nightsfeed"
+ * snapshot, never served as it is): each announcement added or put in place
+ * of the one for its day, a night called off kept and marked so, and an
+ * announced night the club then moved - a future night that is no longer
+ * the next one - taken out. Nights more than 60 days gone are let go, and
+ * at most 40 kept. /c/<club>/nights.ics serves them as one calendar a phone
+ * subscribes to once.
+ *
+ * Only what the public Home card already shows: day, title, venue, first
+ * race, classes and whether it's off. Nothing about any driver.
+ */
+export const NIGHTS_FEED = "nightsfeed";
+
+const FEED_KEEP_DAYS = 60;
+const FEED_MOST = 40;
+
+type FeedNight = Record<string, unknown>;
+
+/** The fields of a nextnight document the feed keeps, or undefined for one with no day. */
+function feedNightFrom(body: unknown): FeedNight | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  const b = body as Record<string, unknown>;
+  if (typeof b["day"] !== "string" || !DAY.test(b["day"])) return undefined;
+  const text = (v: unknown, most: number) => (typeof v === "string" ? v.trim().slice(0, most) : "");
+
+  return {
+    day: b["day"],
+    title: text(b["title"], 120),
+    venue: text(b["venue"], 200),
+    firstRace: typeof b["firstRace"] === "string" && CLOCK.test(b["firstRace"]) ? b["firstRace"] : "",
+    classes: (Array.isArray(b["classes"]) ? b["classes"] : []).map((c) => text(c, 60)).filter((c) => c !== "").slice(0, 30),
+    off: b["off"] === true,
+    offText: text(b["offText"], 300),
+    until: typeof b["until"] === "string" && Number.isFinite(Date.parse(b["until"])) ? b["until"] : "",
+  };
+}
+
+/** The nights the feed held, read back; anything not a night is left out. */
+function feedNights(was: unknown): FeedNight[] {
+  const list = typeof was === "object" && was !== null ? (was as Record<string, unknown>)["nights"] : undefined;
+  return (Array.isArray(list) ? list : []).map(feedNightFrom).filter((n): n is FeedNight => n !== undefined);
+}
+
+/** The feed with a newly published nextnight document taken in (see NIGHTS_FEED). */
+export function nightsFeedWith(was: unknown, next: unknown, now: Date): { nights: FeedNight[] } {
+  const night = feedNightFrom(next);
+  const nowMs = now.getTime();
+  const oldest = new Date(nowMs - FEED_KEEP_DAYS * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const over = (n: FeedNight) => typeof n["until"] === "string" && n["until"] !== "" && Date.parse(n["until"] as string) < nowMs;
+
+  let nights = feedNights(was)
+    .filter((n) => (n["day"] as string) >= oldest)
+    // A night still to come that isn't the one just announced was moved
+    // (or taken down before it happened): it isn't on any more.
+    .filter((n) => over(n) || (night !== undefined && n["day"] === night["day"]) || n["off"] === true)
+    .filter((n) => night === undefined || n["day"] !== night["day"]);
+
+  if (night !== undefined) nights.push(night);
+  nights.sort((a, b) => ((a["day"] as string) < (b["day"] as string) ? -1 : 1));
+  if (nights.length > FEED_MOST) nights = nights.slice(-FEED_MOST);
+  return { nights };
+}
+
+/** Every night the feed holds as one calendar to subscribe to. Always a calendar, if an empty one. */
+export function nightsIcs(club: string, clubName: string, feed: unknown, timeZone: string | undefined, now: Date): string {
+  const stamp = icsUtc(now);
+  const lines = [
+    ...CALENDAR_HEAD,
+    `X-WR-CALNAME:${icsText(`${clubName} race nights`)}`,
+    // How often a subscribed calendar looks again: twice a day is plenty
+    // for a club announcing a week ahead, and a called-off night still
+    // reaches it the same day.
+    "REFRESH-INTERVAL;VALUE=DURATION:PT6H",
+    "X-PUBLISHED-TTL:PT6H",
+  ];
+
+  for (const night of feedNights(feed)) {
+    const event = nightEvent(club, clubName, night, timeZone, stamp);
+    if (event !== undefined) lines.push(...event);
+  }
+
+  lines.push("END:VCALENDAR");
   return lines.map(icsFold).join("\r\n") + "\r\n";
 }

@@ -43,7 +43,8 @@ describe("a race day made the night before is tonight's", () => {
 
   it("is what all four places ask", () => {
     const pages = readFileSync(fileURLToPath(new URL("../src/pages.js", import.meta.url)), "utf8");
-    assert.equal(pages.split("hcDayIsTonight(").length - 1, 5, "defined once, asked in four places");
+    // Five since 19 Nov 2026: Live's card for a followed driver elsewhere (driver phone plan item 4).
+    assert.equal(pages.split("hcDayIsTonight(").length - 1, 6, "defined once, asked in five places");
     assert.doesNotMatch(pages, /hcIsTonight\(ev\.startedUtc\)/);
   });
 });

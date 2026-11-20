@@ -83,6 +83,8 @@ export interface Look {
   readonly checkIn: boolean;
   /** Whether a driver may email themselves a sign-in link on Me (14 Nov 2026, signinmail.ts). */
   readonly emailLink: boolean;
+  /** Whether the club takes sign-ups just now, for Home's "Not on the list? Sign up" (19 Nov 2026, item 22). Undefined is no. */
+  readonly signupOpen?: boolean | undefined;
   /**
    * Whether drivers may pick their own look for the club's pages on their
    * phones (15 Nov 2026, driver themes; Asher: "club driver can change the

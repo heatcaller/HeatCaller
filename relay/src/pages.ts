@@ -17,7 +17,7 @@
 
 import type { PagePreview } from "./preview.js";
 import { DEFAULT_LOOK, type Look, type SocialLink } from "./site.js";
-import { SUN_ICON_SIZE } from "./sun.js";
+import { SUN_ICON_SIZE, SUN_SMALL_ICON_SIZE } from "./sun.js";
 import { GARAGE_CSS, GARAGE_EMBED_BODY, garageEmbedScript } from "./garagepage.js";
 import { ME_BODY_END, ME_BODY_TOP, ME_COMING, ME_CSS, ME_JS, OWE_CSS } from "./mespaces.js";
 import { CLOCK_JS, clockAttr, tzAttr } from "./clock.js";
@@ -1820,11 +1820,22 @@ html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) {
 #board .bm b { font-variant-numeric: tabular-nums; }
 #board .bm i { font-style: normal; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 @media (min-width: 481px) { .ballc, #board tr.bmore { display: none; } #board tr[data-row] { cursor: default; } }
+/* All columns in a sheet (item 4 step 4): the whole table scrolls sideways inside it. */
+.hcallcols .card { overflow-x: auto; margin: 0; }
+.hcallcols table { min-width: 100%; }
+.hcallcols tr.me td { background: var(--tonal); }
 @media (max-width: 480px) {
   #board .card:not(.all) th:not(.k), #board .card:not(.all) td:not(.k):not(.bmc) { display: none; }
   #board .card:not(.all) { overflow: visible; }
   #board .card:not(.all) table { width: 100%; min-width: 0; }
   #board .card:not(.all) tr.me td { position: sticky; top: calc(var(--stick-t) + var(--owe-h, 0px)); bottom: calc(68px + var(--sa-b)); z-index: 2; }
+  /* AT 115% AND 130% TEXT (19 Nov 2026, item 6): the four columns grew past
+     the card and the last one touched its edge. The driver's name gives way
+     (cut with "..."), the cells come in, and the last column keeps a margin. */
+  #board .card:not(.all) td.kd { max-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  #board .card:not(.all) .kl { padding-right: 14px; }
+  html[data-ts] #board .card:not(.all) th, html[data-ts] #board .card:not(.all) td:not(.bmc) { padding-left: 8px; padding-right: 8px; }
+  html[data-ts] #board .card:not(.all) .kl { padding-right: 14px; }
 }
 /* YOUR CARD ON LIVE (item 4). The Following chip is the card's job on Live. */
 body.has-you #follow { display: none; }
@@ -1860,7 +1871,10 @@ body.has-you #follow { display: none; }
 .hcinst { margin: 0 0 14px; }
 .hcinst-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .hcinst-acts .go { min-height: 44px; padding: 0 18px; }
+/* Every race night in the calendar, and Add my races (item 10). */
+.nn-feed, .myraces-cal { display: inline-flex; align-items: center; min-height: 44px; }
 .hcinapp { margin: 10px 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--warn); background: var(--surface); }
+.hcinapp .hcinapp-chrome { display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 8px; text-decoration: none; }
 .hcinapp .linkish { min-height: 36px; }
 .akinds { display: grid; gap: 4px; margin-top: 8px; }
 .akinds .chk { min-height: 40px; display: flex; align-items: center; gap: 10px; }
@@ -1868,6 +1882,13 @@ body.has-you #follow { display: none; }
 .rtw-steps { margin: 8px 0 0; padding-left: 22px; }
 .rtw-steps li { margin: 10px 0; }
 .rtw-steps .more { display: inline-flex; align-items: center; min-height: 44px; margin-left: 4px; }
+.rtw .more { display: inline-flex; align-items: center; min-height: 44px; }
+/* Who this phone follows, under the driver's own name on Me (item 2). */
+.me-following { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; font-size: 0.85rem; color: var(--muted); }
+.me-following b { color: var(--text); font-weight: 600; }
+.me-following .linkish { min-height: 44px; font-size: 0.85rem; }
+.rtw-steps li.done b::after { content: " \\2713"; color: var(--good); }
+.rtw-set { margin: 0 0 12px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); color: var(--good); font-weight: 700; }
 .mn-mail { margin-top: 14px; }
 .mn-mail > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--accent); }
 .mn-mail input { font-size: 16px; }
@@ -2563,6 +2584,49 @@ try {
   addEventListener('popstate', () => { if (hcVideoShut) hcVideoShut(true); });
 } catch (e) { /* no Back to listen for */ }
 
+// BACK CLOSES A SHEET (19 Nov 2026, driver phone plan item 18 step 3): Me's
+// sheets and Live's All columns. Opening one adds a history step at the same
+// address (the address bar still says the page); Back closes the sheet
+// rather than leaving the tab, and a sheet closed by its own button takes
+// its step back off. A sheet opened as another closes keeps the one step.
+// Ahead of the bar's own Back below, which it stops from seeing the step.
+let hcSheetClose = null;
+let hcSheetEntry = false;
+let hcSheetGoingBack = false;
+function hcSheetPush() {
+  try { history.pushState({ hcsheet: 1 }, '', location.href); hcSheetEntry = true; } catch (e) { /* Back leaves, as before */ }
+}
+function hcSheetOpened(close) {
+  hcSheetClose = close;
+  if (!hcSheetEntry && !hcSheetGoingBack) hcSheetPush();
+}
+function hcSheetClosed() {
+  hcSheetClose = null;
+  if (!hcSheetEntry) return;
+  hcSheetEntry = false;
+  hcSheetGoingBack = true;
+  try { history.back(); } catch (e) { hcSheetGoingBack = false; }
+}
+try {
+  addEventListener('popstate', (e) => {
+    if (hcSheetGoingBack) {
+      hcSheetGoingBack = false;
+      if (e && e.stopImmediatePropagation) e.stopImmediatePropagation();
+      // Another sheet opened while its step was being taken off: one again.
+      if (hcSheetClose) hcSheetPush();
+      return;
+    }
+    if (hcSheetEntry && hcSheetClose) {
+      hcSheetEntry = false;
+      const close = hcSheetClose;
+      hcSheetClose = null;
+      if (e && e.stopImmediatePropagation) e.stopImmediatePropagation();
+      if (typeof hcCount === 'function') hcCount('back_used');
+      close();
+    }
+  });
+} catch (e) { /* no Back to listen for */ }
+
 // THE PAGES AFTER A DEPLOY (14 Nov 2026, driver phone plan item 21). A
 // phone keeps the club's pages for when it has no signal, so it can also
 // keep an old page after the relay is updated. Every page knows its build
@@ -2577,6 +2641,20 @@ function hcBuildSeen(response) {
     const b = response && response.headers && typeof response.headers.get === 'function' ? response.headers.get('x-hc-build') : null;
     if (b && HC_BUILD && b !== HC_BUILD && !hcNewer) { hcNewer = true; hcOfferReload(); }
   } catch (e) { /* not told */ }
+}
+// THE OLD PAGE'S SAFETY NET (19 Nov 2026, item 21 step 5): a route an old
+// page asks for that a newer relay no longer has answers a plain 404, with
+// no build on it. Once a page, that asks the relay which build it is (a
+// snapshot answer says so), and a different one offers the reload above
+// rather than leaving an error on screen.
+let hcRouteChecked = false;
+function hcRouteGone(response) {
+  if (hcRouteChecked || hcNewer || !HC_BUILD || typeof CLUB !== 'string' || !CLUB) return;
+  try { if (!response || response.status !== 404 || response.headers.get('x-hc-build')) return; } catch (e) { return; }
+  hcRouteChecked = true;
+  try {
+    fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/snapshot/state', { cache: 'no-store' }).then(hcBuildSeen).catch(() => {});
+  } catch (e) { /* asked again on the next page */ }
 }
 function hcOfferReload() {
   if (!hcNewer || document.getElementById('hcnew')) return;
@@ -2904,16 +2982,42 @@ function inAppHelp() {
     try { navigator.clipboard.writeText(location.href).then(() => toast('Link copied - paste it into your browser.')); } catch (e) { toast(location.href); }
   });
   box.appendChild(copy);
+  // OPEN IN CHROME, ON ANDROID (19 Nov 2026, item 16 step 3): an intent:
+  // address hands the page to Chrome. Without its fragment - an intent
+  // address has no room for one - so a driver's code never rides along,
+  // and they sign in once there, which is where it sticks.
+  const chrome = hcChromeIntent();
+  if (chrome) {
+    const open = document.createElement('a');
+    open.className = 'go quiet hcinapp-chrome';
+    open.href = chrome;
+    open.textContent = 'Open in Chrome';
+    box.appendChild(open);
+  }
   return box;
+}
+
+// The intent: address that opens this page in Chrome, on Android only; ''
+// elsewhere. Path and query only, never the fragment.
+function hcChromeIntent() {
+  try {
+    const ua = (typeof navigator === 'object' && navigator.userAgent) || '';
+    if (!/Android/i.test(ua) || location.protocol !== 'https:' || !location.host) return '';
+    return 'intent://' + location.host + location.pathname + location.search + '#Intent;scheme=https;package=com.android.chrome;end';
+  } catch (e) { return ''; }
 }
 
 // AN ALERT TAPPED (14 Nov 2026, item 9): the relay adds ?from=alert-<kind>
 // to where an alert goes, so it can be counted (item 20) - then taken off
 // the address, which stays as the page's own.
+// Which kind of alert opened this page, or '' - Me scrolls to its card
+// (19 Nov 2026, item 9 step 2; see the redirect in MYNIGHT_JS).
+let HC_ALERT_FROM = '';
 (function () {
   try {
     const m = /[?&]from=alert-([a-z]{3,12})(&|$)/.exec(location.search);
     if (!m) return;
+    HC_ALERT_FROM = m[1];
     hcCount('alert_opened_' + m[1]);
     const rest = location.search.replace(/[?&]from=alert-[a-z]{3,12}/, '').replace(/^&/, '?');
     history.replaceState(history.state, '', location.pathname + (rest === '?' ? '' : rest) + location.hash);
@@ -3071,7 +3175,7 @@ async function grab(path, waitMs, page) {
       // broken is not - and a relay that is busy or being deployed (5xx)
       // is drawn like no signal, from the last copy, rather than as an
       // empty page.
-      if (response.status === 404) { hcNetOk(); seenKeep(path, undefined, true); noteRead(path, page); }
+      if (response.status === 404) { hcNetOk(); seenKeep(path, undefined, true); noteRead(path, page); hcRouteGone(response); }
       else if (response.status >= 500) { hcNetFail('busy'); const kept = hcLastRead(path); if (kept) return hcFromCopy(kept); }
       return { missing: true, status: response.status };
     }
@@ -4188,17 +4292,22 @@ function escapeHtml(value: string): string {
  * came from is nobody else's business. "me" says the club owns the page
  * it links to, which some of those sites use to show a verified link back.
  */
-function socialAnchors(links: readonly SocialLink[]): string {
+function socialAnchors(links: readonly SocialLink[], clubName = ""): string {
   return links
     .map((link) => {
       const label = escapeHtml(link.label);
+      // THE CLUB IN EACH ICON'S NAME (19 Nov 2026, driver phone plan item
+      // 23 step 3): "Upstate Mini Z on Instagram", so a screen reader says
+      // whose page it opens, not only which service. The tooltip stays the
+      // service's own short word.
+      const named = clubName.trim() === "" ? label : `${escapeHtml(clubName.trim())} on ${label}`;
       const icon = SOCIAL_ICONS[link.kind];
       // ICONS, NOT WORDS (5 Nov 2026, Asher: "replace the socials labels
       // with icons"). The platform's name stays as the link's accessible
       // name and its tooltip, so a screen reader still says "Facebook".
       return icon === undefined
         ? `<a href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer me">${label}</a>`
-        : `<a class="soc" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer me" aria-label="${label}" title="${label}">`
+        : `<a class="soc" href="${escapeHtml(link.url)}" target="_blank" rel="noopener noreferrer me" aria-label="${named}" title="${label}">`
           + `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icon}</svg></a>`;
     })
     .join("");
@@ -4398,7 +4507,7 @@ export function shell(page: Shell, context: PageContext): string {
   // which shows them as a row of buttons of its own (see homePage) and
   // would otherwise say the same thing twice. Nothing at all for a club
   // that has set none.
-  const anchors = page.active === "home" ? "" : socialAnchors(look.social);
+  const anchors = page.active === "home" ? "" : socialAnchors(look.social, page.clubName);
   const links = anchors === "" ? "" : `<span class="links">${anchors}</span>`;
 
   return `<!doctype html>
@@ -4426,7 +4535,7 @@ ${preview}${twitter}
 <style>${STYLE}</style>
 ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
 </head>
-<body data-club="${club}" data-club-name="${name}" data-build="${PAGES_BUILD}"${look.emailLink ? ' data-email-link="1"' : ""}${look.guide.length > 0 ? ` data-guide="${escapeHtml(JSON.stringify(look.guide))}"` : ""}${look.updates.length > 0 ? ` data-updates="${escapeHtml(JSON.stringify(look.updates))}"` : ""}>${sunset ? HC_SUNSET : ""}
+<body data-club="${club}" data-club-name="${name}" data-build="${PAGES_BUILD}"${look.emailLink ? ' data-email-link="1"' : ""}${look.signupOpen === true ? ' data-signup="1"' : ""}${look.guide.length > 0 ? ` data-guide="${escapeHtml(JSON.stringify(look.guide))}"` : ""}${look.updates.length > 0 ? ` data-updates="${escapeHtml(JSON.stringify(look.updates))}"` : ""}>${sunset ? HC_SUNSET : ""}
 <div class="wrap">
   <header${page.active === "live" ? ' class="onair-room"' : ""}>
     <div class="hcname">${brand}</div>
@@ -7509,7 +7618,11 @@ function cells(row, columns, roles) {
     const text = /driver|name/i.test(label) ? nm(cell.text) : esc(cell.text);
     // k: one of the four a phone keeps (see A BOARD MADE FOR A PHONE).
     const keep = roles && typeof boardKeeps === 'function' && boardKeeps(roles, i) ? ' k' : '';
-    return '<td class="' + (i === 0 ? 'pos' : '') + align + tone + keep + '">' + text + '</td>';
+    // kd: the driver, who gives way (cut short) so the row fits; kl: the
+    // last column a phone keeps, kept off the card's edge (item 6, at 130%).
+    const fit = keep === '' || typeof boardLastKept !== 'function' ? ''
+      : (i === roles.driver ? ' kd' : '') + (i === boardLastKept(roles, list.length) ? ' kl' : '');
+    return '<td class="' + (i === 0 ? 'pos' : '') + align + tone + keep + fit + '">' + text + '</td>';
   }).join('');
 }
 
@@ -8150,6 +8263,11 @@ function boardRoles(columns) {
 function boardKeeps(roles, i) {
   return i === 0 || i === roles.driver || i === roles.gap || i === roles.last;
 }
+// The right-most column a phone keeps, of n.
+function boardLastKept(roles, n) {
+  for (let i = n - 1; i >= 0; i--) if (boardKeeps(roles, i)) return i;
+  return 0;
+}
 function rowName(row, roles) {
   if (row && typeof row.name === 'string' && row.name !== '') return row.name;
   const c = row && Array.isArray(row.cells) && roles.driver >= 0 ? row.cells[roles.driver] : null;
@@ -8178,7 +8296,8 @@ function drawBoard(state) {
     + columns.map((c, i) => boardKeeps(roles, i) ? '' : '<span><b>' + esc(cellText(r, i) || '-') + '</b><i>' + esc(c) + '</i></span>').join('')
     + '</div></td></tr>';
   const html = '<div class="card' + (boardAll ? ' all' : '') + '"><table><thead><tr>' +
-    columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + (boardKeeps(roles, i) ? ' k' : '') + '">' + esc(c) + '</th>').join('') +
+    columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + (boardKeeps(roles, i) ? ' k' : '')
+      + (boardKeeps(roles, i) && i === roles.driver ? ' kd' : '') + (boardKeeps(roles, i) && i === boardLastKept(roles, columns.length) ? ' kl' : '') + '">' + esc(c) + '</th>').join('') +
     '</tr></thead><tbody>' +
     rows.map((r) => {
       const name = rowName(r, roles);
@@ -8207,6 +8326,8 @@ function drawBoard(state) {
   boardHtml = html;
   const card = left && board.querySelector ? board.querySelector('.card') : null;
   if (card) card.scrollLeft = left;
+  // The All columns sheet, when open, follows the race too.
+  boardAllFill(state);
 }
 
 // YOUR CARD ON LIVE (14 Nov 2026, driver phone plan item 4). Above the
@@ -8280,13 +8401,77 @@ function youGap(state, row, pos, aheadRow) {
   const d = Math.max(0, m - t);
   return { text: '+' + d.toFixed(2), secs: d };
 }
+// A FOLLOWED DRIVER WHO ISN'T IN THIS RACE (19 Nov 2026, driver phone plan
+// item 4 step 1): the card says their next race and when, from the public
+// running order - the line-ups and the laptop's "about 20:42" - so it knows
+// nothing the Schedule page doesn't. Read every 30 s at most, and only
+// while somebody is followed and not on this board. Nothing for a club
+// that doesn't publish line-ups.
+let youProg = null;
+let youProgAt = 0;
+let youProgAsking = false;
+let youLast = null;
+function youReadProg() {
+  if (youProgAsking || Date.now() - youProgAt < 30000) return;
+  youProgAsking = true;
+  grab('/snapshot/programme').then((a) => {
+    if (a && !a.missing && a.body) youProg = { doc: a.body.body || null, at: typeof a.body.publishedAt === 'string' ? a.body.publishedAt : '' };
+    else if (a && a.missing && a.status === 404) youProg = null;
+  }).catch(() => {}).then(() => {
+    youProgAsking = false;
+    youProgAt = Date.now();
+    if (youLast) drawYou(youLast[0], youLast[1], youLast[2]);
+  });
+}
+function youElsewhere(who) {
+  const doc = youProg && youProg.doc;
+  if (!doc || !doc.lineups || !who) return null;
+  if (doc.event && doc.event.startedUtc && !hcDayIsTonight(doc, youProg.at)) return null;
+  let away = 0;
+  for (const l of Array.isArray(doc.lines) ? doc.lines : []) {
+    if (!l || (l.status !== 'running' && l.status !== 'next' && l.status !== 'upcoming')) continue;
+    if (Array.isArray(l.drivers) && l.drivers.some((n) => String(n) === who)) {
+      const e = typeof l.estimate === 'string' ? l.estimate.trim() : '';
+      return {
+        title: [l.className, l.description].filter(Boolean).join(' - ') || 'Their next race',
+        when: l.status === 'running' ? 'on track now' : /^about /.test(e) ? e : '',
+        away: l.status === 'running' ? -1 : away,
+      };
+    }
+    if (l.status !== 'running') away += 1;
+  }
+  return null;
+}
+function drawYouElsewhere(who, isYou) {
+  const n = youElsewhere(who);
+  if (!n) { youHide(); return; }
+  const far = n.away < 0 ? '' : n.away === 0 ? 'up next' : n.away === 1 ? '1 race away' : n.away + ' races away';
+  you.className = 'you elsewhere';
+  you.innerHTML = '<div class="yw"><span class="chip' + (isYou ? '' : ' ghost') + '">' + (isYou ? 'You' : '\\u2606 Following') + '</span> <b>' + esc(who) + '</b>'
+    + followShareButton(who, isYou ? 'Share my race' : 'Share') + '</div>'
+    + '<div class="yx">' + (isYou ? 'You\\u2019re not in this race. Your next: ' : 'Not in this race. Next: ') + '<b>' + esc(n.title) + '</b>'
+    + (n.when ? ', ' + esc(n.when) : '') + (far ? ' (' + esc(far) + ')' : '') + '</div>';
+  you.hidden = false;
+  try { document.body.classList.add('has-you'); } catch (e) { /* no page */ }
+}
+
 function drawYou(state, rows, stale) {
   if (!you) return;
+  youLast = [state, rows, stale];
   const columns = Array.isArray(state.columns) ? state.columns : [];
   const roles = boardRoles(columns);
   const who = youName(rows, roles);
   const mine = who ? rows.filter((r) => rowName(r, roles) === who) : [];
-  if (mine.length !== 1) { youHide(); return; }
+  if (mine.length !== 1) {
+    // Somebody followed by name and not on this board: their next race.
+    if (mine.length === 0 && memory && who === memory) {
+      youReadProg();
+      drawYouElsewhere(who, youIsSignedIn(who));
+      return;
+    }
+    youHide();
+    return;
+  }
   const row = mine[0];
   const pos = rows.indexOf(row) + 1;
   const ahead = pos > 1 ? rows[pos - 2] : null;
@@ -8340,6 +8525,62 @@ function ordinalWord(n) {
   return words[n - 1] || ('P' + n);
 }
 
+// ALL COLUMNS, IN A SHEET (item 4 step 4). The club's whole table, every
+// column, drawn from the board's own last frame and kept up to date while
+// open (drawBoard calls boardAllFill). True when a sheet opened.
+function boardAllTable(state) {
+  const columns = Array.isArray(state.columns) ? state.columns : [];
+  const rows = Array.isArray(state.standings) ? state.standings : [];
+  const roles = boardRoles(columns);
+  const mine = typeof youName === 'function' ? youName(rows, roles) : '';
+  return '<div class="card all"><table><thead><tr>'
+    + columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + '">' + esc(c) + '</th>').join('')
+    + '</tr></thead><tbody>'
+    + rows.map((r) => { const name = rowName(r, roles); return '<tr' + (name !== '' && name === mine ? ' class="me"' : '') + '>' + cells(r, columns, null) + '</tr>'; }).join('')
+    + '</tbody></table></div>';
+}
+function boardAllFill(state) {
+  const box = document.getElementById('hcallcols-t');
+  if (!box || !state) return;
+  const html = boardAllTable(state);
+  if (box.getAttribute('data-html') === html) return;
+  const left = box.firstChild ? box.firstChild.scrollLeft : 0;
+  box.innerHTML = html;
+  box.setAttribute('data-html', html);
+  if (left && box.firstChild) box.firstChild.scrollLeft = left;
+}
+function boardAllClose() {
+  const s = document.getElementById('hcallcols');
+  if (!s) return;
+  s.remove();
+  if (typeof hcSheetClosed === 'function') hcSheetClosed();
+  const back = board.querySelector ? board.querySelector('[data-all]') : null;
+  if (back && back.focus) back.focus();
+}
+function boardAllSheet() {
+  if (!boardState || typeof document.createElement !== 'function' || !document.body || typeof document.body.appendChild !== 'function') return false;
+  const old = document.getElementById('hcallcols');
+  if (old) old.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'hcallcols';
+  wrap.className = 'hcthemes hcallcols';
+  wrap.setAttribute('role', 'dialog');
+  wrap.setAttribute('aria-modal', 'true');
+  wrap.setAttribute('aria-labelledby', 'hcallcols-h');
+  wrap.innerHTML = '<div class="sheet"><h2 id="hcallcols-h">All columns</h2><p class="thnote">Scroll sideways for the rest.</p>'
+    + '<div id="hcallcols-t"></div><button type="button" class="go" data-all-done>Done</button></div>';
+  wrap.addEventListener('click', (e) => {
+    if (e.target === wrap || (e.target && e.target.closest && e.target.closest('[data-all-done]'))) boardAllClose();
+  });
+  wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape') boardAllClose(); });
+  document.body.appendChild(wrap);
+  boardAllFill(boardState);
+  if (typeof hcSheetOpened === 'function') hcSheetOpened(() => { const s = document.getElementById('hcallcols'); if (s) s.remove(); });
+  const done = wrap.querySelector('[data-all-done]');
+  if (done && done.focus) done.focus();
+  return true;
+}
+
 // A tap on a row opens the rest of it (a name tapped follows, as everywhere);
 // All columns shows the club's whole table.
 // WHY (15 Nov 2026, bug hunt 21 #24): a tap inside "See the last race" drew
@@ -8355,6 +8596,11 @@ if (board && typeof board.addEventListener === 'function') {
     const t = e.target;
     if (!t || typeof t.closest !== 'function' || t.closest('.nm')) return;
     if (t.closest('[data-all]')) {
+      // IN A SHEET (19 Nov 2026, driver phone plan item 4 step 4): the whole
+      // table over the board, sideways-scrolling, Back or Done to close -
+      // rather than the board itself growing past the phone's edge. In place,
+      // as before, where there is no sheet to open.
+      if (boardAllSheet()) return;
       boardAll = !boardAll;
       boardHtml = '';
       boardRedraw();
@@ -9879,14 +10125,38 @@ const LISTEN_JS = `
         dropAll();
       }
 
+      // FETCH AHEAD (19 Nov 2026, driver phone plan item 19 step 5): while
+      // the signal is good, every new line listed is asked for at once, and
+      // the answers are taken in order below - so the next clip is already
+      // in hand while this one decodes, and a short gap is not silence. With
+      // no signal it asks one at a time, as before. The 8 s late-drop rule
+      // below is unchanged: a clip fetched ahead is still judged when it is
+      // its turn.
+      function fetchOne(id) {
+        const asked = Date.now();
+        return ask('/api/v1/c/' + CLUB + '/collection/listen/' + encodeURIComponent(id))
+          .catch(() => null)
+          .then((got) => ({ got, took: (Date.now() - asked) / 1000 }));
+      }
+
+      const ahead = new Map();
+
+      if (!listenPaused) {
+        for (const one of lines) {
+          if (isNew(one.id, one.at) && !ahead.has(one.id)) {
+            ahead.set(one.id, fetchOne(one.id));
+          }
+        }
+      }
+
       for (const one of lines) {
         if (!isNew(one.id, one.at)) {
           continue;
         }
 
-        const asked = Date.now();
-        const got = await ask('/api/v1/c/' + CLUB + '/collection/listen/' + encodeURIComponent(one.id)).catch(() => null);
-        const took = (Date.now() - asked) / 1000;
+        const fetched = await (ahead.get(one.id) || fetchOne(one.id));
+        const got = fetched.got;
+        const took = fetched.took;
         stats.fetchLast = took;
         stats.fetchWorst = Math.max(stats.fetchWorst, took);
 
@@ -11378,7 +11648,22 @@ function nextNightHtml(answer) {
     (coming ? '<button class="page wide hp-go nn-gone" type="button" data-day="' + esc(day) + '">Dismiss</button>' : '') +
     // Into the phone's calendar (14 Nov 2026, driver phone plan item 10).
     (word(b.day) && typeof CLUB === 'string' && CLUB ? '<a class="page wide hp-go nn-cal" href="/c/' + encodeURIComponent(CLUB) + '/nextnight.ics" download>Add to calendar</a>' : '') +
+    // Every night, subscribed to once (19 Nov 2026, item 10 step 3): a
+    // webcal: address, so the phone's calendar keeps it up to date - a
+    // night called off shows struck out. A quiet link under the button.
+    (word(b.day) && typeof CLUB === 'string' && CLUB ? '<a class="linkish nn-feed" href="' + esc(typeof nightsFeedHref === 'function' ? nightsFeedHref() : '/c/' + encodeURIComponent(CLUB) + '/nights.ics') + '">Every race night in your calendar</a>' : '') +
     '</div>';
+}
+
+// The nights feed as a subscription: webcal:// on the relay's own host
+// (https: is what a calendar fetches it with); the plain address on a
+// local relay, which no phone calendar can reach anyway.
+function nightsFeedHref() {
+  const path = '/c/' + encodeURIComponent(CLUB) + '/nights.ics';
+  try {
+    if (location.protocol === 'https:' && location.host) return 'webcal://' + location.host + path;
+  } catch (e) {}
+  return path;
 }
 
 // This phone's note for this club: the day Me put them down for
@@ -11419,15 +11704,77 @@ function drawRacingTonight(prog) {
   const p = prog && !prog.missing && prog.body ? prog.body.body || {} : null;
   const ev = p && p.event ? p.event : null;
   const tonight = !!(ev && ev.startedUtc && hcDayIsTonight(p, prog.body.publishedAt));
-  if (!tonight || meCode() !== '') { at.innerHTML = ''; return; }
+  // From the poster's QR code (19 Nov 2026, item 22 step 4): counted, once
+  // a page load, and greeted by the club's name.
+  if (RTW_POSTER && !rtwPosterCounted) { rtwPosterCounted = true; if (typeof hcCount === 'function') hcCount('poster_opened'); }
+  if (!tonight) { at.innerHTML = ''; return; }
   const me = BASE + '/mynight';
-  at.innerHTML = '<section class="lc rtw"><h3>Racing tonight?</h3>'
+  const code = meCode();
+  // SIGNED IN, EACH STEP TICKS (19 Nov 2026, item 22 step 5): the card
+  // stays for a signed-in phone until the night's three steps are done,
+  // each ticked as it is, then folds to one line for the rest of the night.
+  // What this phone has done is asked (rtwProbe), never kept.
+  if (code !== '') {
+    if (rtwKnown.code !== code || Date.now() - rtwKnown.at > 60000) rtwProbe(code, prog);
+    const k = rtwKnown.code === code ? rtwKnown : null;
+    if (!k || k.at === 0) { at.innerHTML = ''; return; }
+    const ciDone = k.open === false || k.inNow === true;
+    if (ciDone && k.alerts) {
+      at.innerHTML = '<p class="rtw-set" role="status">You\\u2019re all set for tonight \\u2713</p>';
+      return;
+    }
+    at.innerHTML = '<section class="lc rtw"><h3>Racing tonight?</h3><ol class="rtw-steps">'
+      + '<li class="done"><b>Signed in</b></li>'
+      + (k.open === false ? '' : '<li' + (k.inNow ? ' class="done"' : '') + '><b>' + (k.inNow ? 'Checked in' : 'Check in') + '</b>'
+        + (k.inNow ? '' : ' on your page once you\\u2019re at the track. <a class="more" href="' + me + '">Your page &rarr;</a>') + '</li>')
+      + '<li' + (k.alerts ? ' class="done"' : '') + '><b>' + (k.alerts ? 'Alerts on' : 'Turn on alerts') + '</b>'
+        + (k.alerts ? '' : ' on your page to hear when your race is next. <a class="more" href="' + me + '">Your page &rarr;</a>') + '</li>'
+      + '</ol></section>';
+    return;
+  }
+  const welcome = RTW_POSTER && CLUB_NAME ? '<p class="note">Welcome to ' + esc(CLUB_NAME) + '.</p>' : '';
+  // New to the club (item 22 step 3): sign-up, only while the club takes them.
+  const signup = document.body.dataset.signup === '1'
+    ? '<p class="note">Not on the list? <a class="more" href="' + BASE + '/signup">Sign up &rarr;</a></p>' : '';
+  at.innerHTML = '<section class="lc rtw"><h3>Racing tonight?</h3>' + welcome
     + (ev.name ? '<p class="note">' + esc(ev.name) + ' is on today.</p>' : '')
     + '<ol class="rtw-steps">'
     + '<li><b>Sign in</b> with the PIN the club emailed you, or the link on your badge. <a class="more" href="' + me + '">Sign in &rarr;</a></li>'
     + '<li><b>Check in</b> on your page once you\\u2019re at the track, so the desk puts you in the heats.</li>'
     + '<li><b>Turn on alerts</b> on your page to hear when your race is next. On an iPhone, add this page to your Home Screen first.</li>'
-    + '</ol></section>';
+    + '</ol>' + signup + '</section>';
+}
+
+const RTW_POSTER = /[?&]from=poster(&|$)/.test(location.search || '');
+let rtwPosterCounted = false;
+// What a signed-in phone has done tonight: checked in (null when unknown),
+// whether check-in is open at all, and whether this phone has alerts on.
+let rtwKnown = { at: 0, code: '', inNow: null, open: true, alerts: false };
+let rtwAsking = false;
+
+async function rtwProbe(code, prog) {
+  if (rtwAsking) return;
+  rtwAsking = true;
+  const next = { at: Date.now(), code: code, inNow: null, open: true, alerts: false };
+  try {
+    const r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/checkin/one', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: code }), cache: 'no-store',
+    });
+    let b = {};
+    try { b = await r.json(); } catch (e) { /* empty */ }
+    if (r.status === 409 || r.status === 404) next.open = false;
+    else if (r.status === 200 && b && b.driver) next.inNow = b.driver.checkedIn === true;
+  } catch (e) { /* no signal: unknown */ }
+  try {
+    if (navigator.serviceWorker && typeof navigator.serviceWorker.getRegistration === 'function') {
+      const reg = await navigator.serviceWorker.getRegistration('/c/' + encodeURIComponent(CLUB) + '/');
+      const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null;
+      next.alerts = !!sub;
+    }
+  } catch (e) { /* no alerts here */ }
+  rtwKnown = next;
+  rtwAsking = false;
+  drawRacingTonight(prog);
 }
 
 // LIVE ON YOUTUBE (14 Nov 2026, race video plan V2): under the On track
@@ -11792,7 +12139,7 @@ export function homePage(club: string, clubName: string, context: PageContext = 
   const look = context.look;
   // Where else to find the club, under everything else. Nothing - not even
   // the heading - for a club that has set no links.
-  const anchors = socialAnchors(look.social);
+  const anchors = socialAnchors(look.social, clubName);
   const social = anchors === "" ? "" : `<div class="day">Find us</div><div class="social">${anchors}</div>`;
 
   // NEW HERE? (30 Oct 2026, relay navigation round 6, Asher: "build it with
@@ -13686,6 +14033,15 @@ function tuck() {
 
 let night = null;
 
+// Stop following, from the Following line under their name (item 2 step 3).
+document.addEventListener('click', (e) => {
+  const b = e.target && e.target.closest ? e.target.closest('[data-unfollow]') : null;
+  if (!b || typeof setFollowed !== 'function') return;
+  setFollowed('');
+  const line = b.closest('.me-following');
+  if (line) line.remove();
+});
+
 // ONE ANSWER FOR EVERY KIND OF NOTHING, written once - see the note above.
 // A closed club, a driver with no night, and a code that is not a code all
 // land here. It names both possibilities and commits to neither, which
@@ -13718,6 +14074,21 @@ function draw() {
     return;
   }
 
+  // The Following line (item 2 step 3): the followed driver, unless it is
+  // the driver whose page this is - their full name, or it with the last
+  // word cut short as the boards cut it ("Ella S" for "Ella Smith").
+  function followingLine(me) {
+    const who = typeof followed === 'function' ? followed() : '';
+    if (!who) return '';
+    const mine = String(me || '').trim().toLowerCase();
+    const f = who.trim().toLowerCase();
+    const words = mine.split(/\\s+/);
+    const last = words.length > 1 ? words[words.length - 1] : '';
+    const short = last ? words.slice(0, -1).join(' ') : '';
+    if (f === mine || (short && f.indexOf(short + ' ') === 0 && last.indexOf(f.slice(short.length + 1)) === 0)) return '';
+    return '<div class="me-following">Following: <b>' + esc(who) + '</b> <button type="button" class="linkish" data-unfollow>Stop following</button></div>';
+  }
+
   // Whether the night's own name already says its day ("Race Day 6 Nov
   // 2026"): its day of the month and the month's first three letters.
   function nightSaysItsDay(n) {
@@ -13734,6 +14105,10 @@ function draw() {
   const head = [
     '<h2>' + esc(night.driver || 'Your night') + '</h2>',
     '<div class="sub">' + esc([night.title, nightSaysItsDay(night) ? '' : night.when].filter(Boolean).join(' · ')) + '</div>',
+    // WHO YOU FOLLOW, APART FROM WHO YOU ARE (19 Nov 2026, driver phone
+    // plan item 2 step 3): the driver this phone follows on the boards, in
+    // smaller words under the name, with a way to stop. Not when it is them.
+    followingLine(night.driver),
     // No "Send my family a link that follows me" under their name since
     // 15 Nov 2026 (Asher: "remove the family link from the top keep on
     // bottom"): the Family links card at the foot of Me makes them.
@@ -14881,6 +15256,8 @@ async function post(path, payload) {
   let body = {};
   try { body = await r.json(); } catch (e) { /* an empty answer is still an answer */ }
   learnClock(r);
+  // A route this old page knows and the relay no longer has (item 21).
+  if (r.status === 404 && typeof hcRouteGone === 'function') hcRouteGone(r);
   return { status: r.status, body: body || {} };
 }
 
@@ -15217,6 +15594,57 @@ function entryMoneyPart() {
   return el('div', 'lc-part lc-entry ' + (e.paid === true ? 'ok' : 'owing'), e.words);
 }
 
+// ADD MY RACES (19 Nov 2026, driver phone plan item 10 step 4): their next
+// race, the ones after it the laptop estimates (live.later), and their
+// marshal duty, as one calendar file made here on the phone - never an
+// address with their badge code in it, nothing sent anywhere. Each with a
+// reminder 15 minutes before, at the laptop's estimate (on the relay's
+// clock, as the card's own minutes are).
+function myRaces() {
+  const out = [];
+  const add = (race, eta) => {
+    const at = Date.parse(String(eta || ''));
+    if (typeof race === 'string' && race.trim() !== '' && Number.isFinite(at) && at > relayNow() - 5 * 60000) out.push({ race: race.trim(), at: at });
+  };
+  const n = live && live.next && typeof live.next === 'object' ? live.next : null;
+  if (n && n.now !== true) add(n.race, n.eta);
+  (live && Array.isArray(live.later) ? live.later : []).forEach((l) => { if (l && typeof l === 'object') add(l.race, l.eta); });
+  const m = live && live.marshal && typeof live.marshal === 'object' ? live.marshal : null;
+  if (m && typeof m.race === 'string') add('Marshal ' + m.race + (typeof m.post === 'string' && m.post !== '' ? ' - ' + m.post : ''), m.eta);
+  return out.slice(0, 12);
+}
+function myRacesIcs(list, clubName, nowMs) {
+  const text = (s) => String(s).replace(/\\\\/g, '\\\\\\\\').replace(/;/g, '\\\\;').replace(/,/g, '\\\\,').replace(/\\r?\\n/g, ' ');
+  const utc = (ms) => new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\\.\\d{3}/, '');
+  const fold = (line) => { let out = ''; while (line.length > 70) { out += line.slice(0, 70) + '\\r\\n '; line = line.slice(70); } return out + line; };
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//HeatCaller//My races//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+  list.forEach((r, i) => {
+    lines.push('BEGIN:VEVENT', 'UID:' + utc(r.at) + '-' + i + '-' + (typeof CLUB === 'string' ? CLUB : 'club') + '@heatcaller', 'DTSTAMP:' + utc(nowMs),
+      'DTSTART:' + utc(r.at), 'DURATION:PT10M', 'SUMMARY:' + text(r.race + (clubName ? ' at ' + clubName : '')),
+      'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + text(r.race), 'TRIGGER:-PT15M', 'END:VALARM', 'END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  return lines.map(fold).join('\\r\\n') + '\\r\\n';
+}
+function addMyRaces() {
+  const list = myRaces();
+  if (list.length === 0) { toast('No race times yet - try again once the desk has the running order.'); return; }
+  try {
+    const blob = new Blob([myRacesIcs(list, typeof CLUB_NAME === 'string' ? CLUB_NAME : '', relayNow())], { type: 'text/calendar' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'my-races.ics';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    toast(list.length === 1 ? 'Your race is in the file - open it to add it' : 'Your ' + list.length + ' races are in the file - open it to add them');
+  } catch (e) {
+    toast("This browser can't make the file - try Safari or Chrome");
+  }
+}
+
 function liveCard() {
   const n = live && live.next && typeof live.next === 'object' ? live.next : null;
   const card = el('section', 'lc' + (n && n.staged === true ? ' staged' : n && n.now !== true && num(n.away) === 0 ? ' next' : ''));
@@ -15263,6 +15691,9 @@ function liveCard() {
     // Their own entry money tonight (setup plan step 8): never anyone else's.
     const money = entryMoneyPart();
     if (money) card.appendChild(money);
+
+    // Add my races (19 Nov 2026, item 10 step 4).
+    if (myRaces().length > 0) card.appendChild(tapButton('Add my races to my calendar', 'btn myraces-cal', addMyRaces));
   }
 
   // The race-day jobs in one row (28 Oct 2026, My Night laid out to be
@@ -18539,8 +18970,12 @@ const REMEMBERED = ADDING ? '' : meCode();
 // The race a "videos are up" alert named (?race=<sid>) goes along, so the
 // night opens at it (race video V2; look-back, 14 Nov 2026).
 const RACE_ASKED = (/[?&]race=([0-9a-f]{32})(&|$)/.exec(location.search) || [])[1] || '';
+// A race or marshal alert (19 Nov 2026, driver phone plan item 9 step 2):
+// Me opens at that card - &go=race or &go=duty in the fragment, no code.
+const ALERT_GO = typeof HC_ALERT_FROM === 'string'
+  ? (HC_ALERT_FROM === 'race' || HC_ALERT_FROM === 'soon' ? '&go=race' : HC_ALERT_FROM === 'marshal' ? '&go=duty' : '') : '';
 if (REMEMBERED) {
-  const there = '/c/' + encodeURIComponent(CLUB) + '/night' + (RACE_ASKED ? '?race=' + RACE_ASKED : '') + '#d=' + REMEMBERED;
+  const there = '/c/' + encodeURIComponent(CLUB) + '/night' + (RACE_ASKED ? '?race=' + RACE_ASKED : '') + '#d=' + REMEMBERED + ALERT_GO;
   try { location.replace(there); } catch (e) { location.href = there; }
 }
 
@@ -20150,6 +20585,10 @@ export function manifest(club: string, clubName: string, look: Look): string {
     icons: [
       { src: `${base}/icon.png?v=${look.iconVersion}`, sizes: `${SUN_ICON_SIZE}x${SUN_ICON_SIZE}`, type: "image/png", purpose: "any" },
       { src: `${base}/icon.png?v=${look.iconVersion}`, sizes: `${SUN_ICON_SIZE}x${SUN_ICON_SIZE}`, type: "image/png", purpose: "maskable" },
+      // And a 192 px one drawn at that size (19 Nov 2026, item 11), for the
+      // launcher and the install prompt.
+      { src: `${base}/icon-192.png?v=${look.iconVersion}`, sizes: `${SUN_SMALL_ICON_SIZE}x${SUN_SMALL_ICON_SIZE}`, type: "image/png", purpose: "any" },
+      { src: `${base}/icon-192.png?v=${look.iconVersion}`, sizes: `${SUN_SMALL_ICON_SIZE}x${SUN_SMALL_ICON_SIZE}`, type: "image/png", purpose: "maskable" },
     ],
     categories: ["sports"],
     // A long press on the icon (item 11).
