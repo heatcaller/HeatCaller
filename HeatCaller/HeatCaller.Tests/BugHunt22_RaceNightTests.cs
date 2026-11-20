@@ -99,6 +99,29 @@ public sealed class BugHunt22_RaceNightTests
         ReceivedMs = receivedMs,
     };
 
+    // --- A lap taken off by hand --------------------------------------------------
+
+    [Fact]
+    public void A_fastest_lap_taken_off_the_board_while_its_call_waited_is_not_said()
+    {
+        var call = new RaceStanding { Transponder = "101", Name = "Sam", FastLapMs = 2_100 };
+
+        // The phantom 2.100 taken off: the car's best is its real 5.600 again.
+        Assert.NotNull(AnnouncementService.FastLapBeatenOnBoard(call, [new RaceStanding { Transponder = "101", Name = "Sam", FastLapMs = 5_600 }]));
+
+        // Its only lap taken off: no best at all.
+        Assert.NotNull(AnnouncementService.FastLapBeatenOnBoard(call, [new RaceStanding { Transponder = "101", Name = "Sam", FastLapMs = 0 }]));
+    }
+
+    [Fact]
+    public void A_fastest_lap_still_on_the_board_is_still_said()
+    {
+        var call = new RaceStanding { Transponder = "101", Name = "Sam", FastLapMs = 5_100 };
+
+        Assert.Null(AnnouncementService.FastLapBeatenOnBoard(call,
+            [new RaceStanding { Transponder = "101", Name = "Sam", FastLapMs = 5_100 }, new RaceStanding { Transponder = "202", Name = "Dee", FastLapMs = 5_400 }]));
+    }
+
     // --- Time left ----------------------------------------------------------------
 
     [Fact]
