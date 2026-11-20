@@ -168,8 +168,11 @@ public sealed class FinalsFormatsForm : Form
         lowerLegsCard.Add(Hint("The B, C and lower mains run in legs like the A-Main."));
         lowerLegsCard.Add(lowerLegs, gapBelow: 0);
 
-        var invitationalCard = new Section(Invitational.Name);
-        invitationalCard.Add(Hint("A series of mains for the whole field, scored on points, best ones counting."));
+        // The card says the short name (look-back, 19 Nov 2026): the full
+        // name is past the 28 letters a card title is spaced out to, and sat
+        // unspaced between two spaced titles. The full name is in the hint.
+        var invitationalCard = new Section(Invitational.ShortName);
+        invitationalCard.Add(Hint("A Reedy-style format: a series of mains for the whole field, scored on points, best ones counting."));
         invitationalCard.Add(invitational, gapBelow: 0);
 
         var lblIntro = new Label
