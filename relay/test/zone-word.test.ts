@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { nextNightWords } from "../src/directory.js";
 import { homePage } from "../src/pages.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * THE CLUB'S ZONE NAMED (20 Nov 2026, look-back on the time-zone picker).
@@ -13,7 +14,8 @@ import { homePage } from "../src/pages.js";
  */
 describe("the club's zone is named next to its times", () => {
   it("on Home's Updated stamp and the next night's times", () => {
-    const html = homePage("acme-rc", "Acme RC");
+    // The stamp lives in the shared app.js, the next night in Home's own script.
+    const html = withSharedInline(homePage("acme-rc", "Acme RC"));
     assert.match(html, /stamp\.textContent = 'Updated ' \+ [^\n]*hcZoneWord\(at\)/);
     assert.match(html, /\.test\(word\(b\.day\)\)[^\n]*\n[^\n]*hcZoneWord\(new Date\(word\(b\.day\) \+ 'T12:00:00Z'\)\)/);
     // The day check must survive the template string it lives in.
