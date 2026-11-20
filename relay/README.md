@@ -1836,6 +1836,16 @@ each club and date.
 Delete one club's totals (a club that has left, or asks) with
 `app-usage-forget <club> [--json]`.
 
+### Phone page views and visit length
+
+Since 19 Nov 2026 the anonymous page counts (`pagecounts.ts`) also hold
+`view_<page>` - one a page load, by the page's name from a fixed list
+(`home`, `live`, `results`, `mynight`, ... or `other`), never its address -
+and `visit_lt30s` / `visit_30sto5m` / `visit_gt5m`, once a visit, from the
+time the window the phone opened was on screen. Nothing new is kept on the
+phone (cookie policy version 4). Read every club's counts with
+`page-counts --json`, which prints `{"version":1,"clubs":{"<club>":{"<day>":{"<event>":n}}}}`.
+
 ### Automatic top-ups, the shared audit log, one-trip refresh
 
 Added for the relay admin app's improvement rounds (Oct 2026).

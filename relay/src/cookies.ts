@@ -18,7 +18,7 @@
  */
 
 /** The policy's version and date, shown at its top and named by Part 3 of the terms. */
-export const COOKIE_POLICY_VERSION = "Version 3, 16 November 2026";
+export const COOKIE_POLICY_VERSION = "Version 4, 19 November 2026";
 
 /** The policy as the page shows it - static, no driver or club data in it. */
 export const COOKIE_POLICY_HTML = `<div class="policy">
@@ -87,7 +87,7 @@ export const COOKIE_POLICY_HTML = `<div class="policy">
 <h2>What reaches the relay</h2>
 <ul>
 <li><b>Your device's internet address</b>, with every request, as with any website. The relay holds it in memory, for ten minutes at most, only to limit how fast one address can try PINs or send requests, and does not write it down. Fly.io, which hosts the relay in the United States, also handles it to run its network, under its own privacy policy.</li>
-<li><b>Anonymous counts</b>: a few named events (for example "lost signal and got it back", "the home-screen card was shown") counted per club per day, with no driver, device id, page address or internet address kept. Kept 90 days.</li>
+<li><b>Anonymous counts</b>: a few named events (for example "lost signal and got it back", "the home-screen card was shown", which page was opened, and whether a visit lasted under 30 seconds, up to 5 minutes or longer) counted per club per day, with no driver, device id, page address or internet address kept. Kept 90 days.</li>
 <li>What you send yourself, such as a check-in, a sign-up, a vote or a request to the desk, as the club's privacy information describes.</li>
 </ul>
 
@@ -108,6 +108,7 @@ export const COOKIE_POLICY_HTML = `<div class="policy">
 
 <h2>What changed</h2>
 <ul>
+<li><b>Version 4, 19 November 2026</b>: the anonymous counts also say which page was opened (by its name, such as Live or Results) and how long a visit lasted, in three bands. Nothing new is kept on the phone.</li>
 <li><b>Version 3, 16 November 2026</b>: a junior signed in on a phone is signed out after 30 days (hg-me-at-&lt;club&gt;); push addresses unused for 180 days are forgotten; juniors can't be followed by name.</li>
 <li><b>Version 2, 15 November 2026</b>: every item named; offline copies, anonymous counts, internet addresses, push services and children added; the visit count for the home-screen offer stopped, and the list of clubs now kept only where a driver is signed in.</li>
 <li><b>Version 1, 15 November 2026</b>: first version.</li>

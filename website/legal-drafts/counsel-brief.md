@@ -88,7 +88,7 @@ These run through our server, the "relay". The club decides what to record and p
 - **What it does:** serves each club's public pages (results, live race, schedule, standings, badges, check-in) and the drivers' private phone pages. It takes requests, sign-ups and shout-outs and holds them for the laptop. It forwards commentary prompts to Anthropic and speech to ElevenLabs with our keys, and sends Web Push alerts.
 - **Logs:**
   - A usage log (counts and timings only, no words or names) kept 24 months.
-  - Anonymous page counts kept 90 days.
+  - Anonymous page counts kept 90 days (named events; since 19 Nov 2026 also which page was opened, by name, and a visit's length in three bands - no driver, device or address).
   - An admin audit log, written only by our admin commands over `fly ssh`.
   - IP addresses are used in memory for rate limits and not logged. **[CHECK]** whether Fly.io's own edge logs record them.
 - **Backups:** `relay/backup.cmd` copies the whole `/data` disk, every club, down to the operator's PC as a dated `relay-data.tgz` under `relay-backups\`. These copies are **not encrypted**. See question 7.12.

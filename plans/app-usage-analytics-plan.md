@@ -1,6 +1,6 @@
 # App usage analytics: what clubs use, and for how long
 
-19 Nov 2026. Rounds 1-3 built on `claude/usage-sharing` (laptop counts and sends, relay keeps); the relay is not deployed yet.
+19 Nov 2026. All five rounds built: rounds 1-3 and 5 on `claude/usage-sharing` (HeatCaller PR 274), round 4 on `claude/product-page` (HeatCaller-Admin PR 4).
 
 **Goal.** See which parts of HeatCaller clubs actually open, how long they
 spend in each, and what they never touch, on a dashboard in the relay admin
@@ -214,7 +214,36 @@ ShowPage / SegmentTabs ──► AppUsage   POST /club/<id>/app-usage ──► 
    - The notice now also says **whether Desk View was on** (Terms Part 2,
      the box's hint, the docs): the report always carried it.
 4. **Admin app: Product page.** Store, fetch, report sums with tests, the page.
+   **Built 19 Nov 2026** in `..\HeatCaller-Admin`, branch
+   `claude/product-page` (heatcaller/HeatCaller-Admin PR 4): `AppUsage.cs`
+   (`AppUsageStore` under `usage\<app>\app\`, `ProductReport`),
+   `RelayCommands.AppUsageAsync`, `AdminSession.SyncAppUsageAsync`,
+   `Pages\ProductPage.cs`, a `BarList` chart, `ProductTests`; the preview
+   relay and the screenshot check include it. Differences from the plan:
+   - **Views, not one long page:** Overview (tiles, time by page, reach,
+     rarely used, race day against the rest), Pages (tabs, before and
+     after), Features, Club (mix against all), and Phones (round 5).
+   - **Ranges are 7 / 30 / 90 days and 12 months**, not "this season":
+     seasons differ by club and by indoor/outdoor.
+   - **A day sent twice counts once** by its content (club, date and
+     totals), not "newest per club and date", so a club's standby PC is not
+     taken for a resend.
+   - **"Never used"** is among pages any report has ever named: the admin
+     app has no list of HeatCaller's pages, so a page nobody has ever opened
+     can't show.
+   - **Clubs by name** (open decision 2, the recommendation).
 5. **Phone pages (optional).** View and dwell counts, `page-counts --json`.
+   **Built 19 Nov 2026** (open decision 3: yes): `view_<page>` (one a page
+   load, from a fixed list, never the address) and `visit_lt30s` /
+   `visit_30sto5m` / `visit_gt5m` in `PAGE_COUNT_EVENTS`; the counting in
+   `pages.ts` (`hcViewName`, `hcVisitBand`); `page-counts --json` in
+   `voiceadmin.ts`; `test/pageviews.test.ts`; cookie policy version 4,
+   Terms Part 2 and the counsel brief say so. In the admin app, a Phones
+   view on the Product page. Differences from the plan:
+   - **A visit's length, not each page's dwell.** The pages run inside a
+     bar that keeps one page playing out of sight, so a page can't tell
+     when it is on screen; the window the phone opened can. Bands are under
+     30 s, 30 s to 5 min, over 5 min.
 
 Rounds 1-2 can run side by side; 3 needs both; 4 needs 2 (test it against
 hand-made JSONL until real reports arrive).
@@ -235,7 +264,7 @@ hand-made JSONL until real reports arrive).
    the US, off elsewhere** (rule 4). Counsel question 18a asks whether US
    opt-out is enough, whether the Windows region is a good enough test, and
    when other regions could move to opt-out.
-2. **Should the admin app see clubs by name,** or only "Club A, B, C"? By name
+2. ~~Should the admin app see clubs by name?~~ **Built by name (19 Nov 2026).** By name
    helps support; anonymous is easier to defend. Recommend by name, since the
    admin app already shows each club's voice spend.
-3. **Phone pages too** (round 5), or the laptop only for now.
+3. ~~Phone pages too?~~ **Built (round 5, 19 Nov 2026).**

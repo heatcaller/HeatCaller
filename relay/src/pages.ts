@@ -2311,6 +2311,34 @@ function hcCount(event) {
   hcCounted[event] = true;
   hcCounts.push(event);
 }
+// WHICH PAGES, AND HOW LONG (19 Nov 2026, app usage plan round 5): one
+// view_<page> a page load, by the page's name from a fixed list - never the
+// address, so no race, night or driver in it - and, for the window the
+// phone opened (not a page inside it), one visit_<band> the first time it
+// goes out of sight, from the time it was on screen. Nothing kept on the
+// phone: the time is a number in this page's memory.
+const HC_VIEW_PAGES = ['home', 'live', 'schedule', 'results', 'standings', 'badges', 'tracks', 'checkin', 'mynight', 'cookies', 'night', 'garage', 'family', 'app', 'signup', 'manage', 'card'];
+function hcViewName(path) {
+  const parts = String(path || '').split('/').filter((p) => p.length > 0);
+  if (parts.length < 2 || parts[0] !== 'c') return 'other';
+  if (parts.length === 2) return 'home';
+  return HC_VIEW_PAGES.indexOf(parts[2]) >= 0 ? parts[2] : 'other';
+}
+function hcVisitBand(ms) {
+  return ms < 30000 ? 'lt30s' : ms < 300000 ? '30sto5m' : 'gt5m';
+}
+try { hcCount('view_' + hcViewName(location.pathname)); } catch (e) { /* never worth an error */ }
+let hcSeenFrom = document.hidden ? 0 : Date.now();
+let hcSeenMs = 0;
+let hcVisitCounted = false;
+document.addEventListener('visibilitychange', () => {
+  try {
+    if (window.top !== window) return;
+    if (!document.hidden) { hcSeenFrom = Date.now(); return; }
+    if (hcSeenFrom > 0) { hcSeenMs += Date.now() - hcSeenFrom; hcSeenFrom = 0; }
+    if (hcSeenMs > 0 && !hcVisitCounted) { hcVisitCounted = true; hcCount('visit_' + hcVisitBand(hcSeenMs)); }
+  } catch (e) { /* never worth an error */ }
+});
 function hcSendCounts() {
   if (hcCounts.length === 0 || !CLUB) return;
   const events = hcCounts.slice(0, 20);

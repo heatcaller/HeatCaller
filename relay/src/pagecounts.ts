@@ -92,7 +92,37 @@ export const PAGE_COUNT_EVENTS: readonly string[] = [
   "video_share",
   "follow_link_shared",
   "follow_link_opened",
+  // Which pages are opened (19 Nov 2026, app usage plan round 5): one a
+  // page load, by the page's name - never its address, so no race, night or
+  // driver in it. Pages not named here count as view_other.
+  "view_home",
+  "view_live",
+  "view_schedule",
+  "view_results",
+  "view_standings",
+  "view_badges",
+  "view_tracks",
+  "view_checkin",
+  "view_mynight",
+  "view_cookies",
+  "view_night",
+  "view_garage",
+  "view_family",
+  "view_app",
+  "view_signup",
+  "view_manage",
+  "view_card",
+  "view_other",
+  // How long a visit lasted, on screen, in three bands: once a visit,
+  // counted by the page the phone opened, when it goes out of sight.
+  "visit_lt30s",
+  "visit_30sto5m",
+  "visit_gt5m",
 ];
+
+/** The page names view_<name> may carry, as the pages work them out from their address (hcViewName in pages.ts). */
+export const VIEW_PAGES: readonly string[] = PAGE_COUNT_EVENTS.filter((e) => e.startsWith("view_")).map((e) => e.slice(5));
+
 
 const KNOWN = new Set(PAGE_COUNT_EVENTS);
 

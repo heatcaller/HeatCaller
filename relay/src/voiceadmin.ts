@@ -6,6 +6,8 @@ import { loadConfig, type RelayConfig } from "./config.js";
 import { isActive, isValidClubId } from "./tenancy.js";
 import { readUsageLog, USAGE_LOG_PAGE } from "./usagelog.js";
 import { APP_USAGE_PAGE, forgetAppUsage, readAppUsage } from "./appusage.js";
+import { PAGE_COUNTS } from "./pagecounts.js";
+import { FileStore } from "./store.js";
 import { checkKeys } from "./keycheck.js";
 import { checkVoiceAccount, type VoiceAccountCheck } from "./voiceaccount.js";
 import { autoGiven, type AutoGiven } from "./autotopup.js";
@@ -58,6 +60,7 @@ export const ADMIN_COMMANDS = [
   "usage-log",
   "app-usage",
   "app-usage-forget",
+  "page-counts",
   "audit-append",
   "audit-log",
   "key-check",
@@ -589,6 +592,34 @@ export async function voiceAdmin(
     }
 
     out(JSON.stringify(await readAppUsage(config.dataDir, since, limit)) + "\n");
+    return 0;
+  }
+
+  if (command === "page-counts") {
+    // page-counts [--json]: every club's anonymous page counts (pagecounts.ts)
+    // by day, as JSON - read by the relay admin app. Read only.
+    if (args.some((arg) => arg !== "--json")) {
+      err("Usage: page-counts [--json]\n");
+      return 1;
+    }
+
+    const store = new FileStore(config.dataDir);
+    const clubs: Record<string, unknown> = {};
+
+    for (const tenant of config.tenants) {
+      try {
+        const held = await store.getSnapshot(tenant.club, PAGE_COUNTS);
+        const days = typeof held?.body === "object" && held.body !== null ? (held.body as Record<string, unknown>)["days"] : undefined;
+
+        if (typeof days === "object" && days !== null) {
+          clubs[tenant.club] = days;
+        }
+      } catch {
+        // A club whose counts won't read is left out, not fatal.
+      }
+    }
+
+    out(JSON.stringify({ version: 1, clubs }) + "\n");
     return 0;
   }
 
