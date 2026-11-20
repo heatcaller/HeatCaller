@@ -212,7 +212,8 @@ public sealed partial class WebServerService
             node.style.translate = ((was[0] || 0) + m[0] * step) + 'px ' + ((was[1] || 0) + m[1] * step) + 'px';
             paint();
             clearTimeout(node._hcNudge);
-            node._hcNudge = setTimeout(() => finish(sel, node, scaleOf(sel)), 350);
+            const k = sel;
+            node._hcNudge = setTimeout(() => finish(k, node, scaleOf(k)), 350);
           });
 
           // The window says which graphic its list picked.
