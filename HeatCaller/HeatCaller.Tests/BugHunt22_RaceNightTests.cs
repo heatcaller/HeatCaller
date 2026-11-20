@@ -206,6 +206,26 @@ public sealed class BugHunt22_RaceNightTests
         Assert.Contains("else if (response.IsSuccessStatusCode)", open);
     }
 
+    [Fact]
+    public void Page_counts_read_for_one_club_are_not_shown_for_the_next()
+    {
+        var settings = new AppSettings { RelayEnabled = false, RelayBaseUrl = "http://127.0.0.1:1", RelayClub = "old-club", RelayToken = "hg_test" };
+        using var publisher = new RelayPublisher(settings);
+
+        const System.Reflection.BindingFlags Private = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var target = typeof(RelayPublisher).GetField("_target", Private)!.GetValue(publisher);
+        var totals = new RelayPageCounts.Totals(new Dictionary<string, int> { ["home"] = 12 }, new Dictionary<string, int> { ["home"] = 40 });
+        var read = Activator.CreateInstance(typeof(RelayPublisher).GetNestedType("ReadCounts", System.Reflection.BindingFlags.NonPublic)!, target, totals);
+        typeof(RelayPublisher).GetField("_pageCounts", Private)!.SetValue(publisher, read);
+
+        Assert.Same(totals, publisher.PageCounts);
+
+        settings.RelayClub = "new-club";
+        publisher.SettingsChanged();
+
+        Assert.Null(publisher.PageCounts);
+    }
+
     private static SessionRecord Run(string transponder, long lapMs) => new()
     {
         SessionType = RaceSessionType.Race,

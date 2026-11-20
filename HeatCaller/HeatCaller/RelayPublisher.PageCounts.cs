@@ -21,10 +21,19 @@ public sealed partial class RelayPublisher
 
     private long _nextPageCountsTick;
 
-    private volatile RelayPageCounts.Totals? _pageCounts;
+    /// <summary>The counts as last read, and the relay and club they were read from.</summary>
+    private sealed record ReadCounts(RelayTarget From, RelayPageCounts.Totals Totals);
 
-    /// <summary>The relay's last 7 and 30 days' counts as last read, or null before the first read.</summary>
-    internal RelayPageCounts.Totals? PageCounts => _pageCounts;
+    private volatile ReadCounts? _pageCounts;
+
+    /// <summary>
+    /// The relay's last 7 and 30 days' counts as last read, or null before
+    /// the first read - and null once the relay, club or token changes
+    /// (bug hunt 22): the old club's counts were shown for the new one, and
+    /// kept for good when the new relay refused or had no /counts.
+    /// </summary>
+    internal RelayPageCounts.Totals? PageCounts =>
+        _pageCounts is { } read && read.From == _target ? read.Totals : null;
 
     /// <summary>Once per pass, from the worker loop, on its own tick. Quiet on failure; the last good counts are kept.</summary>
     private void CollectPageCountsPass(CancellationToken token)
@@ -57,7 +66,7 @@ public sealed partial class RelayPublisher
 
             if (RelayPageCounts.Parse(response.Content.ReadAsStringAsync(token).GetAwaiter().GetResult()) is { } totals)
             {
-                _pageCounts = totals;
+                _pageCounts = new ReadCounts(target, totals);
             }
         }
         catch (OperationCanceledException)
