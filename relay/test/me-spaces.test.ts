@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { garageEmbedScript, garagePage } from "../src/garagepage.js";
 import { ME_JS } from "../src/mespaces.js";
 import { nightPage } from "../src/pages.js";
+import { pageScriptMatch, withSharedInline } from "./pagescript.js";
 
 /**
  * ME AS A PIT WALL (5 Nov 2026, Asher: "Yes, build it"): the night page
@@ -11,10 +12,10 @@ import { nightPage } from "../src/pages.js";
  * a scope of its own, without the Garage page's own bits.
  */
 
-const html = nightPage("acme-rc", "Acme RC");
+const html = withSharedInline(nightPage("acme-rc", "Acme RC"));
 
 function scriptOf(page: string): string {
-  const m = /<script[^>]*>([\s\S]*)<\/script>/.exec(page);
+  const m = pageScriptMatch(page);
   assert.ok(m, "the page has a script");
   return m[1] as string;
 }
@@ -73,7 +74,7 @@ describe("Me as a pit wall", () => {
   it("leaves the Garage page's own tuck and way back out of the night", () => {
     const code = scriptOf(html);
     assert.doesNotMatch(code, /Back to your night/);
-    assert.match(scriptOf(garagePage("acme-rc", "Acme RC")), /Back to your night/);
+    assert.match(scriptOf(withSharedInline(garagePage("acme-rc", "Acme RC"))), /Back to your night/);
   });
 
   it("gives every part of the night a space, and anything new to Stats", () => {

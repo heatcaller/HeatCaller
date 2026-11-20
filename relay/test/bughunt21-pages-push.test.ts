@@ -6,6 +6,7 @@ import { createContext, runInContext } from "node:vm";
 import { homePage, livePage } from "../src/pages.js";
 import { PushService } from "../src/push.js";
 import { MemoryStore } from "../src/store.js";
+import { withSharedInline } from "./pagescript.js";
 
 function fn(source: string, name: string): string {
   const match = new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`).exec(source);
@@ -21,7 +22,7 @@ function fn(source: string, name: string): string {
  * in it starting tonight, counts too.
  */
 describe("a race day made the night before is tonight's", () => {
-  const home = homePage("acme-rc", "Acme RC");
+  const home = withSharedInline(homePage("acme-rc", "Acme RC"));
   const context = createContext({});
   runInContext(["hcYmd", "hcIsTonight", "hcDayIsTonight"].map((n) => fn(home, n)).join("\n"), context);
   const tonight = (context as unknown as { hcDayIsTonight: (doc: unknown, at?: string) => boolean }).hcDayIsTonight;
@@ -55,7 +56,7 @@ describe("a race day made the night before is tonight's", () => {
  */
 describe("Live's ?watch=1 is honoured once", () => {
   it("is taken off the address after the player is docked for it", () => {
-    const live = livePage("acme-rc", "Acme RC");
+    const live = withSharedInline(livePage("acme-rc", "Acme RC"));
     const at = live.indexOf("const asked = /[?&]watch=1(&|$)/");
     assert.ok(at > 0);
     const after = live.slice(at, at + 1500);
@@ -68,7 +69,7 @@ describe("Live's ?watch=1 is honoured once", () => {
  * race" drew the plain board, and the next read folded it shut again.
  */
 describe("a tap inside the folded last race", () => {
-  const live = livePage("acme-rc", "Acme RC");
+  const live = withSharedInline(livePage("acme-rc", "Acme RC"));
 
   function page(folded: boolean) {
     const calls: string[] = [];

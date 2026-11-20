@@ -21,6 +21,7 @@ import { SUN_ICON_SIZE, SUN_SMALL_ICON_SIZE } from "./sun.js";
 import { GARAGE_CSS, GARAGE_EMBED_BODY, garageEmbedScript } from "./garagepage.js";
 import { ME_BODY_END, ME_BODY_TOP, ME_COMING, ME_CSS, ME_JS, OWE_CSS } from "./mespaces.js";
 import { CLOCK_JS, clockAttr, tzAttr } from "./clock.js";
+import { createHash } from "node:crypto";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { COOKIE_POLICY_HTML } from "./cookies.js";
 import type { DirectoryEntry } from "./directory.js";
@@ -3433,7 +3434,7 @@ function touched() {
   if (stamp) {
     // While a page is drawn from copies, the time they were read.
     const at = warm && warmAt > 0 ? new Date(warmAt) : new Date();
-    stamp.textContent = 'Updated ' + at.toLocaleTimeString([], { hour12: HC_H12, hour: '2-digit', minute: '2-digit' });
+    stamp.textContent = 'Updated ' + at.toLocaleTimeString([], { hour12: HC_H12, hour: '2-digit', minute: '2-digit' }) + (typeof hcZoneWord === 'function' ? hcZoneWord(at) : '');
   }
 }
 
@@ -4253,6 +4254,98 @@ if (!SHELL && typeof window.addEventListener === 'function') {
 })();
 `;
 
+/**
+ * ONE CACHED SCRIPT AND STYLE FOR EVERY PAGE (19 Nov 2026, driver phone plan
+ * item 1 step 6). Every club page used to carry the whole of STYLE and
+ * COMMON_JS inline - the same couple of hundred KB on every tab, fetched
+ * again on every visit because a page is no-store. Now the identical part
+ * is two files, /c/<club>/app.css and /c/<club>/app.js, each named by a
+ * fingerprint of its own words (?v=), which the browser keeps for a year
+ * (immutable) and the club's service worker keeps for the build
+ * (push.ts, cache first). A change to either is a new fingerprint, so a
+ * deploy never leaves a phone on an old copy.
+ *
+ * What stays in each page: the club's own colours (the :root overrides,
+ * which differ per club and come after app.css so they win), the sunset
+ * look, and the page's own script, which runs after app.js because both
+ * are plain scripts at the end of the body, in that order - the same order
+ * as when they were one script, and top-level names are shared between
+ * classic scripts, so the page's script sees every helper app.js declares.
+ *
+ * Under the club's own address (not one for the whole relay) so the club's
+ * service worker, whose scope is /c/<club>/, can keep them for no signal.
+ * The words are the same for every club.
+ */
+export interface SharedAsset {
+  readonly body: string;
+  /** Twelve hex characters of the body's sha256: the ?v= in its address. */
+  readonly version: string;
+  readonly type: string;
+}
+
+function sharedAsset(body: string, type: string): SharedAsset {
+  return Object.freeze({ body, type, version: createHash("sha256").update(body).digest("hex").slice(0, 12) });
+}
+
+// hcShared and --hc-app say each file arrived (see HC_SHARED_CHECK_JS).
+export const SHARED_ASSETS: Readonly<Record<string, SharedAsset>> = Object.freeze({
+  "app.js": sharedAsset(COMMON_JS + "\nvar hcShared = true;\n", "text/javascript; charset=utf-8"),
+  "app.css": sharedAsset(STYLE + "\n:root { --hc-app: 1; }\n", "text/css; charset=utf-8"),
+});
+
+/** The shared file of that name, or undefined: app.js and app.css only. */
+export function sharedAssetOf(name: string): SharedAsset | undefined {
+  return Object.prototype.hasOwnProperty.call(SHARED_ASSETS, name) ? SHARED_ASSETS[name] : undefined;
+}
+
+/** A shared file's address under the club, with its fingerprint. club is already escaped. */
+function sharedAssetHref(club: string, name: "app.js" | "app.css"): string {
+  return `/c/${club}/${name}?v=${(SHARED_ASSETS[name] as SharedAsset).version}`;
+}
+
+/** The two tags that bring the shared files into a page: the style in the head, the script at the end of the body. */
+function sharedStyleTag(club: string): string {
+  return `<link rel="stylesheet" href="${sharedAssetHref(club, "app.css")}">`;
+}
+
+function sharedScriptTag(club: string, nonce: string): string {
+  return `<script src="${sharedAssetHref(club, "app.js")}" nonce="${escapeHtml(nonce)}"></script>`;
+}
+
+/**
+ * The first lines of every page's own script: when app.js or app.css did
+ * not arrive (a page the phone kept, opened with no signal before the
+ * files were ever kept), say so in plain words with a way to try again,
+ * and size the icons, which are drawn huge without the style. The page's
+ * own script still runs after it and draws what it can.
+ */
+const HC_SHARED_CHECK_JS = `
+(function () {
+  var js = typeof hcShared !== 'undefined' && hcShared === true;
+  var css = true;
+  try { css = getComputedStyle(document.documentElement).getPropertyValue('--hc-app').trim() !== ''; } catch (e) { css = true; }
+  if (js && css) return;
+  try {
+    if (!css) {
+      var st = document.createElement('style');
+      st.textContent = 'svg{width:24px;height:24px}body{margin:0;padding:12px;font:16px/1.45 system-ui,sans-serif}';
+      document.head.appendChild(st);
+    }
+    var bar = document.createElement('div');
+    bar.setAttribute('role', 'status');
+    bar.style.cssText = 'position:sticky;top:0;z-index:60;padding:12px 16px;background:#FFD23F;color:#111;font:600 16px/1.4 system-ui,sans-serif';
+    bar.textContent = 'This page didn\u2019t load fully. ';
+    var again = document.createElement('button');
+    again.type = 'button';
+    again.textContent = 'Tap to try again';
+    again.style.cssText = 'font:inherit;min-height:44px;margin-left:4px';
+    again.addEventListener('click', function () { location.reload(); });
+    bar.appendChild(again);
+    document.body.insertBefore(bar, document.body.firstChild);
+  } catch (e) { /* nothing more to do */ }
+})();
+`;
+
 interface Shell {
   readonly club: string;
   readonly clubName: string;
@@ -4532,7 +4625,7 @@ ${preview}${twitter}
 <link rel="icon" type="image/png" href="/c/${club}/icon.png?v=${look.iconVersion}">
 <link rel="apple-touch-icon" href="/c/${club}/icon.png?v=${look.iconVersion}">
 <title>${title}</title>
-<style>${STYLE}</style>
+${sharedStyleTag(club)}
 ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
 </head>
 <body data-club="${club}" data-club-name="${name}" data-build="${PAGES_BUILD}"${look.emailLink ? ' data-email-link="1"' : ""}${look.signupOpen === true ? ' data-signup="1"' : ""}${look.guide.length > 0 ? ` data-guide="${escapeHtml(JSON.stringify(look.guide))}"` : ""}${look.updates.length > 0 ? ` data-updates="${escapeHtml(JSON.stringify(look.updates))}"` : ""}>${sunset ? HC_SUNSET : ""}
@@ -4552,7 +4645,8 @@ ${overrides}${sunset ? HC_SUNSET_STYLE : ""}
 </div>
 ${aboutSheet(name)}
 <div id="follow" class="follow" hidden></div>
-<script nonce="${escapeHtml(context.nonce)}">${COMMON_JS}${page.script}</script>
+${sharedScriptTag(club, context.nonce)}
+<script nonce="${escapeHtml(context.nonce)}">${HC_SHARED_CHECK_JS}${page.script}</script>
 </body>
 </html>
 `;
@@ -11617,7 +11711,10 @@ function nextNightHtml(answer) {
   const times = [
     word(b.entriesClose) ? esc('Entries close ' + hcHm(word(b.entriesClose))) : '',
     word(b.firstRace) ? esc('First race ' + hcHm(word(b.firstRace))) : '',
-  ].filter(Boolean).join(' &middot; ');
+  ].filter(Boolean).join(' &middot; ') +
+    // "NZDT" once after the times, only when the phone is somewhere else.
+    (typeof hcZoneWord === 'function' && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(word(b.day)) && (word(b.entriesClose) || word(b.firstRace))
+      ? esc(hcZoneWord(new Date(word(b.day) + 'T12:00:00Z'))) : '');
   const title = word(b.title);
   // Taking entries: the card is a way in to say so (12 Nov 2026, Asher:
   // "theres no way to say you're coming to the next race... when you tap it
@@ -20518,14 +20615,15 @@ ${NO_ZOOM_HEAD}
 <link rel="icon" type="image/png" href="/c/${safeClub}/icon.png?v=${look.iconVersion}">
 <link rel="apple-touch-icon" href="/c/${safeClub}/icon.png?v=${look.iconVersion}">
 <title>${name}</title>
-<style>${STYLE}</style>
+${sharedStyleTag(safeClub)}
 ${overrides}
 </head>
 <body data-club="${safeClub}" data-club-name="${name}">
 <div class="hcstage" id="hcstage"></div>
 ${tabsNav(safeClub, name, "")}
 <div class="hcprobe" id="hcprobe" aria-hidden="true"></div>
-<script nonce="${escapeHtml(context.nonce)}">${COMMON_JS}${APP_SHELL_JS}</script>
+${sharedScriptTag(safeClub, context.nonce)}
+<script nonce="${escapeHtml(context.nonce)}">${HC_SHARED_CHECK_JS}${APP_SHELL_JS}</script>
 </body>
 </html>
 `;

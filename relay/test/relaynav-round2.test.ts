@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { myNightPage, nightPage, resultsPage } from "../src/pages.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * RELAY NAVIGATION, ROUND 2 (29 Oct 2026): Me remembers the driver on
@@ -30,7 +31,7 @@ function relay(full: unknown): Answerer {
 }
 
 async function openNight(answer: Answerer, hash = `#d=${CODE}`, stored: Record<string, string> = {}): Promise<FakePage> {
-  const { html, script } = pageParts(nightPage("acme-rc", "Acme RC"));
+  const { html, script } = pageParts(withSharedInline(nightPage("acme-rc", "Acme RC")));
   const page = new FakePage(html, answer, { hash });
   for (const [k, v] of Object.entries(stored)) page.eval(`localStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)})`);
   page.run(script);
@@ -86,13 +87,13 @@ describe("relay navigation, round 2: the night page remembers the driver", () =>
   });
 
   it("draws Signed in on the page, hidden until there is something to forget", () => {
-    assert.match(nightPage("acme-rc", "Acme RC"), /<div class="me-si" id="mesi" hidden><\/div>/);
+    assert.match(withSharedInline(nightPage("acme-rc", "Acme RC")), /<div class="me-si" id="mesi" hidden><\/div>/);
   });
 });
 
 describe("relay navigation, round 2: Me goes straight to a remembered night", () => {
   async function openMe(stored: Record<string, string>): Promise<FakePage> {
-    const { html, script } = pageParts(myNightPage("acme-rc", "Acme RC"));
+    const { html, script } = pageParts(withSharedInline(myNightPage("acme-rc", "Acme RC")));
     const page = new FakePage(html, async () => ({ status: 404 }), {});
     for (const [k, v] of Object.entries(stored)) page.eval(`localStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)})`);
     page.run(script);
@@ -119,7 +120,7 @@ describe("relay navigation, round 2: Me goes straight to a remembered night", ()
   });
 
   it("points the Me tab at the remembered night on every page", () => {
-    const html = resultsPage("acme-rc", "Acme RC");
+    const html = withSharedInline(resultsPage("acme-rc", "Acme RC"));
 
     assert.match(html, /document\.querySelector\('nav\.tabs a\[href\$="\/mynight"\], nav\.tabs a\[href\*="\/night#d="\]'\)/);
     assert.match(html, /me\.setAttribute\('href', '\/c\/' \+ encodeURIComponent\(CLUB\) \+ '\/night#d=' \+ code\)/);

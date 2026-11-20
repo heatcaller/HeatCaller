@@ -214,9 +214,11 @@ internal static class MissionControl
             return website;
         }
 
+        // On a website that is fine the line is the whole detail: "Online"
+        // says it is up to date, and the tile has room for two lines.
         return website with
         {
-            Detail = website.Detail + " " + problem,
+            Detail = website.Level == Level.Good ? problem.Trim() : website.Detail + " " + problem,
             Level = website.Level == Level.Problem ? Level.Problem : Level.Watch,
         };
     }

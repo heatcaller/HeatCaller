@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { appShellPage, homePage, nightPage } from "../src/pages.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 /**
  * A SWIPE ALONG THE BOTTOM BAR (5 Nov 2026, Asher: "add ability to swipe
@@ -10,7 +11,7 @@ import { appShellPage, homePage, nightPage } from "../src/pages.js";
  */
 
 const scriptOf = (page: string): string => {
-  const m = /<script[^>]*>([\s\S]*)<\/script>/.exec(page);
+  const m = pageScriptMatch(page);
   assert.ok(m, "the page has a script");
   return m[1] as string;
 };

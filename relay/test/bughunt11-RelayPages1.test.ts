@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { resultsPage } from "../src/pages.js";
 import { FakePage, pageParts } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * Bug hunt 11 (5 Nov 2026), relay pages, part 1: the results page's head to
@@ -10,7 +11,7 @@ import { FakePage, pageParts } from "./driverexp-rp1-fakepage.js";
  */
 
 async function resultsWith(answer: (url: string) => { status: number; body?: unknown }): Promise<FakePage> {
-  const { html, script } = pageParts(resultsPage("acme-rc", "Acme RC"));
+  const { html, script } = pageParts(withSharedInline(resultsPage("acme-rc", "Acme RC")));
   const p = new FakePage(html, async (url) => answer(url));
   p.run(script);
   await p.settle();
@@ -106,7 +107,7 @@ describe("Bug hunt 11: View laps in the flat listing", () => {
 
 describe("Bug hunt 11: the framed page hands club links to the bar", () => {
   it("only treats a path with a file extension as a file", () => {
-    const page = resultsPage("acme-rc", "Acme RC");
+    const page = withSharedInline(resultsPage("acme-rc", "Acme RC"));
     const line = page.split("\n").find((l) => l.includes(".test(url.pathname)") && l.includes("A-Za-z0-9"));
     assert.ok(line, "the page has the looks-like-a-file guard");
     const literal = /\/(\\?\.\[A-Za-z0-9\]\+\$)\//.exec(line)?.[1];

@@ -4,6 +4,7 @@ import { MemoryStore } from "../src/store.js";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
 import { SPONSOR_SEEN_PER_ADDRESS } from "../src/server.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * OUR SPONSORS AT THE FOOT OF LIVE (5 Nov 2026, Asher: "add sponsorships to
@@ -150,7 +151,7 @@ type SeenAnswer = number | "fail";
 /** Live or Home in the fake browser, answering /sponsors/seen with whatever answers() says next. */
 async function openWithSponsors(which: "live" | "home", answers: () => SeenAnswer): Promise<FakePage> {
   const { DEFAULT_CONTEXT, homePage, livePage } = await import("../src/pages.js");
-  const text = which === "live" ? livePage("acme-rc", "Acme RC", DEFAULT_CONTEXT) : homePage("acme-rc", "Acme RC", DEFAULT_CONTEXT);
+  const text = which === "live" ? withSharedInline(livePage("acme-rc", "Acme RC", DEFAULT_CONTEXT)) : withSharedInline(homePage("acme-rc", "Acme RC", DEFAULT_CONTEXT));
   const { html, script } = pageParts(text);
   const page: FakePage = new FakePage(html, async (url): ReturnType<Answerer> => {
     const path = url.replace("/api/v1/c/acme-rc", "");
@@ -257,8 +258,8 @@ describe("a view is written down only once the relay has answered it", () => {
 
   it("still uses the one key on both pages, so a phone with both open is one view", async () => {
     const { homePage, livePage } = await import("../src/pages.js");
-    assert.match(livePage("acme-rc", "Acme RC"), /'hg-spseen-' \+ CLUB/);
-    assert.match(homePage("acme-rc", "Acme RC"), /'hg-spseen-' \+ CLUB/);
+    assert.match(withSharedInline(livePage("acme-rc", "Acme RC")), /'hg-spseen-' \+ CLUB/);
+    assert.match(withSharedInline(homePage("acme-rc", "Acme RC")), /'hg-spseen-' \+ CLUB/);
   });
 });
 
@@ -267,7 +268,7 @@ describe("sponsor slides fill the width (5 Nov 2026)", () => {
   // aspect ratio" - on Live and Home's Sponsor of the night alike.
   it("draws a picture edge to edge at its own shape, one to a row on Live", async () => {
     const { livePage } = await import("../src/pages.js");
-    const page = livePage("acme-rc", "Acme RC");
+    const page = withSharedInline(livePage("acme-rc", "Acme RC"));
     assert.match(page, /\.sponsors \.spgrid \{ grid-template-columns: minmax\(0, 1fr\); \}/);
     assert.match(page, /\.sponsors \.sp > img, #spnight \.sp > img \{ display: block; width: 100%; height: auto; max-width: none; max-height: none;/);
     assert.match(page, /\.sponsors \.sp:has\(> img\) \{ padding: 0;/);

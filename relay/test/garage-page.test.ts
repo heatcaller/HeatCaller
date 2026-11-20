@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { garagePage } from "../src/garagepage.js";
 import { DEFAULT_CONTEXT } from "../src/pages.js";
 import { FakePage, pageParts, type Answerer, type FakeNode, type Sent } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * THE GARAGE PAGE (5 Nov 2026, claude/garage-relay-contract.md): packs,
@@ -120,7 +121,7 @@ function relay(options: Relay): Answerer {
 }
 
 async function open(answer: Answerer, hash = `#d=${CODE}`, pass = ""): Promise<FakePage> {
-  const { html, script } = pageParts(garagePage("acme-rc", "Acme RC"));
+  const { html, script } = pageParts(withSharedInline(garagePage("acme-rc", "Acme RC")));
   const page = new FakePage(html, answer, { hash });
   page.run(`globalThis.crypto = { getRandomValues(a) { for (let i = 0; i < a.length; i++) a[i] = (i * 37 + 11) & 255; return a; } };`);
   if (pass !== "") page.store.set("hg-night-pass-acme-rc", pass);
@@ -195,7 +196,7 @@ async function retirePack(page: FakePage, label: string): Promise<void> {
 
 describe("garage page: the markup", () => {
   it("is noindex, lights Me, and carries its one script with the response's nonce", () => {
-    const html = garagePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, nonce: "n0nce123" });
+    const html = withSharedInline(garagePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, nonce: "n0nce123" }));
     assert.match(html, /<meta name="robots" content="noindex, nofollow">/);
     assert.match(html, /<script nonce="n0nce123">/);
     assert.equal((html.match(/<script/g) ?? []).length, 1, "one script, inline");
@@ -205,7 +206,7 @@ describe("garage page: the markup", () => {
   });
 
   it("its script parses", () => {
-    const { script } = pageParts(garagePage("acme-rc", "Acme RC"));
+    const { script } = pageParts(withSharedInline(garagePage("acme-rc", "Acme RC")));
     assert.doesNotThrow(() => new Function(script));
   });
 });

@@ -7,6 +7,7 @@ import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import { managePinHash, pinHash } from "../src/server.js";
 import { FileStore, MemoryStore } from "../src/store.js";
 import { ACME_TOKEN, BROOK_TOKEN, call, start, type Answer, type Harness } from "./helpers.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 function manageDoc(overrides: Record<string, unknown> = {}) {
   return {
@@ -498,7 +499,7 @@ describe("the manage page", () => {
 
   it("ships a manage page whose script parses", async () => {
     const answer = await call(harness, "GET", "/c/acme-rc/manage");
-    const script = /<script[^>]*>([\s\S]*)<\/script>/.exec(answer.text)?.[1] ?? "";
+    const script = pageScriptMatch(answer.text)?.[1] ?? "";
 
     assert.doesNotThrow(() => new Script(script));
   });

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
 import { nightPage } from "../src/pages.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
+import { pageScriptMatch, withSharedInline } from "./pagescript.js";
 
 /**
  * THE REPORT CARD ON A DRIVER'S NIGHT (22 Oct 2026). The laptop sends a
@@ -54,7 +55,7 @@ async function page(club = "acme-rc") {
 
 /** The one inline script the page carries. */
 function script(html: string): string {
-  const match = /<script[^>]*>([\s\S]*)<\/script>/.exec(html);
+  const match = pageScriptMatch(html);
 
   assert.ok(match, "the page carries its script inline");
 
@@ -69,7 +70,9 @@ function script(html: string): string {
  *
  * The script ends by calling load(), so it cannot simply be evaluated.
  */
-function lifted(html: string, names: readonly string[], extras: Record<string, unknown> = {}) {
+function lifted(served: string, names: readonly string[], extras: Record<string, unknown> = {}) {
+  // The escaper is the shared app.js's (19 Nov 2026), so read it with that in.
+  const html = withSharedInline(served);
   const context = createContext(extras);
 
   const escFrom = html.indexOf("const esc = (v) =>");
@@ -115,7 +118,7 @@ describe("the report card", () => {
       if (url.endsWith("/night")) return { status: 200, body: body["part"] === "live" ? { ok: true } : { ok: true, night } };
       return { status: 404 };
     };
-    const { html, script } = pageParts(nightPage("acme-rc", "Acme RC"));
+    const { html, script } = pageParts(withSharedInline(nightPage("acme-rc", "Acme RC")));
     const page = new FakePage(html, answer, { hash: "#d=a1b2c3d4e5f60718293a" });
     page.run(script);
     await page.settle();

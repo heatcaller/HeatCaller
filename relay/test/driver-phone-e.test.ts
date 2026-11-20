@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { homePage, livePage } from "../src/pages.js";
 import { socialFrom, socialHostFits } from "../src/site.js";
 import { FakePage, pageParts } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * DRIVER PHONE PLAN, STEP E (14 Nov 2026): pinch-zoom, text size and high
@@ -27,7 +28,7 @@ function tokens(html: string, selector: RegExp): Record<string, string> {
 }
 
 describe("high contrast passes on every pair (item 6)", () => {
-  const html = livePage("acme-rc", "Acme RC");
+  const html = withSharedInline(livePage("acme-rc", "Acme RC"));
   for (const [name, re] of [["dark", /html\.hc \{([^}]*)\}/], ["light", /html\.hc\.light, html\.hc\.hcl \{([^}]*)\}/]] as const) {
     it(`${name}: text 7:1, colours and controls 4.5:1`, () => {
       const t = tokens(html, re);
@@ -44,7 +45,7 @@ describe("high contrast passes on every pair (item 6)", () => {
 
 describe("text size and high contrast are the phone's choice (item 6)", () => {
   async function open(stored: Record<string, string>): Promise<FakePage> {
-    const { html, script } = pageParts(homePage("acme-rc", "Acme RC"));
+    const { html, script } = pageParts(withSharedInline(homePage("acme-rc", "Acme RC")));
     const page = new FakePage(html, async () => ({ status: 404 }), {});
     for (const [k, v] of Object.entries(stored)) page.store.set(k, v);
     page.run(script);
@@ -53,8 +54,8 @@ describe("text size and high contrast are the phone's choice (item 6)", () => {
   }
 
   it("puts the reading controls in every footer", () => {
-    assert.match(homePage("acme-rc", "Acme RC"), /<span class="hcread" id="hcread" role="group" aria-label="Reading">/);
-    assert.match(livePage("acme-rc", "Acme RC"), /data-ts="130"[^>]*>A\+\+<\/button><button type="button" data-hc="1" aria-label="High contrast">Contrast<\/button>/);
+    assert.match(withSharedInline(homePage("acme-rc", "Acme RC")), /<span class="hcread" id="hcread" role="group" aria-label="Reading">/);
+    assert.match(withSharedInline(livePage("acme-rc", "Acme RC")), /data-ts="130"[^>]*>A\+\+<\/button><button type="button" data-hc="1" aria-label="High contrast">Contrast<\/button>/);
   });
 
   it("applies what the phone chose", async () => {
@@ -64,7 +65,7 @@ describe("text size and high contrast are the phone's choice (item 6)", () => {
   });
 
   it("scales the page's text with the choice", () => {
-    const html = homePage("acme-rc", "Acme RC");
+    const html = withSharedInline(homePage("acme-rc", "Acme RC"));
     assert.match(html, /html\[data-ts="130"\] \{ --ts: 1\.3; \}/);
     assert.match(html, /body \{ font-size: calc\(16px \* var\(--ts, 1\)\); \}/);
   });
@@ -95,7 +96,7 @@ describe("each social link goes where it says, once (item 23)", () => {
 
 describe("the pages a screen reader reads (item 12)", () => {
   it("marks the tab of the page it is on, and says a driver's race when it changes", () => {
-    assert.match(livePage("acme-rc", "Acme RC"), /<a href="\/c\/acme-rc\/live" class="lv" aria-current="page">/);
-    assert.match(livePage("acme-rc", "Acme RC"), /aria-live="polite"/);
+    assert.match(withSharedInline(livePage("acme-rc", "Acme RC")), /<a href="\/c\/acme-rc\/live" class="lv" aria-current="page">/);
+    assert.match(withSharedInline(livePage("acme-rc", "Acme RC")), /aria-live="polite"/);
   });
 });

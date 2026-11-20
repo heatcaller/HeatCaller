@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { homePage, livePage, nightPage, resultsPage, schedulePage, tracksPage } from "../src/pages.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * A STEADY TAB SWITCH (1 Nov 2026, Asher on his iPhone's home-screen icon:
@@ -25,7 +26,7 @@ function tracks(name: string, status = 200): Answerer {
 
 /** Opens the Tracks page, holding whatever an earlier page kept, `laterMs` after it. */
 async function open(answer: Answerer, kept?: FakePage, laterMs = 0): Promise<FakePage> {
-  const { html, script } = pageParts(tracksPage("acme-rc", "Acme RC"));
+  const { html, script } = pageParts(withSharedInline(tracksPage("acme-rc", "Acme RC")));
   const page = new FakePage(html, answer, {});
   if (kept) {
     for (const [key, value] of kept.store) page.store.set(key, value);
@@ -96,7 +97,7 @@ describe("a club page drawn from what this phone last read", () => {
   });
 
   it("never speaks a lap on Live from a copy", () => {
-    const live = livePage("acme-rc", "Acme RC");
+    const live = withSharedInline(livePage("acme-rc", "Acme RC"));
     assert.match(live, /function render\(state, seen, at, empty, copy\) \{[\s\S]{0,120}if \(!seen\) lapTalk\.take\(state, at\);/);
     assert.match(live, /render\(state, answer\.seen === true, /);
   });
@@ -104,11 +105,11 @@ describe("a club page drawn from what this phone last read", () => {
 
 describe("the bottom tabs when tapped", () => {
   const pages: [string, string][] = [
-    ["home", homePage("acme-rc", "Acme RC")],
-    ["live", livePage("acme-rc", "Acme RC")],
-    ["schedule", schedulePage("acme-rc", "Acme RC")],
-    ["results", resultsPage("acme-rc", "Acme RC")],
-    ["a driver's night", nightPage("acme-rc", "Acme RC")],
+    ["home", withSharedInline(homePage("acme-rc", "Acme RC"))],
+    ["live", withSharedInline(livePage("acme-rc", "Acme RC"))],
+    ["schedule", withSharedInline(schedulePage("acme-rc", "Acme RC"))],
+    ["results", withSharedInline(resultsPage("acme-rc", "Acme RC"))],
+    ["a driver's night", withSharedInline(nightPage("acme-rc", "Acme RC"))],
   ];
 
   for (const [name, html] of pages) {
@@ -121,7 +122,7 @@ describe("the bottom tabs when tapped", () => {
   }
 
   it("light the tapped tab at once and wait a third of a second at most for its page's reads", () => {
-    const html = homePage("acme-rc", "Acme RC");
+    const html = withSharedInline(homePage("acme-rc", "Acme RC"));
     assert.match(html, /tabs\.addEventListener\('pointerdown'/);
     assert.match(html, /light\(a\);/);
     assert.match(html, /setTimeout\(go, 300\);/);

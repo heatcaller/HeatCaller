@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { homePage, livePage, nightPage, resultsPage, schedulePage } from "../src/pages.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * A STEADY SWITCH BETWEEN PAGES (1 Nov 2026, Asher on his iPhone's home-screen
@@ -10,11 +11,11 @@ import { homePage, livePage, nightPage, resultsPage, schedulePage } from "../src
  */
 describe("switching tabs on the club pages", () => {
   const pages: [string, string][] = [
-    ["home", homePage("acme-rc", "Acme RC")],
-    ["live", livePage("acme-rc", "Acme RC")],
-    ["schedule", schedulePage("acme-rc", "Acme RC")],
-    ["results", resultsPage("acme-rc", "Acme RC")],
-    ["a driver's night", nightPage("acme-rc", "Acme RC")],
+    ["home", withSharedInline(homePage("acme-rc", "Acme RC"))],
+    ["live", withSharedInline(livePage("acme-rc", "Acme RC"))],
+    ["schedule", withSharedInline(schedulePage("acme-rc", "Acme RC"))],
+    ["results", withSharedInline(resultsPage("acme-rc", "Acme RC"))],
+    ["a driver's night", withSharedInline(nightPage("acme-rc", "Acme RC"))],
   ];
 
   for (const [name, html] of pages) {
@@ -30,7 +31,7 @@ describe("switching tabs on the club pages", () => {
 
   it("swaps the page at once, with no fade into a page still loading", () => {
     // 1 Nov 2026, Asher: "i see the fade I think but it's not really helping".
-    const html = homePage("acme-rc", "Acme RC");
+    const html = withSharedInline(homePage("acme-rc", "Acme RC"));
     assert.match(html, /::view-transition-new\(root\) \{ animation: none; \}/);
     assert.doesNotMatch(html, /hc-page-in/);
   });

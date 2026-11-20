@@ -4,6 +4,7 @@ import { afterEach, describe, it } from "node:test";
 import { MemoryStore } from "../src/store.js";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
 import { FakeAudioWorld } from "./listen-fake-audio.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 /**
  * LISTEN NOW WITHOUT THE HICCUPS (11 Nov 2026, asked for by Asher: the
@@ -48,7 +49,7 @@ async function liveScript(): Promise<string> {
   assert.equal(opened.status, 200);
 
   const page = (await call(harness, "GET", "/c/acme-rc/live")).text;
-  const match = /<script[^>]*>([\s\S]*)<\/script>/.exec(page);
+  const match = pageScriptMatch(page);
   assert.ok(match, "the page carries a script");
   return match[1] as string;
 }

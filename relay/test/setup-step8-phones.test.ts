@@ -4,6 +4,7 @@ import { askFieldsFrom, ASK_COVER_KEY, ASK_OFFER_ID, DRIVER_ASK_KINDS, isWriteKi
 import { ME_JS } from "../src/mespaces.js";
 import { livePage, NEXT_START_JS, nightPage, schedulePage } from "../src/pages.js";
 import { liveAlerts, marshalSoonWords } from "../src/push.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 /**
  * SETUP PLAN STEP 8, THE PHONE SIDE (12 Nov 2026): marshals confirm their own
@@ -16,7 +17,7 @@ const ROUND = "0123456789abcdef0123456789abcdef";
 const OFFER = "00112233445566778899aabb";
 
 function scriptOf(page: string): string {
-  const m = /<script[^>]*>([\s\S]*)<\/script>/.exec(page);
+  const m = pageScriptMatch(page);
   assert.ok(m, "the page has a script");
   return m[1] as string;
 }

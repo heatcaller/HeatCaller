@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { homePage } from "../src/pages.js";
 import { CHANNELS } from "../src/types.js";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * THE NIGHT BEFORE (13 Oct 2026) - a preview of a meeting that has not
@@ -175,7 +176,7 @@ describe("the night before: what the page draws", () => {
   let draw: (answer: unknown) => string;
 
   beforeEach(() => {
-    draw = previewHtmlFrom(homePage("acme-rc", "Acme RC"));
+    draw = previewHtmlFrom(withSharedInline(homePage("acme-rc", "Acme RC")));
   });
 
   it("draws the preview it is given", () => {
@@ -292,9 +293,14 @@ describe("the night before: the home page's own slot", () => {
   });
 
   it("still carries exactly one script block", async () => {
-    // The rule the whole site keeps - one inline script under one nonce.
+    // The rule the whole site keeps - one inline script under one nonce,
+    // and since 19 Nov 2026 the shared app.js before it, under the same.
     const html = (await call(harness, "GET", "/c/acme-rc")).text;
+    const tags = html.match(/<script[^>]*>/g) ?? [];
+    const nonce = /<script nonce="([^"]+)">/.exec(html)?.[1] ?? "";
 
-    assert.equal(html.match(/<script/g)?.length, 1);
+    assert.equal(tags.length, 2);
+    assert.match(tags[0] ?? "", /^<script src="\/c\/acme-rc\/app\.js\?v=[0-9a-f]{12}" nonce="/);
+    assert.ok(nonce !== "" && tags.every((t) => t.includes(`nonce="${nonce}"`)));
   });
 });

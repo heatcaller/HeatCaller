@@ -10,6 +10,7 @@ import { MemoryStore } from "../src/store.js";
 import type { StoredDocument } from "../src/types.js";
 import { VoiceService } from "../src/voice.js";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
+import { pageScriptMatch, pageWithoutScripts } from "./pagescript.js";
 
 // Regressions for the fourth audit: public snapshots read afresh for every
 // request, a check-in tap written after the club was deleted or check-in
@@ -469,9 +470,9 @@ function browser(html: string, fetchImpl: (url: string, init?: { body?: string }
 }
 
 function pageParts(text: string): { html: string; script: string } {
-  const match = /<script[^>]*>([\s\S]*)<\/script>/.exec(text);
+  const match = pageScriptMatch(text);
   assert.ok(match);
-  return { html: text.replace(match[0], ""), script: match[1] as string };
+  return { html: pageWithoutScripts(text), script: match[1] as string };
 }
 
 describe("the check-in page", () => {

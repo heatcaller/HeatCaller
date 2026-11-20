@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { Script } from "node:vm";
 import { homePage, nightPage, signupPage } from "../src/pages.js";
 import { FakePage, pageParts, type Answerer, type FakeNode } from "./driverexp-rp1-fakepage.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 /**
  * RELAY NAVIGATION, ROUND 3 (29 Oct 2026): the little links. Watch live or
@@ -176,7 +177,7 @@ describe("relay navigation, round 3: Go to Me after sign-up", () => {
 
   it("ships scripts that parse", () => {
     for (const html of [homePage("acme-rc", "Acme RC"), nightPage("acme-rc", "Acme RC"), signupPage("acme-rc", "Acme RC")]) {
-      const script = /<script[^>]*>([\s\S]*)<\/script>/.exec(html)?.[1] ?? "";
+      const script = pageScriptMatch(html)?.[1] ?? "";
       assert.doesNotThrow(() => new Script(script));
     }
   });

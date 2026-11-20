@@ -19,6 +19,7 @@ import {
 import { VoiceService, voiceTopUpPath, type CatalogueVoice, type RenderFn, type VoicePlan } from "../src/voice.js";
 import { voiceAdmin, type AdminCommand } from "../src/voiceadmin.js";
 import { ACME_TOKEN, BROOK_TOKEN, call, start, tenants, type Harness } from "./helpers.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 // How much of each monthly allowance a club has used - AI commentary lines
 // and HeatCaller voice characters - read by the laptop with its token and
@@ -496,7 +497,7 @@ describe("usage meters", () => {
     it("has a This month block on the Today tab, and a script that still parses", async () => {
       const relay = await serve();
       const page = await call(relay, "GET", "/c/acme-rc/manage");
-      const script = /<script[^>]*>([\s\S]*)<\/script>/.exec(page.text)?.[1] ?? "";
+      const script = pageScriptMatch(page.text)?.[1] ?? "";
 
       assert.match(page.text, /id="tab-today"[\s\S]*id="usageBox"[\s\S]*id="tab-entries"/);
       assert.match(page.text, /This month/);
