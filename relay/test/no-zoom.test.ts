@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { appShellPage, homePage, managePage, schedulePage } from "../src/pages.js";
 import { DEFAULT_CONTEXT } from "../src/pages.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * PINCH-ZOOM IS BACK (14 Nov 2026, driver phone plan item 6, Asher: "you
@@ -13,10 +14,10 @@ import { DEFAULT_CONTEXT } from "../src/pages.js";
  */
 describe("the relay's pages can be pinched to zoom", () => {
   const pages: [string, string][] = [
-    ["home", homePage("acme-rc", "Acme RC", DEFAULT_CONTEXT)],
-    ["schedule", schedulePage("acme-rc", "Acme RC", DEFAULT_CONTEXT)],
-    ["manage", managePage("acme-rc", "Acme RC", DEFAULT_CONTEXT)],
-    ["app shell", appShellPage("acme-rc", "Acme RC", DEFAULT_CONTEXT)],
+    ["home", withSharedInline(homePage("acme-rc", "Acme RC", DEFAULT_CONTEXT))],
+    ["schedule", withSharedInline(schedulePage("acme-rc", "Acme RC", DEFAULT_CONTEXT))],
+    ["manage", withSharedInline(managePage("acme-rc", "Acme RC", DEFAULT_CONTEXT))],
+    ["app shell", withSharedInline(appShellPage("acme-rc", "Acme RC", DEFAULT_CONTEXT))],
   ];
 
   for (const [name, html] of pages) {

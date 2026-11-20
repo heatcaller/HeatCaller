@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { appShellPage, livePage } from "../src/pages.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * DRIVER PHONE PLAN, STEP C (14 Nov 2026): the board made for a phone and
@@ -22,7 +23,7 @@ const BOARD = [
 ];
 
 async function openLive(stored: Record<string, string> = {}): Promise<FakePage> {
-  const { html, script } = pageParts(livePage("acme-rc", "Acme RC"));
+  const { html, script } = pageParts(withSharedInline(livePage("acme-rc", "Acme RC")));
   let p: FakePage;
   const answer: Answerer = async (url) => url === STATE
     ? { status: 200, body: { seq: 1, publishedAt: new Date(p.clock).toISOString(), body: { state: "Racing", flag: "Green", countdown: "4 LAPS TO GO", columns: COLUMNS, standings: BOARD } } }
@@ -44,7 +45,7 @@ describe("the board made for a phone (item 4)", () => {
   });
 
   it("has the style that hides the rest under 480 px, and keeps the own row in view below the status bar", () => {
-    const html = livePage("acme-rc", "Acme RC");
+    const html = withSharedInline(livePage("acme-rc", "Acme RC"));
     assert.match(html, /@media \(max-width: 480px\) \{\s*#board \.card:not\(\.all\) th:not\(\.k\), #board \.card:not\(\.all\) td:not\(\.k\):not\(\.bmc\) \{ display: none; \}/);
     assert.match(html, /tr\.me td \{ position: sticky; top: calc\(var\(--stick-t\) \+ var\(--owe-h, 0px\)\); bottom: calc\(68px \+ var\(--sa-b\)\)/);
   });
@@ -87,7 +88,7 @@ describe("your card on Live (item 4)", () => {
 
 describe("Back walks the tabs in the home-screen app (item 18)", () => {
   it("adds a history step for each tab, and shows that page again on Back", () => {
-    const shell = appShellPage("acme-rc", "Acme RC");
+    const shell = withSharedInline(appShellPage("acme-rc", "Acme RC"));
     assert.match(shell, /history\.pushState\(\{ hc: 1 \}, '', to\);\s*\}\s*catch \(e2\) \{[^}]*\}\s*hcGo\(to\);/);
     // Bug hunt 20 #4: a Live page that let go of the bar takes it again on Back.
     assert.match(shell, /addEventListener\('popstate', \(\) => \{\s*const path = [^;]*;[\s\S]*?if \(!SHELL && !hcHeld\) \{\s*if \(hcHeldOnce === ''[^)]*\)[^;]*return;\s*hcHold\(hcHeldOnce\);/);

@@ -650,8 +650,13 @@ public sealed class RaceClassEditForm : Form
 
         _tiles[0].Value.Text = method;
         _tiles[1].Value.Text = ((int)_numMainSize.Value).ToString(System.Globalization.CultureInfo.CurrentCulture);
-        // An Invitational's mains replace the A-main (19 Nov 2026).
-        _tiles[2].Value.Text = Result.Invitational ? Invitational.ShortName : legs;
+        // An Invitational's mains replace the A-main (19 Nov 2026). Its name
+        // goes in the caption and the count of mains in the value: the name
+        // in the value's big face was cut to "Invitat..." in the tile.
+        _tiles[2].Value.Text = Result.Invitational
+            ? $"{Result.InvitationalMains} mains"
+            : legs;
+        _tiles[2].Caption.Text = AppTheme.Spaced((Result.Invitational ? Invitational.ShortName : "A-main").ToUpperInvariant());
 
         // Unticked, the class pays the race day's usual fee.
         _tiles[3].Value.Text = _chkOwnFee.Checked

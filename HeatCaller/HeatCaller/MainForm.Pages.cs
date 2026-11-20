@@ -1078,6 +1078,14 @@ public partial class MainForm
 
         today.ConnectTimerRequested += () => GoToPage("Connection");
 
+        // A demo night's strip above Start (20 Nov 2026, head-to-head
+        // baseline): "demo laps only" rather than "laps won't be counted"
+        // when demos fill the program, and - when they don't - why the heat
+        // a demo just ran is still next up, with the way to the setting.
+        today.DemoFillsTheProgram = () => _settings.DemoFillsTheProgramme;
+        today.UnfiledDemoRoundId = () => _unfiledDemoRoundId;
+        today.DemoModeRequested += () => GoToPage("Demo Mode");
+
         BuildTodayWithTheProgramme(subPageToday, raceProgram, today);
 
         // Both halves, because they are one tab now. Today reads the
@@ -1870,6 +1878,10 @@ public partial class MainForm
                     "Can't start a demo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+
+            // Remembered for Next Steps, which says why this heat stays next up.
+            _unfiledDemoRoundId = _settings.DemoFillsTheProgramme ? null : round.Id;
+            _todayControl?.RefreshAll();
 
             // WHETHER THE DEMO CONSUMES THE ROUND IS THE CLUB'S CALL NOW
             // (13 Oct 2026).

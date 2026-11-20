@@ -548,6 +548,47 @@ public sealed class PoleShootoutAndInvitationalTests
         },
     };
 
+    // The Seed Order window (look-back, 19 Nov 2026): each row numbered, so
+    // names cut short still tell apart, the numbers following a move; and
+    // as wide as a long name needs, up to a cap.
+    [Fact]
+    public void The_seed_order_numbers_its_rows_and_keeps_them_numbered_after_a_move()
+    {
+        var rows = StaThread.Run(() =>
+        {
+            using var form = new FinalsFormatsForm.SeedOrderForm("Stock Buggy", new List<(string, string)> { ("T1", "Ann"), ("T2", "Bob"), ("T3", "Cat") });
+            var before = form.RowsShown.ToList();
+            form.MoveForTests(1);
+            return (before, after: form.RowsShown.ToList(), order: form.Order.ToList());
+        }, TimeSpan.FromSeconds(60), () => "building the seed order");
+
+        Assert.Equal(new[] { "1. Ann", "2. Bob", "3. Cat" }, rows.before);
+        Assert.Equal(new[] { "1. Bob", "2. Ann", "3. Cat" }, rows.after);
+        Assert.Equal(new[] { "T2", "T1", "T3" }, rows.order);
+    }
+
+    [Fact]
+    public void The_seed_order_window_widens_for_long_names_up_to_a_cap()
+    {
+        var widths = StaThread.Run(() =>
+        {
+            int Width(string name)
+            {
+                using var form = new FinalsFormatsForm.SeedOrderForm("Stock Buggy", new List<(string, string)> { ("T1", name) });
+                form.Show();
+                StaThread.Settle();
+                var width = form.ClientSize.Width;
+                form.Close();
+                return width;
+            }
+
+            return (shortName: Width("Ann"), longName: Width("Alexandria Montgomery-Fitzwilliam the Third"), huge: Width(new string('W', 200)));
+        }, TimeSpan.FromSeconds(60), () => "sizing the seed order");
+
+        Assert.True(widths.longName > widths.shortName, $"{widths.longName} vs {widths.shortName}");
+        Assert.True(widths.huge <= UiLayout.AtTextSize(640), $"{widths.huge}");
+    }
+
     /// <summary>A main's finishing order, every car with laps.</summary>
     private static SessionRecord Finish(params string[] order) => new()
     {

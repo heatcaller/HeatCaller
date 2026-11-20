@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { homePage, livePage, myNightPage, nightPage, schedulePage } from "../src/pages.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * OWING, ON EVERY PAGE (15 Nov 2026, Asher: "the notification should be a
@@ -41,17 +42,17 @@ const owing = { words: "Entry: $15.00 - pay at the desk", paid: false };
 
 describe("Owing, on every page (15 Nov 2026)", () => {
   it("draws the bar under the header of every club page but Me's own, as a link to Me", () => {
-    for (const html of [homePage("acme-rc", "Acme RC"), livePage("acme-rc", "Acme RC"), schedulePage("acme-rc", "Acme RC")]) {
+    for (const html of [withSharedInline(homePage("acme-rc", "Acme RC")), withSharedInline(livePage("acme-rc", "Acme RC")), withSharedInline(schedulePage("acme-rc", "Acme RC"))]) {
       assert.match(html, /<\/header>\s*<div class="hc-owe-bar" id="hc-owe-bar" hidden><a class="me-fee hc-owe" id="hc-owe" href="\/c\/acme-rc\/mynight"><\/a><\/div>/);
       assert.match(html, /\.hc-owe-bar \{ position: sticky; top: var\(--stick-t, 0px\);/);
     }
-    for (const html of [nightPage("acme-rc", "Acme RC"), myNightPage("acme-rc", "Acme RC")]) {
+    for (const html of [withSharedInline(nightPage("acme-rc", "Acme RC")), withSharedInline(myNightPage("acme-rc", "Acme RC"))]) {
       assert.ok(!html.includes('id="hc-owe-bar"'));
     }
   });
 
   it("shows the desk's words while they owe, on Schedule", async () => {
-    const page = await open(schedulePage("acme-rc", "Acme RC"), { [ME]: CODE }, relay(owing));
+    const page = await open(withSharedInline(schedulePage("acme-rc", "Acme RC")), { [ME]: CODE }, relay(owing));
     assert.equal(page.get("hc-owe-bar").hidden, false);
     assert.equal(page.get("hc-owe").textContent, "Entry: $15.00 - pay at the desk");
     assert.deepEqual(liveReads(page).map((s) => s.body), [{ id: CODE, part: "live" }]);
@@ -59,25 +60,25 @@ describe("Owing, on every page (15 Nov 2026)", () => {
 
   it("stays hidden once paid, with no entry, and with nothing tonight", async () => {
     for (const answer of [relay({ words: "Paid ✓", paid: true }), relay(undefined), relay(owing, 404)]) {
-      const page = await open(schedulePage("acme-rc", "Acme RC"), { [ME]: CODE }, answer);
+      const page = await open(withSharedInline(schedulePage("acme-rc", "Acme RC")), { [ME]: CODE }, answer);
       assert.equal(page.get("hc-owe").textContent, "");
       assert.equal(page.get("hc-owe-bar").hidden, true);
     }
   });
 
   it("asks nothing for a phone that remembers nobody", async () => {
-    const page = await open(schedulePage("acme-rc", "Acme RC"), {}, relay(owing));
+    const page = await open(withSharedInline(schedulePage("acme-rc", "Acme RC")), {}, relay(owing));
     assert.equal(liveReads(page).length, 0);
   });
 
   it("rides on Home's own live poll rather than asking twice", async () => {
-    const page = await open(homePage("acme-rc", "Acme RC"), { [ME]: CODE }, relay(owing));
+    const page = await open(withSharedInline(homePage("acme-rc", "Acme RC")), { [ME]: CODE }, relay(owing));
     assert.equal(page.get("hc-owe").textContent, "Entry: $15.00 - pay at the desk");
     assert.equal(liveReads(page).length, 1);
   });
 
   it("puts the page's own sticky bars under it", () => {
-    const html = livePage("acme-rc", "Acme RC");
+    const html = withSharedInline(livePage("acme-rc", "Acme RC"));
     assert.match(html, /\.hcdock \{ position: sticky; top: calc\(var\(--stick-t\) \+ var\(--owe-h, 0px\)\);/);
   });
 });

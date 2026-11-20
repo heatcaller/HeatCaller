@@ -5,6 +5,7 @@ import { VideoCheck } from "../src/video.js";
 import { ACME_TOKEN, call } from "./helpers.js";
 import { API, SAM, openEverything, publish, startDriver } from "./driverexp-r1-helpers.js";
 import { FakePage, pageParts, type FakeNode } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * RACE VIDEO, V3 AND V7 (14 Nov 2026, plans/race-video-access-plan.md): the
@@ -18,7 +19,7 @@ const MISSED = "11111111111111111111111111111111";
 const VIDEO = { id: "AAAAAAAAAAA", t: 710, end: 970, laps: [724, 733, 741.5], best: 1 };
 
 async function openNight(videoAnswer: unknown): Promise<FakePage> {
-  const { html, script } = pageParts(nightPage("acme-rc", "Acme RC"));
+  const { html, script } = pageParts(withSharedInline(nightPage("acme-rc", "Acme RC")));
   const page = new FakePage(html, async (url) => {
     if (url.endsWith("/video/night")) return { status: 200, body: videoAnswer };
     if (url.endsWith("/night")) {
@@ -185,7 +186,7 @@ describe("the relay's video answers and policy (V3, V7)", () => {
   });
 
   it("lets the shell's frames hand fullscreen and picture-in-picture down to the player", () => {
-    assert.match(homePage("acme-rc", "Acme RC"), /f\.allow = 'fullscreen; picture-in-picture; autoplay; encrypted-media';/);
+    assert.match(withSharedInline(homePage("acme-rc", "Acme RC")), /f\.allow = 'fullscreen; picture-in-picture; autoplay; encrypted-media';/);
   });
 
   it("answers a driver's night with their videos and the races the stream missed", async () => {

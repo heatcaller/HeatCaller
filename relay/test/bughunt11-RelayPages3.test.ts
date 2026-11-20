@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { createContext, runInContext } from "node:vm";
 import { DEFAULT_CONTEXT, appShellPage, nightPage } from "../src/pages.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * BUG HUNT 11 - RELAY PAGES 3 (5 Nov 2026). The night page's alerts, its
@@ -18,7 +19,7 @@ function night(extra: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 async function open(answer: Answerer): Promise<FakePage> {
-  const { html, script } = pageParts(nightPage("acme-rc", "Acme RC", DEFAULT_CONTEXT));
+  const { html, script } = pageParts(withSharedInline(nightPage("acme-rc", "Acme RC", DEFAULT_CONTEXT)));
   const page = new FakePage(html, answer, { hash: `#d=${CODE}` });
   page.eval(`
     this.SpeechSynthesisUtterance = function (text) { this.text = text; };
@@ -92,7 +93,7 @@ describe("bug hunt 11: a busy read of a race's field is asked again", () => {
 
 describe("bug hunt 11: the shell frames only the club's own pages", () => {
   function hcInside(): (path: string) => boolean {
-    const shell = appShellPage("acme-rc", "Acme RC");
+    const shell = withSharedInline(appShellPage("acme-rc", "Acme RC"));
     const source = /function hcInside\(path\) \{[\s\S]*?\n\}\n/.exec(shell)?.[0];
     assert.ok(source, "hcInside in the shell");
     const context = createContext({ HC_HOME: "/c/acme-rc", location: { origin: "https://relay.test" }, URL });

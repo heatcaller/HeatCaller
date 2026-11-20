@@ -239,6 +239,9 @@ public partial class MainForm : Form
     /// <summary>The Race Day page's Today tab, so anything that changes the day can tell it to re-read.</summary>
     private TodayControl? _todayControl;
 
+    /// <summary>The round last run as a demo while demos were not filed against the program - see TodayControl.BlockerFor.</summary>
+    private string? _unfiledDemoRoundId;
+
     /// <summary>The Timetable tab, so the programme can keep its generated lines in step.</summary>
     private DayScheduleControl? _daySchedulePage;
 

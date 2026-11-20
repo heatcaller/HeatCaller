@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { createContext, runInContext } from "node:vm";
 import { appShellPage, DEFAULT_CONTEXT, livePage } from "../src/pages.js";
 import { pageParts } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * LISTEN CARRIES ON ACROSS THE TABS (11 Nov 2026, Asher: "make the audio of
@@ -14,7 +15,7 @@ import { pageParts } from "./driverexp-rp1-fakepage.js";
  * Lap times turned on stop it.
  */
 
-const shell = appShellPage("acme-rc", "Acme RC");
+const shell = withSharedInline(appShellPage("acme-rc", "Acme RC"));
 const engine = /const HC_HOME = [\s\S]*?\nfunction hcHushListen\(\) \{[\s\S]*?\n\}\n/.exec(shell)?.[0] ?? "";
 
 interface FakeFrame {
@@ -173,7 +174,7 @@ describe("Listen carries on across the tabs", () => {
   });
 
   it("the Live page says whether it is listening, and stops when asked", () => {
-    const { script } = pageParts(livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: true } }));
+    const { script } = pageParts(withSharedInline(livePage("acme-rc", "Acme RC", { ...DEFAULT_CONTEXT, look: { ...DEFAULT_CONTEXT.look, listening: true } })));
     assert.match(script, /window\.hcListening = \(\) => on;/);
     assert.match(script, /window\.hcStopListen = \(\) => \{\n    if \(on\) \{\n      on = false;\n      turn \+= 1;\n      stop\(\);/);
     assert.equal((script.match(/hcHushListen\(\); wake\(\)/g) ?? []).length, 2, "both ways lap times go on");

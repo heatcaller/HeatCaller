@@ -3,6 +3,7 @@ import { after, before, describe, it } from "node:test";
 import { checkinPage } from "../src/pages.js";
 import { entryOf, pinHash } from "../src/server.js";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 /**
  * A DRIVER'S OWN ENTRY ON THEIR CHECK-IN CARD (12 Nov 2026, setup plan step 8).
@@ -70,7 +71,7 @@ describe("a driver's own entry on the check-in card", () => {
 
   it("is drawn on the one-driver card, escaped", () => {
     const html = checkinPage("acme-rc", "Acme RC");
-    const m = /<script[^>]*>([\s\S]*)<\/script>/.exec(html);
+    const m = pageScriptMatch(html);
     assert.ok(m);
     const code = m[1] as string;
     assert.doesNotThrow(() => new Function(code));

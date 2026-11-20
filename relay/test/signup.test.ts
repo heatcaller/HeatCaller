@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { managePinHash, pinHash, racerPinHash, signupPinHash } from "../src/server.js";
 import { MemoryStore } from "../src/store.js";
 import { ACME_TOKEN, BROOK_TOKEN, call, start, type Harness } from "./helpers.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 const NOW = new Date("2026-09-20T12:00:00.000Z");
 const LATER = "2026-10-04T12:00:00.000Z";
@@ -268,7 +269,7 @@ describe("driver sign-up", () => {
 
     // The script lives in a template literal that eats a level of
     // backslashes; a syntax error would blank the whole page.
-    const script = /<script[^>]*>([\s\S]*)<\/script>/.exec(page.text)?.[1] ?? "";
+    const script = pageScriptMatch(page.text)?.[1] ?? "";
     assert.doesNotThrow(() => new Script(script));
 
     // Home links sign-up only from its Racing tonight? card, drawn on the

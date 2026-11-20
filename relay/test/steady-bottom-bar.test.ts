@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { homePage, livePage, nightPage, resultsPage, schedulePage } from "../src/pages.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * A BAR THAT STAYS PUT (31 Oct 2026, Asher on iPhone Chrome: "the buttons
@@ -20,11 +21,11 @@ function phoneRules(html: string): string {
 
 describe("the club pages' bottom bar on a phone", () => {
   const pages: [string, string][] = [
-    ["home", homePage("acme-rc", "Acme RC")],
-    ["live", livePage("acme-rc", "Acme RC")],
-    ["schedule", schedulePage("acme-rc", "Acme RC")],
-    ["results", resultsPage("acme-rc", "Acme RC")],
-    ["a driver's night", nightPage("acme-rc", "Acme RC")],
+    ["home", withSharedInline(homePage("acme-rc", "Acme RC"))],
+    ["live", withSharedInline(livePage("acme-rc", "Acme RC"))],
+    ["schedule", withSharedInline(schedulePage("acme-rc", "Acme RC"))],
+    ["results", withSharedInline(resultsPage("acme-rc", "Acme RC"))],
+    ["a driver's night", withSharedInline(nightPage("acme-rc", "Acme RC"))],
   ];
 
   for (const [name, html] of pages) {
@@ -37,7 +38,7 @@ describe("the club pages' bottom bar on a phone", () => {
   }
 
   it("leaves a laptop's page scrolling the window as before", () => {
-    const html = homePage("acme-rc", "Acme RC");
+    const html = withSharedInline(homePage("acme-rc", "Acme RC"));
     const outside = html.replace(phoneRules(html), "");
     assert.doesNotMatch(outside, /html \{[^}]*overflow: hidden/);
     assert.doesNotMatch(outside, /\nbody \{[^}]*overflow/);

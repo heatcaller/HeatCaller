@@ -123,9 +123,12 @@ public sealed partial class RelayPublisher
             return null;
         }
 
+        // What to do before why (19 Nov 2026, look-back): Mission Control's
+        // tile has room for two lines, and a mail server's long reason in
+        // the middle cut the "Check the club's email" off the end.
         var why = failure.Why.Trim().TrimEnd('.');
-        return $"A driver's sign-in email didn't send at {failure.Utc.ToLocalTime():h:mm tt}" + (why.Length > 0 ? $": {why}." : ".")
-            + " Check the club's email on the Club Website page.";
+        return $"A driver's sign-in email didn't send at {failure.Utc.ToLocalTime():h:mm tt}. Check the club's email on the Club Website page."
+            + (why.Length > 0 ? $" {why}." : string.Empty);
     }
 
     /// <summary>The collected emails, one at a time, off the worker thread. Never throws.</summary>

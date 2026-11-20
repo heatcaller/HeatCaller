@@ -1355,6 +1355,9 @@ export function myNightUrl(club: string): string {
  *    from the last visit when the network is gone or takes over three
  *    seconds. Kept by address, without the query, so one copy a page.
  *  - The icon and the logo, which are versioned (?v=): the copy first.
+ *  - The shared app.js and app.css (19 Nov 2026, item 1 step 6), also
+ *    versioned: the copy first, and fetched as soon as the worker installs,
+ *    so a page kept for no signal has its script and style kept with it.
  *  - NEVER a driver's own night or garage, a sign-up, Manage, anything
  *    under /api/ (the pages keep their own last answer, and private
  *    answers stay out of a shared cache), or anything but a GET.
@@ -1369,9 +1372,20 @@ const SERVICE_WORKER_TEMPLATE = `'use strict';
 const HC_BUILD = '__HC_BUILD__';
 const HC_CACHE = 'hc-pages-' + HC_BUILD;
 const HC_PAGES = ['', 'live', 'schedule', 'results', 'standings', 'badges', 'tracks', 'mynight', 'checkin', 'app'];
-const HC_STATIC = ['icon.png', 'logo.png'];
+const HC_STATIC = ['icon.png', 'logo.png', 'app.js', 'app.css'];
+const HC_PRECACHE = __HC_PRECACHE__;
 const HC_WAIT_MS = 3000;
-self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('install', (e) => {
+  self.skipWaiting();
+  // This build's shared files, kept now rather than on the next visit. A
+  // failure is no failure: they are kept when a page first asks for them.
+  if (typeof caches === 'undefined' || HC_PRECACHE.length === 0) return;
+  e.waitUntil(caches.open(HC_CACHE).then((cache) => {
+    const scope = new URL(self.registration.scope);
+    const base = scope.origin + scope.pathname.replace(/\\/$/, '') + '/';
+    return Promise.all(HC_PRECACHE.map((p) => cache.add(base + p).catch(() => null)));
+  }).catch(() => null));
+});
 self.addEventListener('activate', (e) => e.waitUntil(Promise.all([
   self.clients.claim(),
   typeof caches === 'undefined' ? null : caches.keys()
@@ -1430,9 +1444,17 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(route.page ? hcPage(e.request, route.key) : hcStatic(e.request, route.key));
 });`;
 
-/** The service worker for one build of the pages (see PAGES_BUILD in pagebuild.ts). */
-export function serviceWorkerFor(build: string): string {
-  return SERVICE_WORKER_TEMPLATE.replace("__HC_BUILD__", /^[0-9a-z]{1,40}$/.test(build) ? build : "dev") + SERVICE_WORKER_REST;
+/**
+ * The service worker for one build of the pages (see PAGES_BUILD in
+ * pagebuild.ts). precache is the shared files to keep at install, each
+ * "app.js?v=<fingerprint>" (see SHARED_ASSETS in pages.ts); anything not of
+ * that shape is left out.
+ */
+export function serviceWorkerFor(build: string, precache: readonly string[] = []): string {
+  const kept = precache.filter((p) => /^app\.(?:js|css)\?v=[0-9a-f]{1,64}$/.test(p));
+  return SERVICE_WORKER_TEMPLATE
+    .replace("__HC_BUILD__", /^[0-9a-z]{1,40}$/.test(build) ? build : "dev")
+    .replace("__HC_PRECACHE__", JSON.stringify(kept)) + SERVICE_WORKER_REST;
 }
 
 const SERVICE_WORKER_REST = `

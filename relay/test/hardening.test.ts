@@ -9,6 +9,7 @@ import { addressKey, Limiter, pinHash } from "../src/server.js";
 import { FileStore, MemoryStore } from "../src/store.js";
 import type { StoredDocument } from "../src/types.js";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 const SAM = "0123456789abcdef0123";
 const BILL = "fedcba9876543210fedc";
@@ -403,7 +404,7 @@ describe("the check-in page's handling of refusals", () => {
   before(async () => {
     harness = await start();
     const page = await call(harness, "GET", "/c/acme-rc/checkin");
-    script = /<script[^>]*>([\s\S]*)<\/script>/.exec(page.text)?.[1] ?? "";
+    script = pageScriptMatch(page.text)?.[1] ?? "";
     loadList = /async function loadList\(\) \{[\s\S]*?\n\}/.exec(script)?.[0] ?? "";
   });
 

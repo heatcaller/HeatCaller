@@ -6,6 +6,7 @@ import { createContext, runInContext } from "node:vm";
 import { homePage, livePage } from "../src/pages.js";
 import { PushService } from "../src/push.js";
 import { MemoryStore } from "../src/store.js";
+import { withSharedInline } from "./pagescript.js";
 
 function fn(source: string, name: string): string {
   const match = new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`).exec(source);
@@ -21,7 +22,7 @@ function fn(source: string, name: string): string {
  * in it starting tonight, counts too.
  */
 describe("a race day made the night before is tonight's", () => {
-  const home = homePage("acme-rc", "Acme RC");
+  const home = withSharedInline(homePage("acme-rc", "Acme RC"));
   const context = createContext({});
   runInContext(["hcYmd", "hcIsTonight", "hcDayIsTonight"].map((n) => fn(home, n)).join("\n"), context);
   const tonight = (context as unknown as { hcDayIsTonight: (doc: unknown, at?: string) => boolean }).hcDayIsTonight;
@@ -41,6 +42,19 @@ describe("a race day made the night before is tonight's", () => {
     assert.equal(tonight({ event: { startedUtc: new Date().toISOString() } }, ""), true, "made today is still today");
   });
 
+  // 20 Nov 2026: a laptop left open on last week's day sends it every
+  // evening, and Home said "Race Day 13 Nov 2026 is on today" on the 20th.
+  it("is not tonight for a day made over four days ago, however fresh the send", () => {
+    const weekOld = { event: { name: "Race Day 13 Nov 2026", startedUtc: days(6) }, lines: [{ status: "next" }] };
+    assert.equal(tonight(weekOld, new Date().toISOString()), false);
+    assert.equal(tonight({ ...weekOld, event: { startedUtc: days(4.5) } }, new Date().toISOString()), false);
+    // A race in it starting tonight still counts: the club is racing on it.
+    assert.equal(tonight({ ...weekOld, lines: [{ status: "running", startedUtc: new Date().toISOString() }] }, new Date().toISOString()), true);
+    // A weekend meeting's second evening, and a day with no date sent, still count the send.
+    assert.equal(tonight({ ...weekOld, event: { startedUtc: days(1.5) } }, new Date().toISOString()), true);
+    assert.equal(tonight({ event: { name: "Club night" }, lines: [] }, new Date().toISOString()), true);
+  });
+
   it("is what all four places ask", () => {
     const pages = readFileSync(fileURLToPath(new URL("../src/pages.js", import.meta.url)), "utf8");
     // Five since 19 Nov 2026: Live's card for a followed driver elsewhere (driver phone plan item 4).
@@ -55,7 +69,7 @@ describe("a race day made the night before is tonight's", () => {
  */
 describe("Live's ?watch=1 is honoured once", () => {
   it("is taken off the address after the player is docked for it", () => {
-    const live = livePage("acme-rc", "Acme RC");
+    const live = withSharedInline(livePage("acme-rc", "Acme RC"));
     const at = live.indexOf("const asked = /[?&]watch=1(&|$)/");
     assert.ok(at > 0);
     const after = live.slice(at, at + 1500);
@@ -68,7 +82,7 @@ describe("Live's ?watch=1 is honoured once", () => {
  * race" drew the plain board, and the next read folded it shut again.
  */
 describe("a tap inside the folded last race", () => {
-  const live = livePage("acme-rc", "Acme RC");
+  const live = withSharedInline(livePage("acme-rc", "Acme RC"));
 
   function page(folded: boolean) {
     const calls: string[] = [];

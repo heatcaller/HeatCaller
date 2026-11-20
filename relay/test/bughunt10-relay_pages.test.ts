@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { livePage, nightPage, resultsPage, schedulePage, signupPage } from "../src/pages.js";
 import { FakePage, pageParts, type Answerer, type FakeNode } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * BUG HUNT 10 (23 Oct 2026): relay/src/pages.ts.
@@ -26,7 +27,7 @@ async function open(text: string, answer: Answerer, hash = ""): Promise<FakePage
 
 describe("#51 the live page's chequered flag", () => {
   it("has a rule for the class the app's 'Checkered' becomes", () => {
-    const html = livePage("acme-rc", "Acme RC");
+    const html = withSharedInline(livePage("acme-rc", "Acme RC"));
     assert.match(html, /\.flagbar\.f-checkered\b[^{]*\{\s*border-left-color: var\(--accent\)/);
     for (const flag of ["green", "yellow", "red", "checkered"]) {
       assert.match(html, new RegExp(`\\.flagbar\\.f-${flag}\\b`), flag);
@@ -43,7 +44,7 @@ describe("#21 the schedule page after a failed poll", () => {
   ] as const) {
     it(`redraws the same programme once the relay answers again (${what})`, async () => {
       let next: "good" | "bad" = "good";
-      const page = await open(schedulePage("acme-rc", "Acme RC"), async () => {
+      const page = await open(withSharedInline(schedulePage("acme-rc", "Acme RC")), async () => {
         if (next === "good") return { status: 200, body: programme };
         if (failure === null) throw new Error("offline");
         return failure;
@@ -65,7 +66,7 @@ describe("#21 the schedule page after a failed poll", () => {
   }
 
   it("still says nothing is published for a 404", async () => {
-    const page = await open(schedulePage("acme-rc", "Acme RC"), async () => ({ status: 404, body: { ok: false } }));
+    const page = await open(withSharedInline(schedulePage("acme-rc", "Acme RC")), async () => ({ status: 404, body: { ok: false } }));
     assert.match(page.get("board").innerHTML, /No running order has been published/);
   });
 });
@@ -77,7 +78,7 @@ describe("#62 the sign-up page keeps trying after a failed first read", () => {
     const approved = { ok: true, classes: ["Stock"], event: "Club Night", status: { state: "approved", name: "Sam" } };
     let answer: unknown = pending;
 
-    const { html, script } = pageParts(signupPage("acme-rc", "Acme RC"));
+    const { html, script } = pageParts(withSharedInline(signupPage("acme-rc", "Acme RC")));
     const page = new FakePage(html, async (url) => {
       if (!url.endsWith("/signup/status")) return { status: 404 };
       if (!up) throw new Error("offline");
@@ -104,7 +105,7 @@ describe("#62 the sign-up page keeps trying after a failed first read", () => {
   });
 
   it("the code box is never polled", async () => {
-    const page = await open(signupPage("acme-rc", "Acme RC"), async () => ({ status: 200, body: {} }));
+    const page = await open(withSharedInline(signupPage("acme-rc", "Acme RC")), async () => ({ status: 200, body: {} }));
     await page.advance(30000);
     assert.equal(page.sent.length, 0);
   });
@@ -113,7 +114,7 @@ describe("#62 the sign-up page keeps trying after a failed first read", () => {
 describe("#69 the night page and a relay fault", () => {
   it("a 503 is not the refusal, and the page tries again", async () => {
     let status = 503;
-    const page = await open(nightPage("acme-rc", "Acme RC"), async (url, body) => {
+    const page = await open(withSharedInline(nightPage("acme-rc", "Acme RC")), async (url, body) => {
       if (url.endsWith("/night")) {
         if (body["part"] === "live") return { status: 200, body: { ok: true } };
         return status === 200
@@ -132,14 +133,14 @@ describe("#69 the night page and a relay fault", () => {
   });
 
   it("a 404 is still the one refusal", async () => {
-    const page = await open(nightPage("acme-rc", "Acme RC"), async () => ({ status: 404, body: { ok: false } }), `#d=${CODE}`);
+    const page = await open(withSharedInline(nightPage("acme-rc", "Acme RC")), async () => ({ status: 404, body: { ok: false } }), `#d=${CODE}`);
     assert.match(page.get("nt").drawn(), /No night was found for that code/);
   });
 });
 
 describe("#45 the transponder check and the laptop's clock", () => {
   it("a new sighting counts however far the laptop's clock is from the relay's", async () => {
-    const page = await open(nightPage("acme-rc", "Acme RC"), async () => ({ status: 404 }), `#d=${CODE}`);
+    const page = await open(withSharedInline(nightPage("acme-rc", "Acme RC")), async () => ({ status: 404 }), `#d=${CODE}`);
     const pressed = Date.parse("2026-10-22T19:00:00Z");
     const s = (at: string, baseline: string) => page.eval(`sighted(${JSON.stringify({ at, signal: "good" })}, ${pressed}, ${JSON.stringify(baseline)})`);
 
@@ -153,7 +154,7 @@ describe("#45 the transponder check and the laptop's clock", () => {
 describe("#97 the results page and a busy index", () => {
   it("a 503 on the year listing does not drop to the flat listing for good", async () => {
     let meta = 503;
-    const page = await open(resultsPage("acme-rc", "Acme RC"), async (url) => {
+    const page = await open(withSharedInline(resultsPage("acme-rc", "Acme RC")), async (url) => {
       if (url.includes("/collection/resultsindex?meta=1")) {
         return meta === 200 ? { status: 200, body: { items: [{ id: "2026" }] } } : { status: meta, body: { ok: false } };
       }
@@ -187,7 +188,7 @@ describe("#98 Your details with a long announcer name from the desk", () => {
       name: "Sam Parker", announcer: long, pronouns: "", about: "", email: "", emailMyNight: false,
       privacy: { noPhoto: false, noVideo: false, initials: false }, pin: false,
     };
-    const page = await open(nightPage("acme-rc", "Acme RC"), async (url, body) => {
+    const page = await open(withSharedInline(nightPage("acme-rc", "Acme RC")), async (url, body) => {
       if (url.endsWith("/night")) {
         if (body["part"] === "live") return { status: 200, body: { ok: true } };
         return { status: 200, body: { ok: true, night: { driver: "Sam Parker", title: "Club Night", when: "Thursday", night: "2026-10-22", lines: ["Sam raced."] }, me, asksOpen: true } };

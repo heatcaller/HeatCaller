@@ -4,6 +4,7 @@ import { after, before, describe, it } from "node:test";
 import { ACME_TOKEN, call, start, type Harness } from "./helpers.js";
 import { pausedPage, relayNoticePage } from "../src/pages.js";
 import { SUN_ICON_SIZE, sunIcon, sunPixels } from "../src/sun.js";
+import { pageScriptMatch } from "./pagescript.js";
 
 // HeatCaller on the club's pages (30 Oct 2026, relay branding): Asher
 // picked the footer sign-off, the byline, Live's broadcast bug, the sun on
@@ -98,7 +99,7 @@ describe("relay branding: HeatCaller on every club page", () => {
   it("ships scripts that still parse", async () => {
     for (const path of PAGES) {
       const page = (await call(harness, "GET", path)).text;
-      const script = /<script[^>]*>([\s\S]*)<\/script>/.exec(page)?.[1] ?? "";
+      const script = pageScriptMatch(page)?.[1] ?? "";
       assert.doesNotThrow(() => new Script(script), path);
       assert.match(script, /closest\('\[data-hc-about\]'\)/, path);
     }

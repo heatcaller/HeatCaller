@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { resultsPage } from "../src/pages.js";
 import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js";
+import { withSharedInline } from "./pagescript.js";
 
 /**
  * DNS ON THE PUBLIC RESULT (12 Nov 2026). A driver skipped from a race and
@@ -12,7 +13,7 @@ import { FakePage, pageParts, type Answerer } from "./driverexp-rp1-fakepage.js"
 
 async function resultsScript(): Promise<FakePage> {
   const answer: Answerer = async () => ({ status: 404 });
-  const { html, script } = pageParts(resultsPage("acme-rc", "Acme RC"));
+  const { html, script } = pageParts(withSharedInline(resultsPage("acme-rc", "Acme RC")));
   const page = new FakePage(html, answer);
   page.run(script);
   await page.settle();
@@ -60,7 +61,7 @@ describe("DNS drivers on the Results page", () => {
   });
 
   it("greys the DNS rows in the page's style", () => {
-    const { html } = pageParts(resultsPage("acme-rc", "Acme RC"));
+    const { html } = pageParts(withSharedInline(resultsPage("acme-rc", "Acme RC")));
 
     assert.match(html, /table\.res tbody\.dns td \{ color: var\(--muted\); \}/);
   });
