@@ -442,6 +442,7 @@ public partial class MainForm
         // voice is not available, and Hear It is not built at all, which is
         // deliberate: a dead button reads as a broken feature.
         driverProfiles.SpeakName = text => _announcer.SpeakTest(text, _voiceStore.Current.Speed);
+        driverProfiles.CrewVoices = CrewVoicesForDesk;
         WireUnknownTransponders();
     }
 

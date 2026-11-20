@@ -310,7 +310,7 @@ internal static class ScreenWords
         AppSettings? settings = null,
         IEnumerable<string?>? more = null) =>
         NameWords(profiles
-            .SelectMany(p => new[] { p.DriverName, p.AnnouncerName, p.Team, p.Sponsors, p.Mentor, p.CrewPrincipalName, p.CrewTechName }
+            .SelectMany(p => new[] { p.DriverName, p.AnnouncerName, p.Team, p.Sponsors, p.Mentor, p.CrewPrincipalName, p.CrewTechName, p.CrewPrincipalSaidAs, p.CrewTechSaidAs }
                 .Concat(p.AllClasses))
             .Concat(settings is null ? Enumerable.Empty<string?>() : ClubNames(settings))
             .Concat(more ?? Enumerable.Empty<string?>()));

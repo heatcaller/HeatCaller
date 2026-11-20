@@ -9,6 +9,7 @@ import { FileStore } from "./store.js";
 import { TenantRegistry } from "./tenancy.js";
 import { removeLeftoverVideos } from "./oldvideos.js";
 import { DiskClipVault } from "./clips.js";
+import { DiskCrewSampleVault } from "./crewsamples.js";
 import { ElevenLabsLogging, elevenLabsRenderer, elevenLabsStreamer, migrateVoiceFolder, noLoggingFromEnv, VoiceService } from "./voice.js";
 import { LAP_VOICE_DIR, LapVoiceLibrary } from "./lapvoice.js";
 import { TopUpRequests } from "./topuprequests.js";
@@ -159,6 +160,8 @@ async function serve(): Promise<number> {
     voice,
     // Drivers' own race clips - see clips.ts (22 Oct 2026, driver experience).
     clips: new DiskClipVault(config.dataDir),
+    // Crew voice samples from the club's PC - see crewsamples.ts (19 Nov 2026).
+    crewSamples: new DiskCrewSampleVault(config.dataDir),
     brain,
     topUpRequests: new TopUpRequests({ dataDir: config.dataDir, log: (line) => console.log(line) }),
     // One line per voice and commentary request, for the relay admin app's

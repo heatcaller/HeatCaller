@@ -42,6 +42,12 @@ import {
   type ClipVault,
 } from "./clips.js";
 import {
+  CREW_SAMPLE_KEY,
+  CREW_SAMPLE_MAX_BYTES,
+  CREW_SAMPLE_MAX_PER_CLUB,
+  type CrewSampleVault,
+} from "./crewsamples.js";
+import {
   askFieldsFrom,
   askRefOf,
   asDriverAsk,
@@ -1144,6 +1150,12 @@ export interface RelayOptions {
    */
   readonly clips?: ClipVault | undefined;
   /**
+   * Samples of the voices drivers may pick for their crew, rendered on the
+   * club's PC (19 Nov 2026) - see crewsamples.ts. Absent, the relay keeps
+   * none, and the phone's Play shows only for ElevenLabs voices.
+   */
+  readonly crewSamples?: CrewSampleVault | undefined;
+  /**
    * The commentary brain. Absent means this relay writes no commentary:
    * clubs use Ollama on the race laptop, or go without, exactly as
    * before this existed.
@@ -1288,6 +1300,8 @@ export class Relay {
   // on the laptop. See removeLeftoverVideos (oldvideos.ts) for the disk.
   /** Drivers' own race clips - see clips.ts (22 Oct 2026, driver experience). */
   private readonly clips: ClipVault | undefined;
+  /** Crew voice samples - see crewsamples.ts (19 Nov 2026). */
+  private readonly crewSamples: CrewSampleVault | undefined;
   private readonly push: PushService | undefined;
   /** Phones fetching a clip, per club and address - an audio player asks in ranges too. */
   private readonly clipReads: Limiter;
@@ -1575,6 +1589,7 @@ export class Relay {
     this.lapVoice = options.lapVoice ?? new LapVoiceLibrary(new Map());
     // 22 Oct 2026, driver experience: clips and drivers' asks. See the fields.
     this.clips = options.clips;
+    this.crewSamples = options.crewSamples;
     this.push = options.push;
     // What the checks learnt is kept in the club's private "videocheck"
     // snapshot, so a restart neither forgets a dead video nor asks again.
@@ -2923,6 +2938,23 @@ export class Relay {
     // experience) - see clips.ts and receiveClip.
     if (method === "POST" && rest.length === 2 && rest[0] === "clip") {
       await this.receiveClip(request, response, club, rest[1] as string, parsed.query, liftCeiling);
+      return;
+    }
+
+    // Crew voice samples (19 Nov 2026) - see crewsamples.ts. The laptop
+    // lists and sends with its token; a phone plays one by its key.
+    if (method === "GET" && rest.length === 2 && rest[0] === "crew" && rest[1] === "samples") {
+      await this.listCrewSamples(request, response, club);
+      return;
+    }
+
+    if (method === "POST" && rest.length === 3 && rest[0] === "crew" && rest[1] === "sample") {
+      await this.receiveCrewSample(request, response, club, rest[2] as string);
+      return;
+    }
+
+    if (method === "GET" && rest.length === 3 && rest[0] === "crew" && rest[1] === "sample") {
+      await this.sendCrewSample(response, club, rest[2] as string);
       return;
     }
 
@@ -5341,6 +5373,13 @@ export class Relay {
       // nothing. (The podium videos were wiped here the same way until 28
       // Oct 2026, when they stopped coming to the relay.)
       await this.wipeClips(club);
+
+      // Its crew voice samples (19 Nov 2026) - no one's words, but the club's.
+      const samples = this.crewSamples;
+
+      if (samples !== undefined) {
+        await this.withLock(`${club}|crewsamples`, () => samples.removeClub(club).catch(() => {}));
+      }
 
       // And the voice's lines for this club - drivers' names, spoken -
       // which the voice keeps in a folder of its own rather than the
@@ -8132,6 +8171,105 @@ export class Relay {
     for (const item of await this.store.itemSizes(club, PUSH_CHANNEL)) {
       await this.store.deleteItem(club, PUSH_CHANNEL, item.id).catch(() => undefined);
     }
+  }
+
+  // --------------------------------------------------- crew voice samples
+
+  /** The keys of a club's crew samples, for its laptop to send only the missing ones (19 Nov 2026). */
+  private async listCrewSamples(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token" || who === "wrong-club") {
+      sendJson(response, who === "no-token" ? 401 : 403, { ok: false, error: who === "no-token" ? "A publish token is required." : "That token does not belong to this club." });
+      return;
+    }
+
+    if (this.crewSamples === undefined) {
+      sendJson(response, 404, { ok: false, error: "This relay does not keep crew voice samples." });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true, keys: await this.crewSamples.keys(club).catch(() => [] as string[]) });
+  }
+
+  /** One crew voice sample from the laptop: the mp3 is the body, the key the address. */
+  private async receiveCrewSample(request: IncomingMessage, response: ServerResponse, club: string, rawKey: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token" || who === "wrong-club") {
+      await discardRest(request, response);
+      sendJson(response, who === "no-token" ? 401 : 403, { ok: false, error: who === "no-token" ? "A publish token is required." : "That token does not belong to this club." });
+      return;
+    }
+
+    const vault = this.crewSamples;
+
+    if (vault === undefined) {
+      await discardRest(request, response);
+      sendJson(response, 404, { ok: false, error: "This relay does not keep crew voice samples." });
+      return;
+    }
+
+    const key = rawKey.toLowerCase();
+
+    if (!CREW_SAMPLE_KEY.test(key)) {
+      await discardRest(request, response);
+      sendJson(response, 400, { ok: false, error: "That is not a voice key." });
+      return;
+    }
+
+    const declared = Number(request.headers["content-length"] ?? "0");
+
+    if (Number.isFinite(declared) && declared > CREW_SAMPLE_MAX_BYTES) {
+      await discardRest(request, response);
+      sendJson(response, 413, { ok: false, error: "That sample is too big." });
+      return;
+    }
+
+    const bytes = await readRawBody(request, response, CREW_SAMPLE_MAX_BYTES);
+
+    if (bytes === "too-big") {
+      sendJson(response, 413, { ok: false, error: "That sample is too big." });
+      return;
+    }
+
+    if (bytes === "unreadable" || !looksLikeMp3(bytes)) {
+      sendJson(response, 400, { ok: false, error: "That is not an mp3." });
+      return;
+    }
+
+    const kept = await this.withLock(`${club}|crewsamples`, async () => {
+      const held = await vault.keys(club);
+
+      if (!held.includes(key) && held.length >= CREW_SAMPLE_MAX_PER_CLUB) {
+        return false;
+      }
+
+      await vault.put(club, key, bytes);
+      return true;
+    });
+
+    if (!kept) {
+      sendJson(response, 507, { ok: false, error: "This club has as many voice samples as it can keep." });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true });
+  }
+
+  /** A crew voice sample, to a phone's Play button. A fixed line in a voice - nobody's words - so anyone may have it. */
+  private async sendCrewSample(response: ServerResponse, club: string, file: string): Promise<void> {
+    const key = file.endsWith(".mp3") ? file.slice(0, -4).toLowerCase() : "";
+    const clip = this.crewSamples !== undefined && CREW_SAMPLE_KEY.test(key)
+      ? await this.crewSamples.read(club, key).catch(() => undefined)
+      : undefined;
+
+    if (clip === undefined) {
+      sendJson(response, 404, { ok: false, error: "There is no sample of that voice." });
+      return;
+    }
+
+    sendBody(response, 200, "audio/mpeg", clip, "public, max-age=86400");
   }
 
   /** Every one of a club's clips, gone - when nights close or the club is deleted. Anything on its way keeps nothing. */

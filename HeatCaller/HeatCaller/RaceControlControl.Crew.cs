@@ -42,6 +42,11 @@ public sealed partial class RaceControlControl
             reserved,
             CrewVoiceStillThere);
 
-        return new CrewMember(DriverCrew.NameFor(own, clubsName), voice, why);
+        // Said as spelled for the ear (19 Nov 2026): their name's "said as"
+        // spelling when it has one, as a driver's announcer name is - the
+        // name the model is given is the one the voice will read.
+        var saidAs = !allowed ? null : principal ? profile?.CrewPrincipalSaidAs : profile?.CrewTechSaidAs;
+
+        return new CrewMember(DriverCrew.SpokenNameFor(own, saidAs, clubsName), voice, why);
     }
 }

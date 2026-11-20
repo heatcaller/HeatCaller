@@ -98,6 +98,20 @@ public sealed class ProfileForm : Form
     private readonly TextBox _txtAboutLine = new();
     private readonly TextBox _txtCrewPrincipal = new();
     private readonly TextBox _txtCrewTech = new();
+
+    /// <summary>How their crew's names are said (19 Nov 2026) - see DriverProfile.CrewPrincipalSaidAs.</summary>
+    private readonly TextBox _txtCrewPrincipalSay = new();
+    private readonly TextBox _txtCrewTechSay = new();
+
+    /// <summary>
+    /// Their crew's voices, picked at the desk (19 Nov 2026) from the list a
+    /// phone is offered - built only when there is one (drivers' crews on and
+    /// the engine's voices listed). See CrewVoiceChoices.
+    /// </summary>
+    private ComboBox? _cmbCrewPrincipalVoice;
+    private ComboBox? _cmbCrewTechVoice;
+    private IReadOnlyList<CrewVoiceChoice> _crewPrincipalChoices = Array.Empty<CrewVoiceChoice>();
+    private IReadOnlyList<CrewVoiceChoice> _crewTechChoices = Array.Empty<CrewVoiceChoice>();
     private readonly TextBox _txtCrewGoal = new();
     private readonly TextBox _txtCrewThanks = new();
     private readonly TextBox _txtCrewCar = new();
@@ -186,7 +200,12 @@ public sealed class ProfileForm : Form
     /// beside the Announcer name box - wire it to
     /// AnnouncementService.SpeakTest. Null leaves that button off.
     /// </param>
-    public ProfileForm(DriverProfile? existing, RaceClassStore classStore, string? fixedTransponder = null, UndoService? undo = null, ProfileStore? profiles = null, Action<string>? speakName = null)
+    /// <param name="crewVoices">
+    /// The voices a driver may pick for their crew, as the phone is offered
+    /// them (MainForm.CrewVoicesForDesk), or null when there are none to
+    /// offer - then the voices are only described, as before (19 Nov 2026).
+    /// </param>
+    internal ProfileForm(DriverProfile? existing, RaceClassStore classStore, string? fixedTransponder = null, UndoService? undo = null, ProfileStore? profiles = null, Action<string>? speakName = null, IReadOnlyList<CrewVoiceOption>? crewVoices = null)
     {
         _classStore = classStore;
         _undo = undo;
@@ -318,11 +337,20 @@ public sealed class ProfileForm : Form
         captions.Add(AddLabeledTextBox(crew, "Their principal:", _txtCrewPrincipal, Result.CrewPrincipalName ?? string.Empty));
         _txtCrewPrincipal.MaxLength = DriverCrew.NameMaxChars;
         _txtCrewPrincipal.PlaceholderText = "optional - blank for the club's Team Principal";
+        captions.Add(AddLabeledTextBox(crew, "Said as:", _txtCrewPrincipalSay, Result.CrewPrincipalSaidAs ?? string.Empty));
+        _txtCrewPrincipalSay.MaxLength = DriverCrew.SaidAsMaxChars;
+        _txtCrewPrincipalSay.PlaceholderText = "optional - how the name sounds";
+        _cmbCrewPrincipalVoice = AddCrewVoiceRow(crew, captions, crewVoices, Result.CrewPrincipalVoice, out _crewPrincipalChoices);
         captions.Add(AddLabeledTextBox(crew, "Their tech lead:", _txtCrewTech, Result.CrewTechName ?? string.Empty));
         _txtCrewTech.MaxLength = DriverCrew.NameMaxChars;
         _txtCrewTech.PlaceholderText = "optional - blank for the club's Technical Lead";
+        captions.Add(AddLabeledTextBox(crew, "Said as:", _txtCrewTechSay, Result.CrewTechSaidAs ?? string.Empty));
+        _txtCrewTechSay.MaxLength = DriverCrew.SaidAsMaxChars;
+        _txtCrewTechSay.PlaceholderText = "optional - how the name sounds";
+        _cmbCrewTechVoice = AddCrewVoiceRow(crew, captions, crewVoices, Result.CrewTechVoice, out _crewTechChoices);
         crew.AddHint("Made-up names for their own Team Principal and Technical Lead. Letters, spaces, hyphens and "
-                       + "apostrophes. " + CrewVoicesHint(Result));
+                       + "apostrophes. \"Said as\" is the name spelled the way it sounds, as for an announcer name. "
+                       + (crewVoices is null ? CrewVoicesHint(Result) : "A driver can pick the voices from their phone too."));
 
         captions.Add(AddLabeledTextBox(crew, "Tonight's goal:", _txtCrewGoal, DriverCrew.GoalTonight(Result, DateTime.Now)));
         _txtCrewGoal.MaxLength = DriverCrew.GoalMaxChars;
@@ -739,6 +767,11 @@ public sealed class ProfileForm : Form
         FitPicker(_cmbTransponders, keepToRow: false);
         FitPicker(_cmbOnStream, keepToRow: false);
         FitPicker(_cmbJuniorAge, keepToRow: false);
+
+        foreach (var picker in new[] { _cmbCrewPrincipalVoice, _cmbCrewTechVoice }.OfType<ComboBox>())
+        {
+            FitPicker(picker, keepToRow: false);
+        }
 
         // The fields' column: never narrower than the text boxes were, wide
         // enough for the garage's drop-down and its two buttons on one line
@@ -1540,8 +1573,13 @@ public sealed class ProfileForm : Form
             // this dialog and are kept as they were.
             CrewPrincipalName = Kept(_txtCrewPrincipal.Text, Result.CrewPrincipalName, DriverCrew.NameMaxChars),
             CrewTechName = Kept(_txtCrewTech.Text, Result.CrewTechName, DriverCrew.NameMaxChars),
-            CrewPrincipalVoice = Result.CrewPrincipalVoice?.Copy(),
-            CrewTechVoice = Result.CrewTechVoice?.Copy(),
+            CrewPrincipalSaidAs = Kept(_txtCrewPrincipalSay.Text, Result.CrewPrincipalSaidAs, DriverCrew.SaidAsMaxChars),
+            CrewTechSaidAs = Kept(_txtCrewTechSay.Text, Result.CrewTechSaidAs, DriverCrew.SaidAsMaxChars),
+
+            // Picked here since 19 Nov 2026 when the voices are listed; kept
+            // as they were otherwise, and when the pick shown is the one they had.
+            CrewPrincipalVoice = CrewVoiceKept(_cmbCrewPrincipalVoice, _crewPrincipalChoices, Result.CrewPrincipalVoice),
+            CrewTechVoice = CrewVoiceKept(_cmbCrewTechVoice, _crewTechChoices, Result.CrewTechVoice),
             CrewThanks = Kept(_txtCrewThanks.Text, Result.CrewThanks, DriverCrew.ThanksMaxChars),
             CrewCarStory = Kept(_txtCrewCar.Text, Result.CrewCarStory, DriverCrew.CarStoryMaxChars),
             CrewGoal = GoalKept(_txtCrewGoal.Text, Result).Goal,
@@ -1660,6 +1698,89 @@ public sealed class ProfileForm : Form
 
         var goal = Kept(typed, null, DriverCrew.GoalMaxChars);
         return goal.Length == 0 ? (string.Empty, null, false) : (goal, TonightAtTheTrack.NightOf(DateTime.Now), false);
+    }
+
+    /// <summary>
+    /// One line of a crew voice drop-down (19 Nov 2026): the club's own
+    /// (Pick null, Kept false), a voice on the list, or the pick they have
+    /// now when it is not on the list (Kept true) - another engine's, or one
+    /// gone - so opening and saving never takes it away.
+    /// </summary>
+    internal sealed record CrewVoiceChoice(string Words, CrewVoicePick? Pick, bool Kept)
+    {
+        public override string ToString() => Words;
+    }
+
+    /// <summary>The drop-down's lines, and which of them is their pick now.</summary>
+    internal static (IReadOnlyList<CrewVoiceChoice> Choices, int Selected) CrewVoiceChoices(
+        IReadOnlyList<CrewVoiceOption> offered, CrewVoicePick? current)
+    {
+        var choices = new List<CrewVoiceChoice> { new("The club's own voice", null, false) };
+        var selected = 0;
+
+        foreach (var voice in offered.Where(v => DriverCrew.IsAPick(v.Pick)))
+        {
+            var name = DriverCrew.Clean(string.IsNullOrWhiteSpace(voice.Pick.Name) ? voice.Pick.Id : voice.Pick.Name);
+
+            if (voice.Pick.SameVoiceAs(current))
+            {
+                selected = choices.Count;
+            }
+
+            choices.Add(new CrewVoiceChoice(name, voice.Pick.Copy(), false));
+        }
+
+        if (selected == 0 && DriverCrew.IsAPick(current))
+        {
+            selected = choices.Count;
+            choices.Add(new CrewVoiceChoice($"{DriverCrew.Clean(current!.Name)} (not on the list now)", current.Copy(), true));
+        }
+
+        return (choices, selected);
+    }
+
+    /// <summary>A crew voice drop-down, when there are voices to pick from; null otherwise.</summary>
+    private static ComboBox? AddCrewVoiceRow(
+        FieldGrid grid, List<Label> captions, IReadOnlyList<CrewVoiceOption>? offered, CrewVoicePick? current, out IReadOnlyList<CrewVoiceChoice> choices)
+    {
+        choices = Array.Empty<CrewVoiceChoice>();
+
+        if (offered is null)
+        {
+            return null;
+        }
+
+        var (list, selected) = CrewVoiceChoices(offered, current);
+        choices = list;
+
+        var picker = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+
+        foreach (var choice in list)
+        {
+            picker.Items.Add(choice);
+        }
+
+        picker.SelectedIndex = selected;
+        captions.Add(grid.AddRow("Voice:", picker));
+        return picker;
+    }
+
+    /// <summary>The voice saved for a role: the one picked, or - with no drop-down, or the old pick still shown - the one they had.</summary>
+    internal static CrewVoicePick? CrewVoiceKept(ComboBox? picker, IReadOnlyList<CrewVoiceChoice> choices, CrewVoicePick? had)
+    {
+        if (picker is null || picker.SelectedIndex < 0 || picker.SelectedIndex >= choices.Count)
+        {
+            return had?.Copy();
+        }
+
+        var choice = choices[picker.SelectedIndex];
+
+        if (choice.Kept || choice.Pick?.SameVoiceAs(had) == true)
+        {
+            return had?.Copy();
+        }
+
+        return choice.Pick?.Copy();
     }
 
     /// <summary>Which voices their crew speaks in, for the hint under the names.</summary>

@@ -41,7 +41,8 @@ public sealed class CrewVoicePick
 /// <summary>A voice a driver may pick for their crew, as the phone is told it.</summary>
 /// <param name="Pick">The voice itself.</param>
 /// <param name="Sample">A clip of it to play on the phone (an ElevenLabs preview); empty for none.</param>
-internal sealed record CrewVoiceOption(CrewVoicePick Pick, string Sample);
+/// <param name="OnRelay">A sample of it rendered on this PC is kept on the relay under its key (19 Nov 2026, CrewSamples).</param>
+internal sealed record CrewVoiceOption(CrewVoicePick Pick, string Sample, bool OnRelay = false);
 
 /// <summary>
 /// A DRIVER'S OWN CREW (15 Nov 2026, driver crew plan, plans/driver-crew-plan.md).
@@ -71,6 +72,12 @@ internal static class DriverCrew
 {
     /// <summary>The longest crew name a phone or the desk can set.</summary>
     public const int NameMaxChars = 24;
+
+    /// <summary>
+    /// The longest "said as" spelling of a crew name (19 Nov 2026): how a
+    /// made-up name sounds, the way a driver's announcer name works.
+    /// </summary>
+    public const int SaidAsMaxChars = 40;
 
     /// <summary>The longest "tonight's goal".</summary>
     public const int GoalMaxChars = 80;
@@ -143,6 +150,38 @@ internal static class DriverCrew
     {
         var chars = (text ?? string.Empty).Select(c => char.IsControl(c) ? ' ' : c).ToArray();
         return string.Join(' ', new string(chars).Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    /// <summary>
+    /// Whether a "said as" spelling is one the announcer can read: the same
+    /// letters a name may have, at most <see cref="SaidAsMaxChars"/>. A
+    /// respelling is not a real name ("Zhock"), so nothing more is checked.
+    /// </summary>
+    public static bool IsASaidAs(string? saidAs)
+    {
+        var clean = Clean(saidAs);
+
+        return clean.Length > 0
+               && clean.Length <= SaidAsMaxChars
+               && clean.All(c => char.IsLetter(c) || c is ' ' or '-' or '\'' or '’' or '.');
+    }
+
+    /// <summary>
+    /// What the announcer SAYS for this driver's crew member (19 Nov 2026):
+    /// their own name's "said as" spelling when it has one, else
+    /// <see cref="NameFor"/>. The spelling counts only beside a name of
+    /// their own - with no name it would be a respelling of nothing.
+    /// </summary>
+    public static string SpokenNameFor(string? driversOwn, string? driversSaidAs, string? clubs)
+    {
+        var own = Clean(driversOwn);
+
+        if (own.Length > 0 && IsAName(own) && IsASaidAs(driversSaidAs))
+        {
+            return Clean(driversSaidAs);
+        }
+
+        return NameFor(driversOwn, clubs);
     }
 
     /// <summary>

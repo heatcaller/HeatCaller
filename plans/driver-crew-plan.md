@@ -3,10 +3,12 @@
 *15 November 2026. Built the same day on branch `claude/driver-crew` (steps 0-5). Not yet merged, the relay not deployed, and not tried on a real phone.*
 
 **Where the build differs from this plan:**
-- **No "said as" spelling** for crew names (2.3). The name is said as typed.
-- **The approve question is all or nothing** for a crew request's words: a Yes/No listing each change. There are no per-field ticks or edit boxes; to reword, decline and type it on the profile.
-- **Voices aren't picked at the desk.** The profile dialog edits the names and notes and shows which voices the phone picked; a voice is picked only from the phone.
-- **Samples play only for ElevenLabs voices** (the account's own preview clip). HeatCaller and Kokoro voices have no Play button yet: rendering and storing their samples on the relay is not built.
+- **Built 19 Nov 2026 (branch `claude/oi-driver-crew`, not merged, relay not deployed, not tried on a real phone):**
+  - **"Said as" spelling** for each crew name (`pSay`, `tSay`, 40 characters, letters only). Sent from the phone's Crew tab with the name, waits for the desk like the name, an under-13's is the desk's too, and the interviews say it instead of the name (`DriverCrew.SpokenNameFor`). Also a box under each name on the driver profile.
+  - **Per-field approve.** The Desk Inbox's crew approve is a dialog (`ApproveCrewRequestForm`) with a tick and an edit box per name, spelling and note, and Hear It for names. Unticked fields are left alone; the phone is told "Some of it is in" or "Approved, with a change from the desk". The junior and under-13 rules are unchanged: unticking a junior's note lets the rest through.
+  - **Desk voice picking.** The driver profile has a Voice drop-down per role with the same list the phone is offered (only while drivers' crews are on and the voices are listed). A pick not on the list now is kept and shown as "(not on the list now)". Not on the Edit Driver dialog opened from Race Control's leaderboard or Who's Racing (no list there).
+  - **Samples for HeatCaller and Kokoro voices.** After each listing the PC asks the relay which samples it has (`GET .../crew/samples`), and sends the missing ones once (`POST .../crew/sample/<key>`, up to 512 KB, 200 per club): a HeatCaller voice's free relay sample, or a Kokoro line rendered here and made an mp3. Kept on this PC in `crew-samples`, so never made twice. The phone plays `GET .../crew/sample/<key>.mp3` (driverme marks the voice `h`). Deleted with Delete everything.
+- **Still not built:** voices on the Edit Driver dialog opened from other pages.
 - **Family links can't send requests at all** (the family page is read-only), so a junior's notes come in with the guardian tick only.
 - **The phone field for the car's story is `story`, not `car`**: `car` is already a garage request's car id on the laptop, 40 characters, and would have cut a story short.
 - **The relay also refuses a crew request when the club has drivers' crews off**: "Your club is not taking crew picks from phones just now."
