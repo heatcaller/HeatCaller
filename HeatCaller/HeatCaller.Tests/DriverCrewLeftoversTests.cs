@@ -334,6 +334,58 @@ public sealed class DriverCrewLeftoversTests : IDisposable
         Assert.Equal(0, none);
     }
 
+    [Fact]
+    public void Edit_driver_from_other_pages_offers_the_voices_too_and_keeps_a_pick_not_on_the_list()
+    {
+        var emma = Pick(VoiceEngine.Kokoro, "bf_emma", "Emma");
+        var rachel = Pick(VoiceEngine.ElevenLabs, "rachel-id", "Rachel");
+        var profiles = ProfileStore.Load();
+        profiles.Upsert(new DriverProfile { Transponder = "100", DriverName = "Sam", CrewPrincipalVoice = rachel });
+
+        var (shown, words) = StaThread.Run(() =>
+        {
+            using var form = DriverEditDialog.FormFor(profiles.Get("100"), "100", RaceClassStore.Load(), new UndoService(), profiles,
+                new[] { new CrewVoiceOption(emma, string.Empty) });
+            var pickers = AllControls(form).OfType<ComboBox>()
+                .Where(c => c.Items.Count > 0 && c.Items[0] is ProfileForm.CrewVoiceChoice)
+                .ToList();
+            return (form.ProfileAsShown(), pickers.Select(p => p.Text).ToList());
+        }, TimeSpan.FromSeconds(60), () => "Edit Driver with crew voices");
+
+        Assert.Equal(2, words.Count);
+        Assert.Contains("(not on the list now)", words[0]);
+        Assert.Equal("The club's own voice", words[1]);
+        Assert.Equal("rachel-id", shown.CrewPrincipalVoice!.Id);
+        Assert.Null(shown.CrewTechVoice);
+
+        var without = StaThread.Run(() =>
+        {
+            using var form = DriverEditDialog.FormFor(profiles.Get("100"), "100", RaceClassStore.Load(), new UndoService(), profiles, null);
+            return AllControls(form).OfType<ComboBox>().Count(c => c.Items.Count > 0 && c.Items[0] is ProfileForm.CrewVoiceChoice);
+        }, TimeSpan.FromSeconds(60), () => "Edit Driver without crew voices");
+
+        Assert.Equal(0, without);
+    }
+
+    [Fact]
+    public void A_voice_the_desk_picked_on_edit_driver_is_saved_and_a_phone_pick_meanwhile_kept_when_the_desk_left_it()
+    {
+        var emma = Pick(VoiceEngine.Kokoro, "bf_emma", "Emma");
+        var adam = Pick(VoiceEngine.Kokoro, "am_adam", "Adam");
+        var openedOn = new DriverProfile { Transponder = "100", DriverName = "Sam" };
+
+        // The desk picked Emma for the principal; the phone meanwhile picked Adam for the tech lead.
+        var edited = ProfileStore.Snapshot(openedOn);
+        edited.CrewPrincipalVoice = emma;
+        var onFile = ProfileStore.Snapshot(openedOn);
+        onFile.CrewTechVoice = adam;
+
+        var saved = DriverEditDialog.ToSave(openedOn, edited, onFile);
+
+        Assert.Equal("bf_emma", saved.CrewPrincipalVoice!.Id);
+        Assert.Equal("am_adam", saved.CrewTechVoice!.Id);
+    }
+
     private static IEnumerable<Control> AllControls(Control root)
     {
         foreach (Control child in root.Controls)

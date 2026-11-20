@@ -16,6 +16,13 @@ namespace HeatCaller;
 /// </summary>
 public sealed partial class CheckInControl
 {
+    /// <summary>
+    /// The voices a driver may pick for their crew, for the Edit Driver
+    /// dialog's voice drop-downs (19 Nov 2026, MainForm.CrewVoicesForDesk).
+    /// Null, or a null answer, leaves them off.
+    /// </summary>
+    internal Func<IReadOnlyList<CrewVoiceOption>?>? CrewVoices { get; set; }
+
     /// <summary>The Class cell: every class the driver races, the main one first ("Stock + Mod").</summary>
     internal static string ClassCellText(DriverProfile profile) => string.Join(" + ", profile.AllClasses);
 

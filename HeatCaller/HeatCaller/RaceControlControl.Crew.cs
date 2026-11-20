@@ -22,6 +22,13 @@ public sealed partial class RaceControlControl
     /// </summary>
     internal Func<CrewVoicePick, bool>? CrewVoiceStillThere { get; set; }
 
+    /// <summary>
+    /// The voices a driver may pick for their crew, for the Edit Driver
+    /// dialog's voice drop-downs (19 Nov 2026, MainForm.CrewVoicesForDesk).
+    /// Null, or a null answer, leaves them off.
+    /// </summary>
+    internal Func<IReadOnlyList<CrewVoiceOption>?>? CrewVoices { get; set; }
+
     /// <summary>The Team Principal (or, with <paramref name="principal"/> false, the Technical Lead) of the driver with this transponder.</summary>
     private CrewMember CrewOf(string? transponder, bool principal)
     {

@@ -11,7 +11,11 @@ internal static class DriverEditDialog
     /// Edits the driver on <paramref name="transponder"/> (adds one when there
     /// is none on file). True when the form was saved.
     /// </summary>
-    public static bool Edit(IWin32Window owner, string transponder, RaceClassStore raceClasses, UndoService undo, ProfileStore profiles)
+    /// <param name="crewVoices">
+    /// The voices a driver may pick for their crew (MainForm.CrewVoicesForDesk),
+    /// for the profile's voice drop-downs (19 Nov 2026); null leaves them off.
+    /// </param>
+    public static bool Edit(IWin32Window owner, string transponder, RaceClassStore raceClasses, UndoService undo, ProfileStore profiles, IReadOnlyList<CrewVoiceOption>? crewVoices = null)
     {
         var existing = profiles.Get(transponder);
 
@@ -20,7 +24,7 @@ internal static class DriverEditDialog
         var before = existing is null ? null : System.Text.Json.JsonSerializer.Serialize(existing);
         var openedOn = existing is null ? null : ProfileStore.Snapshot(existing);
 
-        using var form = new ProfileForm(existing, raceClasses, fixedTransponder: transponder, undo: undo, profiles: profiles);
+        using var form = FormFor(existing, transponder, raceClasses, undo, profiles, crewVoices);
 
         if (form.ShowDialog(owner) != DialogResult.OK)
         {
@@ -84,6 +88,11 @@ internal static class DriverEditDialog
     /// this dialog is open - and saving it put the old car straight back.
     /// Driver Hub's edit has had the same guard since bug hunt 15.
     /// </summary>
+    /// <summary>The profile dialog Edit shows, built but not shown - for the tests too.</summary>
+    internal static ProfileForm FormFor(
+        DriverProfile? existing, string transponder, RaceClassStore raceClasses, UndoService undo, ProfileStore profiles, IReadOnlyList<CrewVoiceOption>? crewVoices) =>
+        new(existing, raceClasses, fixedTransponder: transponder, undo: undo, profiles: profiles, crewVoices: crewVoices);
+
     internal static DriverProfile ToSave(DriverProfile? openedOn, DriverProfile edited, DriverProfile? onFile) =>
         openedOn is null ? edited : ProfileStore.KeepChangesMadeSince(openedOn, edited, onFile);
 }

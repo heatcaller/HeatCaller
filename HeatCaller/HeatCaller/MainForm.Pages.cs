@@ -622,6 +622,7 @@ public partial class MainForm
 
         // Who said from their phone they're coming tonight (setup plan C1).
         checkIn.ComingTonightList = ComingTonightList;
+        checkIn.CrewVoices = CrewVoicesForDesk;
         _preEntries.Changed += () =>
         {
             if (!checkIn.IsDisposed)

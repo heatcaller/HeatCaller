@@ -768,9 +768,13 @@ public sealed class ProfileForm : Form
         FitPicker(_cmbOnStream, keepToRow: false);
         FitPicker(_cmbJuniorAge, keepToRow: false);
 
+        // The crew voice drop-downs (19 Nov 2026): the column is made wide
+        // enough for their longest voice name, as for the pronouns.
+        var crewVoicesWidth = 0;
+
         foreach (var picker in new[] { _cmbCrewPrincipalVoice, _cmbCrewTechVoice }.OfType<ComboBox>())
         {
-            FitPicker(picker, keepToRow: false);
+            crewVoicesWidth = Math.Max(crewVoicesWidth, FitPicker(picker, keepToRow: false) + picker.Margin.Horizontal);
         }
 
         // The fields' column: never narrower than the text boxes were, wide
@@ -790,6 +794,7 @@ public sealed class ProfileForm : Form
             carsWidth + UiLayout.TightButtonGap,
             classWidth + UiLayout.TightButtonGap,
             pronounsWidth + _cmbPronouns.Margin.Horizontal,
+            crewVoicesWidth,
             _chkRental.GetPreferredSize(Size.Empty).Width,
             _chkExcludeRecords.GetPreferredSize(Size.Empty).Width,
             _chkVisitor.GetPreferredSize(Size.Empty).Width,
