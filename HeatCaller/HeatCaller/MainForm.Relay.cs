@@ -1735,6 +1735,168 @@ public partial class MainForm
         [JsonPropertyName("dns")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string>? Dns { get; init; }
+
+        /// <summary>
+        /// After a Pole Shootout run or an Invitational main (19 Nov 2026):
+        /// the shootout order or the Invitational standings as they stand
+        /// with this race in, drawn under the result. Left out for every
+        /// other race, so those are byte for byte what they were.
+        /// </summary>
+        [JsonPropertyName("standings")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public RelayStandings? Standings { get; init; }
+    }
+
+    /// <summary>A small table under a result: its heading, a line on how it is scored, and the rows.</summary>
+    private sealed class RelayStandings
+    {
+        [JsonPropertyName("title")]
+        public string Title { get; init; } = string.Empty;
+
+        [JsonPropertyName("note")]
+        public string Note { get; init; } = string.Empty;
+
+        [JsonPropertyName("rows")]
+        public List<RelayStandingRow> Rows { get; init; } = new();
+    }
+
+    /// <summary>One line of a standings table: place, public name, the figure ("12.345", "3 pts") and how it was made.</summary>
+    private sealed class RelayStandingRow
+    {
+        [JsonPropertyName("pos")]
+        public int Pos { get; init; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; init; } = string.Empty;
+
+        [JsonPropertyName("value")]
+        public string Value { get; init; } = string.Empty;
+
+        [JsonPropertyName("detail")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Detail { get; init; }
+    }
+
+    /// <summary>
+    /// The shootout order or Invitational standings for a session's round
+    /// (19 Nov 2026), or null for any other race. As they stand with this
+    /// session in: the rounds of its own race day, read up to and including it.
+    /// Names through the same public-name rule as the result's rows.
+    /// </summary>
+    private RelayStandings? FinalsStandingsFor(SessionRecord session, bool abbreviate)
+    {
+        if (session.RoundId is not { } roundId || _rounds.Get(roundId) is not { } round)
+        {
+            return null;
+        }
+
+        var dayIds = _raceEvents.EventForRound(round.Id)?.RoundIds.ToHashSet(StringComparer.Ordinal);
+        var day = _rounds.All.Where(r => dayIds is null || dayIds.Contains(r.Id)).ToList();
+        var raceClass = _raceClasses.All.FirstOrDefault(c => string.Equals(c.Name, round.ClassName, StringComparison.OrdinalIgnoreCase));
+
+        // Only what had been filed by the time of this session, so a
+        // re-send of an early run does not carry the later ones.
+        SessionRecord? Upto(string id) => _sessionHistory.Get(id) is { } s && s.EndedAtUtc <= session.EndedAtUtc ? s : null;
+
+        List<string> Shown(IReadOnlyList<(string Transponder, string Name)> rows) =>
+            RelayPublisher.DisplayNames(
+                rows.Select(r => RelayDocuments.PublicNameOrUnnamed(_profiles.Get(r.Transponder)?.DriverName ?? r.Name, r.Transponder)).ToList(),
+                abbreviate,
+                rows.Select(r => (string?)r.Transponder).ToList()).ToList();
+
+        if (round.Kind == RoundKind.Shootout)
+        {
+            var standing = PoleShootout.Standings(PoleShootout.RunsOf(day.Append(round), round.ClassName), Upto,
+                PoleShootout.TimedLapsFor(raceClass), _profiles.PrimaryForAlternate, (round, session));
+
+            if (standing.Order.Count == 0)
+            {
+                return null;
+            }
+
+            var names = Shown(standing.Order.Select(t => (t.Transponder, t.DriverName)).ToList());
+
+            return new RelayStandings
+            {
+                Title = standing.Complete ? $"{PoleShootout.Name} result" : $"{PoleShootout.Name} so far ({standing.RunsDone} of {standing.Runs} runs)",
+                Note = PoleShootout.NoTimeWords,
+                Rows = standing.Order.Select((t, i) => new RelayStandingRow
+                {
+                    Pos = i + 1,
+                    Name = names[i],
+                    Value = t.TimeMs > 0 ? PoleShootout.TimeWords(t.TimeMs) : "No time",
+                    Detail = i == 0 && t.TimeMs > 0 && standing.Complete ? "Pole" : $"Qualified {AMainLegs.Ordinal(t.QualifyingPlace)}",
+                }).ToList(),
+            };
+        }
+
+        if (round is { Kind: RoundKind.Main, InvitationalMain: > 0 })
+        {
+            var series = Invitational.SeriesOf(round, day).Where(r => r.InvitationalMain <= round.InvitationalMain).ToList();
+            var table = Invitational.Standings(series, Upto, raceClass, _profiles.PrimaryForAlternate,
+                t => _profiles.Get(t)?.DriverName ?? t, (round, session));
+
+            if (table is null)
+            {
+                return null;
+            }
+
+            var names = Shown(table.Rows.Select(s => (s.Transponder, s.DriverName)).ToList());
+            var mains = Math.Max(table.Mains, round.InvitationalMainCount);
+
+            return new RelayStandings
+            {
+                Title = table.MainsRun >= mains
+                    ? $"{Invitational.ShortName} final result"
+                    : $"{Invitational.ShortName} standings after main {round.InvitationalMain} of {mains}",
+                Note = $"A finish scores {Invitational.ScoringWords(raceClass)}; the best {table.Counting} of {mains} count, fewest points wins.",
+                Rows = table.Rows.Select((s, i) => new RelayStandingRow
+                {
+                    Pos = i + 1,
+                    Name = names[i],
+                    Value = s.Points == 1 ? "1 pt" : $"{s.Points} pts",
+                    Detail = s.Detail,
+                }).ToList(),
+            };
+        }
+
+        // A leg of any main run in legs (19 Nov 2026, with lower mains in
+        // legs): that main's overall so far, from its second leg on.
+        if (round is { Kind: RoundKind.Main, MainLeg: > 0 })
+        {
+            var legs = AMainLegs.LegsOf(round, day).Where(r => r.MainLeg <= round.MainLeg).ToList();
+            var filed = legs
+                .Select(r => (Leg: r, Result: ReferenceEquals(r, round) ? session : r.LinkedSessionId is { } id ? Upto(id) : null))
+                .Where(x => x.Result is not null)
+                .ToList();
+
+            if (filed.Count < 2)
+            {
+                return null;
+            }
+
+            var legCount = Math.Max(round.MainLegCount, filed.Count);
+            var counting = AMainLegs.LegsCounting(legCount, raceClass?.AMainLegsCounted ?? 0);
+            var table = AMainLegs.Overall(filed.Select(x => x.Result!).ToList(), counting, _profiles.PrimaryForAlternate, filed.Select(x => x.Leg.MainLeg).ToList());
+            var names = Shown(table.Select(s => (s.Transponder, s.DriverName)).ToList());
+
+            return new RelayStandings
+            {
+                Title = filed.Count >= legCount
+                    ? $"{round.TierLetter}-Main overall result"
+                    : $"{round.TierLetter}-Main overall after {Plural.Of(filed.Count, "leg")} of {legCount}",
+                Note = $"1st = 1 point; the best {counting} of {legCount} legs count, fewest points wins.",
+                Rows = table.Select((s, i) => new RelayStandingRow
+                {
+                    Pos = i + 1,
+                    Name = names[i],
+                    Value = s.Points == 1 ? "1 pt" : $"{s.Points} pts",
+                    Detail = s.Detail,
+                }).ToList(),
+            };
+        }
+
+        return null;
     }
 
     /// <summary>One line of the public race control log: when, whose result, and what changed - never why.</summary>
@@ -2211,6 +2373,9 @@ public partial class MainForm
                 // ran. Left out with nobody DNS, so a result is byte for
                 // byte what it was.
                 Dns = publicNames.Dns.Count > 0 ? publicNames.Dns.ToList() : null,
+
+                // 19 Nov 2026: the shootout order or Invitational standings, for those races only.
+                Standings = FinalsStandingsFor(session, abbreviate),
             });
 
             // The effective start - the end, for a session saved without a

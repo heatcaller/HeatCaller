@@ -1285,6 +1285,9 @@ html.light .flagbar.f-white { --flag: #8A90A0; }
 .rclog h4 { margin: 0 0 2px; font-size: 0.95rem; color: var(--warn); }
 .rclog ul { list-style: none; margin: 6px 0 0; padding: 0; }
 .rclog li { padding: 3px 0; font-size: 0.9rem; }
+.fstand { margin: 8px 16px 14px; }
+.fstand h4 { margin: 0 0 2px; font-size: 0.95rem; }
+.fstand p.when { margin: 0 0 6px; }
 /* Head to head on a driver's history (4 Nov 2026). */
 .rivals { padding: 12px 16px; margin-bottom: 12px; }
 .rivals h3 { margin: 0 0 4px; font-size: 1.05rem; }
@@ -5027,8 +5030,27 @@ function card(line, body, mine) {
         '<th class="pos">Pos</th><th>Driver</th><th class="n">Qual</th>' +
         '<th class="n">Laps/Time</th><th class="n">Behind</th><th class="n">Best</th>' +
         '</tr></thead>' + withLength(body, () => rows(results, line.id)) + dnsRows(body) + '</table></div>' +
-        positionGraph(results) + raceControlLog(body)) +
+        positionGraph(results) + finalsStandings(body) + raceControlLog(body)) +
     '</details>';
+}
+
+// THE POLE SHOOTOUT AND THE INVITATIONAL (19 Nov 2026): under a shootout
+// run, the shootout order so far (and the pole once every run is in); under
+// an Invitational main, the standings on points with it in. The laptop sends
+// body.standings for those races only, names already made public; any other
+// result - and one from an older laptop - has none, and gets nothing.
+function finalsStandings(body) {
+  const s = body && body.standings && typeof body.standings === 'object' ? body.standings : null;
+  const rows = s && Array.isArray(s.rows) ? s.rows.filter((r) => r && typeof r.name === 'string') : [];
+  if (rows.length === 0) return '';
+  return '<div class="fstand"><h4>' + esc(String(s.title || 'Standings')) + '</h4>' +
+    (s.note ? '<p class="when">' + esc(String(s.note)) + '</p>' : '') +
+    '<div class="tw"><table class="res"><thead><tr><th class="pos">Pos</th><th>Driver</th><th class="n">Score</th></tr></thead><tbody>' +
+    rows.slice(0, 60).map((r) =>
+      '<tr><td class="pos">' + esc(r.pos) + '</td><td>' + nm(r.name) +
+      (r.detail ? '<span class="sec">' + esc(String(r.detail)) + '</span>' : '') + '</td>' +
+      '<td class="n">' + esc(String(r.value || '')) + '</td></tr>').join('') +
+    '</tbody></table></div></div>';
 }
 
 // THE RACE CONTROL LOG (4 Nov 2026, from the relay roadmap Asher asked to

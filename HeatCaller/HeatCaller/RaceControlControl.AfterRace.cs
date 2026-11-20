@@ -843,16 +843,50 @@ public sealed partial class RaceControlControl
 
                 if (aMainOverall is { } decided)
                 {
-                    var overallLine = AMainLegs.OverallCall(SpokenDriverName(decided.Winner.Transponder), decided.Counting, decided.Legs);
+                    var overallLine = AMainLegs.OverallCall(SpokenDriverName(decided.Winner.Transponder), decided.Counting, decided.Legs, decided.Letter);
                     // "Unnamed driver" for a car with no profile, as the recap's own result lines have it - never a blank name.
                     aMainOverallFact = AMainLegs.OverallFact(decided, s => RelayDocuments.PublicNameOrUnnamed(SpokenDriverName(s.Transponder), s.Transponder));
                     resultRead = resultRead is null ? overallLine : $"{resultRead} {overallLine}";
-                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] A-Main overall: {decided.Winner.DriverName}, {decided.Winner.Words()}.");
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] {decided.Letter}-Main overall: {decided.Winner.DriverName}, {decided.Winner.Words()}.");
                 }
             }
             catch (Exception ex)
             {
                 StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] The A-Main overall could not be worked out: {ex.Message}");
+            }
+        }
+
+        // THE POLE SHOOTOUT AND THE INVITATIONAL (19 Nov 2026): a shootout
+        // run's time in place of the race's own result - one car alone has
+        // no "win" to call - and the pole once the last run is in; after an
+        // Invitational main, who leads on points, or who has won. Said like
+        // the A-Main overall, and handed to the recap the same way. Not
+        // under "Lap times only". Guarded like the rest.
+        if (!LapTimesOnly.IsOn(_settings) && round is not null && (round.Kind == RoundKind.Shootout || round.InvitationalMain > 0))
+        {
+            try
+            {
+                if (FinalsFormatAtTheFlag(record, round) is { } said)
+                {
+                    if (round.Kind == RoundKind.Shootout)
+                    {
+                        resultRead = _settings.FlagResultRead ? said.RunLine : null;
+                    }
+
+                    if (said.Decided is { Length: > 0 } decidedLine)
+                    {
+                        resultRead = resultRead is null ? decidedLine : $"{resultRead} {decidedLine}";
+                    }
+
+                    if (said.Fact is { Length: > 0 } fact)
+                    {
+                        aMainOverallFact = aMainOverallFact is null ? fact : $"{aMainOverallFact} {fact}";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] The {PoleShootout.Name} or Invitational standings could not be worked out: {ex.Message}");
             }
         }
 
@@ -1077,7 +1111,10 @@ public sealed partial class RaceControlControl
                     // count", so a meeting's main goes to its overall winner.
                     aMainLegsCounted: _raceClasses?.All
                         .FirstOrDefault(c => string.Equals(c.Name, round?.ClassName, StringComparison.OrdinalIgnoreCase))
-                        ?.AMainLegsCounted ?? 0);
+                        ?.AMainLegsCounted ?? 0,
+                    // And for an Invitational (19 Nov 2026): its own count and scale.
+                    invitational: _raceClasses?.All
+                        .FirstOrDefault(c => string.Equals(c.Name, round?.ClassName, StringComparison.OrdinalIgnoreCase)));
             }
             catch (Exception ex)
             {

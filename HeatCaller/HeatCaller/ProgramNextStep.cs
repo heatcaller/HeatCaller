@@ -352,7 +352,9 @@ internal static class ProgramNextStep
                 ProgramStage.BumpUps,
                 feeder is null
                     ? $"{ready.RoundLabel} is ready for bump-ups."
-                    : $"{feeder.RoundLabel} has finished.",
+                    : feeder.MainLeg > 0
+                        ? $"Every leg of the {feeder.TierLetter}-Main has finished."
+                        : $"{feeder.RoundLabel} has finished.",
                 // The button also offers to skip them. It has to: this step
                 // outranks running the next round, so a club not doing
                 // bump-ups today - or a main with nobody left to promote -

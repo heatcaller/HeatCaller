@@ -329,6 +329,18 @@ public partial class MainForm
                 // redrawing a page must never stop that.
             }
 
+            // A Pole Shootout's runs and grid, and the next Invitational
+            // main's grid, follow the race just filed (19 Nov 2026). It
+            // catches its own faults; this is for anything it did not.
+            try
+            {
+                _raceProgram?.KeepFinalsFormatsInStep();
+            }
+            catch
+            {
+                // As above: never in the way of the filing.
+            }
+
             RefreshActiveRoundCombo();
             RefreshCurrentPage();
         };

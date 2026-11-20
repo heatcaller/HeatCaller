@@ -6352,6 +6352,15 @@ public sealed class CommentaryService
 
         switch (round.Kind)
         {
+            // 19 Nov 2026: the two finals formats say what they are.
+            case RoundKind.Main when round.InvitationalMain > 0:
+                return round.InvitationalMainCount > 0
+                    ? $"main {round.InvitationalMain} of {round.InvitationalMainCount} of the {Invitational.ShortName}, the whole field on points"
+                    : $"a main of the {Invitational.ShortName}";
+
+            case RoundKind.Shootout:
+                return $"a {PoleShootout.Name} run, one car alone against the clock for pole";
+
             case RoundKind.Main:
                 return round.MainTier switch
                 {

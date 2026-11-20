@@ -465,7 +465,7 @@ The **Add Class** / **Edit Class** dialog has these settings:
 | **A jump start also costs the lap** | When on, a car that jumps the start loses the lap it jumped on as well as any time penalty. When off, it's credited with the start lap at the green like everyone else. | Off |
 | **Warn when a driver in a heat hasn't passed tech today** | When a heat is staged, Race Control warns about drivers in it who haven't been cleared by scrutineering today. It never stops the race. See [Tech warnings on Race Control](events-and-entries.md#tech-warnings-on-race-control). | On |
 
-The row of buttons under the settings opens the class's sub-editors: **Tech Checklist**, **Format**, **Qualifier Format**, **Color**, **Sanctioning Preset** and **Warnings**. Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change.
+The row of buttons under the settings opens the class's sub-editors: **Tech Checklist**, **Format**, **Qualifier Format**, **Color**, **Sanctioning Preset**, **Warnings** and **Finals Formats** (a [Pole Shootout and Invitational](pole-shootout-and-invitational.md) for the class). Changes made in them are kept when you click **Save** on the class. **Cancel** on the class throws them away too, including a sanctioning preset or checklist change.
 
 !!! note
     Classes don't have a points scale. Points are set per championship — see [Results and championships](../race-control/results-and-championships.md).
@@ -564,8 +564,8 @@ Each preset names the rulebook edition it came from. Check it against your curre
 
 !!! warning
     - The IFMAR, EFRA and NZRCA off-road presets switch on **Points per round** with **Top qualifier scores:** on that body's 0-point scale. IFMAR and EFRA count fewer rounds when fewer are run, so check **Heats that count:** against your schedule. The ROAR presets are for Level 1-4, which ranks on each driver's single best heat; ROAR's Qual-Points is for Level 5. See [The top qualifier on 0 points](program-and-mains.md#the-top-qualifier-on-0-points-ifmar-and-efra).
-    - The IFMAR section, EFRA, NZRCA and Reedy presets set the class's **A-main:** to 3 legs. HeatCaller runs only the A-main in legs, so lower mains that their rules run in legs are run once.
-    - The PNWC preset sets the length of one leg only. It doesn't change the class's **A-main:** setting, so to run PNWC's three-leg A-main, set that yourself (see [Double and triple A-mains](program-and-mains.md#double-and-triple-a-mains)). HeatCaller has no multi-leg lower mains. Read **What it does not set** for each one.
+    - The IFMAR section, EFRA, NZRCA and Reedy presets set the class's **A-main:** to 3 legs. The presets leave the lower mains as single races. To run them in legs too, as some of these rulebooks do, tick **Run the lower mains in legs too** under **Finals Formats** (see [Lower mains in legs](pole-shootout-and-invitational.md#lower-mains-in-legs)).
+    - The PNWC preset sets the length of one leg only. It doesn't change the class's **A-main:** setting, so to run PNWC's three-leg A-main, set that yourself (see [Double and triple A-mains](program-and-mains.md#double-and-triple-a-mains)). Read **What it does not set** for each one.
     - If the class was following the app default format, a preset that sets a duration gives the class its own format. Later changes to the app default won't reach it any more. The other settings in that new format start from HeatCaller's built-in values (for example a 3000 ms minimum lap), not from your app default, so check **Format** afterwards.
     - Applied from the **Classes** page, the preset is saved as soon as you click **Yes**. Applied from inside the class editor, it's saved when you click **Save** on the class.
 

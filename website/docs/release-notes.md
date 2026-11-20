@@ -4,12 +4,22 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+<<<<<<< HEAD
 - **Three fixes (19 November).**
     - **Connection's Race tools card shows Photo Finish the first time.** On a 1280-wide window, the first time the **Connection** page opened, the **Race tools** card left room for its finish-camera buttons on one line. They wrap onto two, so **Photo Finish** was hidden under the card until you went to another page and back. The card is now as tall as its buttons from the start.
     - **A table wider than its card scrolls with the app's slim bar.** When a table's columns are wider than the card it sits in, for example **Championship → Standings** at 1280 wide with nothing counted yet, Windows' own white scroll bar showed along its foot. It's now the app's slim drawn bar, and dragging it scrolls the table sideways.
     - **Search pages... finds the Updates and Standby PC cards.** Typing "update", "check for updates", "version" or "standby" in the sidebar's search box found nothing. It now lists **Backup & Restore**, where both cards are.
 
     See [Choosing a connection type](timing/decoders.md#choosing-a-connection-type), [Championship](race-control/results-and-championships.md#championship) and [Checking for updates yourself](getting-started/install.md#checking-for-updates-yourself). Update HeatCaller on the race PC; nothing changes on the relay.
+=======
+- **Pole Shootout, Invitational and lower mains in legs (19 November).** New ways to run a class's finals, each off until you turn it on with **Finals Formats** in the class settings.
+    - **Pole Shootout.** After qualifying, the top 5 (or the number you choose) each run alone, slowest first: an out lap, then one timed lap (up to 3, best counts). The fastest takes pole, and the shootout sets the front of the A-Main grid. The announcer calls each run and the pole.
+    - **Invitational (Reedy-style format).** The whole field races a series of mains (5 unless you choose), scored 1st = 1 point or on the class's points scale, with the best 4 counting. Later grids follow the points, or are inverted. The announcer says who leads after each main.
+    - **Lower mains in legs.** With a double or triple A-Main, the B, C and lower mains can run in legs too. Each bumps up on its overall result once all its legs are in, into every A-Main leg.
+    - All three show in the program, the event report and on the club website's results.
+
+    See [Pole Shootout and Invitational](race-day/pole-shootout-and-invitational.md). Update HeatCaller on the race PC, and deploy the relay for the standings on the website.
+>>>>>>> claude/oi-formats
 - **Anonymous usage totals, and new terms (19 November).** HeatCaller asks you to accept its terms again (revision 3) the next time it opens. The one change: while the relay is on, HeatCaller can send us a few totals once a day (which pages and tabs were used and for how long, the version, and whether a race day was open or Desk View on) so we know what to improve. Nothing about your drivers, nothing typed, no results or keys. **Send HeatCaller anonymous usage totals** on **Backup & Restore** starts ticked where Windows is set to the United States and unticked everywhere else. See [Usage totals](admin/backups.md#usage-totals). Update HeatCaller on the race PC.
 - **The Big Screen fits every driver on the board (19 November).** On a 720p screen the board showed six drivers, and it was cleared on every lap, so P7 and P8 of an eight-car heat were never seen.
     - **Fit first.** When the field is bigger than the board, the rows and their writing shrink a step at a time, down to three quarters of their size. An eight-car heat on a 720p screen fits with nothing moving.

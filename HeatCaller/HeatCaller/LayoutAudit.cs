@@ -247,6 +247,12 @@ internal static class LayoutAudit
         // A sanctioning body's rules for a class, and what they leave out (SanctioningPresetForm, titled "Sanctioning preset - <class>").
         "Sanctioning preset",
 
+        // A class's Pole Shootout and Invitational (Reedy-style format) settings (FinalsFormatsForm, titled "Finals Formats - <class>").
+        "Finals Formats",
+
+        // The Invitational's seed order, from its Seed Order... (FinalsFormatsForm.SeedOrderForm, titled "Seed Order - <class>").
+        "Seed Order",
+
         // A club transponder lent at the counter, to a saved driver or a walk-in (RentalCheckOutForm, titled "Check Out - <unit>").
         "Check Out",
 
