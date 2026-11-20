@@ -134,6 +134,58 @@ public static class NightPlan
         return LengthOf(format);
     }
 
+    /// <summary>
+    /// The finals a class will still race when it qualifies but has none
+    /// built yet: its Pole Shootout's one-car runs first, when it has one,
+    /// then its mains - an Invitational's series of whole-field mains, or a
+    /// ladder of heat-sized mains with the A-main (and, when chosen, the
+    /// lower mains) run in legs.
+    /// </summary>
+    /// <remarks>
+    /// WHY (20 Nov 2026, bug hunt 22): the plan counted every class as
+    /// drivers / heat size mains, one race each. An Invitational of ten with
+    /// a shootout - five runs and five mains - was planned as one race, so
+    /// "Racing done" and the late strip came out about nine races early and
+    /// "Get back on time" had nothing to offer.
+    /// </remarks>
+    /// <param name="length">One main's length, the night's finals cut already taken off.</param>
+    public static List<UnbuiltMains> UnbuiltFor(string className, RaceClass? raceClass, int drivers, int heatSize,
+        bool oneMainFewer, RaceFormat format, TimeSpan length)
+    {
+        var unbuilt = new List<UnbuiltMains>();
+
+        if (raceClass is { PoleShootout: true }
+            && Math.Min(PoleShootout.DriversFor(raceClass), drivers) is var runs and >= PoleShootout.MinDrivers)
+        {
+            var runFormat = PoleShootout.RunFormat(format, PoleShootout.TimedLapsFor(raceClass));
+            unbuilt.Add(new UnbuiltMains(className, runs, LengthOf(runFormat), runFormat));
+        }
+
+        int mains;
+
+        if (raceClass is { Invitational: true })
+        {
+            mains = Invitational.MainsFor(raceClass);
+        }
+        else
+        {
+            var ladder = (int)Math.Ceiling(drivers / (double)Math.Max(2, heatSize));
+
+            // Tonight's finals cut (12 Nov 2026, setup plan step 8), chosen
+            // in "We're Done After This Round...".
+            if (oneMainFewer && ladder > 1)
+            {
+                ladder--;
+            }
+
+            var legs = Math.Clamp(raceClass?.AMainLegs ?? 1, 1, AMainLegs.MaxLegs);
+            mains = raceClass is { LowerMainsInLegs: true } ? ladder * legs : ladder + (legs - 1);
+        }
+
+        unbuilt.Add(new UnbuiltMains(className, mains, length, format));
+        return unbuilt;
+    }
+
     /// <summary>A format's length on track. See <see cref="LengthOf(RoundDefinition, RaceClass?, RaceFormat)"/>.</summary>
     public static TimeSpan LengthOf(RaceFormat format) =>
         format.TimeLimitMinutes > 0

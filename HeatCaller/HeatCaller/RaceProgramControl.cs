@@ -1316,18 +1316,12 @@ public sealed partial class RaceProgramControl : UserControl
             {
                 foreach (var (className, drivers) in ClassesAwaitingMains(day, _profiles))
                 {
-                    var mains = (int)Math.Ceiling(drivers / (double)Math.Max(2, HeatSize()));
-                    var format = ClassNamed(className)?.Format ?? appDefault;
-
-                    // Tonight's finals cut (12 Nov 2026, setup plan step 8),
-                    // chosen in "We're Done After This Round...".
-                    if (raceDay.FinalsOneMainFewer && mains > 1)
-                    {
-                        mains--;
-                    }
-
+                    var raceClass = ClassNamed(className);
+                    var format = raceClass?.Format ?? appDefault;
                     var length = NightPlan.LengthOf(NightPlan.Shortened(format, raceDay.FinalsMinutesShorter) ?? format);
-                    unbuilt.Add(new NightPlan.UnbuiltMains(className, mains, length, format));
+
+                    // Its shootout, Invitational or legs too - see NightPlan.UnbuiltFor.
+                    unbuilt.AddRange(NightPlan.UnbuiltFor(className, raceClass, drivers, HeatSize(), raceDay.FinalsOneMainFewer, format, length));
                 }
             }
 
