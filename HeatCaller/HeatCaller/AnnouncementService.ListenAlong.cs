@@ -139,6 +139,21 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
+    /// Swaps the cars said by their number for <paramref name="with"/> and
+    /// hands back the ones there were - for the tests, which share one run.
+    /// </summary>
+    /// <remarks>
+    /// WHY (19 Nov 2026): tests that race a car whose transponder and name
+    /// are both "Sam" noted "Sam" here for the rest of the run, so a later
+    /// test's "Sam Parker takes the lead!" was withheld from listen-along -
+    /// it passed alone and failed in the full suite. A test that checks
+    /// what reaches listeners starts from an empty set and puts the old one
+    /// back after.
+    /// </remarks>
+    internal static ConcurrentDictionary<string, byte>? SwapCarsSpokenByNumberForTests(ConcurrentDictionary<string, byte>? with) =>
+        Interlocked.Exchange(ref _carsSpokenByNumber, with);
+
+    /// <summary>
     /// Whether these words name a car by its transponder number - one the
     /// announcer has said as a name (<see cref="NoteSpokenAsNumber"/>). Such
     /// a line stays in the room: see the remarks there.
