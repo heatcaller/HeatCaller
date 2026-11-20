@@ -262,17 +262,18 @@ public sealed class RaceTiming
 
     /// <summary>
     /// While a queued event is being delivered on the UI thread (threaded
-    /// mode): when the engine raised it, on TimingClock. Null otherwise, and
-    /// always null inline. For the staleness rule - a lap call more than a
-    /// few seconds old by the time the UI gets to it is not spoken (P4b).
+    /// mode): when the engine raised it, on TimingClock. Inline, while a pass
+    /// is being processed: when that pass arrived (bug hunt 22). Null
+    /// otherwise. For the staleness rule - a lap call more than a few
+    /// seconds old by the time the UI gets to it is not spoken (P4b).
     /// </summary>
     internal long? DeliveringEventRaisedAtMs { get; private set; }
 
     /// <summary>
     /// True while the UI is being told of an event (threaded mode) that the
     /// race raised more than <see cref="StaleLapCallMs"/> ago - the window
-    /// was busy or frozen meanwhile. Always false inline, and outside a
-    /// delivery. UI thread.
+    /// was busy or frozen meanwhile - inline, a pass that arrived that long
+    /// ago. Always false outside a delivery. UI thread.
     /// </summary>
     /// <remarks>
     /// WHY (23 Oct 2026, timing layer, P4b): after a freeze the UI is handed
@@ -286,7 +287,7 @@ public sealed class RaceTiming
     internal bool DeliveringIsStale =>
         DeliveringEventRaisedAtMs is { } raisedAt && TimingClock.NowMs - raisedAt > StaleLapCallMs;
 
-    /// <summary>How long ago the event being delivered was raised, in milliseconds (threaded mode); null outside a delivery and always inline.</summary>
+    /// <summary>How long ago the event being delivered was raised, in milliseconds (threaded mode, or a pass being processed inline); null outside a delivery.</summary>
     internal long? DeliveringAgeMs =>
         DeliveringEventRaisedAtMs is { } raisedAt ? TimingClock.NowMs - raisedAt : null;
 
@@ -907,7 +908,35 @@ public sealed class RaceTiming
 
     // ---- Commands: passes in. ----
 
-    public void ProcessLapEvent(DirectLapEvent lap) => Do(e => e.ProcessLapEvent(lap));
+    public void ProcessLapEvent(DirectLapEvent lap)
+    {
+        if (_host is not null)
+        {
+            Do(e => e.ProcessLapEvent(lap));
+            return;
+        }
+
+        // Inline (bug hunt 22): the pass was posted to this thread by the
+        // decoder's and may be handled seconds after it arrived (the window
+        // was busy). The engine already judges it by its arrival; the lap's
+        // calls are now timed from it too, as threaded mode's are - so a
+        // call the room would hear late is not said, and one that is said
+        // has its say-by counted from the crossing (see
+        // DeliveringEventRaisedAtMs and AnnouncementService.LapRaisedAtMs).
+        // The age is on the engine's own clock, then put on TimingClock.
+        var previous = DeliveringEventRaisedAtMs;
+        var ageMs = Math.Max(0, Engine.NowMsSource() - Engine.ArrivalOf(lap));
+        DeliveringEventRaisedAtMs = TimingClock.NowMs - ageMs;
+
+        try
+        {
+            Engine.ProcessLapEvent(lap);
+        }
+        finally
+        {
+            DeliveringEventRaisedAtMs = previous;
+        }
+    }
     public bool ProcessSplitPass(string rowTransponder, TimingPoint point, long lineMs) => Do(e => e.ProcessSplitPass(rowTransponder, point, lineMs));
 
     // ---- Commands: the race's flags and clock. ----

@@ -43,6 +43,62 @@ public sealed class BugHunt22_RaceNightTests
         Assert.Contains("if (HandScoringOn) { _announcer.WhileHandScoring(", body);
     }
 
+    // --- Lap calls timed from the crossing, inline -------------------------------
+
+    [Fact]
+    public void Inline_a_pass_handled_seconds_after_it_arrived_is_delivered_as_stale()
+    {
+        // The default mode. The decoder thread stamps the pass and posts it;
+        // a busy window handles it late. Its calls were timed from then.
+        var clock = 1_000_000L;
+        var engine = new RaceControlSession { NowMsSource = () => clock };
+        var race = new RaceTiming(engine);
+        var seen = new List<(long? RaisedAt, bool Stale)>();
+        race.LapProcessed += (_, _, _) => seen.Add((race.DeliveringEventRaisedAtMs, race.DeliveringIsStale));
+
+        race.Stage();
+        race.GreenFlag(10_000);
+        race.ProcessLapEvent(Pass("101", 21_000, receivedMs: 0)); // stamped now
+
+        clock += 12_000;
+        race.ProcessLapEvent(Pass("101", 33_000, receivedMs: clock - 5_000)); // handled 5 s after it arrived
+
+        Assert.NotEmpty(seen);
+        var late = seen[^1];
+        Assert.True(late.Stale);
+        Assert.InRange(TimingClock.NowMs - late.RaisedAt!.Value, 5_000, 6_000);
+        Assert.Null(race.DeliveringEventRaisedAtMs);
+    }
+
+    [Fact]
+    public void Inline_a_pass_handled_as_it_arrives_is_fresh()
+    {
+        var clock = 1_000_000L;
+        var engine = new RaceControlSession { NowMsSource = () => clock };
+        var race = new RaceTiming(engine);
+        var seen = new List<bool>();
+        race.LapProcessed += (_, _, _) => seen.Add(race.DeliveringIsStale);
+
+        race.Stage();
+        race.GreenFlag(10_000);
+        race.ProcessLapEvent(Pass("101", 21_000, receivedMs: clock));
+        clock += 12_000;
+        race.ProcessLapEvent(Pass("101", 33_000, receivedMs: clock));
+
+        Assert.NotEmpty(seen);
+        Assert.All(seen, Assert.False);
+    }
+
+    private static DirectLapEvent Pass(string car, uint deviceTimeMs, long receivedMs) => new()
+    {
+        TransponderId = car,
+        DeviceTimeMs = deviceTimeMs,
+        SignalHits = 1,
+        SignalStrength = 100,
+        Decoder = DecoderConnection.EasyLap,
+        ReceivedMs = receivedMs,
+    };
+
     // --- Time left ----------------------------------------------------------------
 
     [Fact]
