@@ -236,7 +236,7 @@ To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of
 While the relay is on and **Send HeatCaller anonymous usage totals** is ticked, HeatCaller sends us a few totals once a day, through your club's relay, so we can see which parts of HeatCaller clubs use and decide what to improve next:
 
 - which pages and tabs were opened, how many times, and for how long;
-- the HeatCaller version;
+- the HeatCaller version and its text size setting;
 - whether a race day was open, and whether Desk View was on.
 
 They never include a driver's name or anything else about a driver, anything typed into HeatCaller, results, keys, or the order in which anything was done. They go with your club's relay sign-in, so we can tell which club they came from. The relay keeps them for 13 months.

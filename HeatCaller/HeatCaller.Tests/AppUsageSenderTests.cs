@@ -82,7 +82,7 @@ public sealed class AppUsageSenderTests : IDisposable
 
         var day = root.GetProperty("days").EnumerateArray().Single();
         Assert.Equal("2026-11-18", day.GetProperty("date").GetString());
-        Assert.Equal(["date", "version", "rows", "events"], day.EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["date", "version", "rows", "events", "textSize"], day.EnumerateObject().Select(p => p.Name));
 
         var row = day.GetProperty("rows").EnumerateArray().First(r => r.GetProperty("page").GetString() == "live_timing");
         Assert.Equal(

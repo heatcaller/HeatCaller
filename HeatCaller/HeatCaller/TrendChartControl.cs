@@ -741,6 +741,7 @@ public sealed class TrendChartControl : UserControl
 
     private void ExportChart()
     {
+        AppUsageTracker.Note("chart_exported");
         if (BuildPoints().Count == 0)
         {
             AppDialog.Show(this, "Nothing to export - select a driver with session history first.", "Nothing to export",

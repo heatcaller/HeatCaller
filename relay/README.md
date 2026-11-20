@@ -1804,13 +1804,14 @@ Authorization: Bearer <publish token>
 {"version":1,"days":[{"date":"2026-11-18","version":"1.4.2",
   "rows":[{"page":"live_timing","tab":"","raceDay":true,"deskView":false,
            "opens":3,"activeSeconds":600,"shownSeconds":5400}],
-  "events":{"nav_search_used":2}}]}
+  "events":{"nav_search_used":2},"textSize":100}]}
 ```
 
 - **The shape is checked and anything else dropped**: page, tab and event
   names must match `[a-z0-9_.]{1,64}` (tab may be empty), seconds 0 to
   86,400 (in use is cut to on screen), at most 31 days a report, 400 rows
-  and 60 events a day, dates within the last 31 days. A report with
+  and 60 events a day, dates within the last 31 days, `textSize` a whole
+  percentage from 50 to 300 (or left out). A report with
   nothing left is still `204`, so a newer laptop is never told off.
 - `401` / `403` without the club's own token, `400` for a body that won't
   read or is over 512 KB, `429` after 40 reports from a club in 24 hours,

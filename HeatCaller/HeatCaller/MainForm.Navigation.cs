@@ -1590,6 +1590,7 @@ public partial class MainForm
 
     private void BtnManageNav_Click(object? sender, EventArgs e)
     {
+        AppUsageTracker.Note("manage_navigation_opened");
         var toggleable = _navItems.Where(i => i.Name != "Connection").Select(i => i.Name).ToList();
         // The club's own order, NOT what the sidebar is showing. During a
         // race night the sidebar leads with Race Day and Race Control

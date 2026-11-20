@@ -85,6 +85,8 @@ export interface AppUsageDay {
   readonly version: string;
   readonly rows: readonly AppUsageRow[];
   readonly events: Readonly<Record<string, number>>;
+  /** The laptop's text size setting that day, a percentage (50-300); absent from laptops before it was sent. */
+  readonly textSize?: number;
 }
 
 /** One line of the file: a day, who sent it and when it arrived. */
@@ -206,8 +208,11 @@ export function cleanAppUsage(body: unknown, now: Date): AppUsageDay[] {
       continue;
     }
 
+    const size = value["textSize"];
+    const textSize = typeof size === "number" && Number.isInteger(size) && size >= 50 && size <= 300 ? size : undefined;
+
     seen.add(date);
-    days.push({ date, version, rows, events });
+    days.push(textSize === undefined ? { date, version, rows, events } : { date, version, rows, events, textSize });
   }
 
   return days;

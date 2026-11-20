@@ -134,6 +134,13 @@ describe("app usage: the shape check", () => {
     assert.equal(kept?.rows.length, APP_USAGE_MAX_ROWS);
   });
 
+  it("keeps a whole text size from 50 to 300, and leaves anything else out", () => {
+    const sizes = cleanAppUsage({ days: [day("2026-11-15", { textSize: 125 }), day("2026-11-16", { textSize: 125.5 }), day("2026-11-17", { textSize: 900 }), day("2026-11-18")] }, NOW);
+
+    assert.deepEqual(sizes.map((d) => d.textSize), [125, undefined, undefined, undefined]);
+    assert.ok(!("textSize" in (sizes[3] as object)));
+  });
+
   it("answers nothing for a body that isn't a report", () => {
     for (const body of [null, [], "days", { days: "all" }, { rows: [] }]) {
       assert.deepEqual(cleanAppUsage(body, NOW), [], JSON.stringify(body));

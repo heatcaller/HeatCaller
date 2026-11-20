@@ -170,10 +170,16 @@ ShowPage / SegmentTabs ──► AppUsage   POST /club/<id>/app-usage ──► 
      `unknown_driver`.
    - **Counting is off when the box is off.** Unticked means nothing is
      counted either, and unticking deletes what was held.
-   - **Dialogs** count as time on the page beneath them; they aren't rows of
-     their own yet.
-   - **Not done yet:** the text-size context and the feature events other
-     than `nav_search_used` (Manage Navigation, warm-up flag and the rest).
+   - **Dialogs** (closed in the lookback): a window on
+     `LayoutAudit.ConvertedWindows` gets a row of its own, "Dialog: <its
+     name in that list>", never its own title; any other window's time
+     stays with the page beneath it.
+   - **Text size and feature events** (closed in the lookback): each day
+     carries `textSize` (FontScale as a percentage, to the nearest 5); the
+     starter events are counted through `AppUsageTracker.Note`. Protest
+     window and "OBS overlay on" became `overlay_editor_opened` and
+     `chart_exported`: there is no protest window, and the overlay has no
+     single on switch.
 2. **Relay.** `appusage.ts`, the route, `app-usage` admin command, tests.
    Deploy (memory: from the main checkout, then restart the app).
    **Built 19 Nov 2026** on `claude/usage-sharing` (PR 274), not deployed:
@@ -268,3 +274,33 @@ hand-made JSONL until real reports arrive).
    helps support; anonymous is easier to defend. Recommend by name, since the
    admin app already shows each club's voice spend.
 3. ~~Phone pages too?~~ **Built (round 5, 19 Nov 2026).**
+
+## Lookback (19 Nov 2026)
+
+After all five rounds, the plan was read again against what was built.
+Closed then:
+
+- **Feature events:** only `nav_search_used` was counted. Now also Manage
+  Navigation, the warm-up flag, photo finish, the overlay editor, chart
+  exports, and the tour finished or skipped.
+- **Dialogs as rows of their own**, named only from the fixed window list.
+- **Text size** on each day, through the relay to a block on the Overview.
+- **Never from a test run:** the sender also refuses when
+  `AppPaths.IsRedirected` (the suite's data folder), not only in rehearsal.
+- **Names the relay would drop:** a caption with accents ("Réglages") made
+  a slug the relay's `[a-z0-9_.]` check threw away without a word. Accents
+  are now folded and other letters left out; a test runs every window name
+  and odd captions through it.
+- **A removed club's totals:** the admin app now runs `app-usage-forget`
+  and clears its own copies when a removal is pushed (rule 6).
+- **Tests the plan listed:** crossing midnight, every name fitting the relay.
+
+Left as they are:
+
+- **Phone pages: a visit's length, not each page's dwell** (round 5 says
+  why).
+- **Counsel question 18a** (US opt-out, the Windows region as the test,
+  UK/EU opt-in) is still open; nothing here depends on its answer until a
+  club outside the US ticks the box.
+- **The admin app's Audit log** has a button that runs past its box at
+  every scale; it does on `main` too, before any of this.

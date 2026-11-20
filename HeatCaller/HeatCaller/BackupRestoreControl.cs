@@ -276,7 +276,7 @@ public sealed partial class BackupRestoreControl : UserControl
     /// </summary>
     /// <summary>What the usage box sends, in the same words as the privacy notice (Terms, Part 2).</summary>
     internal const string ShareUsageHint =
-        "Once a day, through your club's relay: which pages and tabs were opened and for how long, the HeatCaller version "
+        "Once a day, through your club's relay: which pages and tabs were opened and for how long, the HeatCaller version and text size "
         + "and whether a race day or Desk View was on. Never driver names, anything typed, results or keys. Nothing is sent without the relay. "
         + "Ticked to begin with only where Windows is set to the United States.";
 

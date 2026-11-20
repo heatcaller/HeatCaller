@@ -718,7 +718,7 @@ public partial class MainForm : Form
         _usageTracker = new AppUsageTracker(
             new AppUsage(AppUsage.DefaultPath, () => _profiles.AllIncludingGhosts, AppVersion.Number),
             _settings,
-            () => new AppUsage.Context(_raceEvents.Active is { IsLegacy: false, IsOpen: true }, _deskOnly));
+            () => new AppUsage.Context(_raceEvents.Active is { IsLegacy: false, IsOpen: true }, _deskOnly, AppUsage.Context.Percent(_settings.FontScale)));
         FormClosed += (_, _) =>
         {
             _usageTracker.Save();

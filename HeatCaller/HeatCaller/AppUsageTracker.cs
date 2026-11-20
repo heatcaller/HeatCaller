@@ -12,6 +12,11 @@ namespace HeatCaller;
 /// totals kept at all, not merely none sent. Unticking it also forgets what
 /// was already counted. Nothing at all in the rehearsal copy.
 ///
+/// DIALOGS. While a window from LayoutAudit.ConvertedWindows is the one in
+/// front, its time goes to a row of its own, "Dialog: <its name in that
+/// list>" - never the window's own title, which can hold a driver's or a
+/// track's name. Any other window's time stays with the page beneath it.
+///
 /// SENDING (round 3). On the first tick and every 6 hours after, the
 /// finished days go to the club's relay (AppUsageSender), and are deleted
 /// here once it has them.
@@ -42,10 +47,32 @@ internal sealed class AppUsageTracker : IDisposable
     private DateTime _lastSave = DateTime.Now;
     private bool _wasOn;
     private DateTime _lastSendTry = DateTime.MinValue;
+    private string? _dialog;
     private bool _sending;
+
+    /// <summary>The window's tracker, for <see cref="Note"/>; null before the window is built and after it closes.</summary>
+    private static AppUsageTracker? _current;
+
+    /// <summary>
+    /// Counts one of AppUsage.Events from anywhere - a button deep in a page
+    /// or a dialog - through the main window's tracker. Nothing when there is
+    /// none (a test's control on its own) or the box is off.
+    /// </summary>
+    internal static void Note(string name)
+    {
+        try
+        {
+            _current?.Count(name);
+        }
+        catch (Exception)
+        {
+            // Counting is never worth an error.
+        }
+    }
 
     internal AppUsageTracker(AppUsage usage, AppSettings settings, Func<AppUsage.Context> context)
     {
+        _current = this;
         _usage = usage;
         _settings = settings;
         _context = context;
@@ -126,7 +153,37 @@ internal sealed class AppUsageTracker : IDisposable
             return;
         }
 
+        if (_dialog is { } dialog)
+        {
+            _usage.Enter(DialogPrefix + dialog, "", DateTime.Now, _context());
+            return;
+        }
+
         _usage.Enter(_page, CurrentTab(_pageControl), DateTime.Now, _context());
+    }
+
+    /// <summary>What a dialog's row is called before its name.</summary>
+    internal const string DialogPrefix = "Dialog: ";
+
+    /// <summary>
+    /// The window in front's name on LayoutAudit.ConvertedWindows - its title
+    /// exactly, or the title starting with the name then " (" or " - " - or
+    /// null for the main window, no window, or one not on the list.
+    /// </summary>
+    internal static string? DialogName(Form? active)
+    {
+        if (active is null or MainForm)
+        {
+            return null;
+        }
+
+        var title = active.Text ?? "";
+
+        return LayoutAudit.ConvertedWindows.FirstOrDefault(name =>
+            name.Length > 0
+            && (string.Equals(title, name, StringComparison.Ordinal)
+                || title.StartsWith(name + " (", StringComparison.Ordinal)
+                || title.StartsWith(name + " - ", StringComparison.Ordinal)));
     }
 
     private void Tick()
@@ -154,8 +211,18 @@ internal sealed class AppUsageTracker : IDisposable
             return;
         }
 
-        var inFront = Form.ActiveForm is not null;
+        var active = Form.ActiveForm;
+        var inFront = active is not null;
         _usage.Mark(now, inFront, inFront && IdleFor() < AppUsage.ActiveWithin, _context());
+
+        // A dialog from the list came in front, or went: its own row from here.
+        var dialog = inFront ? DialogName(active) : _dialog;
+
+        if (!string.Equals(dialog, _dialog, StringComparison.Ordinal))
+        {
+            _dialog = dialog;
+            Enter();
+        }
 
         if (now - _lastSave >= SaveEvery)
         {
@@ -177,7 +244,7 @@ internal sealed class AppUsageTracker : IDisposable
     private async Task SendFinishedDaysAsync(DateTime now)
     {
         var target = AppUsageSender.Target(_settings);
-        var whyNot = AppUsageSender.WhyNot(IsOn, AppPaths.IsRehearsal, Terms.IsAccepted(), target is not null);
+        var whyNot = AppUsageSender.WhyNot(IsOn, AppPaths.IsRehearsal || AppPaths.IsRedirected, Terms.IsAccepted(), target is not null);
 
         if (whyNot is not null || target is not { } relay)
         {
@@ -283,6 +350,11 @@ internal sealed class AppUsageTracker : IDisposable
 
     public void Dispose()
     {
+        if (ReferenceEquals(_current, this))
+        {
+            _current = null;
+        }
+
         _timer.Stop();
         _timer.Dispose();
     }

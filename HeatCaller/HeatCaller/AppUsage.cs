@@ -65,6 +65,13 @@ internal sealed class AppUsage
     {
         // A page opened from the sidebar's search box.
         "nav_search_used",
+        "manage_navigation_opened",
+        "warmup_flag",
+        "photo_finish_opened",
+        "overlay_editor_opened",
+        "chart_exported",
+        "tour_finished",
+        "tour_skipped",
     };
 
     internal static readonly JsonSerializerOptions Json = new()
@@ -248,7 +255,7 @@ internal sealed class AppUsage
         foreach (var day in _store.Days.OrderByDescending(d => d.Date))
         {
             text.Append(day.Date.ToString("dddd d MMMM yyyy", CultureInfo.CurrentCulture))
-                .Append(" (HeatCaller ").Append(day.Version).AppendLine(")");
+                .Append(" (HeatCaller ").Append(day.Version).Append(", text size ").Append(day.TextSize).AppendLine("%)");
 
             foreach (var row in day.Rows.OrderByDescending(r => r.ActiveSeconds).ThenByDescending(r => r.ShownSeconds))
             {
@@ -319,18 +326,40 @@ internal sealed class AppUsage
                 if (word.Length >= 3)
                 {
                     names.Add(word);
+                    names.Add(Fold(word));
                 }
             }
         }
 
         // A name, or a name with a possessive "s" ("Billy's" is one word, "Billys").
-        if (words.Any(word => names.Contains(word) || (word.Length > 3 && word.EndsWith('s') && names.Contains(word[..^1]))))
+        if (words.Any(word => names.Contains(word) || names.Contains(Fold(word))
+            || (word.Length > 3 && word.EndsWith('s') && (names.Contains(word[..^1]) || names.Contains(Fold(word[..^1]))))))
         {
             return UnknownDriver;
         }
 
-        var slug = string.Join("_", words).ToLowerInvariant();
+        // Plain a-z only, as the relay takes: accents folded ("Réglages" →
+        // "reglages"), any other letter left out.
+        var slug = string.Join("_", words.Select(Fold).Where(word => word.Length > 0));
         return slug.Length <= LongestName ? slug : slug[..LongestName].TrimEnd('_');
+    }
+
+    /// <summary>A word in plain lower-case a-z: accents taken off, anything else dropped.</summary>
+    private static string Fold(string word)
+    {
+        var plain = new StringBuilder(word.Length);
+
+        foreach (var c in word.Normalize(NormalizationForm.FormD))
+        {
+            var lower = char.ToLowerInvariant(c);
+
+            if (lower is >= 'a' and <= 'z')
+            {
+                plain.Append(lower);
+            }
+        }
+
+        return plain.ToString();
     }
 
     /// <summary>The words in a caption or name; an apostrophe joins rather than splits ("Who's" is one word).</summary>
@@ -355,6 +384,7 @@ internal sealed class AppUsage
     private Row RowFor(DateTime now, (string Page, string Tab) key, Context context)
     {
         var day = DayFor(now);
+        day.TextSize = context.TextSize;
         var row = day.Rows.FirstOrDefault(r =>
             r.Page == key.Page && r.Tab == key.Tab && r.RaceDay == context.RaceDay && r.DeskView == context.DeskView);
 
@@ -385,7 +415,13 @@ internal sealed class AppUsage
     }
 
     /// <summary>What a row is counted under besides its page and tab.</summary>
-    internal readonly record struct Context(bool RaceDay, bool DeskView);
+    /// <param name="TextSize">The text size setting as a percentage (AppSettings.FontScale), kept on the day.</param>
+    internal readonly record struct Context(bool RaceDay, bool DeskView, int TextSize = 100)
+    {
+        /// <summary>A FontScale as the percentage kept: to the nearest 5, from 50 to 300.</summary>
+        internal static int Percent(float scale) =>
+            float.IsFinite(scale) ? Math.Clamp((int)Math.Round(scale * 20) * 5, 50, 300) : 100;
+    }
 
     internal sealed class Store
     {
@@ -409,6 +445,9 @@ internal sealed class AppUsage
         public string Version { get; set; } = "";
         public List<Row> Rows { get; set; } = [];
         public Dictionary<string, int> Events { get; set; } = new(StringComparer.Ordinal);
+
+        /// <summary>The text size setting, as a percentage, the last time anything was counted that day.</summary>
+        public int TextSize { get; set; } = 100;
     }
 
     internal sealed class Row

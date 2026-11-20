@@ -971,6 +971,7 @@ public sealed partial class RaceControlControl
     /// </summary>
     private void PressWarmUp()
     {
+        AppUsageTracker.Note("warmup_flag");
         if (RefuseIfPracticeRunningForRaceStart("open a warm-up"))
         {
             return;

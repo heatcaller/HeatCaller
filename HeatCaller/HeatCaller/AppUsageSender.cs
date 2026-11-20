@@ -11,7 +11,7 @@ namespace HeatCaller;
 ///
 /// Only when all of these hold (<see cref="WhyNot"/>):
 /// - the box Send HeatCaller anonymous usage totals is on (UsageSharing.IsOn);
-/// - this isn't the rehearsal copy;
+/// - this isn't the rehearsal copy or a test run (AppPaths.IsRedirected);
 /// - the Terms accepted on this PC are the ones in this build - revision 3
 ///   or later, which say that usage totals are sent;
 /// - the relay is on and set up with a club and token.
@@ -44,7 +44,7 @@ internal static class AppUsageSender
     /// <summary>Why nothing may be sent, in a few words for the log, or null when it may.</summary>
     internal static string? WhyNot(bool sharingOn, bool rehearsal, bool termsAccepted, bool relayReady) =>
         !sharingOn ? "the box is off"
-        : rehearsal ? "this is the rehearsal copy"
+        : rehearsal ? "this is the rehearsal copy or a test run"
         : !termsAccepted ? "the current Terms haven't been accepted on this PC"
         : !relayReady ? "the relay isn't set up"
         : null;
