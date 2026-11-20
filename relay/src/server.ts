@@ -75,7 +75,7 @@ import {
 } from "./garage.js";
 import { garagePage } from "./garagepage.js";
 import { DEFAULT_LOOK, lookFrom, type Look } from "./site.js";
-import { sunIcon } from "./sun.js";
+import { sunIcon, sunSmallIcon } from "./sun.js";
 import { BRAIN_LONG_WORDS_CEILING, BRAIN_PLAN_OFF, type BrainService } from "./brain.js";
 import { LapVoiceLibrary } from "./lapvoice.js";
 import { STREAM_FORMAT, VOICE_PLAN_OFF, type MeterUsage, type VoicePlan, type VoiceService } from "./voice.js";
@@ -85,7 +85,7 @@ import { APP_USAGE_MAX_BODY, APP_USAGE_REPORTS_PER_DAY, cleanAppUsage, type AppU
 import { BROADCAST_TTL_SECONDS, FOLLOW_CHANNEL, followIdOf, followNameFrom, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
 import { isJuniorName, NO_PRIVACY_RULES, namesAJunior, PRIVACY_CHANNEL, privacyNameKey, privacyRulesFrom, resultTakenDown, ROBOTS_TXT, UNKNOWN_PRIVACY_RULES, yearTakenDown, type PrivacyRules } from "./privacy.js";
-import { nextNightIcs } from "./ics.js";
+import { NIGHTS_FEED, nextNightIcs, nightsFeedWith, nightsIcs } from "./ics.js";
 import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, streamFrom, streamNightId, VIDEO_CHECK_FOR_MS, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
 import { addCounts, countableEvents, PAGE_COUNTS, PAGE_COUNTS_DAYS, PAGE_COUNTS_MAX_BODY, PAGE_COUNTS_PER_ADDRESS, totalsOver } from "./pagecounts.js";
@@ -1797,13 +1797,33 @@ export class Relay {
       // Off.
     }
 
+    // Whether the club takes sign-ups, for Home's "Not on the list? Sign up"
+    // (19 Nov 2026, driver phone plan item 22). Off when it can't be read.
+    const signupOpen = await this.signupOpenFor(club).catch(() => false);
+
     // emailLink too (bug hunt 18): the day after a night check-in is stale,
     // so checkIn matches the cached look and the club's "email me a link"
     // was thrown away while the route behind it still took asks.
     return checkIn === site.look.checkIn && emailLink === site.look.emailLink && listening === site.look.listening
-      && notes === site.look.notes && vote === site.look.vote
+      && notes === site.look.notes && vote === site.look.vote && signupOpen === (site.look.signupOpen === true)
       ? site.look
-      : { ...site.look, checkIn, emailLink, listening, notes, vote };
+      : { ...site.look, checkIn, emailLink, listening, notes, vote, signupOpen };
+  }
+
+  /** Whether sign-up is open, held a minute: every page asks, and the answer changes when the desk opens it. */
+  private signupOpenHeld = new Map<string, { at: number; open: boolean }>();
+
+  private async signupOpenFor(club: string): Promise<boolean> {
+    const now = this.now().getTime();
+    const held = this.signupOpenHeld.get(club);
+
+    if (held !== undefined && now - held.at < 60_000) {
+      return held.open;
+    }
+
+    const open = (await this.currentSignup(club))?.enabled === true;
+    this.signupOpenHeld.set(club, { at: now, open });
+    return open;
   }
 
   /**
@@ -2461,6 +2481,23 @@ export class Relay {
             return;
           }
 
+          // Every night, a feed to subscribe to once (19 Nov 2026, item 10
+          // step 3; see nightsIcs). An empty calendar rather than a 404, so a
+          // subscription made before the first announcement keeps working.
+          if (page === "nights.ics") {
+            const feed = (await this.store.getSnapshot(tenant.club, NIGHTS_FEED).catch(() => undefined))?.body;
+            const look = await this.lookFor(tenant.club);
+
+            response.writeHead(200, {
+              ...BASE_HEADERS,
+              "content-type": "text/calendar; charset=utf-8",
+              "content-disposition": `inline; filename="${tenant.club}-race-nights.ics"`,
+              "cache-control": "public, max-age=900",
+            });
+            response.end(nightsIcs(tenant.club, tenant.name, feed, look.timeZone, this.now()));
+            return;
+          }
+
           if (page === "sw.js") {
             sendBody(response, 200, "text/javascript; charset=utf-8", serviceWorkerFor(PAGES_BUILD), "no-cache");
             return;
@@ -2471,6 +2508,12 @@ export class Relay {
           // regardless of logo"). The club's logo stays on its pages.
           if (page === "icon.png") {
             sendBody(response, 200, "image/png", sunIcon());
+            return;
+          }
+
+          // The 192 px one, drawn at its size (19 Nov 2026, item 11).
+          if (page === "icon-192.png") {
+            sendBody(response, 200, "image/png", sunSmallIcon());
             return;
           }
 
@@ -3051,6 +3094,13 @@ export class Relay {
       return;
     }
 
+    // Whether a short address is free for this club (19 Nov 2026, driver
+    // phone plan item 5): the laptop asks before the club relies on it.
+    if (method === "GET" && rest.length === 1 && rest[0] === "alias") {
+      await this.aliasCheck(request, response, club);
+      return;
+    }
+
     // Race video (14 Nov 2026, race video plan V1): a race's moment in the
     // club's YouTube stream, worked out here from the private stream
     // document - see video.ts.
@@ -3347,6 +3397,18 @@ export class Relay {
         if (spec.name === "programme" && this.push !== undefined && !unreadable) {
           const push = this.push;
           void this.juniorCheckOf(club).then((isJunior) => push.afterProgramme(club, existing?.body, doc.body, isJunior));
+        }
+
+        // Every night, for nights.ics (19 Nov 2026, driver phone plan item
+        // 10) - see NIGHTS_FEED in ics.ts. Inside the lock, so two
+        // announcements can't each add to the list the other had.
+        if (spec.name === "nextnight") {
+          const feed = await this.store.getSnapshot(club, NIGHTS_FEED).catch(() => undefined);
+          await this.store.putSnapshot(club, NIGHTS_FEED, {
+            seq: at.getTime(),
+            publishedAt: at.toISOString(),
+            body: nightsFeedWith(feed?.body, body, at),
+          }).catch(() => undefined);
         }
 
         // The club's privacy rules (15 Nov 2026) - see privacy.ts.
@@ -10337,6 +10399,51 @@ export class Relay {
     const day = at.toISOString().slice(0, 10);
     const days = addCounts(isPlainObject(held?.body) ? (held.body as Record<string, unknown>)["days"] : undefined, day, [], "0000-00-00");
     sendJson(response, 200, { ok: true, days, last7: totalsOver(days, day, 7), last30: totalsOver(days, day, 30) });
+  }
+
+  /**
+   * IS THIS SHORT ADDRESS FREE? (19 Nov 2026, driver phone plan item 5.) The
+   * relay used to ignore a taken alias quietly, so a club printed posters
+   * with an address that went to somebody else. GET .../alias?name=x with the
+   * club's token answers "yours" (it sends drivers here), "free", "taken"
+   * (another club's id, or another club claimed it first) or "bad" (not an
+   * alias at all). Never says which club has it.
+   */
+  private async aliasCheck(request: IncomingMessage, response: ServerResponse, club: string): Promise<void> {
+    const who = this.authorise(request, club);
+
+    if (who === "no-token") {
+      sendJson(response, 401, { ok: false, error: "A publish token is required." });
+      return;
+    }
+
+    if (who === "wrong-club") {
+      sendJson(response, 403, { ok: false, error: "That token does not belong to this club." });
+      return;
+    }
+
+    const url = new URL(request.url ?? "/", "http://relay.invalid");
+    const name = (url.searchParams.get("name") ?? "").trim().toLowerCase();
+
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(name) || name.length < 3 || name.length > 32) {
+      sendJson(response, 200, { ok: true, name, state: "bad" });
+      return;
+    }
+
+    if (name === club) {
+      sendJson(response, 200, { ok: true, name, state: "yours" });
+      return;
+    }
+
+    if (this.tenants.club(name) !== undefined) {
+      sendJson(response, 200, { ok: true, name, state: "taken" });
+      return;
+    }
+
+    // Fresh, not the minute-old map: the club has just typed it.
+    this.aliasCache = undefined;
+    const owner = await this.aliasOwner(name);
+    sendJson(response, 200, { ok: true, name, state: owner === undefined ? "free" : owner === club ? "yours" : "taken" });
   }
 
   /** The hourly sponsor counts, for the laptop's sponsor report. Publish token only. */

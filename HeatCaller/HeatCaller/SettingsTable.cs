@@ -355,6 +355,7 @@ internal static class SettingsTable
             nameof(AppSettings.RelayTagline),
             nameof(AppSettings.RelayClubAlias),
             nameof(AppSettings.RelayShortName),
+            nameof(AppSettings.RelayTimeZone),
             nameof(AppSettings.RelayDriverThemes),
             nameof(AppSettings.InboxQuickReplies),
             nameof(AppSettings.InboxDocked),

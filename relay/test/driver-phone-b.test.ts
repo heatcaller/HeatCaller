@@ -232,8 +232,17 @@ describe("Racing tonight? on Home (item 22)", () => {
     assert.match(card, /Turn on alerts/);
   });
 
-  it("says nothing on another day, or once a driver is signed in", async () => {
+  it("says nothing on another day", async () => {
     assert.equal((await openHome(new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString())).get("rtw").innerHTML, "");
-    assert.equal((await openHome(new Date().toISOString(), { "hg-me-acme-rc": ELLA })).get("rtw").innerHTML, "");
+  });
+
+  // Since 19 Nov 2026 (item 22 step 5) a signed-in phone keeps the card,
+  // each step ticked as it is done, until it folds to "You're all set".
+  it("ticks Signed in once a driver is, and leaves out check-in while it is closed", async () => {
+    const card = (await openHome(new Date().toISOString(), { "hg-me-acme-rc": ELLA })).get("rtw").innerHTML;
+    assert.match(card, /<li class="done"><b>Signed in<\/b><\/li>/);
+    assert.doesNotMatch(card, /Sign in<\/b> with the PIN/);
+    assert.doesNotMatch(card, /<b>Check in<\/b>/, "checkin/one said 404: no check-in step");
+    assert.match(card, /<b>Turn on alerts<\/b>/);
   });
 });

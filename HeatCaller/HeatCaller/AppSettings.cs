@@ -2491,6 +2491,14 @@ public sealed class AppSettings
     public string RelayShortName { get; set; } = string.Empty;
 
     /// <summary>
+    /// The club's time zone for its phone pages, as a Windows zone id
+    /// ("Eastern Standard Time"), or empty for this PC's own (19 Nov 2026,
+    /// driver phone plan item 15). The PC's zone is right while the laptop is
+    /// at the track; this is for a laptop set up somewhere else.
+    /// </summary>
+    public string RelayTimeZone { get; set; } = string.Empty;
+
+    /// <summary>
     /// Drivers may pick their own look for the club's pages on their phones
     /// (15 Nov 2026, driver themes; Asher: "club driver can change the look
     /// should be on by default"). Only ever on that phone; off hides the

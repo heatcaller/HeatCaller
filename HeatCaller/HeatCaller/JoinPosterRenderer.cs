@@ -22,7 +22,8 @@ public static class JoinPosterRenderer
     /// <param name="subtitle">The one line of instruction underneath.</param>
     /// <param name="size">Overall square size in pixels. Print wants 1000+; a screen panel is happy at 300.</param>
     /// <param name="forPrint">True for a bitmap headed to paper: text is drawn grayscale-antialiased instead of ClearType.</param>
-    public static Bitmap Render(string url, string heading, string subtitle, int size = 640, bool forPrint = false)
+    /// <param name="printed">The address printed under the code, when it isn't the one encoded - the club's short one (19 Nov 2026, driver phone plan item 22). Null prints the encoded one.</param>
+    public static Bitmap Render(string url, string heading, string subtitle, int size = 640, bool forPrint = false, string? printed = null)
     {
         size = Math.Clamp(size, 220, 4000);
 
@@ -107,7 +108,7 @@ public static class JoinPosterRenderer
             }
         }
 
-        g.DrawString(string.IsNullOrWhiteSpace(url) ? "-" : url, urlFont, black, urlRect, centred);
+        g.DrawString(string.IsNullOrWhiteSpace(url) ? "-" : string.IsNullOrWhiteSpace(printed) ? url : printed, urlFont, black, urlRect, centred);
         g.DrawString(subtitle, subFont, grey, subRect, centred);
 
         // HeatCaller's mark, small and black, centred in the bottom margin

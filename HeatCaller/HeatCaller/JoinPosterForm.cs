@@ -31,6 +31,7 @@ public sealed class JoinPosterForm : Form
     private const int PosterLeast = 220;
 
     private readonly string _url;
+    private readonly string? _printed;
     private readonly string _heading;
     private readonly string _subtitle;
 
@@ -42,9 +43,11 @@ public sealed class JoinPosterForm : Form
 
     private Bitmap? _poster;
 
-    public JoinPosterForm(string url, string heading, string subtitle)
+    /// <param name="printed">The address printed under the code when it isn't the one encoded; null prints the encoded one.</param>
+    public JoinPosterForm(string url, string heading, string subtitle, string? printed = null)
     {
         _url = url;
+        _printed = printed;
         _heading = heading;
         _subtitle = subtitle;
 
@@ -201,7 +204,7 @@ public sealed class JoinPosterForm : Form
         if (_poster is null || _poster.Width != renderSize)
         {
             DisposePoster();
-            _poster = JoinPosterRenderer.Render(_url, _heading, _subtitle, renderSize);
+            _poster = JoinPosterRenderer.Render(_url, _heading, _subtitle, renderSize, printed: _printed);
         }
 
         e.Graphics.DrawImage(_poster, (room.Width - available) / 2, 0, available, available);
@@ -233,7 +236,7 @@ public sealed class JoinPosterForm : Form
                 var dpi = e.Graphics is { DpiX: > 0f } printerGraphics ? printerGraphics.DpiX : 300f;
                 var pixels = (int)Math.Min(2000f, side * dpi / 100f);
 
-                using var poster = JoinPosterRenderer.Render(_url, _heading, _subtitle, pixels, forPrint: true);
+                using var poster = JoinPosterRenderer.Render(_url, _heading, _subtitle, pixels, forPrint: true, printed: _printed);
 
                 e.Graphics?.DrawImage(
                     poster,

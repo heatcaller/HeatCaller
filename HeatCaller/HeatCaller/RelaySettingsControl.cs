@@ -212,6 +212,33 @@ public sealed partial class RelaySettingsControl : UserControl
     private readonly Button _btnPoster = new();
     private readonly System.Windows.Forms.Timer _tick = new();
 
+    /// <summary>The Status card's line of driver page counts - see RelayPageCounts.</summary>
+    private readonly Label _lblPageCounts = new();
+
+    /// <summary>What the relay said about the short address last asked, or empty.</summary>
+    private readonly Label _lblAliasState = new();
+
+    /// <summary>The home-screen icon as a phone shows it, with the name under it.</summary>
+    private readonly PictureBox _picIconPreview = new();
+
+    /// <summary>The short address last asked about, so a box left unchanged isn't asked again.</summary>
+    private string _aliasAsked = string.Empty;
+
+    /// <summary>What the relay said about it - a taken one is never printed on the poster.</summary>
+    private RelayPublisher.AliasState _aliasState = RelayPublisher.AliasState.Unknown;
+
+    /// <summary>Says when the club's name is cut short under the icon.</summary>
+    private readonly Label _lblIconNameCut = new();
+
+    /// <summary>The club's time zone for its phone pages - see AppSettings.RelayTimeZone.</summary>
+    private readonly ComboBox _cmbTimeZone = new();
+
+    /// <summary>One time zone in the picker: its Windows id (empty for this PC's own) and its name.</summary>
+    private sealed record ZoneChoice(string Id, string Text)
+    {
+        public override string ToString() => Text;
+    }
+
     /// <summary>
     /// Raised when the personal PINs have been changed here - a new set, or
     /// switched on or off - so the check-in list goes to the relay at once
@@ -466,6 +493,7 @@ public sealed partial class RelaySettingsControl : UserControl
         Fit(_txtTagline, address);
         Fit(_txtClubAlias, UiLayout.AtTextSize(ClubWidth));
         Fit(_txtShortName, UiLayout.AtTextSize(ClubWidth));
+        Fit(_cmbTimeZone, address);
         Fit(_txtNewcomerWhere, address);
         Fit(_txtNewcomerWhen, address);
         Fit(_txtNewcomerJoin, address);
@@ -1297,8 +1325,18 @@ public sealed partial class RelaySettingsControl : UserControl
                 _settings.RelayClubAlias = _txtClubAlias.Text.Trim().ToLowerInvariant();
             }
         };
-        _txtClubAlias.Leave += (_, _) => _settings.Save();
+        _txtClubAlias.Leave += async (_, _) =>
+        {
+            _settings.Save();
+            await CheckAliasAsync();
+        };
         tagline.AddRow("Short address:", _txtClubAlias);
+
+        // Whether the relay gives this club that address (19 Nov 2026,
+        // item 5): it used to ignore a taken one without a word.
+        _lblAliasState.Text = string.Empty;
+        _lblAliasState.Visible = false;
+        tagline.AddHint(_lblAliasState);
 
         _txtShortName.MaxLength = 12;
         _txtShortName.PlaceholderText = "Upstate MZ";
@@ -1308,9 +1346,45 @@ public sealed partial class RelaySettingsControl : UserControl
             {
                 _settings.RelayShortName = _txtShortName.Text.Trim();
             }
+
+            RefreshIconPreview();
         };
         _txtShortName.Leave += (_, _) => _settings.Save();
         tagline.AddRow("Name under the icon:", _txtShortName);
+
+        // The icon as a phone's home screen shows it, the name under it cut
+        // where the phone cuts it (19 Nov 2026, item 5): every club's icon is
+        // the same sun, so the name is what tells clubs apart.
+        _picIconPreview.SizeMode = PictureBoxSizeMode.AutoSize;
+        _picIconPreview.AccessibleName = "How the icon looks on a phone";
+        _picIconPreview.Margin = new Padding(0, 0, 0, UiLayout.RowGap);
+        tagline.AddField(_picIconPreview);
+        _lblIconNameCut.Text = string.Empty;
+        _lblIconNameCut.Visible = false;
+        tagline.AddHint(_lblIconNameCut);
+        RefreshIconPreview();
+
+        // THE CLUB'S TIME ZONE (19 Nov 2026, driver phone plan item 15): the
+        // phones show every time in it. This PC's own is right while the
+        // laptop is at the track, and stays the first choice.
+        _cmbTimeZone.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cmbTimeZone.Items.Add(new ZoneChoice(string.Empty, $"This PC's zone ({TimeZoneInfo.Local.DisplayName})"));
+
+        foreach (var zone in TimeZoneInfo.GetSystemTimeZones())
+        {
+            _cmbTimeZone.Items.Add(new ZoneChoice(zone.Id, zone.DisplayName));
+        }
+
+        _cmbTimeZone.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_loading && _cmbTimeZone.SelectedItem is ZoneChoice picked)
+            {
+                _settings.RelayTimeZone = picked.Id;
+                _settings.Save();
+            }
+        };
+        tagline.AddRow("Time zone:", _cmbTimeZone);
+        tagline.AddHint("Times on drivers' phones are shown in this zone, wherever the phone is.");
 
         _linedUp.Add(tagline);
 
@@ -1651,6 +1725,143 @@ public sealed partial class RelaySettingsControl : UserControl
         _settings.Save();
     }
 
+    /// <summary>
+    /// Asks the relay whether the short address in the box is this club's
+    /// (RelayPublisher.CheckAliasAsync), and says so under it - in the
+    /// danger colour when another club has it. Says nothing when the relay
+    /// can't be asked (publishing off, an older relay).
+    /// </summary>
+    private async Task CheckAliasAsync()
+    {
+        var alias = _txtClubAlias.Text.Trim().ToLowerInvariant();
+
+        if (alias.Length == 0)
+        {
+            _aliasAsked = string.Empty;
+            ShowAliasState(string.Empty, danger: false);
+            return;
+        }
+
+        if (alias == _aliasAsked)
+        {
+            return;
+        }
+
+        _aliasAsked = alias;
+        var state = await _publisher.CheckAliasAsync(alias);
+
+        // The box may have changed, or the page gone, while the relay answered.
+        if (IsDisposed || _txtClubAlias.Text.Trim().ToLowerInvariant() != alias)
+        {
+            return;
+        }
+
+        _aliasState = state;
+
+        if (state == RelayPublisher.AliasState.Unknown)
+        {
+            // Asked again next time the box is left.
+            _aliasAsked = string.Empty;
+        }
+
+        ShowAliasState(RelayPublisher.AliasStateText(state, alias),
+            danger: state is RelayPublisher.AliasState.Taken or RelayPublisher.AliasState.Bad);
+    }
+
+    /// <summary>The picker on the saved zone; this PC's own when it is empty or not one this PC has.</summary>
+    private void SelectTimeZone(string id)
+    {
+        var index = 0;
+
+        for (var i = 1; i < _cmbTimeZone.Items.Count; i++)
+        {
+            if (_cmbTimeZone.Items[i] is ZoneChoice z && string.Equals(z.Id, id, StringComparison.OrdinalIgnoreCase))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if (_cmbTimeZone.Items.Count > 0 && _cmbTimeZone.SelectedIndex != index)
+        {
+            _cmbTimeZone.SelectedIndex = index;
+        }
+    }
+
+    private void ShowAliasState(string text, bool danger)
+    {
+        _lblAliasState.Text = text;
+        _lblAliasState.ForeColor = danger ? AppTheme.Danger : AppTheme.TextMuted;
+        _lblAliasState.Visible = text.Length > 0;
+    }
+
+    /// <summary>The name a phone puts under the icon: the one typed, or the club's own cut to 12 as the relay cuts it.</summary>
+    internal static (string Shown, bool Cut) NameUnderIcon(string typed, string clubName)
+    {
+        var name = (typed ?? string.Empty).Trim();
+
+        if (name.Length > 0)
+        {
+            return (name.Length > 12 ? name[..12].Trim() : name, name.Length > 12);
+        }
+
+        var club = (clubName ?? string.Empty).Trim();
+        return club.Length > 12 ? (club[..12].Trim(), true) : (club, false);
+    }
+
+    /// <summary>Redraws the icon preview for the name in the box, and says when the club's name is cut short.</summary>
+    private void RefreshIconPreview()
+    {
+        var club = PinMailer.ClubName(_settings);
+        var (shown, cut) = NameUnderIcon(_txtShortName.Text, club);
+
+        var old = _picIconPreview.Image;
+        _picIconPreview.Image = DrawIconPreview(shown, _txtShortName.Font);
+        old?.Dispose();
+
+        _lblIconNameCut.Text = cut && _txtShortName.Text.Trim().Length == 0
+            ? $"Phones cut \"{club}\" to \"{shown}\". Type a name of 12 letters or fewer to choose what they show."
+            : string.Empty;
+        _lblIconNameCut.Visible = _lblIconNameCut.Text.Length > 0;
+    }
+
+    /// <summary>HeatCaller's sun at a phone's icon size, with the name centred under it.</summary>
+    private static Bitmap DrawIconPreview(string name, Font font)
+    {
+        var icon = UiLayout.AtTextSize(56);
+        var width = UiLayout.AtTextSize(96);
+        var line = TextRenderer.MeasureText("Ag", font).Height;
+        var bitmap = new Bitmap(width, icon + 6 + line);
+
+        using var g = Graphics.FromImage(bitmap);
+        g.Clear(AppTheme.Surface);
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+
+        var left = (width - icon) / 2;
+
+        if (AppIcon.Window is { } appIcon)
+        {
+            using var sized = new Icon(appIcon, new Size(256, 256));
+            using var picture = sized.ToBitmap();
+            using var round = new System.Drawing.Drawing2D.GraphicsPath();
+            var r = icon / 4;
+            round.AddArc(left, 0, r * 2, r * 2, 180, 90);
+            round.AddArc(left + icon - r * 2, 0, r * 2, r * 2, 270, 90);
+            round.AddArc(left + icon - r * 2, icon - r * 2, r * 2, r * 2, 0, 90);
+            round.AddArc(left, icon - r * 2, r * 2, r * 2, 90, 90);
+            round.CloseFigure();
+            g.SetClip(round);
+            g.DrawImage(picture, new Rectangle(left, 0, icon, icon));
+            g.ResetClip();
+        }
+
+        TextRenderer.DrawText(g, name.Length == 0 ? " " : name, font, new Rectangle(0, icon + 6, width, line), AppTheme.TextDark,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+
+        return bitmap;
+    }
+
     /// <summary>Shows the first link that still can't be used, or nothing.</summary>
     private void RefreshSocialProblem()
     {
@@ -1663,6 +1874,17 @@ public sealed partial class RelaySettingsControl : UserControl
                 _lblSocialProblem.Visible = true;
                 return;
             }
+        }
+
+        // The wrong service's address, or one address in two boxes (19 Nov
+        // 2026, driver phone plan item 23) - RelaySocial.SetProblem.
+        var typed = _socialBoxes.ToDictionary(pair => pair.Key, pair => pair.Value.Text);
+
+        if (RelaySocial.SetProblem(typed) is { } setProblem)
+        {
+            _lblSocialProblem.Text = setProblem;
+            _lblSocialProblem.Visible = true;
+            return;
         }
 
         _lblSocialProblem.Text = string.Empty;
@@ -3084,14 +3306,37 @@ public sealed partial class RelaySettingsControl : UserControl
             return;
         }
 
+        // FROM THE POSTER (19 Nov 2026, driver phone plan item 22): the code
+        // opens Home with ?from=poster, so the club's counts say how many
+        // came that way and the page greets them; the address printed under
+        // it is the short one when the club has one, for typing.
+        var (qr, printed) = PosterAddresses(url, RelayPublisher.NormaliseBaseUrl(_settings.RelayBaseUrl),
+            _aliasState is RelayPublisher.AliasState.Taken or RelayPublisher.AliasState.Bad ? string.Empty : _settings.RelayClubAlias);
+
         // Non-modal, like the Wi-Fi posters: it is meant to sit open on a
         // second screen while the meeting carries on behind it.
         var poster = new JoinPosterForm(
-            url,
+            qr,
             "FOLLOW THE RACING",
-            "Scan with your phone camera. Live timing, schedule and results - and your own races under Me.");
+            "Scan with your phone camera. Live timing, schedule and results - and your own races under Me.",
+            printed);
 
         poster.Show(this);
+    }
+
+    /// <summary>
+    /// The club poster's two addresses: the one its code opens (the club's
+    /// page with ?from=poster) and the one printed under it (the short
+    /// address when the club has one, else the page itself).
+    /// </summary>
+    internal static (string Qr, string Printed) PosterAddresses(string clubPage, string root, string alias)
+    {
+        var shortAlias = (alias ?? string.Empty).Trim().ToLowerInvariant();
+        var printed = root.Length > 0 && System.Text.RegularExpressions.Regex.IsMatch(shortAlias, "^[a-z0-9]+(-[a-z0-9]+)*$") && shortAlias.Length is >= 3 and <= 32
+            ? $"{root}/c/{shortAlias}"
+            : clubPage;
+
+        return (clubPage + "?from=poster", printed);
     }
 
     /// <summary>
@@ -3124,6 +3369,16 @@ public sealed partial class RelaySettingsControl : UserControl
         card.Add(HintLabel("Whether what this laptop publishes is reaching the relay, and the one way to take it all back down."));
         card.Add(_lblStatus, gapBelow: UiLayout.HintGap);
         card.Add(_lblDetail);
+
+        // How drivers use the pages (19 Nov 2026, driver phone plan item
+        // 20): the relay's anonymous counts for the last seven days, read
+        // with the token (RelayPublisher.PageCounts). Hidden until read.
+        _lblPageCounts.ForeColor = AppTheme.TextMuted;
+        _lblPageCounts.AutoSize = true;
+        _textSize.Wear(_lblPageCounts, () => AppTheme.SmallFont);
+        _lblPageCounts.Visible = false;
+        card.Add(_lblPageCounts);
+
         card.Add(new ButtonBar().With(_btnDelete), gapBelow: UiLayout.HintGap);
         card.Add(lblDeleteHint, gapBelow: 0);
 
@@ -3161,6 +3416,7 @@ public sealed partial class RelaySettingsControl : UserControl
             _txtTagline.Text = _settings.RelayTagline;
             _txtClubAlias.Text = _settings.RelayClubAlias;
             _txtShortName.Text = _settings.RelayShortName;
+            SelectTimeZone(_settings.RelayTimeZone);
             _txtNewcomerWhere.Text = _settings.RelayNewcomerWhere;
             _txtNewcomerWhen.Text = _settings.RelayNewcomerWhen;
             _txtNewcomerJoin.Text = _settings.RelayNewcomerJoin;
@@ -3562,6 +3818,18 @@ public sealed partial class RelaySettingsControl : UserControl
         var status = _publisher.Status;
 
         ShowTiles(status);
+
+        var counts = status.Enabled ? RelayPageCounts.Describe(_publisher.PageCounts) : null;
+
+        if (_lblPageCounts.Text != (counts ?? string.Empty))
+        {
+            _lblPageCounts.Text = counts ?? string.Empty;
+        }
+
+        if (_lblPageCounts.Visible != (counts is not null))
+        {
+            _lblPageCounts.Visible = counts is not null;
+        }
 
         // Before "Not configured", which is what the publisher reports while
         // it holds back - and which would send somebody looking for a

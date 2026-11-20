@@ -97,6 +97,8 @@ export const OWE_CSS = `
 `;
 
 export const ME_CSS = `
+/* The card an alert opened, lit up for a moment (item 9). */
+.me-flash { outline: 3px solid var(--primary); outline-offset: 3px; border-radius: 16px; }
 .me-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 0.82rem;
   font-weight: 600; white-space: nowrap; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; }
 .me-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
@@ -1114,13 +1116,56 @@ function meAskCheckIn() {
   }
   meOpenSheet('Are you at the track?', (body) => {
     body.appendChild(el('p', 'note', question + ' Checking in tells the timing desk you’re here, so you’re put in the heats.'));
+    // ALSO CHECK IN AL? (19 Nov 2026, driver phone plan item 8 step 6): the
+    // other drivers on this phone who are on tonight's list and not in yet,
+    // a tick each, filled in as the relay answers. Unticked to start.
+    const also = el('div', 'akinds me-also');
+    also.setAttribute('role', 'group');
+    also.setAttribute('aria-label', 'Check in others on this phone');
+    body.appendChild(also);
+    meAlsoChoices(also);
     body.appendChild(tapButton('Yes, check me in', 'go', () => {
+      const ticked = (typeof also.querySelectorAll === 'function' ? Array.from(also.querySelectorAll('input[data-code]')) : []).filter((t) => t.checked)
+        .map((t) => ({ c: t.getAttribute('data-code'), n: t.getAttribute('data-name') || '' }));
       meCloseSheet();
       if (typeof hcCount === 'function') hcCount('checkin_tapped');
       tapCheckIn();
+      if (ticked.length > 0) void meAlsoCheckIn(ticked);
     }));
     body.appendChild(tapButton('Not yet', 'go quiet', meCloseSheet));
   }, true);
+}
+
+// The others on this phone who could be checked in with them: on tonight's
+// list (checkin/one answers them) and not in yet.
+async function meAlsoChoices(box) {
+  const others = typeof meDrivers === 'function' ? meDrivers().filter((d) => d.c !== CODE) : [];
+  for (const d of others) {
+    let a = null;
+    try { a = await post('/checkin/one', { id: d.c }); } catch (e) { a = null; }
+    if (!a || a.status !== 200 || !a.body || !a.body.driver || a.body.driver.checkedIn === true) continue;
+    const name = d.n ? meFirstName(d.n) : 'another driver';
+    const label = el('label', 'chk');
+    const tick = document.createElement('input');
+    tick.type = 'checkbox';
+    tick.setAttribute('data-code', d.c);
+    tick.setAttribute('data-name', name);
+    label.appendChild(tick);
+    label.appendChild(el('span', '', 'Also check in ' + name + '?'));
+    box.appendChild(label);
+  }
+}
+
+// Checks the ticked others in. One with a personal PIN needs it, which only
+// their own page can ask for: said so, rather than asked here.
+async function meAlsoCheckIn(list) {
+  for (const d of list) {
+    let a = null;
+    try { a = await post('/checkin/tap', { id: d.c, wanted: true }); } catch (e) { a = null; }
+    if (a && a.status === 200 && a.body && a.body.checkedIn === true) toast(d.n + ' is checked in too');
+    else if (a && a.status === 403) toast(d.n + ' needs their own PIN - switch to them on Signed in to check in');
+    else toast(d.n + " wasn't checked in - try from their page");
+  }
 }
 
 // The first space says "Tonight" only when the night is tonight (14 Nov
@@ -1437,13 +1482,17 @@ function meOpenSheet(title, fill, noDone) {
   fill(body);
   if (!noDone) body.appendChild(tapButton('Done', 'go quiet x', meCloseSheet));
   sheet.hidden = false;
+  // Back closes the sheet, not Me (19 Nov 2026, driver phone plan item 18).
+  if (typeof hcSheetOpened === 'function') hcSheetOpened(meCloseSheet);
   const first = body.querySelector('button');
   if (first) first.focus();
 }
 
 function meCloseSheet() {
   const sheet = document.getElementById('me-sheet');
+  const was = sheet && !sheet.hidden;
   if (sheet) sheet.hidden = true;
+  if (was && typeof hcSheetClosed === 'function') hcSheetClosed();
   if (meSheetFrom && meSheetFrom.focus) meSheetFrom.focus();
 }
 
@@ -1617,6 +1666,27 @@ function meRefresh() {
   // on every refresh so asksOpen and the answer stay in step.
   meReadNextNight();
   meComingCard();
+  meGoToAlert();
+}
+
+// AN ALERT OPENS ITS OWN CARD (19 Nov 2026, driver phone plan item 9 step
+// 2): a race alert (&go=race) brings the moment card into view - it says
+// the race, its grid slot and when - and a marshal alert (&go=duty) the
+// duty line on the Alerts card, each lit up for a moment. Tried as the page
+// fills, given up after 15 seconds.
+let meGoAlert = '';
+let meGoAlertUntil = 0;
+function meGoToAlert() {
+  if (meGoAlert === '' || Date.now() > meGoAlertUntil) { meGoAlert = ''; return; }
+  const target = meGoAlert === 'duty' ? document.querySelector('.lc-duty') : document.querySelector('.me-hero');
+  if (!target) return;
+  meGoAlert = '';
+  if (meSpace !== 'tonight') meSetSpace('tonight', 'r');
+  try { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* stays where it is */ }
+  if (target.classList) {
+    target.classList.add('me-flash');
+    setTimeout(() => target.classList.remove('me-flash'), 2400);
+  }
 }
 
 let meQueued = false;
@@ -1647,6 +1717,9 @@ function meStart() {
   try { kept = localStorage.getItem(ME_SPACE_KEY) || ''; } catch (e) { /* none kept */ }
   meSetSpace(asked ? asked[1] : kept || 'tonight');
   meGoComing = /[#&]go=coming/.test(location.hash || '');
+  meGoAlert = (/[#&]go=(race|duty)(&|$)/.exec(location.hash || '') || [])[1] || '';
+  meGoAlertUntil = Date.now() + 15000;
+  if (meGoAlert !== '') meSetSpace('tonight');
 
   // The byline beside their name (7 Nov 2026, Asher: "drop the byline on
   // me tab to the match the height of the driver name keeping a little

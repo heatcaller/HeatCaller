@@ -271,8 +271,11 @@ describe("driver sign-up", () => {
     const script = /<script[^>]*>([\s\S]*)<\/script>/.exec(page.text)?.[1] ?? "";
     assert.doesNotThrow(() => new Script(script));
 
+    // Home links sign-up only from its Racing tonight? card, drawn on the
+    // phone while the club takes sign-ups (19 Nov 2026, driver phone plan
+    // item 22) - never as a link in the page itself.
     const home = await call(harness, "GET", "/c/acme-rc");
-    assert.equal(home.text.includes("/signup"), false);
+    assert.equal(home.text.includes('href="/c/acme-rc/signup"'), false);
   });
 
   it("forgets every sign-up when the club deletes what it published", async () => {
