@@ -2179,9 +2179,17 @@ function hcIsTonight(dayOrTime) {
 // running order (it sends it while it is open with the day current), or a
 // race in it started tonight. A week-old day nobody has opened since has
 // none of them.
+// A send today only counts for a day made in the last four days (20 Nov
+// 2026): a laptop left open on last week's day sends it again every evening,
+// and Home said "Race Day 13 Nov 2026 is on today" on the 20th. Four days
+// still covers a weekend, or a three-day meeting, before its first race.
 function hcDayIsTonight(doc, publishedAt) {
+  const HC_DAY_KEPT_MS = 4 * 24 * 3600 * 1000;
   const ev = doc && doc.event ? doc.event : {};
-  const seen = [ev.startedUtc, publishedAt];
+  const made = typeof ev.startedUtc === 'string' ? new Date(ev.startedUtc).getTime() : NaN;
+  const sent = typeof publishedAt === 'string' ? new Date(publishedAt).getTime() : NaN;
+  const sendCounts = !(made > 0) || !(sent > 0) || sent - made <= HC_DAY_KEPT_MS;
+  const seen = [ev.startedUtc, sendCounts ? publishedAt : ''];
   for (const l of (doc && Array.isArray(doc.lines) ? doc.lines : [])) seen.push(l && l.startedUtc);
   return seen.some((t) => typeof t === 'string' && t !== '' && hcIsTonight(t));
 }
