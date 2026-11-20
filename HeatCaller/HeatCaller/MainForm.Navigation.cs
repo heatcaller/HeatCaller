@@ -647,6 +647,10 @@ public partial class MainForm
             return;
         }
 
+        // For the usage count below: every keystroke in the search box
+        // shows the page again, and that is not a page opened.
+        var shownBefore = _shownPage;
+
         // The whole swap happens with the content area's painting off.
         //
         // Every page is a Dock=Fill child of the same panel, stacked in
@@ -748,7 +752,7 @@ public partial class MainForm
             // a page opening.
             try
             {
-                if (txtNavSearch.Text.Length > 0)
+                if (txtNavSearch.Text.Length > 0 && !string.Equals(name, shownBefore, StringComparison.Ordinal))
                 {
                     _usageTracker.Count("nav_search_used");
                 }
