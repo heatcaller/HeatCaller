@@ -312,6 +312,9 @@ public sealed partial class RaceControlControl
             Marshals = MarshalsFor(next),
             NotCheckedIn = notIn,
             TwoOutRound = twoOut?.RoundLabel ?? string.Empty,
+            // "Stock and Mod" for a heat two classes share (bug hunt 23):
+            // its first class alone left the other's drivers out of the call.
+            TwoOutClassName = GapWords.SpokenClassOf(twoOut),
             TwoOutId = twoOut?.Id,
             Track = _events?.Current is { } day
                 ? (day.TrackLayoutName.Trim().Length > 0 ? day.TrackLayoutName : day.VenueName).Trim()
@@ -468,8 +471,8 @@ public sealed partial class RaceControlControl
                 }
 
                 Gap.SaidTwoOut(twoOut, now);
-                SayGapLine(GapWords.TwoOut(facts.TwoOutRound), "Two races out");
-                return $"Called {facts.TwoOutRound} - two races out.";
+                SayGapLine(GapWords.TwoOut(facts.TwoOutRound, facts.TwoOutClassName), "Two races out");
+                return $"Called {GapWords.Race(facts.TwoOutRound, facts.TwoOutClassName)} - two races out.";
 
             case CallUpChoice.MarshalsOnly:
                 if (!facts.HasNext || facts.Marshals.Count == 0)

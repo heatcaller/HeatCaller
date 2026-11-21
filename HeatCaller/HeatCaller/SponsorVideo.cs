@@ -337,6 +337,22 @@ internal sealed class SponsorVideoSurface : IDisposable
     /// <summary>Why it can't, or null when it can.</summary>
     internal string? Problem => _problem;
 
+    /// <summary>Whether a video is playing now - the preview asks, to try once more when the first start didn't take. UI thread only.</summary>
+    internal bool IsPlaying
+    {
+        get
+        {
+            try
+            {
+                return _player is not null && !_disposed && _player.IsPlaying;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
     /// <summary>
     /// The video reached its end, or failed part way through. Raised on a
     /// LibVLC thread - a handler that touches a form must marshal.

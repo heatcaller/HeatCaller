@@ -93,6 +93,7 @@ public sealed class TodayControl : UserControl
     internal const string ConnectTimerCaption = "Connect Timer";
     internal const string OpenDemoModeCaption = "Open Demo Mode";
     internal const string TimerDownWords = "Timer not connected. Laps won't be counted.";
+    internal const string TimerDownShortWords = "Timer not connected.";
     internal const string DemoLapsOnlyWords = "Demo laps only - connect the timer for real cars.";
     internal const string DemoNotFiledWords = "Demos don't move the night on: tick \"Let a demo fill in the race program\" on Demo Mode.";
 
@@ -108,7 +109,11 @@ public sealed class TodayControl : UserControl
     {
         if (demoOfThisRaceNotFiled)
         {
-            return (DemoNotFiledWords, OpenDemoModeCaption, true);
+            // The timer said first when it is down too (21 Nov 2026, bug
+            // hunt 23): a heat demoed as a sound check kept this strip all
+            // night, and the real race then had no word that its laps
+            // would not be counted.
+            return (timerDown ? TimerDownShortWords + " " + DemoNotFiledWords : DemoNotFiledWords, OpenDemoModeCaption, true);
         }
 
         if (!timerDown)
@@ -164,8 +169,11 @@ public sealed class TodayControl : UserControl
     /// <summary>The fixes on offer, as last read from the plan.</summary>
     private IReadOnlyList<RunSheet.Choice> _choices = Array.Empty<RunSheet.Choice>();
 
-    /// <summary>What the last Apply changed, for "Tell the drivers".</summary>
+    /// <summary>What the last Apply changed, for "Tell the drivers". Cleared once told.</summary>
     private string _lastAnnouncement = string.Empty;
+
+    /// <summary>The race day _lastAnnouncement belongs to, so another day's change is never told.</summary>
+    private string? _lastAnnouncementDayId;
 
     /// <summary>Set while RefreshAll runs, so the sheet's own refresh (SheetRebuilt) doesn't start a second one inside it.</summary>
     private bool _refreshing;
@@ -276,7 +284,9 @@ public sealed class TodayControl : UserControl
         _btnTell.Click += (_, _) =>
         {
             _program.Announce(_lastAnnouncement);
-            _btnTell.Enabled = false;
+            _lastAnnouncement = string.Empty;
+            RefreshFixes();
+            FitParts();
         };
 
         _fixesCard.Add(_fixList);
@@ -613,7 +623,21 @@ public sealed class TodayControl : UserControl
             : "Also: " + string.Join("; ", advice.Select(c => $"{char.ToLowerInvariant(c.Label[0])}{c.Label[1..]} ({c.SavesWords})")) + ".";
         _lblAdvice.Visible = advice.Count > 0;
 
-        _fixesCard.Visible = choices.Count > 0;
+        // A change from another race day is never told to tonight's room.
+        if (_lastAnnouncement.Length > 0 && !string.Equals(_lastAnnouncementDayId, _program.ActiveDayId, StringComparison.Ordinal))
+        {
+            _lastAnnouncement = string.Empty;
+        }
+
+        // The card stays while a change is waiting to be told (20 Nov 2026).
+        //
+        // WHY: a fix that brings the night back on time leaves no fixes on
+        // offer, and the card used to hide with them - taking Tell the
+        // Drivers with it, at the very moment there was something to tell.
+        // Now it stays with just that button until it's pressed (or the
+        // night needs fixing again, when the fixes come back above it).
+        _fixesCard.Visible = choices.Count > 0 || _lastAnnouncement.Length > 0;
+        _btnApply.Visible = choices.Any(c => c.CanTick);
         RefreshFixButtons();
     }
 
@@ -671,6 +695,7 @@ public sealed class TodayControl : UserControl
         }
 
         _lastAnnouncement = announcement;
+        _lastAnnouncementDayId = _program.ActiveDayId;
         _choices = Array.Empty<RunSheet.Choice>();
         RefreshAll();
         _card.ShowNote(message);

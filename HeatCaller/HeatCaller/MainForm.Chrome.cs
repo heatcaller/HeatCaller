@@ -259,6 +259,9 @@ public partial class MainForm
             _raceControlControl.ShowNavNarrowed(iconsOnly);
         }
 
+        // And Practice's Expand, likewise.
+        _practiceControl?.ShowNavNarrowed(iconsOnly);
+
         // Painting is held off for the whole change and the window drawn once
         // at the end, so the sidebar goes from one width to the other in a
         // single frame - without it the sidebar, the header, the footer and

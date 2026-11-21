@@ -40,7 +40,20 @@ public sealed class NextStepsDemoStripTests
         Assert.True(strip.Value.OpensDemoMode);
 
         // Said with the timer connected too: it is about the program, not the timer.
-        Assert.Equal(strip, TodayControl.BlockerFor(timerDown: false, demoFillsTheProgram: false, demoOfThisRaceNotFiled: true));
+        var connected = TodayControl.BlockerFor(timerDown: false, demoFillsTheProgram: false, demoOfThisRaceNotFiled: true);
+        Assert.Equal((TodayControl.DemoNotFiledWords, TodayControl.OpenDemoModeCaption, true), connected);
+    }
+
+    [Fact]
+    public void A_demo_that_was_not_filed_never_hides_that_the_timer_is_not_connected()
+    {
+        // Bug hunt 23: a heat demoed as a sound check kept the demo's strip, and the
+        // real race had no word that the timer was down.
+        var strip = TodayControl.BlockerFor(timerDown: true, demoFillsTheProgram: false, demoOfThisRaceNotFiled: true);
+
+        Assert.StartsWith("Timer not connected.", strip!.Value.Text);
+        Assert.DoesNotContain("Timer not connected",
+            TodayControl.BlockerFor(timerDown: false, demoFillsTheProgram: false, demoOfThisRaceNotFiled: true)!.Value.Text);
     }
 
     [Fact]

@@ -645,6 +645,13 @@ public sealed class AppSettings
     public bool RaceControlSideFolded { get; set; }
 
     /// <summary>
+    /// Practice expanded (21 Nov 2026): the Setup and Ghost cars cards and
+    /// everything under the clock folded away, so the session table takes
+    /// the page. Off by default: everything shown, as it always was.
+    /// </summary>
+    public bool PracticeExpanded { get; set; }
+
+    /// <summary>
     /// Race Control's "Warm-up first" switch (14 Nov 2026): every start opens
     /// the warm-up flag first - free laps, then Stage, then the countdown -
     /// for the format's warm-up, or two minutes when it has none. Off by

@@ -383,9 +383,17 @@ internal static class ProgramNextStep
         //     that main had run - their B-Mains then queued behind it. The
         //     rule in 7 (never jump ahead of another class's heats) still
         //     holds: this only fires once no qualifier is left to run.
+        //     And only until the first final has run (21 Nov 2026, bug hunt
+        //     23): a class that can't be seeded (its heat recorded with no
+        //     results) or that isn't getting finals tonight held this step
+        //     for the rest of the night - Start Next was the seed button,
+        //     Auto start stayed closed and the card lost Start, Call and
+        //     Skip for every main. A final started from the program says
+        //     the director has gone on, and the class is offered again at 7.
         if (next is { Kind: RoundKind.Main }
             && !clubNight
             && !dayRounds.Any(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
+            && !dayRounds.Any(r => r.Kind == RoundKind.Main && r.IsRecorded)
             && ClassToSeed(classes, dayRounds) is { } waiting)
         {
             return waiting;
