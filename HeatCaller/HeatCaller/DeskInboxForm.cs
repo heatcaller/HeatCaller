@@ -1377,12 +1377,73 @@ internal sealed partial class DeskInboxForm : Form
     private bool _sheetOpen;
     private readonly LinkLabel _lnkSheet = new() { Text = "Details", AutoSize = true };
 
+    /// <summary>
+    /// Details and Back to the list, with painting held until the inbox is
+    /// laid out the new way. Unheld, for a frame the middle had the new
+    /// shape with the old parts in it - the list's place with the sheet's
+    /// answers still showing - and both the picked item and the whole page
+    /// overflowed: Windows drew its own white bars down each, there before
+    /// the themed bars' 150ms sync covered them (21 Nov 2026, Asher's
+    /// recording). The parts are shown or hidden first, then the middle
+    /// rearranged, then - after FitToWidth's queued layout - the themed bars
+    /// brought up to date and the whole thing drawn once.
+    /// </summary>
     private void ToggleSheet()
     {
-        _sheetOpen = !_sheetOpen && _body is { Wide: false };
-        _body.SheetOpen = _sheetOpen;
-        FitToWidth(_body.Wide);
+        var held = IsHandleCreated && Visible;
+
+        if (held)
+        {
+            SendMessage(Handle, WmSetRedraw, IntPtr.Zero, IntPtr.Zero);
+        }
+
+        try
+        {
+            _sheetOpen = !_sheetOpen && _body is { Wide: false };
+            FitToWidth(_body.Wide);
+            _body.SheetOpen = _sheetOpen;
+
+            // Settled here and now - a click is not inside a layout, so
+            // nothing drops these, as FitToWidth has to allow for.
+            _detail.PerformLayout();
+            _page.PerformLayout();
+        }
+        finally
+        {
+            if (held)
+            {
+                // Queued behind FitToWidth's own layout, so it runs after it.
+                BeginInvoke(() =>
+                {
+                    if (IsDisposed)
+                    {
+                        return;
+                    }
+
+                    _page.PerformLayout();
+                    ThinScrollBar.SyncNow();
+                    SendMessage(Handle, WmSetRedraw, 1, IntPtr.Zero);
+
+                    // Frames too: a scrollbar is drawn in its window's frame.
+                    RedrawWindow(Handle, IntPtr.Zero, IntPtr.Zero, RdwInvalidate | RdwErase | RdwFrame | RdwAllChildren | RdwUpdateNow);
+                });
+            }
+        }
     }
+
+    private const int WmSetRedraw = 0x000B;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    private const uint RdwInvalidate = 0x0001;
+    private const uint RdwErase = 0x0004;
+    private const uint RdwAllChildren = 0x0080;
+    private const uint RdwUpdateNow = 0x0100;
+    private const uint RdwFrame = 0x0400;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool RedrawWindow(IntPtr hWnd, IntPtr update, IntPtr region, uint flags);
 
     /// <summary>
     /// What the driver's phone will say to the main answer, and what a
