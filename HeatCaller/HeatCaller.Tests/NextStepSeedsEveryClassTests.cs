@@ -66,4 +66,32 @@ public sealed class NextStepSeedsEveryClassTests : IDisposable
         Assert.Equal(ProgramStage.RunNext, step.Stage);
         Assert.Equal("Mod", step.Round!.ClassName);
     }
+
+    [Fact]
+    public void Once_a_final_has_run_a_class_with_no_finals_no_longer_holds_the_next_final()
+    {
+        // Bug hunt 23: Stock can't be seeded (or isn't getting finals tonight). The director
+        // started Mod's B-Main from the program; the A-Main is next, not Stock's seeding again.
+        var bMain = Main("Mod");
+        bMain.RoundLabel = "B-Main";
+        bMain.MainTier = 1;
+        bMain.LinkedSessionId = Guid.NewGuid().ToString("N");
+
+        var step = Step(Heat("Mod", "Q1 Heat 1", run: true), Heat("Stock", "Q1 Heat 1", run: true), bMain, Main("Mod"));
+
+        Assert.Equal(ProgramStage.RunNext, step.Stage);
+        Assert.Equal("A-Main", step.Round!.RoundLabel);
+    }
+
+    [Fact]
+    public void With_every_final_run_the_class_with_none_is_offered_again()
+    {
+        var aMain = Main("Mod");
+        aMain.LinkedSessionId = Guid.NewGuid().ToString("N");
+
+        var step = Step(Heat("Mod", "Q1 Heat 1", run: true), Heat("Stock", "Q1 Heat 1", run: true), aMain);
+
+        Assert.Equal(ProgramStage.SeedMains, step.Stage);
+        Assert.Equal("Stock", step.ClassName);
+    }
 }

@@ -195,9 +195,19 @@ export function nightsFeedWith(was: unknown, next: unknown, now: Date): { nights
   // `until` passing, tonight counted as "still to come" all evening, and
   // announcing next week's night after racing (or taking the card down)
   // deleted tonight from every subscribed calendar.
+  //
+  // With a first race time, the night has begun when its first race is due,
+  // not at 06:00 (21 Nov 2026, bug hunt 23): a night moved on the day
+  // itself - rained off at three, on tomorrow instead - had "begun" that
+  // morning, so it stayed in every calendar beside its new date.
   const begun = (n: FeedNight) => {
     if (typeof n["until"] === "string" && n["until"] !== "") {
-      return Date.parse(n["until"] as string) - 24 * 3600 * 1000 <= nowMs;
+      const dayStart = Date.parse(n["until"] as string) - 24 * 3600 * 1000;
+      const clock = typeof n["firstRace"] === "string" ? /^(\d{1,2}):(\d{2})$/.exec(n["firstRace"] as string) : null;
+      if (clock === null) return dayStart <= nowMs;
+      // Minutes after the 06:00 rollover; a first race before 06:00 is after midnight.
+      const minutes = (((Number(clock[1]) * 60 + Number(clock[2]) - 360) % 1440) + 1440) % 1440;
+      return dayStart + minutes * 60 * 1000 <= nowMs;
     }
     return (n["day"] as string) <= now.toISOString().slice(0, 10);
   };
