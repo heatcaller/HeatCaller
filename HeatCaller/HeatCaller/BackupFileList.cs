@@ -27,6 +27,9 @@ internal sealed class BackupFileList : ListBox
         // The picked row draws its own outline - see LayoutList.
         InputOutline.Exclude(this);
         Remeasure();
+
+        // The wheel scrolls the page past the list until it's clicked into.
+        WheelPassThrough.Attach(this);
     }
 
     /// <summary>What a row shows, asked of the item at paint time.</summary>

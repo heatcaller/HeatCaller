@@ -523,6 +523,7 @@ internal static class SettingsTable
             nameof(AppSettings.FontScale),
             nameof(AppSettings.NavIconsOnly),
             nameof(AppSettings.RaceControlSideFolded),
+            nameof(AppSettings.PracticeExpanded),
             nameof(AppSettings.AnnouncerMuted),
             nameof(AppSettings.LastTrackLayoutName),
             nameof(AppSettings.LastActiveRoundId),

@@ -402,6 +402,13 @@ internal sealed record GapFacts
     /// <summary>The race after the next one, "Heat 4", or empty.</summary>
     public string TwoOutRound { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The race after next's class, "Mod", or empty. Said with the round
+    /// (21 Nov 2026): "Q1 Heat 1 drivers" alone, straight after another
+    /// class's Q1 Heat 1 has run, sounds like the race that just finished.
+    /// </summary>
+    public string TwoOutClassName { get; init; } = string.Empty;
+
     /// <summary>The race after the next one's id.</summary>
     public string? TwoOutId { get; init; }
 
@@ -1216,8 +1223,15 @@ internal static class GapWords
         return (Pick(repeat ? "repeat" : "first", bag) ?? bag[0]).Replace("{race}", Race(facts.Round, facts.ClassName), StringComparison.Ordinal);
     }
 
-    /// <summary>"Heat 4 drivers, you're two races away. Get your cars ready."</summary>
-    public static string TwoOut(string round) => $"{round.Trim()} drivers, you're two races away. Get your cars ready.";
+    /// <summary>A round's class as the announcer says it - "Stock and Mod" for a shared heat - or empty with no round or class.</summary>
+    internal static string SpokenClassOf(RoundDefinition? round) =>
+        round is null ? string.Empty : (MixedHeats.SpokenClasses(round) ?? string.Empty).Trim();
+
+    /// <summary>"Box Stock, Heat 4 drivers, you're two races away. Get your cars ready." - "Heat 4 drivers, ..." with no class.</summary>
+    public static string TwoOut(string round, string className = "") =>
+        string.IsNullOrWhiteSpace(className)
+            ? $"{round.Trim()} drivers, you're two races away. Get your cars ready."
+            : $"{className.Trim()}, {round.Trim()} drivers, you're two races away. Get your cars ready.";
 
     /// <summary>"Marshals for Heat 3: Sam on Turn 1, Bill on Turn 2." - or the names alone when the posts have none.</summary>
     public static string Marshals(GapFacts facts, GapRules rules, DateTime nowUtc)
@@ -1440,6 +1454,7 @@ internal static class GapPreview
         Marshals = new[] { ("Jo", "Turn 1"), ("Chris", "Turn 2"), ("Pat", "the hairpin") },
         NotCheckedIn = new[] { "Frank" },
         TwoOutRound = "Heat 4",
+        TwoOutClassName = "Box Stock",
         TwoOutId = "sample-two-out",
         Track = "the club track",
         DueUtc = startUtc + untilDue,
@@ -1560,7 +1575,7 @@ internal static class GapPreview
         GapLine.CallUp => GapWords.CallUp(facts, rules, repeat: state.CallUps > 0, nowUtc),
         GapLine.Marshals => GapWords.Marshals(facts, rules, nowUtc),
         GapLine.NotCheckedIn => GapWords.NotCheckedIn(facts),
-        GapLine.TwoOut => GapWords.TwoOut(facts.TwoOutRound),
+        GapLine.TwoOut => GapWords.TwoOut(facts.TwoOutRound, facts.TwoOutClassName),
         GapLine.Notice => GapWords.Notice(facts, rules, nowUtc),
         GapLine.LongBreak => GapWords.LongBreak(facts, nowUtc),
         _ => string.Empty,

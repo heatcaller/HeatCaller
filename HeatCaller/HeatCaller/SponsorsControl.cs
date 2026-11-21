@@ -1084,6 +1084,16 @@ public sealed class SponsorsControl : UserControl
                                  + "\n\nDouble-click, or press Preview Video, to watch it here.";
             _lblVideoNote.Visible = true;
             _btnPreviewVideo.Enabled = true;
+
+            // The player warmed now, in the background (21 Nov 2026), so
+            // the first Preview Video plays at once rather than loading the
+            // engine itself - which on the first press of the night left the
+            // preview not playing until it was closed and opened again.
+            if (SponsorVideoEngine.NativesPresent && !SponsorVideoEngine.Settled)
+            {
+                SponsorVideoEngine.WarmUp();
+            }
+
             return;
         }
 

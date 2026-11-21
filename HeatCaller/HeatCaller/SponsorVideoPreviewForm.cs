@@ -30,6 +30,16 @@ internal sealed class SponsorVideoPreviewForm : Form
     private readonly Button _btnReplay = new();
     private readonly Button _btnClose = new();
     private readonly System.Windows.Forms.Timer _waitForEngine = new() { Interval = 250 };
+
+    /// <summary>
+    /// A few seconds after a start, checks the video really is playing, and
+    /// starts it once more if not (21 Nov 2026). The first preview after the
+    /// player had just loaded sometimes never got going - Close and open it
+    /// again and it played - so the window now does that second try itself.
+    /// </summary>
+    private readonly System.Windows.Forms.Timer _checkStarted = new() { Interval = 3000 };
+    private bool _retried;
+    private bool _finished;
     private SponsorVideoSurface? _surface;
 
     internal SponsorVideoPreviewForm(string path)
@@ -132,6 +142,20 @@ internal sealed class SponsorVideoPreviewForm : Form
 
         _waitForEngine.Tick += (_, _) => TryStart();
 
+        _checkStarted.Tick += (_, _) =>
+        {
+            _checkStarted.Stop();
+
+            // Paused by hand, already over, or playing as it should: leave it.
+            if (IsDisposed || _surface is null || _finished || _retried || _btnPause.Text != "Pause" || _surface.IsPlaying)
+            {
+                return;
+            }
+
+            _retried = true;
+            StartVideo();
+        };
+
         Shown += (_, _) =>
         {
             // Never TryGet on the UI thread before the engine has settled -
@@ -161,6 +185,7 @@ internal sealed class SponsorVideoPreviewForm : Form
         FormClosing += (_, _) =>
         {
             _waitForEngine.Stop();
+            _checkStarted.Stop();
             _surface?.Stop();
         };
     }
@@ -213,6 +238,7 @@ internal sealed class SponsorVideoPreviewForm : Form
 
         _surface.Stop();
         _failed = false;
+        _finished = false;
 
         if (!_surface.Play(_path, withSound: true))
         {
@@ -227,6 +253,10 @@ internal sealed class SponsorVideoPreviewForm : Form
         _btnPause.Enabled = true;
         _btnReplay.Enabled = true;
         _btnPause.Focus();
+
+        // See _checkStarted.
+        _checkStarted.Stop();
+        _checkStarted.Start();
     }
 
     private void TogglePause()
@@ -244,6 +274,8 @@ internal sealed class SponsorVideoPreviewForm : Form
 
     private void OnFinished()
     {
+        _finished = true;
+        _checkStarted.Stop();
         _btnPause.Text = "Pause";
         _btnPause.Enabled = false;
         _btnReplay.Enabled = true;
@@ -296,6 +328,7 @@ internal sealed class SponsorVideoPreviewForm : Form
         if (disposing)
         {
             _waitForEngine.Dispose();
+            _checkStarted.Dispose();
             _surface?.Dispose();
             _surface = null;
         }

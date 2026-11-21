@@ -1719,6 +1719,10 @@ public partial class MainForm
         practice.BatteryPacks = _batteryPacks;
         practice.StatusMessage += OnClientRawMessage;
         practice.BadgesAwarded += raceControl.ReloadAchievements;
+
+        // Expand (21 Nov 2026): the sidebar narrowed with the cards and the column under the clock.
+        practice.ExpandRequested += SlideNavIconsOnly;
+        practice.ShowNavNarrowed(_navIconsOnly);
         // Ghost profiles kept in step as ghosts are added, edited and
         // deleted - so a new ghost is immediately pickable everywhere.
         _ghostStore.Saved += _ => OnGhostStoreSaved();
@@ -1848,6 +1852,32 @@ public partial class MainForm
             {
                 _raceControlControl.DemoRound = null;
                 _raceControlControl.RefreshFormat();
+            }
+        };
+
+        // A real race staged: the night has moved on from the demo, so Next
+        // Steps stops saying why a demoed heat is still next up (21 Nov
+        // 2026, bug hunt 23) - it used to say so until the app was closed.
+        _race.StateChanged += state =>
+        {
+            if (state != RaceState.Staging || _race.IsDemoMode || _unfiledDemoRoundId is null)
+            {
+                return;
+            }
+
+            void Forget()
+            {
+                _unfiledDemoRoundId = null;
+                _todayControl?.RefreshAll();
+            }
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(Forget);
+            }
+            else
+            {
+                Forget();
             }
         };
 

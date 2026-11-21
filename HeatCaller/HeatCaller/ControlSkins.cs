@@ -720,9 +720,21 @@ internal static class WheelPassThrough
     private const int SB_VERT = 1;
     private const int SIF_ALL = 0x17;
 
-    private static readonly ConditionalWeakTable<TextBoxBase, object> Hooked = new();
+    private static readonly ConditionalWeakTable<Control, object> Hooked = new();
 
-    public static void Attach(TextBoxBase box)
+    public static void Attach(TextBoxBase box) =>
+        Hook(box, () => box.Focused || box.ReadOnly, up => CanScroll(box, up));
+
+    /// <summary>
+    /// The same for a list inside a scrolling page (Backup and Restore's
+    /// Existing backups, 21 Nov 2026): the wheel goes past it down the page
+    /// until the list is clicked into, then scrolls the list up to its top
+    /// or bottom, and the page carries on from there.
+    /// </summary>
+    public static void Attach(ListBox list) =>
+        Hook(list, () => list.Focused, up => CanScroll(list, up));
+
+    private static void Hook(Control box, Func<bool> working, Func<bool, bool> canScroll)
     {
         if (Hooked.TryGetValue(box, out _))
         {
@@ -745,9 +757,7 @@ internal static class WheelPassThrough
                 return;
             }
 
-            var working = box.Focused || box.ReadOnly;
-
-            if (working && CanScroll(box, up: e.Delta > 0))
+            if (working() && canScroll(e.Delta > 0))
             {
                 return;
             }
@@ -776,6 +786,19 @@ internal static class WheelPassThrough
         }
 
         return null;
+    }
+
+    /// <summary>Whether the list still has rows to scroll to, up or down.</summary>
+    internal static bool CanScroll(ListBox list, bool up)
+    {
+        if (list.Items.Count == 0 || list.ItemHeight <= 0)
+        {
+            return false;
+        }
+
+        var rows = Math.Max(1, list.ClientSize.Height / list.ItemHeight);
+
+        return up ? list.TopIndex > 0 : list.TopIndex + rows < list.Items.Count;
     }
 
     /// <summary>Whether the box still has text to scroll to, up or down.</summary>

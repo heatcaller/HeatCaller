@@ -11,7 +11,7 @@ namespace HeatCaller;
 /// it as per-driver rolling stats (last lap, best, rolling average,
 /// consistency) rather than a finishing order.
 /// </summary>
-public sealed class PracticeModeControl : UserControl
+public sealed partial class PracticeModeControl : UserControl
 {
     private readonly RaceTiming _race;
     private readonly ProfileStore _profiles;
@@ -138,6 +138,37 @@ public sealed class PracticeModeControl : UserControl
     /// <summary>The ghosts' card and its button, which the card's width is measured from - see GhostsWidth.</summary>
     private Section? _ghostsCard;
     private ButtonBar? _ghostButtons;
+
+    // --- Expand (21 Nov 2026), as Race Control's Expand board ---
+
+    /// <summary>At the foot of the session table: folds Setup, Ghost cars and everything under the clock, and narrows the sidebar.</summary>
+    private readonly Button _btnExpand = new() { Text = "Expand" };
+
+    /// <summary>The sidebar is narrowed to its icons - told by MainForm (ShowNavNarrowed).</summary>
+    private bool _navNarrowed;
+
+    /// <summary>Asks for the sidebar narrowed (true) or opened (false), with Expand.</summary>
+    public event Action<bool>? ExpandRequested;
+
+    /// <summary>Both folded: the sidebar narrowed, and the cards and the column under the clock folded away.</summary>
+    private bool Expanded => _navNarrowed && _settings.PracticeExpanded;
+
+    /// <summary>The sidebar narrowed or opened, from anywhere - for Expand's caption.</summary>
+    internal void ShowNavNarrowed(bool narrowed)
+    {
+        _navNarrowed = narrowed;
+        ShowExpandCaption();
+    }
+
+    private void ShowExpandCaption()
+    {
+        var caption = Expanded ? "Restore" : "Expand";
+
+        if (_btnExpand.Text != caption)
+        {
+            _btnExpand.Text = caption;
+        }
+    }
 
     /// <summary>What this page keeps in step with the text size - see TextSize.</summary>
     private readonly TextSize _textSize = new();
@@ -607,15 +638,21 @@ public sealed class PracticeModeControl : UserControl
             }
         };
 
-        var top = new Beside(TilesColumnWidth)
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-        };
+        // The whole page in one Beside (21 Nov 2026, for Expand): the cards
+        // down the left, the clock column down the right, and the session
+        // table under both, the whole width - as it was when the table sat
+        // under the Beside in the page. One Beside so that Expand slides the
+        // column's parts away as Race Control's fold does (Beside.SlideTo),
+        // and the table takes their room.
+        var top = new Beside(TilesColumnWidth) { FillWidensUnderSide = true };
 
         top.Add(_lblIntro);
         top.Add(run);
-        top.Add(cards, gapBelow: 0);
+
+        // In a fold, so Expand rolls it up - see PracticeModeControl.Expand.
+        // Its gap under it is inside the fold, so that folds away with it.
+        _cardsFold = top.Add(new FoldPanel(cards, UiLayout.RowGap, sizesItself: true), gapBelow: 0);
+        _body = top;
 
         // The tiles under the clock, two to a row - in the room that was
         // blank there, so they cost the table none of its height. The column
@@ -628,9 +665,15 @@ public sealed class PracticeModeControl : UserControl
         }
 
         top.AddSide(_clock);
-        top.AddSide(_btnBigScreen);
-        top.AddSideMeasured(new TileStrip(new[] { _tiles[0], _tiles[1] }));
-        top.AddSideMeasured(new TileStrip(new[] { _tiles[2], _tiles[3] }), gapBelow: 0);
+
+        // Open Big Screen and the tiles in one fold, so Expand rolls them up
+        // under the clock with the cards - see PracticeModeControl.Expand.
+        var underClock = new SideStack(
+            (_btnBigScreen, UiLayout.RowGap),
+            (new TileStrip(new[] { _tiles[0], _tiles[1] }), UiLayout.RowGap),
+            (new TileStrip(new[] { _tiles[2], _tiles[3] }), 0));
+
+        _sideFold = top.AddSideMeasured(new FoldPanel(underClock, 0, sizesItself: false), gapBelow: 0);
 
         // --- This session ---
 
@@ -699,12 +742,46 @@ public sealed class PracticeModeControl : UserControl
 
         session.Add(_lblStatus);
         session.AddFill(_grid, () => _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height);
-        session.Add(new ButtonBar().With(btnColumns), gapBelow: 0);
+        session.Add(new ButtonBar().With(btnColumns, _btnExpand), gapBelow: 0);
+
+        top.AddFill(session, session.LeastHeight);
+
+        // The session card's picture while the fold runs, in the card's own room.
+        _sessionHolder = session.Parent;
+        _sessionStandIn = new SessionStandIn(session, _grid);
+        _sessionHolder?.Controls.Add(_sessionStandIn);
+
+        // EXPAND (21 Nov 2026, asked for by Asher: "an expand and restore
+        // button with a smooth animation for practice just like race
+        // control"). Folds Setup, Ghost cars, Open Big Screen and the tiles
+        // away - the column's parts sliding out to the right - narrows the
+        // sidebar to its icons (MainForm, through ExpandRequested), and the
+        // table takes the room. Pressed again with both folded, it opens
+        // both. Kept from night to night (AppSettings.PracticeExpanded).
+        _btnExpand.Click += (_, _) =>
+        {
+            var expand = !Expanded;
+
+            // The sidebar first: it lays the page out at its new width before
+            // its slide's first frame, and the fold then takes its pictures at
+            // that width - see SlideFolded.
+            ExpandRequested?.Invoke(expand);
+
+            if (_settings.PracticeExpanded != expand)
+            {
+                _settings.PracticeExpanded = expand;
+                _settings.Save();
+                SlideFolded();
+            }
+
+            ShowExpandCaption();
+        };
+
+        ShowFolded();
 
         var page = new FillPage();
 
-        page.Add(top);
-        page.AddFill(session, session.LeastHeight, gapBelow: 0);
+        page.AddFill(top, top.LeastHeight, gapBelow: 0);
 
         Controls.Add(page);
     }
