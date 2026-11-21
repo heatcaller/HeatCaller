@@ -414,7 +414,12 @@ public sealed class DirectDecoderClient : IDisposable
             {
                 var arrived = TimingClock.NowMs;
                 Clock.Add(arrived, lap.DeviceTimeMs);
-                LapEventReceived?.Invoke(lap.Stamped(DecoderConnection.EasyLap, arrived, TimingPoint.Line));
+
+                // When the car crossed, by the decoder's own clock - so a
+                // call about this lap is timed from the crossing itself, the
+                // link's delay included (see DirectLapEvent.CrossedMs).
+                var crossed = DirectLapEvent.CrossingOnAppClock(Clock.ToApp(lap.DeviceTimeMs, arrived), arrived);
+                LapEventReceived?.Invoke(lap.Stamped(DecoderConnection.EasyLap, arrived, TimingPoint.Line, crossed));
             },
             clock =>
             {

@@ -404,7 +404,7 @@ public sealed partial class AnnouncementService
                 _linesBeingWritten = 0;
             }
 
-            clearedVoice = BinQueuedLocked(_ => true, ref giveBack);
+            clearedVoice = BinQueuedLocked(_ => true, ref giveBack, withdrawText: true);
         }
 
         GiveBackLost(giveBack);

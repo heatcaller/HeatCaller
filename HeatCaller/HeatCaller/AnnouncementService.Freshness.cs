@@ -104,6 +104,35 @@ public sealed partial class AnnouncementService
     public long? LapRaisedAtMs { get; set; }
 
     /// <summary>
+    /// While a lap is being handed over: when the car crossed, by the
+    /// decoder's own clock (RaceTiming.DeliveringLapCrossedAtMs), on
+    /// TimingClock - a little before the pass reached the app. Null when the
+    /// decoder's clock could not say. UI thread.
+    /// </summary>
+    /// <remarks>
+    /// WHY (21 Nov 2026): a call is timed from the crossing it is about.
+    /// The raise time leaves out the decoder link's own delay, so a call
+    /// could start up to that much later than its say-by meant. The crossing
+    /// time is used when it is plausible - not after the raise, and no more
+    /// than DecoderClockMap.Jump before it - and the raise time otherwise.
+    /// </remarks>
+    public long? LapCrossedAtMs { get; set; }
+
+    /// <summary>
+    /// What a call about the crossing being handed over is timed from: the
+    /// decoder's crossing time when plausible (LapCrossedAtMs), else when the
+    /// timing engine raised it (LapRaisedAtMs), else now.
+    /// </summary>
+    private long CrossingAnchorMs(long now)
+    {
+        var raised = LapRaisedAtMs is { } r && r <= now ? r : now;
+
+        return LapCrossedAtMs is { } crossed && crossed <= raised && raised - crossed <= DecoderClockMap.Jump
+            ? crossed
+            : raised;
+    }
+
+    /// <summary>
     /// A standing that comes from a penalty, a lap added or removed by hand -
     /// Race Control marks these "adjusted" (OnStandingAdjusted). Not a
     /// crossing: nobody passed anybody on track.
@@ -113,7 +142,7 @@ public sealed partial class AnnouncementService
 
     /// <summary>Notes a car's crossing - see _lapSeenAtMs.</summary>
     private void NoteLapSeen(string transponder) =>
-        _lapSeenAtMs[transponder] = LapRaisedAtMs is { } raised && raised <= TimingClock.NowMs ? raised : TimingClock.NowMs;
+        _lapSeenAtMs[transponder] = CrossingAnchorMs(TimingClock.NowMs);
 
     /// <summary>
     /// The say-by for a call about a split-loop crossing: a few seconds from
@@ -127,9 +156,7 @@ public sealed partial class AnnouncementService
     /// </summary>
     private long SplitSayBy()
     {
-        var now = TimingClock.NowMs;
-
-        return (LapRaisedAtMs is { } raised && raised <= now ? raised : now) + LapCallSayWithinMs;
+        return CrossingAnchorMs(TimingClock.NowMs) + LapCallSayWithinMs;
     }
 
     /// <summary>
@@ -243,13 +270,27 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>The race as it is now, for an AI line about to be written. Any thread.</summary>
-    public RaceFactsStamp RaceFactsNow() => new(
-        Interlocked.Read(ref _factsRace),
-        Interlocked.Read(ref _factsFastestLaps),
-        Interlocked.Read(ref _factsLeadChanges),
-        Volatile.Read(ref _factsLeaderLaps),
-        TimingClock.NowMs,
-        LapsTakenOff: Interlocked.Read(ref _factsLapsTakenOff));
+    /// <remarks>
+    /// Read as one snapshot (21 Nov 2026): the counters are written under
+    /// _factsLock too, so a stamp never mixes two moments - a new race's
+    /// count with the last race's leader laps, say.
+    /// </remarks>
+    public RaceFactsStamp RaceFactsNow()
+    {
+        lock (_factsLock)
+        {
+            return new(
+                _factsRace,
+                _factsFastestLaps,
+                _factsLeadChanges,
+                _factsLeaderLaps,
+                TimingClock.NowMs,
+                LapsTakenOff: _factsLapsTakenOff);
+        }
+    }
+
+    /// <summary>Guards the race-facts counters, so RaceFactsNow reads them as one.</summary>
+    private readonly object _factsLock = new();
 
     /// <summary>
     /// Why a line written against <paramref name="then"/> is no longer true
@@ -334,15 +375,23 @@ public sealed partial class AnnouncementService
     /// <summary>A new race: AI lines from the last one are no longer about this one.</summary>
     private void NoteNewRaceForFacts()
     {
-        Interlocked.Increment(ref _factsRace);
-        Volatile.Write(ref _factsLeaderLaps, 0);
+        lock (_factsLock)
+        {
+            _factsRace++;
+            _factsLeaderLaps = 0;
+        }
+
         BinStaleCommentary();
     }
 
     /// <summary>A new fastest lap of the race was just set.</summary>
     private void NoteRaceFastestLap()
     {
-        Interlocked.Increment(ref _factsFastestLaps);
+        lock (_factsLock)
+        {
+            _factsFastestLaps++;
+        }
+
         BinStaleCommentary();
     }
 
@@ -416,26 +465,38 @@ public sealed partial class AnnouncementService
     /// <summary>A lap was just taken off by hand - see WhyNoLongerTrue.</summary>
     private void NoteLapTakenOffForFacts()
     {
-        Interlocked.Increment(ref _factsLapsTakenOff);
+        lock (_factsLock)
+        {
+            _factsLapsTakenOff++;
+        }
+
         BinStaleCommentary();
     }
 
     /// <summary>The lead just changed hands.</summary>
     private void NoteLeadChangeForFacts()
     {
-        Interlocked.Increment(ref _factsLeadChanges);
+        lock (_factsLock)
+        {
+            _factsLeadChanges++;
+        }
+
         BinStaleCommentary();
     }
 
     /// <summary>The leader's lap count, as of this crossing.</summary>
     private void NoteLeaderLapsForFacts(int laps)
     {
-        if (laps == Volatile.Read(ref _factsLeaderLaps))
+        lock (_factsLock)
         {
-            return;
+            if (laps == _factsLeaderLaps)
+            {
+                return;
+            }
+
+            _factsLeaderLaps = laps;
         }
 
-        Volatile.Write(ref _factsLeaderLaps, laps);
         BinStaleCommentary();
     }
 

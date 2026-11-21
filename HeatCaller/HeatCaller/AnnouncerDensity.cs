@@ -407,7 +407,12 @@ internal sealed class HeldOver<T> where T : class
     private int _weight;
     private DateTime _at;
 
-    public HeldOver(Func<DateTime>? clock = null) => _clock = clock ?? (() => DateTime.UtcNow);
+    /// <remarks>
+    /// By default on TimingClock (21 Nov 2026), not the wall clock, so a
+    /// kept call's few seconds are not stretched or cut by the PC's clock
+    /// being set. Expressed as a DateTime so a test can still hand in its own.
+    /// </remarks>
+    public HeldOver(Func<DateTime>? clock = null) => _clock = clock ?? (() => DateTime.MinValue.AddMilliseconds(Math.Max(0, TimingClock.NowMs)));
 
     /// <summary>Whether a call is being kept. For the tests and the console.</summary>
     public bool IsHolding

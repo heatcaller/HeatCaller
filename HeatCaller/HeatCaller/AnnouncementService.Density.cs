@@ -72,7 +72,12 @@ public sealed partial class AnnouncementService
     /// holding the first one back would mean every race opened with
     /// silence where the announcer had something to say.
     /// </summary>
-    private DateTime _lastRoutineAcceptedUtc = DateTime.MinValue;
+    /// <remarks>
+    /// On TimingClock (21 Nov 2026), not the wall clock: the PC's clock
+    /// being set mid-race (a time sync, daylight saving) must not open or
+    /// close the gap between calls.
+    /// </remarks>
+    private long? _lastRoutineAcceptedMs;
 
     private int _lastRoutineWeight;
 
@@ -223,9 +228,9 @@ public sealed partial class AnnouncementService
 
         lock (_pacingLock)
         {
-            var since = DateTime.UtcNow - _lastRoutineAcceptedUtc;
+            var since = TimeSpan.FromMilliseconds(_lastRoutineAcceptedMs is { } last ? TimingClock.NowMs - last : 0);
 
-            if (_lastRoutineAcceptedUtc != DateTime.MinValue
+            if (_lastRoutineAcceptedMs is not null
                 && since < TimeSpan.FromSeconds(gap)
                 && !AnnouncerDensity.WorthBreakingIn(weight, _lastRoutineWeight))
             {
@@ -243,7 +248,7 @@ public sealed partial class AnnouncementService
                 return false;
             }
 
-            _lastRoutineAcceptedUtc = DateTime.UtcNow;
+            _lastRoutineAcceptedMs = TimingClock.NowMs;
             _lastRoutineWeight = weight;
         }
 
@@ -664,7 +669,7 @@ public sealed partial class AnnouncementService
 
         lock (_pacingLock)
         {
-            _lastRoutineAcceptedUtc = DateTime.MinValue;
+            _lastRoutineAcceptedMs = null;
             _lastRoutineWeight = 0;
             _recentRoutineCallsMs.Clear();
         }

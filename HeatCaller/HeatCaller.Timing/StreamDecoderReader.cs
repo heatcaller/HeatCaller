@@ -127,7 +127,7 @@ internal sealed class StreamDecoderReader
                 DeviceTimeMs = (uint)at,
                 SignalHits = reading.Hits,
                 SignalStrength = reading.Strength,
-            }.Stamped(_decoder, arrivedMs, TimingPoint.Line));
+            }.Stamped(_decoder, arrivedMs, TimingPoint.Line, DirectLapEvent.CrossingOnAppClock(at, arrivedMs)));
         }
 
         return passes;

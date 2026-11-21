@@ -398,7 +398,7 @@ public sealed partial class AnnouncementService
             // The rest of a two-hander about the same fight goes with it.
             var cutPair = verdict.Cut?.Pair;
             BinQueuedLocked(item => item.Battle is { } line
-                && (verdict.Stale.Contains(line) || (cutPair is not null && line.Pair == cutPair)), ref giveBack);
+                && (verdict.Stale.Contains(line) || (cutPair is not null && line.Pair == cutPair)), ref giveBack, withdrawText: true);
         }
 
         GiveBackLost(giveBack);
@@ -455,7 +455,7 @@ public sealed partial class AnnouncementService
         var inClass = ClassPlaceOf(ordered, cut.Pair.BehindId);
         place = inClass?.Place ?? place;
 
-        QueueBattlePass(cut.Pair.BehindId, BattlePassWords(driver, place, inClass?.Class), place, LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs);
+        QueueBattlePass(cut.Pair.BehindId, BattlePassWords(driver, place, inClass?.Class), place, LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs, cut.Pair.AheadId);
 
         // The lead change call is for the lead overall, so it is that the
         // pass call stands in for.
@@ -469,7 +469,13 @@ public sealed partial class AnnouncementService
     /// start: a few seconds from the chaser's crossing for a pass on track,
     /// from the ruling itself for a correction.
     /// </summary>
-    private void QueueBattlePass(string behindId, string words, int place, long sayByMs)
+    /// <param name="aheadId">
+    /// The car passed. The pass call is tagged with the two of them (21 Nov
+    /// 2026), as a pass just made (BattlePair.Passed): if the car passed is
+    /// straight back in front before the call is heard, the call is cut off
+    /// or dropped rather than said, with no second pass call.
+    /// </param>
+    private void QueueBattlePass(string behindId, string words, int place, long sayByMs, string? aheadId = null)
     {
         var type = place <= 1 ? AnnouncementEventType.LeaderChange : AnnouncementEventType.CloseBattle;
 
@@ -490,7 +496,9 @@ public sealed partial class AnnouncementService
             // always timed from the chaser's last crossing, so a ruling made
             // 6-12 s after that went in already past it - and was dropped
             // unheard straight after the battle line was cut off.
-            _voiceQueue.Insert(at, new QueuedVoiceItem(type, behindId, OnAir: "Battle",
+            var battle = aheadId is null ? null : new BattleLine(BattlePair.Passed(behindId, aheadId, Math.Max(1, place)));
+
+            _voiceQueue.Insert(at, new QueuedVoiceItem(type, behindId, OnAir: "Battle", Battle: battle,
                 SayByMs: sayByMs, ShownText: words, Work: async () =>
             {
                 try
@@ -582,7 +590,7 @@ public sealed partial class AnnouncementService
 
             if (stale.Count > 0)
             {
-                BinQueuedLocked(item => item.Battle is { } line && stale.Contains(line), ref giveBack);
+                BinQueuedLocked(item => item.Battle is { } line && stale.Contains(line), ref giveBack, withdrawText: true);
             }
         }
 
@@ -628,7 +636,8 @@ public sealed partial class AnnouncementService
                     cut.Pair.BehindId,
                     RulingPassWords(driver, called, inClass?.Class),
                     called,
-                    TimingClock.NowMs + LapCallSayWithinMs);
+                    TimingClock.NowMs + LapCallSayWithinMs,
+                    cut.Pair.AheadId);
             }
         }
 

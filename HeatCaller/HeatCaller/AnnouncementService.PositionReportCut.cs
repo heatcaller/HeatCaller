@@ -256,6 +256,9 @@ public sealed partial class AnnouncementService
                 _positionReportOnAir = null;
             }
         }
+
+        // A cut still waiting for the report to register was for it alone.
+        ForgetPendingCut();
     }
 
     /// <summary>True when a flag, the countdown or Reset has cut everything since the voice loop took this report.</summary>
@@ -314,7 +317,7 @@ public sealed partial class AnnouncementService
             return false;
         }
 
-        var wasSpeaking = StopCurrentPlaybackAfterABeat();
+        var wasSpeaking = StopCurrentPlaybackAfterABeat(orTheLineAboutToPlay: true);
 
         var mover = place < now.Count ? now[place].Standing : null;
         var why = mover is null
@@ -330,9 +333,12 @@ public sealed partial class AnnouncementService
             return false;
         }
 
-        QueuePositionReportCorrection(now, place, report.Depth, byRuling);
+        // Only a correction actually queued stands in for the lead change
+        // call (21 Nov 2026): one whose words came out empty was never going
+        // to say the new leader, so the lead change call goes ahead.
+        var queued = QueuePositionReportCorrection(now, place, report.Depth, byRuling);
 
-        return place == 0;
+        return place == 0 && queued;
     }
 
     /// <summary>
@@ -397,7 +403,7 @@ public sealed partial class AnnouncementService
     /// (CorrectionSlot), worded from <paramref name="now"/>, with the few
     /// seconds a battle's pass call gets (QueueBattlePass).
     /// </summary>
-    private void QueuePositionReportCorrection(List<PositionReportOrder.Row> now, int place, int depth, bool byRuling)
+    private bool QueuePositionReportCorrection(List<PositionReportOrder.Row> now, int place, int depth, bool byRuling)
     {
         var mover = now[place].Standing;
         var worded = OrderOf(now);
@@ -412,10 +418,11 @@ public sealed partial class AnnouncementService
 
         if (words.Length == 0)
         {
-            return;
+            return false;
         }
 
         var config =_voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.PositionReport));
+        var sayBy = (byRuling ? TimingClock.NowMs : LapSeenAt(mover.Transponder)) + LapCallSayWithinMs;
         var speed = config?.SpeedFor(_voiceStore.Current.Speed);
 
         RaiseAnnouncementText(words, mover.Transponder);
@@ -425,20 +432,42 @@ public sealed partial class AnnouncementService
             var at = CorrectionSlot(_voiceQueue.Select(waiting => waiting.Type).ToList());
 
             _voiceQueue.Insert(at, new QueuedVoiceItem(AnnouncementEventType.PositionReport, mover.Transponder, OnAir: "Position report",
-                SayByMs: (byRuling ? TimingClock.NowMs : LapSeenAt(mover.Transponder)) + LapCallSayWithinMs, ShownText: words, Work: async () =>
+                SayByMs: sayBy, ShownText: words, Work: async () =>
             {
+                var heard = false;
+                var movedAgain = false;
+
                 try
                 {
                     // Not cut in its turn (see the class remarks) - dropped
                     // unsaid if the order moves again before it is heard.
                     await SynthesizeAndPlayAsync(words, "[voice] Position report correction", speedOverride: speed,
-                        whyNotNow: () => RunningOrderNow(depth) is { Count: >= 2 } after && FirstChangedPlaceAsReported(worded, OrderOf(after)) >= 0
-                            ? "the order moved again before it was said"
-                            : null);
+                        whyNotNow: () =>
+                        {
+                            if (RunningOrderNow(depth) is { Count: >= 2 } after && FirstChangedPlaceAsReported(worded, OrderOf(after)) >= 0)
+                            {
+                                movedAgain = true;
+                                return "the order moved again before it was said";
+                            }
+
+                            return null;
+                        },
+                        spoken: () => heard = true);
                 }
                 catch (Exception ex)
                 {
                     StatusMessage?.Invoke($"[voice] Position report correction failed: {ex.Message}");
+                }
+
+                // A correction naming a new leader stood in for the lead
+                // change call, which was not queued. Dropped unheard because
+                // the order moved again somewhere else, it must not leave the
+                // lead change unsaid (21 Nov 2026). Not after a flag, the
+                // countdown, a mute or a passed say-by: those would drop the
+                // lead change call too.
+                if (!heard && movedAgain && place == 0 && !byRuling)
+                {
+                    CallTheLeadAfterADroppedCorrection(mover.Transponder, depth, sayBy);
                 }
             })
             {
@@ -447,5 +476,37 @@ public sealed partial class AnnouncementService
         }
 
         _voiceQueueSignal.Release();
+        return true;
+    }
+
+    /// <summary>
+    /// A correction that named a new leader was dropped unheard because the
+    /// order moved again behind the new leader. The lead change call
+    /// it stood in for was never queued, so it is queued now, if the car is
+    /// still leading: a plain lead change line with the correction's own
+    /// say-by, so it is still dropped if it would be heard too late.
+    /// </summary>
+    private void CallTheLeadAfterADroppedCorrection(string transponder, int depth, long sayByMs)
+    {
+        if (Muted || _postRaceQuiet || TimingClock.NowMs > sayByMs)
+        {
+            return;
+        }
+
+        if (RunningOrderNow(depth) is not { Count: >= 1 } now
+            || !string.Equals(now[0].Standing.Transponder, transponder, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var config = _voiceStore.Current.Events.GetValueOrDefault(nameof(AnnouncementEventType.LeaderChange));
+
+        if (!VoiceCandidateCanSpeak(AnnouncementEventType.LeaderChange, config))
+        {
+            return;
+        }
+
+        StatusMessage?.Invoke("[voice] Position report correction dropped unheard - the lead change it stood in for is called instead.");
+        EnqueueVoice(AnnouncementEventType.LeaderChange, now[0].Standing, null, sayByMs: sayByMs);
     }
 }

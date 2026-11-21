@@ -270,6 +270,23 @@ public sealed class RaceTiming
     internal long? DeliveringEventRaisedAtMs { get; private set; }
 
     /// <summary>
+    /// While a lap's events are being delivered: when the car crossed, by
+    /// the decoder's own clock (DirectLapEvent.CrossedMs), on TimingClock -
+    /// a little before the pass reached the app. Null outside a delivery, or
+    /// when the decoder's clock could not say. What the announcer times a
+    /// call about the lap from (21 Nov 2026) - see
+    /// AnnouncementService.LapCrossedAtMs.
+    /// </summary>
+    internal long? DeliveringLapCrossedAtMs { get; private set; }
+
+    /// <summary>
+    /// Threaded: the decoder-mapped crossing time of the pass the engine is
+    /// judging right now, so the raises it makes can carry it to the UI.
+    /// Timing thread only; 0 between passes.
+    /// </summary>
+    private long _crossingBeingJudgedMs;
+
+    /// <summary>
     /// True while the UI is being told of an event (threaded mode) that the
     /// race raised more than <see cref="StaleLapCallMs"/> ago - the window
     /// was busy or frozen meanwhile - inline, a pass that arrived that long
@@ -912,7 +929,19 @@ public sealed class RaceTiming
     {
         if (_host is not null)
         {
-            Do(e => e.ProcessLapEvent(lap));
+            Do(e =>
+            {
+                _crossingBeingJudgedMs = lap.CrossedMs;
+
+                try
+                {
+                    e.ProcessLapEvent(lap);
+                }
+                finally
+                {
+                    _crossingBeingJudgedMs = 0;
+                }
+            });
             return;
         }
 
@@ -925,8 +954,10 @@ public sealed class RaceTiming
         // DeliveringEventRaisedAtMs and AnnouncementService.LapRaisedAtMs).
         // The age is on the engine's own clock, then put on TimingClock.
         var previous = DeliveringEventRaisedAtMs;
+        var previousCrossed = DeliveringLapCrossedAtMs;
         var ageMs = Math.Max(0, Engine.NowMsSource() - Engine.ArrivalOf(lap));
         DeliveringEventRaisedAtMs = TimingClock.NowMs - ageMs;
+        DeliveringLapCrossedAtMs = lap.CrossedMs > 0 ? lap.CrossedMs : null;
 
         try
         {
@@ -935,6 +966,7 @@ public sealed class RaceTiming
         finally
         {
             DeliveringEventRaisedAtMs = previous;
+            DeliveringLapCrossedAtMs = previousCrossed;
         }
     }
     public bool ProcessSplitPass(string rowTransponder, TimingPoint point, long lineMs) => Do(e => e.ProcessSplitPass(rowTransponder, point, lineMs));
@@ -1873,11 +1905,14 @@ public sealed class RaceTiming
 
         /// <summary>For a RaceCompleted raise: the race as it finished (see DeliveringFinishedRace). Null for anything else.</summary>
         public FinishedRace? Finished { get; init; }
+
+        /// <summary>For a raise made while a pass was judged: its decoder-mapped crossing time (see DeliveringLapCrossedAtMs); 0 otherwise.</summary>
+        public long CrossedAtMs { get; init; }
     }
 
     private bool HasUiHandlers(EventSlot slot) => Volatile.Read(ref _uiHandlers[(int)slot]) is not null;
 
-    private void ToUi(EventSlot slot, Action<Delegate> raise) => EnqueueForUi(new UiItem(slot, raise));
+    private void ToUi(EventSlot slot, Action<Delegate> raise) => EnqueueForUi(new UiItem(slot, raise) { CrossedAtMs = _crossingBeingJudgedMs });
 
     /// <summary>Queues for the UI and makes sure a delivery is posted. Any thread; never waits.</summary>
     private void EnqueueForUi(UiItem item)
@@ -2000,8 +2035,10 @@ public sealed class RaceTiming
             while (take() is { } item)
             {
                 var previous = DeliveringEventRaisedAtMs;
+                var previousCrossed = DeliveringLapCrossedAtMs;
                 var previousFinished = DeliveringFinishedRace;
                 DeliveringEventRaisedAtMs = item.RaisedAtMs;
+                DeliveringLapCrossedAtMs = item.CrossedAtMs > 0 ? item.CrossedAtMs : null;
                 DeliveringFinishedRace = item.Finished;
 
                 try
@@ -2011,6 +2048,7 @@ public sealed class RaceTiming
                 finally
                 {
                     DeliveringEventRaisedAtMs = previous;
+                    DeliveringLapCrossedAtMs = previousCrossed;
                     DeliveringFinishedRace = previousFinished;
                 }
             }

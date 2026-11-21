@@ -1874,9 +1874,9 @@ public sealed partial class AnnouncementService
 
         lock (_pacingLock)
         {
-            since = _lastRoutineAcceptedUtc == DateTime.MinValue
-                ? 0
-                : (DateTime.UtcNow - _lastRoutineAcceptedUtc).TotalSeconds;
+            since = _lastRoutineAcceptedMs is { } last
+                ? (TimingClock.NowMs - last) / 1000.0
+                : 0;
         }
 
         var until = DateTime.UtcNow + BattleCooldown(AnnouncerDensity.GapSeconds(Stature, Density), since);

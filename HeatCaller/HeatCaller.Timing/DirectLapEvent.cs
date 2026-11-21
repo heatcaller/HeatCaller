@@ -39,6 +39,25 @@ public sealed class DirectLapEvent
     /// </summary>
     public long ReceivedMs { get; init; }
 
+    /// <summary>
+    /// When the car crossed, on TimingClock, by the decoder's own clock
+    /// (DecoderClockMap) - earlier than ReceivedMs by however long the pass
+    /// took to reach the app. 0 when the map could not say (too few clock
+    /// readings yet, a ghost, a test, a decoder with no map). What a call
+    /// about this crossing is timed from, so the link's delay counts against
+    /// its say-by too (21 Nov 2026) - see AnnouncementService.LapCrossedAtMs.
+    /// </summary>
+    public long CrossedMs { get; init; }
+
+    /// <summary>
+    /// A decoder-mapped crossing time, kept only when it is plausible: not
+    /// after the pass arrived, and not further before it than
+    /// DecoderClockMap.Jump (a map that far out is not a clock to trust). 0
+    /// otherwise - see CrossedMs.
+    /// </summary>
+    public static long CrossingOnAppClock(long? mappedMs, long receivedMs) =>
+        mappedMs is { } mapped && mapped > 0 && mapped <= receivedMs && receivedMs - mapped <= DecoderClockMap.Jump ? mapped : 0;
+
     /// <summary>Which decoder saw it (DecoderConnection.EasyLap or ILap), or 0 when none did.</summary>
     public int Decoder { get; init; }
 
@@ -59,6 +78,7 @@ public sealed class DirectLapEvent
         IsSynthetic = IsSynthetic,
         IsSimulated = IsSimulated,
         ReceivedMs = ReceivedMs,
+        CrossedMs = CrossedMs,
         Decoder = Decoder,
         Point = Point,
     };
@@ -73,12 +93,13 @@ public sealed class DirectLapEvent
         IsSynthetic = IsSynthetic,
         IsSimulated = true,
         ReceivedMs = ReceivedMs,
+        CrossedMs = CrossedMs,
         Decoder = Decoder,
         Point = Point,
     };
 
     /// <summary>A copy saying which decoder saw it, when it arrived and where it was seen.</summary>
-    public DirectLapEvent Stamped(int decoder, long receivedMs, TimingPoint point) => new()
+    public DirectLapEvent Stamped(int decoder, long receivedMs, TimingPoint point, long? crossedMs = null) => new()
     {
         TransponderId = TransponderId,
         DeviceTimeMs = DeviceTimeMs,
@@ -87,6 +108,7 @@ public sealed class DirectLapEvent
         IsSynthetic = IsSynthetic,
         IsSimulated = IsSimulated,
         ReceivedMs = receivedMs,
+        CrossedMs = crossedMs ?? CrossedMs,
         Decoder = decoder,
         Point = point,
     };

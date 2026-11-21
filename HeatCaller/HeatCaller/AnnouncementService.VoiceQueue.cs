@@ -617,12 +617,14 @@ public sealed partial class AnnouncementService
         if (IsSupersededByInterrupt())
         {
             StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - a flag call interrupted before it spoke.");
+            WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
             return;
         }
 
         if (IsCutByCountdown())
         {
             StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the countdown started before it spoke.");
+            WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
             return;
         }
 
@@ -630,12 +632,14 @@ public sealed partial class AnnouncementService
         if (IsOvertakenOnTrack())
         {
             StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the two cars it is about swapped before it spoke.");
+            WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
             return;
         }
 
         if (honourMute && Muted)
         {
             StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the announcer is muted.");
+            WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
             return;
         }
 
@@ -712,6 +716,7 @@ public sealed partial class AnnouncementService
             if (IsSupersededByInterrupt())
             {
                 StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - a flag call interrupted while it was being synthesized.");
+                WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
                 return;
             }
 
@@ -721,6 +726,7 @@ public sealed partial class AnnouncementService
             if (IsCutByCountdown())
             {
                 StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the countdown started while it was being synthesized.");
+                WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
                 return;
             }
 
@@ -728,6 +734,7 @@ public sealed partial class AnnouncementService
             if (IsOvertakenOnTrack())
             {
                 StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the two cars it is about swapped while it was being synthesized.");
+                WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
                 return;
             }
 
@@ -779,6 +786,7 @@ public sealed partial class AnnouncementService
             if (honourMute && Muted)
             {
                 StatusMessage?.Invoke($"{announcingLogPrefix}: dropped \"{text}\" - the announcer was muted before it spoke.");
+                WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
                 return;
             }
 
@@ -1610,7 +1618,14 @@ public sealed partial class AnnouncementService
     /// stamped for three minutes over a line nobody heard, so the sponsor's
     /// name was left off every call for that moment.
     /// </remarks>
-    private int BinQueuedLocked(Predicate<QueuedVoiceItem> match, ref List<Action>? giveBack)
+    /// <param name="withdrawText">
+    /// Also take each binned line's words back off the screens (21 Nov
+    /// 2026), with the reservations, once the lock is released - for a
+    /// line binned because it will now never be said (a flag, a reset, two
+    /// cars that swapped). Not for a line replaced by a newer one of the same
+    /// kind, whose words may be the very ones the newer line has just shown.
+    /// </param>
+    private int BinQueuedLocked(Predicate<QueuedVoiceItem> match, ref List<Action>? giveBack, bool withdrawText = false)
     {
         if (_lostIfBinned is { } table)
         {
@@ -1619,6 +1634,17 @@ public sealed partial class AnnouncementService
                 if (match(item) && table.TryGetValue(item, out var lost))
                 {
                     (giveBack ??= new List<Action>()).Add(lost);
+                }
+            }
+        }
+
+        if (withdrawText)
+        {
+            foreach (var item in _voiceQueue)
+            {
+                if (item.ShownText is { } shown && match(item))
+                {
+                    (giveBack ??= new List<Action>()).Add(() => WithdrawAnnouncementText(shown));
                 }
             }
         }
@@ -1873,6 +1899,13 @@ public sealed partial class AnnouncementService
             // work never runs, so nothing else would.
             if (Muted || stale is not null)
             {
+                // Muted (21 Nov 2026): never to be said, so off the screens
+                // too - a stale line was taken back above.
+                if (stale is null)
+                {
+                    WithdrawAnnouncementText(shown);
+                }
+
                 if (work is not null && timing is not null)
                 {
                     timing.DroppedBecause = stale ?? "muted";
