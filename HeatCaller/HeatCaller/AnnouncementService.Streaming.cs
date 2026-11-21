@@ -274,6 +274,12 @@ public sealed partial class AnnouncementService
                     : IsOvertakenOnTrack() ? "the two cars it is about swapped before it spoke"
                     : null;
 
+                // Never to be heard now, so off the screens too (21 Nov 2026).
+                if (drop is not null)
+                {
+                    WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
+                }
+
                 if (drop is null && WhyDequeuedLineIsStale() is { } stale)
                 {
                     drop = stale;

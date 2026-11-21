@@ -98,9 +98,12 @@ public sealed partial class RaceControlControl
             // its lap calls - see HandScoring.
             if (HandScoringOn) { _announcer.WhileHandScoring(() => OnLapProcessed(standing, isValid, isFastestLap)); return; }
 
-            // When the engine raised it (8 Nov 2026), so a call about this lap
-            // is timed from the crossing - see AnnouncementService.Freshness.
+            // When the engine raised it (8 Nov 2026), and when the car
+            // crossed by the decoder's clock (21 Nov 2026), so a call about
+            // this lap is timed from the crossing - see
+            // AnnouncementService.Freshness.
             _announcer.LapRaisedAtMs = _race.DeliveringEventRaisedAtMs;
+            _announcer.LapCrossedAtMs = _race.DeliveringLapCrossedAtMs;
             try
             {
                 OnLapProcessed(standing, isValid, isFastestLap);
@@ -108,6 +111,7 @@ public sealed partial class RaceControlControl
             finally
             {
                 _announcer.LapRaisedAtMs = null;
+                _announcer.LapCrossedAtMs = null;
             }
         };
         _race.LapProcessed += _lapProcessedHandler;

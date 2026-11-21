@@ -97,8 +97,20 @@ public sealed partial class AnnouncementService
                 ["rival"] = (rival, rival),
             };
 
-            ConsiderPerLapAction("voice", chaser.Transponder, config!.Weight, MaxVoicePerLap,
-                () => EnqueueVoice(AnnouncementEventType.FinalLapsGap, chaser, null, extras: extras));
+            // Tagged with the two cars (21 Nov 2026): "a tenth behind" said
+            // after the chaser has got by is the wrong way round, so the line
+            // is cut off or dropped, and the pass called, if they swap first -
+            // see AnnouncementService.BattleLines. Inside the action: the
+            // scope has to be open when the batch queues it.
+            var pair = new BattlePair(leader.Transponder, chaser.Transponder, 1);
+
+            ConsiderPerLapAction("voice", chaser.Transponder, config!.Weight, MaxVoicePerLap, () =>
+            {
+                using (AboutBattle(pair))
+                {
+                    EnqueueVoice(AnnouncementEventType.FinalLapsGap, chaser, null, extras: extras);
+                }
+            });
         }
         catch (Exception ex)
         {

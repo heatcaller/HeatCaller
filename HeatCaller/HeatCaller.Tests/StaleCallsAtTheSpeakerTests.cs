@@ -214,8 +214,9 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         var battles = Source("AnnouncementService.BattleLines.cs");
 
         Assert.Contains("SayByMs: sayByMs,", battles, StringComparison.Ordinal);
-        Assert.Contains("place, LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs);", battles, StringComparison.Ordinal);
-        Assert.Contains("TimingClock.NowMs + LapCallSayWithinMs);", battles, StringComparison.Ordinal);
+        // The car passed rides along after the deadline (21 Nov 2026), so the pass call is tagged with the pair.
+        Assert.Contains("place, LapSeenAt(cut.Pair.BehindId) + LapCallSayWithinMs, cut.Pair.AheadId);", battles, StringComparison.Ordinal);
+        Assert.Contains("TimingClock.NowMs + LapCallSayWithinMs,", battles, StringComparison.Ordinal);
     }
 
     [Fact]

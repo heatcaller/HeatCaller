@@ -99,7 +99,17 @@ public sealed partial class AnnouncementService
     /// next one. The pass call queued behind it plays straight after.
     /// Returns true when there was a line to cut.
     /// </summary>
-    public static bool StopCurrentPlaybackAfterABeat()
+    /// <param name="orTheLineAboutToPlay">
+    /// When nothing is registered as playing yet, cut the next line that
+    /// registers instead, after the same beat (21 Nov 2026). For a position
+    /// report, which is put on air a moment before its audio is registered
+    /// (both under the playback lock, so the next line to register IS the
+    /// report): a change of order in that moment used to find nothing to
+    /// stop, and the report played in full with its correction after it.
+    /// Forgotten when the report goes off air (ForgetPendingCut), so it can
+    /// never reach another line.
+    /// </param>
+    public static bool StopCurrentPlaybackAfterABeat(bool orTheLineAboutToPlay = false)
     {
         CancellationTokenSource? line;
         long wordsAt;
@@ -108,6 +118,11 @@ public sealed partial class AnnouncementService
         {
             line = _activeLine;
             wordsAt = _activeLineWordsAtMs;
+
+            if (line is null && orTheLineAboutToPlay)
+            {
+                _cutTheLineAboutToPlay = true;
+            }
         }
 
         if (line is null)
@@ -115,9 +130,59 @@ public sealed partial class AnnouncementService
             return false;
         }
 
-        _ = Task.Delay(TimeSpan.FromMilliseconds(CutDelayMs(wordsAt, TimingClock.NowMs))).ContinueWith(
+        CutAfterABeat(line, wordsAt);
+        return true;
+    }
+
+    /// <summary>A cut asked for before the line it was meant for registered - see StopCurrentPlaybackAfterABeat. Under ActiveOutputLock.</summary>
+    private static bool _cutTheLineAboutToPlay;
+
+    /// <summary>
+    /// The playing line's words begin <paramref name="leadMs"/> plus the
+    /// device's buffer after now - the moment the output first pulled it.
+    /// Only for the line still registered, and only ever later than the
+    /// estimate made at registration. Any thread (the audio thread).
+    /// </summary>
+    private static void NoteWordsStartFromFirstSample(CancellationTokenSource line, long leadMs)
+    {
+        var wordsAt = TimingClock.NowMs + leadMs + VoiceLineTiming.DeviceAheadMs;
+
+        lock (ActiveOutputLock)
+        {
+            if (ReferenceEquals(_activeLine, line) && wordsAt > _activeLineWordsAtMs)
+            {
+                _activeLineWordsAtMs = wordsAt;
+            }
+        }
+    }
+
+    /// <summary>Forgets a cut still waiting for its line - the position report it was for has gone off air.</summary>
+    internal static void ForgetPendingCut()
+    {
+        lock (ActiveOutputLock)
+        {
+            _cutTheLineAboutToPlay = false;
+        }
+    }
+
+    /// <summary>Cuts <paramref name="line"/> once enough of its words have been heard - see StopCurrentPlaybackAfterABeat.</summary>
+    private static void CutAfterABeat(CancellationTokenSource line, long wordsAt) =>
+        CutAfter(line, CutDelayMs(wordsAt, TimingClock.NowMs));
+
+    /// <summary>
+    /// Cuts <paramref name="line"/> after <paramref name="delayMs"/> - or
+    /// later, when its words turned out to start later than thought (the
+    /// output first pulled it after the cut was asked for: see
+    /// NoteWordsStartFromFirstSample), so it is still heard for
+    /// CutLineHeardAtLeastMs.
+    /// </summary>
+    private static void CutAfter(CancellationTokenSource line, long delayMs)
+    {
+        _ = Task.Delay(TimeSpan.FromMilliseconds(Math.Max(0, delayMs))).ContinueWith(
             _ =>
             {
+                long stillToHear;
+
                 lock (ActiveOutputLock)
                 {
                     // Ended by itself meanwhile - nothing of ours to stop.
@@ -125,6 +190,14 @@ public sealed partial class AnnouncementService
                     {
                         return;
                     }
+
+                    stillToHear = _activeLineWordsAtMs + CutLineHeardAtLeastMs - TimingClock.NowMs;
+                }
+
+                if (stillToHear > 50)
+                {
+                    CutAfter(line, stillToHear);
+                    return;
                 }
 
                 try
@@ -137,8 +210,6 @@ public sealed partial class AnnouncementService
                 }
             },
             TaskScheduler.Default);
-
-        return true;
     }
 
     /// <summary>
@@ -515,8 +586,22 @@ public sealed partial class AnnouncementService
     /// stillWanted. Reads the generations stamped at dequeue, which are
     /// AsyncLocal and so flow into the awaited playback call.
     /// </summary>
+    /// <remarks>
+    /// A line it turns down is taken back off the screens too (21 Nov 2026):
+    /// it will never be heard now.
+    /// </remarks>
     private Func<bool> StillWantedUnlessOvertaken(bool honourMute) =>
-        () => !IsSupersededByInterrupt() && !IsCutByCountdown() && !IsOvertakenOnTrack() && !(honourMute && Muted);
+        () =>
+        {
+            var wanted = !IsSupersededByInterrupt() && !IsCutByCountdown() && !IsOvertakenOnTrack() && !(honourMute && Muted);
+
+            if (!wanted)
+            {
+                WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
+            }
+
+            return wanted;
+        };
 
     /// <summary>Plays already-decoded audio, padded the way every line is.</summary>
     /// <param name="stillWanted">
@@ -580,6 +665,8 @@ public sealed partial class AnnouncementService
         // and carries on from - a dead announcer is the outcome to avoid.
         using var stop = new CancellationTokenSource();
 
+        bool cutAsSoonAsHeard;
+
         lock (ActiveOutputLock)
         {
             _activeLine = stop;
@@ -587,6 +674,15 @@ public sealed partial class AnnouncementService
             // When its words begin, past the lead-in silence - see
             // StopCurrentPlaybackAfterABeat.
             _activeLineWordsAtMs = TimingClock.NowMs + (long)leadFor.TotalMilliseconds;
+
+            // A cut asked for in the moment before this line registered.
+            cutAsSoonAsHeard = _cutTheLineAboutToPlay;
+            _cutTheLineAboutToPlay = false;
+        }
+
+        if (cutAsSoonAsHeard)
+        {
+            CutAfterABeat(stop, _activeLineWordsAtMs);
         }
 
         // Whether the line played to its end, for the captions below.
@@ -621,9 +717,19 @@ public sealed partial class AnnouncementService
             // started: run when the output first pulls the line - the moment
             // it is heard, which after a speaker dropout is later than now
             // (22 Oct 2026, known issues; see FirstReadSampleProvider).
-            ISampleProvider source = started is null
-                ? rawReader.ToSampleProvider()
-                : new FirstReadSampleProvider(rawReader.ToSampleProvider(), started);
+            //
+            // And when the output first pulls it, its words' start is set
+            // again from that moment (21 Nov 2026): the first pulled sample,
+            // its lead-in silence and the device's buffer ahead of the
+            // speaker (VoiceLineTiming.DeviceAheadMs) - nearer the moment the
+            // room hears the first word than the registration above, so a
+            // cut-off line is heard for its full CutLineHeardAtLeastMs.
+            var leadMs = (long)leadFor.TotalMilliseconds;
+            ISampleProvider source = new FirstReadSampleProvider(rawReader.ToSampleProvider(), () =>
+            {
+                NoteWordsStartFromFirstSample(stop, leadMs);
+                started?.Invoke();
+            });
 
             // WHY (1 Nov 2026, asked for by Asher): the Big Screen puts each
             // driver's name and photo up as the introductions reach them, and
@@ -734,10 +840,21 @@ public sealed partial class AnnouncementService
         using var stop = new CancellationTokenSource();
         var heardToTheEnd = false;
 
+        bool cutAsSoonAsHeard;
+
         lock (ActiveOutputLock)
         {
             _activeLine = stop;
             _activeLineWordsAtMs = TimingClock.NowMs + (long)(leadingSilenceSeconds * 1000);
+
+            // See PlayPcmAsync: a cut asked for in the moment before this registered.
+            cutAsSoonAsHeard = _cutTheLineAboutToPlay;
+            _cutTheLineAboutToPlay = false;
+        }
+
+        if (cutAsSoonAsHeard)
+        {
+            CutAfterABeat(stop, _activeLineWordsAtMs);
         }
 
         try
@@ -748,9 +865,14 @@ public sealed partial class AnnouncementService
                 return;
             }
 
-            ISampleProvider source = timing is null
-                ? line
-                : new FirstReadSampleProvider(line, () => timing.FirstPulled(TimingClock.NowMs));
+            // Its words' start set again from the first pulled sample (21 Nov
+            // 2026) - see PlayPcmAsync.
+            var leadMs = (long)(leadingSilenceSeconds * 1000);
+            ISampleProvider source = new FirstReadSampleProvider(line, () =>
+            {
+                NoteWordsStartFromFirstSample(stop, leadMs);
+                timing?.FirstPulled(TimingClock.NowMs);
+            });
 
             await AudioBus.PlayAsync(source, (float)Math.Clamp(volume, 0.0, AudioBus.MaxBoost), stop.Token, allowBoost: true, voice: true, offAir: !onAir);
 

@@ -715,8 +715,12 @@ public sealed partial class AnnouncementService
             // IsPriorityAnnouncement, which kept the post-race recap -
             // queued as a Reminder - and let it read the last race's
             // result over this one. See SurvivesAFlag.
-            clearedVoice = BinQueuedLocked(item => !SurvivesAFlag(item.Type), ref giveBack);
+            clearedVoice = BinQueuedLocked(item => !SurvivesAFlag(item.Type), ref giveBack, withdrawText: true);
         }
+
+        // A cut a position report asked for before it registered is never
+        // for the flag call (21 Nov 2026) - see StopCurrentPlaybackAfterABeat.
+        ForgetPendingCut();
 
         GiveBackLost(giveBack);
 
