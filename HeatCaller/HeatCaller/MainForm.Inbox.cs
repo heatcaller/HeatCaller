@@ -66,6 +66,7 @@ public partial class MainForm
             }
 
             HideInboxDock();
+            ShowInboxDockedOnRaceControl();
             form.Dispose();
         };
 
@@ -127,6 +128,52 @@ public partial class MainForm
         }
 
         form.ShowDocked(docked);
+        ShowInboxDockedOnRaceControl();
+    }
+
+    /// <summary>The inbox is open and in the dock, not a window of its own.</summary>
+    private bool InboxDockedOnScreen =>
+        _inboxForm is { IsDisposed: false } open && InboxDockButton.DockedOnScreen(open: true, inItsOwnWindow: open.TopLevel);
+
+    /// <summary>Race Control's Dock Inbox button reads Undock Inbox while the inbox is docked on screen.</summary>
+    private void ShowInboxDockedOnRaceControl() => _raceControlControl?.ShowInboxDocked(InboxDockedOnScreen);
+
+    /// <summary>
+    /// Race Control's Dock Inbox button (22 Nov 2026, asked for by Asher):
+    /// docks the inbox - opening it if it is closed - or makes it a window
+    /// of its own again. The same saved choice as the tick at the inbox's
+    /// foot, set before the window moves so the tick, following the window,
+    /// has nothing left to ask for.
+    /// </summary>
+    internal void DockInboxFromRaceControl(bool dock)
+    {
+        if (_closingDown)
+        {
+            return;
+        }
+
+        if (_settings.InboxDocked != dock)
+        {
+            _settings.InboxDocked = dock;
+            _settings.Save();
+        }
+
+        if (_inboxForm is not { IsDisposed: false } open)
+        {
+            // Closed: it opens where the choice just saved says.
+            ShowInbox(InboxFilter.All);
+            return;
+        }
+
+        // The tick could never be pressed on a minimised window; this
+        // button can. Docked as it stood, it would go in the dock still
+        // minimised - a strip with nothing in it.
+        if (dock && open.TopLevel && open.WindowState != FormWindowState.Normal)
+        {
+            open.WindowState = FormWindowState.Normal;
+        }
+
+        HostInbox(open, dock);
     }
 
     /// <summary>

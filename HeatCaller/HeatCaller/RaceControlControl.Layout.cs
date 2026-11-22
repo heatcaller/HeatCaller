@@ -315,7 +315,15 @@ public sealed partial class RaceControlControl
         // starts.
         // Tight (15 Nov 2026, asked for by Asher: "on one level"): each button
         // as wide as its caption, so the row fits on one line beside the clock.
-        var footer = new ButtonBar(tight: true).With(_chkStartWithOnAir, _swWarmUpFirst, _swAutoStart, _btnFormat, _btnExpandBoard);
+        // Dock Inbox (22 Nov 2026) after Expand: both change what stands
+        // beside the board - see RaceControlControl.Desk.
+        BuildDockInboxButton();
+        var footer = new ButtonBar(tight: true).With(_chkStartWithOnAir, _swWarmUpFirst, _swAutoStart, _btnFormat, _btnExpandBoard, _btnDockInbox);
+
+        // After the row's own sizing of it, which runs first: a picture, so square.
+        SquareDockInboxButton();
+        _btnDockInbox.FontChanged += (_, _) => SquareDockInboxButton();
+        _btnDockInbox.SizeChanged += (_, _) => SquareDockInboxButton();
 
         // The switches are shorter than the buttons beside them; the bar lines
         // everything up along the top, so they are brought down to their middle.

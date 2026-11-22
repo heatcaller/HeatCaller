@@ -2221,6 +2221,11 @@ public partial class MainForm
         _raceControlControl.ExpandBoardRequested += SlideNavIconsOnly;
         _raceControlControl.ShowNavNarrowed(_navIconsOnly);
 
+        // Dock Inbox (22 Nov 2026), beside Expand: the inbox into the dock
+        // down the right of this window, or back out of it.
+        _raceControlControl.DockInboxRequested += DockInboxFromRaceControl;
+        ShowInboxDockedOnRaceControl();
+
         // Brings Race Control forward without closing the announcer's
         // window. It used to be a tab, so "Race Control" meant leaving the
         // announcer's page; now the two can be side by side and this only
