@@ -225,7 +225,8 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         var queue = Source("AnnouncementService.VoiceQueue.cs");
 
         Assert.Contains("&& !(type == AnnouncementEventType.Reminder && IsLapBoundCall(item.Type))", queue, StringComparison.Ordinal);
-        Assert.Contains("waiting.Facts is not null || waiting.Type == AnnouncementEventType.Reminder", queue, StringComparison.Ordinal);
+        // An AI line's stamp, not a template call's (21 Nov 2026) - see TemplateCallStampTests.
+        Assert.Contains("waiting.Facts is { FromTemplate: false } || waiting.Type == AnnouncementEventType.Reminder", queue, StringComparison.Ordinal);
     }
 
     // --- Which calls are about the lap just done ----------------------------
@@ -602,7 +603,8 @@ public sealed class StaleCallsAtTheSpeakerTests : IDisposable
         Assert.Contains("sayByMs ??= IsLapBoundCall(type) ? LapSeenAt(transponder) + SayWithinMsFor(type) : null;", queue, StringComparison.Ordinal);
 
         // An AI line no longer bins the lap calls ahead of it.
-        Assert.Contains("if (isPriority && facts is null)", queue, StringComparison.Ordinal);
+        // Only an AI line: a template call's stamp (21 Nov 2026) changes nothing here.
+        Assert.Contains("if (isPriority && facts is not { FromTemplate: false })", queue, StringComparison.Ordinal);
     }
 
     [Fact]

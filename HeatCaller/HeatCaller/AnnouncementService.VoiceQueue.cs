@@ -1288,12 +1288,17 @@ public sealed partial class AnnouncementService
         // left out the per-lap batch, the field window and a busy window.
         sayByMs ??= IsLapBoundCall(type) ? LapSeenAt(transponder) + SayWithinMsFor(type) : null;
 
+        // And the race as it is now (21 Nov 2026): a template call is held to
+        // the race the way an AI line is - see TemplateFactsFor. A call kept
+        // for the end of a line comes back with the stamp it went in with.
+        facts ??= TemplateFactsFor(type);
+
         // Written against a race that has already moved on, or a call kept
         // for the end of a line that ran past its few seconds - nothing to
         // queue, and nothing to put on the screens.
         if (WhyStale(sayByMs, facts) is { } untrue)
         {
-            StatusMessage?.Invoke(facts is not null
+            StatusMessage?.Invoke(facts is { FromTemplate: false }
                 ? $"[voice] Dropped an AI line before it was queued - {untrue}: \"{displayText ?? onAir ?? type.ToString()}\"."
                 : $"[voice] Dropped {type} before it was queued - {untrue}.");
             NoteKeptCallLost(heldOver, type, transponder, displayText, untrue);
@@ -1459,7 +1464,7 @@ public sealed partial class AnnouncementService
             // colour about the race, and the lap calls waiting ahead of it are
             // the race. It used to bin them - "Cleared 1 queued announcement
             // to make way for Reminder" - see AnnouncementService.Freshness.
-            if (isPriority && facts is null)
+            if (isPriority && facts is not { FromTemplate: false })
             {
                 // Drop any queued-but-not-yet-started routine announcements.
                 // Once a flag is out, lap chatter from a moment ago is stale
@@ -1507,7 +1512,7 @@ public sealed partial class AnnouncementService
             if (IsLapBoundCall(type))
             {
                 at = Math.Min(at, LapCallSlot(_voiceQueue
-                    .Select(waiting => waiting.Facts is not null || waiting.Type == AnnouncementEventType.Reminder)
+                    .Select(waiting => waiting.Facts is { FromTemplate: false } || waiting.Type == AnnouncementEventType.Reminder)
                     .ToList()));
             }
 
@@ -1885,7 +1890,7 @@ public sealed partial class AnnouncementService
 
             if (stale is not null)
             {
-                StatusMessage?.Invoke(facts is not null
+                StatusMessage?.Invoke(facts is { FromTemplate: false }
                     ? $"[voice] Dropped a waiting AI line unheard - {stale}."
                     : $"[voice] Dropped {dequeuedType} unheard - {stale}.");
                 WithdrawAnnouncementText(shown);
