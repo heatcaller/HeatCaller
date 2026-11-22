@@ -844,6 +844,19 @@ public sealed partial class AnnouncerControl : UserControl
     });
 
     /// <summary>A feed entry marked as dropped unheard - see OnAnnouncementTextWithdrawn.</summary>
+    /// <summary>
+    /// What LAST RACE SUMMARY says before there is one.
+    ///
+    /// WHY (22 Nov 2026, the owner, from the Voice of the Night video): on a
+    /// club without AI Commentary it said "Commentary is off", right beside a
+    /// running order and talking points from an announcer that was calling
+    /// every race. It read as if the announcer was off. Only the summary needs
+    /// AI Commentary, so that is all it now says is missing.
+    /// </summary>
+    internal static string NoSummaryText(bool commentaryAvailable) => commentaryAvailable
+        ? "No race summary yet - one is generated after the checkered flag."
+        : "Race summaries need AI Commentary (Voice > AI Commentary). The race calls don't - they carry on without it.";
+
     internal static string FeedLineNotSaid(string line) => line + "   (not said - out of date)";
 
     /// <summary>
@@ -1201,9 +1214,7 @@ public sealed partial class AnnouncerControl : UserControl
         else
         {
             SetSummaryCaption(SummaryCaption);
-            _lblLastSummary.Text = _commentary?.IsAvailable == true
-                ? "No race summary yet - one is generated after the checkered flag."
-                : "Commentary is off. Turn it on at Voice > AI Commentary.";
+            _lblLastSummary.Text = NoSummaryText(_commentary?.IsAvailable == true);
             _lblLastSummary.ForeColor = AppTheme.TextMuted;
         }
     }
