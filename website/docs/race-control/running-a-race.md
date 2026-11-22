@@ -24,6 +24,8 @@ Two buttons give the leaderboard more room. Both slide into place, and both are 
 - **▴ in the clock's corner** folds away the buttons and level meters under the clock. They slide off to the right, the clock shrinks to the height of the Race Control card beside it, and the leaderboard widens across the whole page under them, keeping its place. Press **▾** to bring them back. Their keys (<kbd>F8</kbd>, <kbd>B</kbd>, <kbd>A</kbd> and <kbd>R</kbd>) still work while they're folded away.
 - **Expand**, at the foot of the leaderboard, folds both sides at once: the sidebar narrows to its icons and the column under the clock folds away. It then reads **Restore**, which opens both again.
 
+**Dock Inbox**, beside **Expand**, puts the [Inbox](inbox.md) in a panel down the right of the main window, opening it if it's closed. It then reads **Undock Inbox**, which makes the Inbox a window of its own again. See [Docking it in the main window](inbox.md#docking-it-in-the-main-window).
+
 ## The flag row
 
 The row changes with the race, so the buttons you need are the only ones there:

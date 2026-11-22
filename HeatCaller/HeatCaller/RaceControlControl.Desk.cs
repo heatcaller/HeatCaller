@@ -56,6 +56,44 @@ public partial class RaceControlControl
     /// <summary>The announcer strip's Notes or Votes was clicked: the host opens the Desk Inbox on that chip.</summary>
     internal event Action<InboxFilter>? InboxRequested;
 
+    /// <summary>
+    /// DOCK INBOX (22 Nov 2026, asked for by Asher: "make a button next to
+    /// expand on race control to dock the inbox"). At the foot of the board,
+    /// beside Expand: one press puts the inbox in the dock down the right of
+    /// the main window - opening it if it is closed - and it then reads
+    /// Undock Inbox, which makes it a window of its own again. Before, it
+    /// could only be docked from the tick at the inbox's own foot, and the
+    /// flag row's Inbox button is only there while something is waiting.
+    /// The rules are in <see cref="InboxDockButton"/>.
+    /// </summary>
+    private readonly Button _btnDockInbox = new() { Text = InboxDockButton.Caption(dockedOnScreen: false) };
+
+    /// <summary>Dock Inbox was pressed: the host docks the inbox (true) or makes it a window of its own again (false).</summary>
+    internal event Action<bool>? DockInboxRequested;
+
+    /// <summary>The inbox is docked on screen now - told by MainForm whenever it moves, opens or closes.</summary>
+    private bool _inboxDockedOnScreen;
+
+    /// <summary>The Dock Inbox button - for the tests.</summary>
+    internal Button DockInboxButton => _btnDockInbox;
+
+    /// <summary>The inbox docked, undocked or closed, from anywhere - for Dock Inbox's caption.</summary>
+    internal void ShowInboxDocked(bool dockedOnScreen)
+    {
+        _inboxDockedOnScreen = dockedOnScreen;
+
+        var caption = InboxDockButton.Caption(dockedOnScreen);
+
+        if (_btnDockInbox.Text != caption)
+        {
+            _btnDockInbox.Text = caption;
+        }
+    }
+
+    /// <summary>Wires Dock Inbox. Called once, by BuildLayout.</summary>
+    private void BuildDockInboxButton() =>
+        _btnDockInbox.Click += (_, _) => DockInboxRequested?.Invoke(InboxDockButton.DockOnPress(_inboxDockedOnScreen));
+
     /// <summary>The badge's colour: red while anything waiting holds up the next race, dark otherwise.</summary>
     internal static Color DeskBadgeColour(bool urgent) => urgent ? DeskBadgeRed : DeskBadgeCalm;
 

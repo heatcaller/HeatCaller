@@ -177,7 +177,7 @@ Its columns are **Sent**, **Kind**, **From**, **What**, **Answer** and **Ref**. 
 
 ## Docking it in the main window
 
-Tick **Dock in the main window** and the Inbox moves into a panel down the right of the main window, beside Race Control. Drag the splitter between them to make it wider or narrower; the width is remembered.
+Tick **Dock in the main window** and the Inbox moves into a panel down the right of the main window, beside Race Control. **Dock Inbox**, beside **Expand** at the foot of Race Control's leaderboard, does the same in one press, and opens the Inbox first if it's closed. Drag the splitter between them to make it wider or narrower; the width is remembered.
 
 Narrower than about 760 pixels, it rearranges itself to fit:
 
@@ -188,4 +188,4 @@ Narrower than about 760 pixels, it rearranges itself to fit:
 
 ![The Inbox docked down the right of the main window: the filters as chips across the top from All to Done, the list in two-line rows, and the picked Skip my race request with Approve, Decline and Later in a bar under it](../assets/images/inbox-docked.png)
 
-Untick **Dock in the main window** to make it a window of its own again.
+Untick **Dock in the main window**, or press **Undock Inbox** on Race Control, to make it a window of its own again. **Close** closes the docked Inbox, and Race Control's button reads **Dock Inbox** again.
