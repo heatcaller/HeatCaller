@@ -320,6 +320,11 @@ public sealed partial class RaceControlControl
         BuildDockInboxButton();
         var footer = new ButtonBar(tight: true).With(_chkStartWithOnAir, _swWarmUpFirst, _swAutoStart, _btnFormat, _btnExpandBoard, _btnDockInbox);
 
+        // After the row's own sizing of it, which runs first: a picture, so square.
+        SquareDockInboxButton();
+        _btnDockInbox.FontChanged += (_, _) => SquareDockInboxButton();
+        _btnDockInbox.SizeChanged += (_, _) => SquareDockInboxButton();
+
         // The switches are shorter than the buttons beside them; the bar lines
         // everything up along the top, so they are brought down to their middle.
         footer.Layout += (_, _) =>

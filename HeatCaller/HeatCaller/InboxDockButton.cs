@@ -17,7 +17,12 @@ namespace HeatCaller;
 /// </summary>
 internal static class InboxDockButton
 {
-    /// <summary>The caption: what a press would do.</summary>
+    /// <summary>The button's tooltip: its name, then where the inbox goes.</summary>
+    internal static string Tip(bool dockedOnScreen) => dockedOnScreen
+        ? "Undock Inbox - the inbox goes back to a window of its own."
+        : "Dock Inbox - the inbox opens down the right of this window, beside the board.";
+
+    /// <summary>The button's name - its tooltip's first words, and what a screen reader says: what a press would do.</summary>
     internal static string Caption(bool dockedOnScreen) => dockedOnScreen ? "Undock Inbox" : "Dock Inbox";
 
     /// <summary>

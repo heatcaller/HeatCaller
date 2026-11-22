@@ -65,8 +65,22 @@ public partial class RaceControlControl
     /// could only be docked from the tick at the inbox's own foot, and the
     /// flag row's Inbox button is only there while something is waiting.
     /// The rules are in <see cref="InboxDockButton"/>.
+    ///
+    /// A PICTURE, NOT WORDS (22 Nov 2026, Asher's pick of three): the row
+    /// it stands on was made tight to stay "on one level" (15 Nov), and at
+    /// a 1280-wide window it has 46 pixels left where "Dock Inbox" needs
+    /// 120 - in words the button dropped to a second row and the board lost
+    /// a driver's row. So it is a square with a window drawn in it, a panel
+    /// down its right-hand side - filled while the inbox is docked - and
+    /// the words are its tooltip and its name for a screen reader.
     /// </summary>
-    private readonly Button _btnDockInbox = new() { Text = InboxDockButton.Caption(dockedOnScreen: false) };
+    private readonly Button _btnDockInbox = new()
+    {
+        Text = string.Empty,
+        AccessibleName = InboxDockButton.Caption(dockedOnScreen: false),
+    };
+
+    private readonly ToolTip _dockInboxTip = new();
 
     /// <summary>Dock Inbox was pressed: the host docks the inbox (true) or makes it a window of its own again (false).</summary>
     internal event Action<bool>? DockInboxRequested;
@@ -84,15 +98,68 @@ public partial class RaceControlControl
 
         var caption = InboxDockButton.Caption(dockedOnScreen);
 
-        if (_btnDockInbox.Text != caption)
+        if (_btnDockInbox.AccessibleName != caption)
         {
-            _btnDockInbox.Text = caption;
+            _btnDockInbox.AccessibleName = caption;
+            _dockInboxTip.SetToolTip(_btnDockInbox, InboxDockButton.Tip(dockedOnScreen));
+            _btnDockInbox.Invalidate();
         }
     }
 
-    /// <summary>Wires Dock Inbox. Called once, by BuildLayout.</summary>
-    private void BuildDockInboxButton() =>
+    /// <summary>Wires Dock Inbox. Called once, by BuildLayout, before the button goes on its row.</summary>
+    private void BuildDockInboxButton()
+    {
         _btnDockInbox.Click += (_, _) => DockInboxRequested?.Invoke(InboxDockButton.DockOnPress(_inboxDockedOnScreen));
+        _btnDockInbox.Paint += (_, e) => PaintDockInboxIcon(e.Graphics);
+
+        AppTheme.StyleToolTip(_dockInboxTip, keep: true);
+        _dockInboxTip.SetToolTip(_btnDockInbox, InboxDockButton.Tip(dockedOnScreen: false));
+    }
+
+    /// <summary>
+    /// Dock Inbox as wide as it is tall. Its row sizes a button to its
+    /// caption, and this one has none - left to the row it is a sliver. So
+    /// whenever the row has sized it (on going in, and at a new text size)
+    /// it is squared off again.
+    /// </summary>
+    private void SquareDockInboxButton()
+    {
+        if (_btnDockInbox.Width != _btnDockInbox.Height)
+        {
+            _btnDockInbox.Width = _btnDockInbox.Height;
+        }
+    }
+
+    /// <summary>The picture: a window with a panel down its right-hand side, filled while the inbox is docked there.</summary>
+    private void PaintDockInboxIcon(Graphics g)
+    {
+        var saved = g.Save();
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        var width = Math.Min(UiLayout.AtDpi(18), _btnDockInbox.Width - UiLayout.AtDpi(12));
+        var height = width * 3 / 4;
+        var box = new Rectangle((_btnDockInbox.Width - width) / 2, (_btnDockInbox.Height - height) / 2, width, height);
+        var split = box.Right - width * 2 / 5;
+        var ink = _btnDockInbox.Enabled ? _btnDockInbox.ForeColor : AppTheme.TextMuted;
+
+        using (var pen = new Pen(ink, UiLayout.AtDpi(1) * 1.5f))
+        using (var path = AppTheme.RoundedRect(box, UiLayout.AtDpi(2)))
+        {
+            if (_inboxDockedOnScreen)
+            {
+                using var fill = new SolidBrush(ink);
+                var clip = g.Clip;
+                g.SetClip(new Rectangle(split, box.Top, box.Right - split + 1, box.Height + 1));
+                g.FillPath(fill, path);
+                g.Clip = clip;
+            }
+
+            g.DrawPath(pen, path);
+            g.DrawLine(pen, split, box.Top, split, box.Bottom);
+        }
+
+        g.Restore(saved);
+    }
 
     /// <summary>The badge's colour: red while anything waiting holds up the next race, dark otherwise.</summary>
     internal static Color DeskBadgeColour(bool urgent) => urgent ? DeskBadgeRed : DeskBadgeCalm;
