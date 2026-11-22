@@ -89,6 +89,10 @@ public sealed class VoiceSettingsStore
         ["[cheerful] Badge for {driver} - {achievement}."] = "[cheerful] Achievement for {driver} - {achievement}.",
         ["[excited] {driver} is dialled in - {streak} straight!"] = "[excited] {driver} is dialed in - {streak} straight!",
         ["[shouting] Chequers are out. Race complete!"] = "[shouting] Checkered flag is out. Race complete!",
+
+        // WHY (22 Nov 2026, the owner): the one track record line that didn't name the driver.
+        // A record broken twice in a race sounded like the first driver's, said again.
+        ["[awe] That is the fastest lap this track has ever seen!"] = "[awe] {driver}, {time} - that is the fastest lap this track has ever seen!",
     };
 
     /// <summary>

@@ -1408,7 +1408,11 @@ p.Events[nameof(AnnouncementEventType.JumpStart)] = new AnnouncementEventConfig
                 "[shouting] The track record is GONE - {driver}, {time}!",
                 "[shouting] Nobody has ever gone faster here. {driver}, {time}!",
                 "[awe] History made - {driver} takes the track record with {time}!",
-                "[awe] That is the fastest lap this track has ever seen!",
+                // WHY (22 Nov 2026, the owner, from the Voice of the Night video): every record line
+                // names the driver. This one used to be "[awe] That is the fastest lap this track has
+                // ever seen!" - with no name, so when a second driver broke a record set moments before,
+                // the room heard it as more praise for the first one.
+                "[awe] {driver}, {time} - that is the fastest lap this track has ever seen!",
                 "[shouting] {driver} rewrites the record books - {time}!",
                 "[awe] All-time best! {driver} with {time}!",
                 "[shouting] The new standard is {time}, set by {driver}!",
