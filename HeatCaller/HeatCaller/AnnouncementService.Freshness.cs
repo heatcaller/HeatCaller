@@ -24,8 +24,14 @@ namespace HeatCaller;
 /// one car and its team, which names no lap (bug hunt 20). A quicker lap or
 /// a lap taken off then leaves it standing.
 /// </param>
+/// <param name="FromTemplate">
+/// True for the stamp a template call carries (21 Nov 2026) - see
+/// AnnouncementService.TemplateFactsFor - rather than an AI line's. The
+/// race test is the same; only what an AI line alone does (wait behind the
+/// lap calls, spare the routine calls a priority call bins) goes by this.
+/// </param>
 public sealed record RaceFactsStamp(long Race, long FastestLaps, long LeadChanges, int LeaderLaps, long AtMs, long? SayByMs = null,
-    int? LeaderLapsAllowed = 1, bool LeadMatters = true, long LapsTakenOff = 0, bool LapTimesMatter = true);
+    int? LeaderLapsAllowed = 1, bool LeadMatters = true, long LapsTakenOff = 0, bool LapTimesMatter = true, bool FromTemplate = false);
 
 /// <summary>
 /// Lines that are no longer true by the time they would be heard (8 Nov
@@ -298,7 +304,11 @@ public sealed partial class AnnouncementService
     /// </summary>
     internal static string? WhyNoLongerTrue(RaceFactsStamp then, RaceFactsStamp now)
     {
-        if (now.Race != then.Race || now.LeaderLaps < then.LeaderLaps)
+        // A template call only by a new race (21 Nov 2026): in practice and
+        // qualifying the board is ordered by best lap, so the car on top can
+        // have fewer laps than the last one, and every lap call waiting would
+        // have gone with it. An AI line about the front is still dropped.
+        if (now.Race != then.Race || (!then.FromTemplate && now.LeaderLaps < then.LeaderLaps))
         {
             return "the race it was about is over";
         }
@@ -341,6 +351,42 @@ public sealed partial class AnnouncementService
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The stamp a template call carries (21 Nov 2026): the race as it is
+    /// now, so the call is held to the same test an AI line is - when it is
+    /// queued, when it comes off the queue, once it is rendered, and on every
+    /// sweep - with a profile that only drops it for what makes it untrue.
+    /// Null for a call no race fact can overtake (instructions, flags, the
+    /// finish), which keeps the rules it has.
+    /// </summary>
+    /// <remarks>
+    /// A call about one car's lap is not made untrue by the leader starting
+    /// another lap, by another car's quicker lap or by a lead change, so it
+    /// tolerates all three; it is still dropped when the race it was about is
+    /// over or reset, or its leader's laps go back (a ruling). A fastest-lap
+    /// or record call is also dropped by a quicker lap or a lap taken off; a
+    /// lead change or a gap to the leader by a change of leader. Its own
+    /// deadline stays where it was (SayByMs on the queued item), so the stamp
+    /// carries none.
+    /// </remarks>
+    internal RaceFactsStamp? TemplateFactsFor(AnnouncementEventType type)
+    {
+        if (!IsLapBoundCall(type) && !IsTimeLeftCall(type))
+        {
+            return null;
+        }
+
+        return RaceFactsNow() with
+        {
+            SayByMs = null,
+            LeaderLapsAllowed = null,
+            LeadMatters = type is AnnouncementEventType.LeaderChange or AnnouncementEventType.FinalLapsGap,
+            LapTimesMatter = type is AnnouncementEventType.FastLap or AnnouncementEventType.RecordPace
+                or AnnouncementEventType.SplitRecordPace or AnnouncementEventType.FastestSector,
+            FromTemplate = true,
+        };
     }
 
     /// <summary>Why a queued line is no longer worth saying now, or null. Any thread.</summary>
@@ -539,7 +585,7 @@ public sealed partial class AnnouncementService
         if (binned > 0)
         {
             StatusMessage?.Invoke(
-                $"[voice] Dropped {Plural.Of(binned, "waiting AI line")} unheard - {why![0]}.");
+                $"[voice] Dropped {Plural.Of(binned, "waiting line")} unheard - {why![0]}.");
         }
     }
 
