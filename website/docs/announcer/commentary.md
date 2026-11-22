@@ -1611,7 +1611,7 @@ If a claim is ever still held after six minutes it is let go and the console say
 
 ## Using the recap on the Announcer screen
 
-The last race summary is shown under **LAST RACE SUMMARY** on the Announcer screen (**Announcer Screen** on **Race Control**). To say it again, press **Play again** in the [Broadcast window](#the-broadcast-window) while the recap is the last segment: it repeats the stored recap with its show round it rather than asking the model again, so it works even if nothing can write commentary any more. When commentary is off, that area says "Commentary is off. Turn it on at Voice > AI Commentary." See [Announcer screen](voice.md#announcer-screen).
+The last race summary is shown under **LAST RACE SUMMARY** on the Announcer screen (**Announcer Screen** on **Race Control**). To say it again, press **Play again** in the [Broadcast window](#the-broadcast-window) while the recap is the last segment: it repeats the stored recap with its show round it rather than asking the model again, so it works even if nothing can write commentary any more. Without AI Commentary, that area says "Race summaries need AI Commentary (Voice > AI Commentary). The race calls don't - they carry on without it." See [Announcer screen](voice.md#announcer-screen).
 
 ## Privacy
 
