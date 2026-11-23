@@ -257,7 +257,7 @@ Click **Test Connection**. A good result says `Connected as Acme RC.` (your club
 
 ## The HeatCaller voice
 
-The relay can also speak. With an ElevenLabs key of your own on the relay, the clubs you switch on get natural announcer voices with no account, no key and no bill of their own; the laptop sends the words and the name of a voice, and gets audio back. The clubs' side of it is in [Voice announcements](../announcer/voice.md#the-heatcaller-voice).
+The relay can also speak. With an ElevenLabs key of your own on the relay, the clubs you switch on get natural announcer voices with no account or key of their own; the laptop sends the words and the name of a voice, and gets audio back. The clubs' side of it is in [Voice announcements](../announcer/voice.md#the-heatcaller-voice).
 
 This is optional, and the relay works exactly as it did without it. Leave the key out and the relay starts, says so in the log, and every club carries on with its own key or the free Kokoro voice.
 

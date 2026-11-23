@@ -11,6 +11,11 @@
  */
 export const CLOCK_JS = `
 var HC_H12 = (function () { try { return ({ '24': false, '12': true })[document.documentElement.getAttribute('data-clock') || '']; } catch (e) { return undefined; } })();
+// THE HOUR ON A 12-HOUR CLOCK (22 Nov 2026, the owner, from the Voice of the
+// Night video): times were drawn with hour: "2-digit", which on a 12-hour
+// clock reads "06:08 PM" - nobody writes a 12-hour time that way. A 12-hour
+// clock now gets "6:08 PM"; a 24-hour one keeps "18:08" and "06:08".
+var HC_HOUR = HC_H12 === false ? "2-digit" : HC_H12 === true ? "numeric" : (function () { try { return new Intl.DateTimeFormat([], { hour: "numeric" }).resolvedOptions().hour12 ? "numeric" : "2-digit"; } catch (e) { return "2-digit"; } })();
 // THE CLUB'S TIME ZONE (14 Nov 2026, driver phone plan item 15). The laptop
 // says which zone the club is in (data-tz on <html>, an IANA name); every
 // date and time the pages draw is then in the club's zone, not the phone's

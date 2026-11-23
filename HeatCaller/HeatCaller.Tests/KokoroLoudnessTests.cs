@@ -141,7 +141,7 @@ public sealed class KokoroLoudnessTests
     {
         var shortNames = File.ReadAllText(Path.Combine(RepoRoot(), "HeatCaller", "HeatCaller", "AnnouncementService.ShortNames.cs"));
 
-        Assert.Contains("RaceNumbers.SpokenRoundNames(ShortensForCloudVoice() ? Shortened(text) : text, cloudVoice: true)", shortNames);
+        Assert.Contains("RaceNumbers.SpokenRoundNames(ShortensForCloudVoice() ? Shortened(text, spoken: true) : text, cloudVoice: true)", shortNames);
     }
 
     [Theory]

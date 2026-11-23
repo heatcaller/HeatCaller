@@ -6,7 +6,7 @@ import { isValidClubId } from "./tenancy.js";
 
 /**
  * The HeatCaller voice: ElevenLabs, spoken through the relay, so a club
- * needs no account, no key and no bill of its own.
+ * needs no account and no key of its own.
  *
  * WHY THIS EXISTS AT ALL. A club's laptop could hold an ElevenLabs key -
  * that is what "bring your own key" still does - but a key HeatCaller

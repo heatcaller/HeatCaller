@@ -453,7 +453,9 @@ public partial class MainForm
         // queue. Without this line the page lists the names and says the
         // voice is not available, and Hear It is not built at all, which is
         // deliberate: a dead button reads as a broken feature.
-        driverProfiles.SpeakName = text => _announcer.SpeakTest(text, _voiceStore.Current.Speed);
+        // Through NameAsTheRoomHearsIt (22 Nov 2026), so a name not saved yet is
+        // said as the race will say it - see that method.
+        driverProfiles.SpeakName = text => _announcer.SpeakTest(_announcer.NameAsTheRoomHearsIt(text), _voiceStore.Current.Speed);
         driverProfiles.CrewVoices = CrewVoicesForDesk;
         WireUnknownTransponders();
     }
