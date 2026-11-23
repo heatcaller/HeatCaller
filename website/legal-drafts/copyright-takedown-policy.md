@@ -1,6 +1,6 @@
 > **DRAFT for review by a licensed attorney - not legal advice.**
 >
-> **Updated 23 Nov 2026: the agent is registered.** Asher registered HeatCaller LLC with the Copyright Office's DMCA Designated Agent Directory: designation **DMCA-1087259**, agent "Copyright Agent, HeatCaller LLC", at the LLC's address with support@heatcaller.com. Part A below has those details, and the page is up for review as heatcaller-site PR #38 (live once merged). The two policy choices left open are filled in as the draft suggested; counsel may still change them.
+> **Updated 23 Nov 2026: the agent is registered.** Asher registered HeatCaller LLC with the Copyright Office's DMCA Designated Agent Directory: designation **DMCA-1087259**, agent "Copyright Agent, HeatCaller LLC", at the LLC's address with support@heatcaller.com. Part A below has those details, and the page is live at https://heatcaller.com/copyright (heatcaller-site PR #38, merged 23 Nov 2026). The two policy choices left open are filled in as the draft suggested; counsel may still change them.
 > Written 15 Nov 2026 for HeatCaller LLC (plans/children-privacy-and-ip-plan.md, item 3.6). Part A is a page for heatcaller.com. Part B is the owner's checklist for registering a designated agent with the US Copyright Office, which Asher files himself. Points marked **[CHECK]** need a fact or a lawyer's wording before the page goes live. The page must not go live until the agent is registered: the safe harbour in 17 U.S.C. §512(c) depends on it.
 
 # Copyright and takedown policy
@@ -65,7 +65,7 @@ For trademark complaints, a driver's or parent's privacy request, or anything el
 
 ## Part B: owner's checklist for the designated agent
 
-Done 23 Nov 2026: designation **DMCA-1087259**. The first seven boxes are ticked; the page itself goes live when heatcaller-site PR #38 merges.
+Done 23 Nov 2026: designation **DMCA-1087259**. The first seven boxes are ticked; the page is live at https://heatcaller.com/copyright since 23 Nov 2026.
 
 The Copyright Office runs an online directory of designated agents. Asher files this himself.
 
