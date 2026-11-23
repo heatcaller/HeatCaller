@@ -227,7 +227,7 @@ The guide and the updates need the relay redeployed since 6 Nov 2026 (see [Updat
 
 ## The relay also speaks
 
-Once the **Relay** card is filled in and testing clean, the same address, club id and token give the laptop the [HeatCaller voice](../announcer/voice.md#the-heatcaller-voice): natural announcer voices on HeatCaller's own ElevenLabs account, so your club needs no account, no key and no bill.
+Once the **Relay** card is filled in and testing clean, the same address, club id and token give the laptop the [HeatCaller voice](../announcer/voice.md#the-heatcaller-voice): natural announcer voices on HeatCaller's own ElevenLabs account, so your club needs no account and no key.
 
 There's nothing to set up here for it. Choose it under **Speak with** on **Voice → Voice**, pick an announcer voice in **HeatCaller voice:** at the top of **Voice → Cast**, and **Voice Settings** shows your club's allowance for the month. Until the **Relay** card is filled in, **Voice Settings** says "Set the club up on the Club Website page first - the HeatCaller voice speaks through the same relay, with the same token."
 

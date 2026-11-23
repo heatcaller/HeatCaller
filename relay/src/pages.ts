@@ -3442,7 +3442,7 @@ function touched() {
   if (stamp) {
     // While a page is drawn from copies, the time they were read.
     const at = warm && warmAt > 0 ? new Date(warmAt) : new Date();
-    stamp.textContent = 'Updated ' + at.toLocaleTimeString([], { hour12: HC_H12, hour: '2-digit', minute: '2-digit' }) + (typeof hcZoneWord === 'function' ? hcZoneWord(at) : '');
+    stamp.textContent = 'Updated ' + at.toLocaleTimeString([], { hour12: HC_H12, hour: HC_HOUR, minute: '2-digit' }) + (typeof hcZoneWord === 'function' ? hcZoneWord(at) : '');
   }
 }
 
@@ -6499,7 +6499,7 @@ async function loadFlat() {
     html += card({
       id: item.id,
       day: iso,
-      at: d ? d.toLocaleTimeString([], { hour12: HC_H12, hour: '2-digit', minute: '2-digit' }) : '',
+      at: d ? d.toLocaleTimeString([], { hour12: HC_H12, hour: HC_HOUR, minute: '2-digit' }) : '',
       type: body.type,
       label: body.label,
       track: body.track,
@@ -15326,7 +15326,7 @@ function qualPart() {
 // sign-out still clears a timer an older page kept (ME_LEFTOVERS).
 
 function hm(ms) {
-  return new Date(ms).toLocaleTimeString([], { hour12: HC_H12, hour: '2-digit', minute: '2-digit' });
+  return new Date(ms).toLocaleTimeString([], { hour12: HC_H12, hour: HC_HOUR, minute: '2-digit' });
 }
 
 // A time off the laptop, drawn as the phone's own clock reads it - or a

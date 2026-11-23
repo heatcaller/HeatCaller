@@ -37,7 +37,7 @@ Yes. **Demo Mode** runs a fake race through the same race logic, announcer and s
 
 No, and most clubs won't want one. **Voice → Voice** offers three voices:
 
-- **The HeatCaller voice** — natural announcer voices that come with HeatCaller, spoken through your club's relay. No account, no key, no bill. It needs the club set up on the **Club Website** page and internet at the track, it has a monthly allowance of characters, and the wording it speaks is the standard set of lines.
+- **The HeatCaller voice** — natural announcer voices that come with HeatCaller, spoken through your club's relay. No account and no key. It needs the club set up on the **Club Website** page and internet at the track, it has a monthly allowance of characters, and the wording it speaks is the standard set of lines.
 - **Your own ElevenLabs account** — your key and your credits, and complete control of the voice, the tuning and every word.
 - **The free Kokoro voice** — a natural-sounding voice that runs on the club's own PC. No account, no internet, nothing to pay however much the announcer talks, and the wording is yours.
 

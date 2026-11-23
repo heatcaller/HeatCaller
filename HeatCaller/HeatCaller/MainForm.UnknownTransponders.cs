@@ -217,7 +217,7 @@ public partial class MainForm
             fixedTransponder: transponder,
             undo: _undo,
             profiles: _profiles,
-            speakName: text => _announcer.SpeakTest(text, _voiceStore.Current.Speed),
+            speakName: text => _announcer.SpeakTest(_announcer.NameAsTheRoomHearsIt(text), _voiceStore.Current.Speed),
             crewVoices: CrewVoicesForDesk());
 
         if (form.ShowDialog(this) != DialogResult.OK)

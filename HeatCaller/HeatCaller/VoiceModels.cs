@@ -497,7 +497,7 @@ public enum VoiceEngine
 
     /// <summary>
     /// The HeatCaller voice: ElevenLabs, spoken through the club's relay on
-    /// HeatCaller's own account. No key, no bill, and nothing to set up
+    /// HeatCaller's own account. No key, and nothing to set up
     /// beyond the relay the club already has.
     ///
     /// Everything that costs a character is fixed in this mode - the

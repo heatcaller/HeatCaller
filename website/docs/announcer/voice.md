@@ -2,7 +2,7 @@
 
 HeatCaller can call the race out loud: the start, flags, fast laps, lead changes, streaks, the last lap and the finish. It speaks with one of three voices:
 
-- **The HeatCaller voice** — natural announcer voices that come with HeatCaller, spoken through your club's relay. There's no account to sign up for, no key to paste and no bill. This is the one most clubs will use. It needs the relay, it has a monthly allowance, and the wording it speaks is fixed.
+- **The HeatCaller voice** — natural announcer voices that come with HeatCaller, spoken through your club's relay. There's no account to sign up for and no key to paste. This is the one most clubs will use. It needs the relay, it has a monthly allowance, and the wording it speaks is fixed.
 - **Your own ElevenLabs account** — your key, your voices, your credits, and complete control of the voice, the tuning and every word the announcer says.
 - **The free Kokoro voice** — a natural-sounding voice that runs on the club's own PC. No account, no internet, nothing to pay however much the announcer talks, and full control of the wording. It's what a new install speaks with, and it's what speaks whenever the voice you chose can't.
 
@@ -49,7 +49,7 @@ The announcer's voice itself is picked on **Voice → Cast**, on the **Announcer
 
 | Choice | What it is |
 |---|---|
-| **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** | An announcer voice from HeatCaller's own catalog, spoken through your club's relay. Pick one in **HeatCaller voice:** at the top of **Voice → Cast**. Everything that would spend is fixed while it's chosen, and your club has a monthly allowance of characters. See [The HeatCaller voice](#the-heatcaller-voice). |
+| **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key** | An announcer voice from HeatCaller's own catalog, spoken through your club's relay. Pick one in **HeatCaller voice:** at the top of **Voice → Cast**. Everything that would spend is fixed while it's chosen, and your club has a monthly allowance of characters. See [The HeatCaller voice](#the-heatcaller-voice). |
 | **ElevenLabs - natural voices from your own ElevenLabs account (your API key and credits)** | ElevenLabs' online voices, set up on the **ElevenLabs connection** card below, with the voice picked at the top of **Voice → Cast**. It needs a key, a voice and internet at the track, and uses your ElevenLabs credits. Everything on the page is yours to change. |
 | **Kokoro voice - free, natural-sounding, runs on this PC. No account, no internet, nothing billed** | A natural-sounding voice that runs on the laptop itself. It comes with HeatCaller, so there's nothing to sign up for, no internet needed and nothing to pay, however much the announcer talks. The wording is yours to change, and it's also what speaks whenever the voice you chose can't. See [Use the Kokoro voice](#use-the-kokoro-voice). |
 
@@ -67,7 +67,7 @@ Beside the **Race calls** card (under it on a narrow window), the **Juniors** ca
 
 ### Pick a HeatCaller voice
 
-1. On **Voice → Voice**, choose **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** under **Speak with**.
+1. On **Voice → Voice**, choose **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key** under **Speak with**.
 2. Open **Voice → Cast** and pick one of the announcer voices in **HeatCaller voice:**, at the top of the **Announcer** card. Each is listed as its name and a short description, for example "Clubhouse - Warm and clear, easy over a PA". The first one is chosen for you if you've never picked one, so the announcer works without another decision.
 3. Press **Hear It** beside the list to listen to the voice you've highlighted, and **Preview** to hear it say words of your own. See [Hear a voice before you choose it](#hear-a-voice-before-you-choose-it).
 4. Back on **Voice → Voice**, read the line under the HeatCaller choice, which says where your allowance stands.
@@ -452,7 +452,7 @@ On the HeatCaller voice the **Test** buttons are hidden, so **Re-roll Line** is 
 
 A name the voice says wrongly is best fixed with the driver's **Announcer name:** on **Driver Hub**. Changing the words makes a new line, so it's rendered the new way from then on. That works on every voice.
 
-**Shortened names on the paid voices.** With **Shorten published names to a first name and an initial** ticked (it's on unless your club turned it off), a line sent to the HeatCaller voice or your own ElevenLabs account carries each driver's name in the same short form the club's pages use — "Billy S" rather than "Billy Smith" — so a full name never leaves the laptop. That applies to the **Announcer name:** too, and to AI-written recaps. The Kokoro voice speaks on the laptop and sends nothing anywhere, so it still says names in full. To hear full names on a paid voice and keep the short ones online, tick **Say full names aloud with the online voices**, just under it on the Club Website page: the announcer then says full names on every voice, while the club's pages and captions still show the short form, and a line that says a full name isn't sent to people listening along at home.
+**Shortened names on the paid voices.** With **Shorten published names to a first name and an initial** ticked (it's on unless your club turned it off), a line sent to the HeatCaller voice or your own ElevenLabs account carries each driver by first name — "Billy" rather than "Billy Smith" — so a full name never leaves the laptop. Two drivers who share a first name keep the letter the club's pages give them, "Sam J" and "Sam K", so the room can tell them apart. The pages and captions still show "Billy S". That applies to the **Announcer name:** too, and to AI-written recaps. The Kokoro voice speaks on the laptop and sends nothing anywhere, so it still says names in full. To hear full names on a paid voice and keep the short ones online, tick **Say full names aloud with the online voices**, just under it on the Club Website page: the announcer then says full names on every voice, while the club's pages and captions still show the short form, and a line that says a full name isn't sent to people listening along at home.
 
 **Forget All** clears every saved line, after asking first. Everything is then rendered, and paid for, again as it's spoken. It's worth doing after changing something HeatCaller can't see, such as editing a cloned voice in your ElevenLabs account.
 
@@ -779,7 +779,7 @@ Rivalries are also given to the commentary model (the relay's, or the one built 
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill** is grayed out | The relay hasn't said your club has it: the **Club Website** page isn't set up, the relay couldn't be reached, or the club isn't switched on for the voice. The line under that choice says which. | Set the club up on the **Club Website** page, or ask whoever runs your relay. Press **Refresh** once it's done. |
+| **HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key** is grayed out | The relay hasn't said your club has it: the **Club Website** page isn't set up, the relay couldn't be reached, or the club isn't switched on for the voice. The line under that choice says which. | Set the club up on the **Club Website** page, or ask whoever runs your relay. Press **Refresh** once it's done. |
 | "Set the club up on the Club Website page first - the HeatCaller voice speaks through the same relay, with the same token." | No relay address, club id or token on the **Club Website** page. | Fill them in and run **Test Connection**. See [Setting up the Club Website page](../online/setup.md). |
 | "The HeatCaller voice isn't included for this club yet. Your own ElevenLabs key and the free Kokoro voice both work as normal. Its free samples are at the top of the Cast tab to listen to." | Your club is on the relay, but hasn't been given the voice. | Ask whoever runs your relay to switch it on for your club. Meanwhile you can still press **Hear It** on any voice in the list at the top of **Voice → Cast**. See [Hosting the relay](../admin/relay-hosting.md#the-heatcaller-voice). |
 | "Couldn't ask the relay:" and a reason | The relay couldn't be reached when the page asked. | Check the laptop's internet. The list and your chosen voice are left alone, so the announcer keeps working. Press **Refresh** to try again. |

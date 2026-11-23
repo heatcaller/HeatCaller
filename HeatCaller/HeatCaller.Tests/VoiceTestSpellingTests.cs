@@ -37,7 +37,7 @@ public class VoiceTestSpellingTests
         var announcer = Announcer(shorten: true);
 
         Assert.Equal(
-            "Billy S leads the Ay-Main!",
+            "Billy leads the Ay-Main!",
             VoiceSettingsControl.TextTheRaceSpeaks("Billy Smith leads the A-Main!", kokoro: false, announcer.TextForCloudVoice));
     }
 

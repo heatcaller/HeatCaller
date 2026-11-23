@@ -1284,17 +1284,27 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// into grids or rows of their own: radio buttons switch each other off
     /// only among the controls that share their parent.
     /// </summary>
+    /// <summary>
+    /// The HeatCaller voice's choice under Speak with.
+    ///
+    /// WHY (22 Nov 2026, the owner): it ended "no key, no bill". HeatCaller
+    /// itself is paid for, so "no bill" read as if HeatCaller were free. The
+    /// voice is included in the setup; that is what it now says, and no more.
+    /// </summary>
+    internal const string HeatCallerChoiceText =
+        "HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key";
+
     private (Section Card, FieldGrid[] Grids) BuildEngineCard(VoiceProfile current)
     {
         // --- The HeatCaller voice: included, and nothing to set up ---
         //
         // First because it is the one most clubs want: a natural voice with
-        // no account, no key and no bill. Everything that costs a character
+        // no account and no key. Everything that costs a character
         // is fixed while it is chosen - the wording, the voice's settings,
         // the Test buttons - because the account behind it is HeatCaller's,
         // not the club's. A club that wants its own words uses its own key
         // or the free Kokoro voice, where both are theirs to spend.
-        _rdoHeatCaller.Text = "HeatCaller voice - included with your HeatCaller setup. Nothing to sign up for, no key, no bill";
+        _rdoHeatCaller.Text = HeatCallerChoiceText;
         _rdoHeatCaller.AutoSize = true;
 
         _cmbHeatCallerVoice.DropDownStyle = ComboBoxStyle.DropDownList;

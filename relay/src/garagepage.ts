@@ -362,7 +362,7 @@ function when(raw) {
   const d = new Date(at);
   try {
     return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
-      + ' ' + d.toLocaleTimeString(undefined, { hour12: ({ '24': false, '12': true })[document.documentElement.getAttribute('data-clock') || ''], hour: '2-digit', minute: '2-digit' });
+      + ' ' + d.toLocaleTimeString(undefined, { hour12: ({ '24': false, '12': true })[document.documentElement.getAttribute('data-clock') || ''], hour: (({ '24': false, '12': true })[document.documentElement.getAttribute('data-clock') || ''] === false ? '2-digit' : 'numeric'), minute: '2-digit' });
   } catch (e) {
     return d.toISOString().slice(0, 16).replace('T', ' ');
   }
@@ -774,7 +774,7 @@ async function readGarage() {
   // read the pack in the car, the car tonight and the pack charts from here.
   try { document.dispatchEvent(new CustomEvent('hg-garage', { detail: garage })); } catch (e) { /* an old browser: no tiles from it */ }
   const stamp = document.getElementById('stamp');
-  if (stamp) stamp.textContent = 'Updated ' + new Date(Date.now()).toLocaleTimeString(undefined, { hour12: ({ '24': false, '12': true })[document.documentElement.getAttribute('data-clock') || ''], hour: '2-digit', minute: '2-digit' });
+  if (stamp) stamp.textContent = 'Updated ' + new Date(Date.now()).toLocaleTimeString(undefined, { hour12: ({ '24': false, '12': true })[document.documentElement.getAttribute('data-clock') || ''], hour: (({ '24': false, '12': true })[document.documentElement.getAttribute('data-clock') || ''] === false ? '2-digit' : 'numeric'), minute: '2-digit' });
   schedule();
 }
 

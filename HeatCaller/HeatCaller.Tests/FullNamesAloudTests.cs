@@ -24,12 +24,12 @@ public class FullNamesAloudTests
     }
 
     [Fact]
-    public void By_default_the_online_voices_say_the_short_names_the_pages_show()
+    public void By_default_the_online_voices_say_first_names_and_the_pages_show_the_short_names()
     {
         using var data = new TempAppData();
         var announcer = Announcer(shorten: true, fullNamesAloud: false);
 
-        Assert.Equal("Billy S takes the lead from Sam J!", announcer.TextForCloudVoice(Line));
+        Assert.Equal("Billy takes the lead from Sam!", announcer.TextForCloudVoice(Line));
         Assert.Equal("Billy S takes the lead from Sam J!", announcer.TextForPublicPages(Line));
     }
 

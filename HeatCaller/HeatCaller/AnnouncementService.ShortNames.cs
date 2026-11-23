@@ -58,6 +58,7 @@ public sealed partial class AnnouncementService
     private readonly object _shortNamesLock = new();
     private string? _shortNamesKey;
     private (Regex Pattern, Dictionary<string, string> Map)? _shortNames;
+    private (Regex Pattern, Dictionary<string, string> Map)? _spokenNames;
 
     /// <summary>
     /// The words a cloud voice's take of this line is saved under - for
@@ -77,10 +78,14 @@ public sealed partial class AnnouncementService
     /// <summary>The line as a cloud voice should be sent it - see the class note and SayFullNamesWithCloudVoices.</summary>
     /// "A-Main" goes as "Ay-Main" (9 Nov 2026) - see RaceNumbers.SpokenRoundNames.
     private string ForCloudVoice(string text) =>
-        RaceNumbers.SpokenRoundNames(ShortensForCloudVoice() ? Shortened(text) : text, cloudVoice: true);
+        RaceNumbers.SpokenRoundNames(ShortensForCloudVoice() ? Shortened(text, spoken: true) : text, cloudVoice: true);
 
-    /// <summary>The line with every driver's full name in its short form.</summary>
-    private string Shortened(string text)
+    /// <summary>
+    /// The line with every driver's full name in its short form: the pages'
+    /// "Ben S", or with <paramref name="spoken"/> the form the voice says -
+    /// see SpokenNameMap.
+    /// </summary>
+    private string Shortened(string text, bool spoken = false)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -108,9 +113,10 @@ public sealed partial class AnnouncementService
             {
                 _shortNamesKey = key;
                 _shortNames = ShortNamePattern(ShortNameMap(names));
+                _spokenNames = ShortNamePattern(SpokenNameMap(names));
             }
 
-            built = _shortNames;
+            built = spoken ? _spokenNames : _shortNames;
         }
 
         return built is { } shortNames ? ShortenNames(text, shortNames.Pattern, shortNames.Map) : text;
@@ -154,6 +160,87 @@ public sealed partial class AnnouncementService
 
         return map;
     }
+
+    /// <summary>
+    /// What the voice says for each full name while names are shortened: the
+    /// first name alone, or the pages' "Ben S" where two drivers on file share
+    /// that first name and the initial is what tells them apart.
+    ///
+    /// WHY (22 Nov 2026, the owner, from the Voice of the Night video): the
+    /// voice said the pages' form, "Ben S keeps it clean", and the room heard
+    /// a stray letter after every name. Nobody calls a driver that way out
+    /// loud. The first name keeps the name just as private and sounds like a
+    /// person talking; the pages and captions still show "Ben S".
+    /// </summary>
+    internal static Dictionary<string, string> SpokenNameMap(IReadOnlyList<(string Driver, string Spoken)> drivers)
+    {
+        var map = ShortNameMap(drivers);
+
+        // How many drivers go by each first name - each driver counted once,
+        // whichever of their two names carries it.
+        var sharing = drivers
+            .SelectMany(driver => new[] { FirstWord(driver.Driver), FirstWord(driver.Spoken) }
+                .Where(word => word.Length > 0)
+                .Distinct(StringComparer.CurrentCultureIgnoreCase))
+            .GroupBy(word => word, StringComparer.CurrentCultureIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.CurrentCultureIgnoreCase);
+
+        foreach (var full in map.Keys.ToList())
+        {
+            var first = FirstWord(full);
+
+            if (first.Length > 0 && sharing.TryGetValue(first, out var count) && count == 1)
+            {
+                map[full] = first;
+            }
+        }
+
+        return map;
+    }
+
+    /// <summary>
+    /// A name as Hear It should say it: what the room will hear from the voice
+    /// chosen now. The full name on Kokoro, or while full names are said
+    /// aloud; otherwise the race's first-name form (see SpokenNameMap).
+    ///
+    /// WHY (22 Nov 2026, from the Voice of the Night video): Hear It reads the
+    /// box as typed, and a name not saved yet is in no map, so a new
+    /// Announcer name "Zhock Luh-fev" was read in full while the race would
+    /// say "Zhock". The button is there to say a name exactly as the
+    /// announcer will. A name saved already takes its map form; a new one
+    /// takes its first name, unless another driver on file has that first
+    /// name, when it keeps the initial the pages would give it.
+    /// </summary>
+    public string NameAsTheRoomHearsIt(string name)
+    {
+        var trimmed = (name ?? string.Empty).Trim();
+
+        if (trimmed.Length == 0
+            || VoiceEngineInUse is not (VoiceEngine.HeatCaller or VoiceEngine.ElevenLabs)
+            || !ShortensForCloudVoice())
+        {
+            return trimmed;
+        }
+
+        var spoken = Shortened(trimmed, spoken: true);
+
+        if (!string.Equals(spoken, trimmed, StringComparison.Ordinal) || !trimmed.Contains(' '))
+        {
+            return spoken;
+        }
+
+        var first = FirstWord(trimmed);
+        var sharedBy = NamesToShorten().Count(driver =>
+            string.Equals(FirstWord(driver.Driver), first, StringComparison.CurrentCultureIgnoreCase)
+            || string.Equals(FirstWord(driver.Spoken), first, StringComparison.CurrentCultureIgnoreCase));
+
+        return sharedBy == 0
+            ? first
+            : RelayPublisher.DisplayNamesForTheRoom(new[] { trimmed }, abbreviate: true).FirstOrDefault() ?? trimmed;
+    }
+
+    private static string FirstWord(string? name) =>
+        (name ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
 
     /// <summary>
     /// Each full name (two words or more) and the short form the club's
