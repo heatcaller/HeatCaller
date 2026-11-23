@@ -2,9 +2,14 @@
 
 # Owner to-do
 
-Do them in this order. 4 is done, and 3 is registered (its page waits on a merge). 1 and 2 take about 15 minutes each, 3 about 20 minutes, and 5 is waiting on replies.
+Do them in this order. 1 and 4 are done, 3 is registered and its page is live, 2 is ready to sign, and 6 (New York publication) is under way. 1 and 2 take about 15 minutes each, 3 about 20 minutes, and 5 is waiting on replies.
 
-## 1. Name the security coordinator (security-program.md)
+## 1. Name the security coordinator (security-program.md) - DONE 23 Nov 2026
+
+Asher is the coordinator at support@heatcaller.com, adopted 23 Nov 2026, next review 23 Nov 2027 (in the calendar). Support files are kept at most 90 days, security records three years, and family-link and crew codes get a wrong-guess limit (being built). Still blank in the draft: the list of people with admin access (section 5), which is just Asher for now.
+
+The original steps, for the record:
+
 
 1. In the header, write the coordinator's name and email. For a one-person company that is you, at a mailbox you read (support@heatcaller.com works). Then write today's date as **Adopted**, and a year from today as **Next review due**.
 2. Decide the three **[CHECK]** points left:
@@ -13,7 +18,12 @@ Do them in this order. 4 is done, and 3 is registered (its page waits on a merge
    - whether family-link and crew codes need a wrong-guess limit like the PIN one.
 3. Put a reminder in your calendar for the review date.
 
-## 2. Sign the founder IP assignment (founder-ip-assignment.md)
+## 2. Sign the founder IP assignment (founder-ip-assignment.md) - READY TO SIGN
+
+Filled in 23 Nov 2026: both addresses ("506 Pinyon Dr, Schenectady, NY 12303"), formed 26 September 2026 (New York DOS ID 8031449), title Managing Member, Porkbun for the domain and Google for email (confirm it is Google Workspace), no payment or app-store accounts yet, and no employer claims anything. Left: the consideration (ask counsel, or use "US$1 and other good and valuable consideration"), then date and sign both copies.
+
+The original steps, for the record:
+
 
 The repositories and the main accounts are already listed. You fill in:
 
@@ -70,3 +80,13 @@ What to expect, from the vendors' own documentation (16 Nov 2026):
 
 - **ElevenLabs:** Zero Retention Mode is for enterprise customers only, which probably means an enterprise plan.
 - **Anthropic:** zero data retention is granted by sales, for one organization at a time.
+
+## 6. New York LLC publication (Limited Liability Company Law §206) - UNDER WAY
+
+New York's record for HeatCaller LLC (DOS ID 8031449, checked 23 Nov 2026) shows only the Articles of Organization, filed 26 September 2026. A new New York LLC must publish a notice of its formation once a week for six weeks in two newspapers the county clerk names, then file a Certificate of Publication with the Department of State, within 120 days of formation: by about **24 January 2027**. An LLC that misses it has its authority to do business suspended until it files.
+
+1. The publication notice is ready to go (Asher, 23 Nov 2026). Six weekly runs need to start by mid-December to finish in time.
+2. When the newspapers send their affidavits of publication, file them with the Certificate of Publication (form DOS-1708) and the fee.
+3. Check the entity record afterwards: the filing history should list the certificate.
+
+Also on the record: the first **biennial statement is due 30 September 2028**.
