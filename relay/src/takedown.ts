@@ -261,7 +261,7 @@ export function takedownCounts(records: readonly TakedownRecord[], now: Date): {
   const notices = new Set(
     records
       .filter((r) => r.state === "active" && Date.parse(r.takenDownAt) > since.getTime())
-      .map((r) => (r.notice === "" ? r.id : r.notice.toLowerCase().replace(/\s+/g, " "))),
+      .map((r) => (r.notice === "" ? r.id : r.notice.toLowerCase().replace(/\s+/g, " ").trim())),
   );
 
   return {
@@ -398,9 +398,11 @@ export class TakedownBook {
     const running = this.loads.get(club);
 
     if (running !== undefined) {
-      // Somebody else is looking: the same answer, but only one of them
-      // reports the change.
-      return running.then(({ active }) => ({ active, changed: false }));
+      // Somebody else is looking: the same answer, change and all. Each
+      // caller that hears "changed" drops the club's caches itself, so
+      // none can serve from a cache the other has not dropped yet; a
+      // second drop costs one read.
+      return running;
     }
 
     const load = this.look(club).finally(() => this.loads.delete(club));

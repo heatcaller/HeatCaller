@@ -32,8 +32,8 @@ Steps 1 to 4 are done: designation **DMCA-1087259**, agent "Copyright Agent, Hea
 
 - **The page:** heatcaller-site PR #38 adds `/copyright` and a Copyright link in the footer. It is live once you merge it.
 - **The renewal:** put the expiry date from the confirmation (about November 2029) in your calendar.
-- **One-item removal (step 6):** being built on branch `claude/takedown`. Until it merges, a takedown means asking the club, or a hand edit over `fly ssh`.
-- **The notice log:** keep one (date, club, URL, what was done). The removal tool will write one for you.
+- **One-item removal (step 6):** built 23 Nov 2026 on branch `claude/takedown`: `takedown-find`, `takedown`, `takedown-restore` and `takedown-list`, run over `fly ssh console` (steps in the relay hosting guide, "Copyright takedowns"). It works once that branch is merged and the relay deployed; until then a takedown means asking the club. Listen audio and captions still mean asking the club to switch Listen off.
+- **The notice log:** `takedown-list` keeps each takedown with its club, item, your notice reference, dates and any restore, and the admin audit log has each action. It deliberately keeps nothing about who sent the notice, so keep the notices themselves (and the URL each named) in your own mail folder, filed by the same reference.
 
 The original steps, for the record:
 
