@@ -113,6 +113,69 @@ describe("CodeGuard on its own", () => {
     assert.notEqual(second.guard.refusalNow(CLUB, "10.5.5.5"), undefined);
   });
 
+  it("keeps a count above the PIN guard's fifty across a restart, so the family limit of 100 still holds", async () => {
+    const first = guardWith();
+    await first.guard.ready(CLUB);
+
+    for (let i = 0; i < 60; i++) {
+      await first.guard.wrongNow(CLUB, `10.0.${Math.floor(i / 10)}.${i % 10}`, code(i));
+    }
+
+    const second = guardWith(first.store, first.now());
+    await second.guard.ready(CLUB);
+
+    for (let i = 60; i < FAMILY_CODE_LIMITS.club - 1; i++) {
+      await second.guard.wrongNow(CLUB, `10.1.${Math.floor(i / 10)}.${i % 10}`, code(i));
+    }
+
+    assert.equal(second.guard.refusalNow(CLUB, "10.5.5.5"), undefined, "99 so far: open");
+    await second.guard.wrongNow(CLUB, "10.1.99.9", code(99));
+    assert.notEqual(second.guard.refusalNow(CLUB, "10.5.5.5"), undefined, "the 100th closes it - none of the first 60 was lost");
+  });
+
+  it("catches a guesser who paces under the ten-minute limit with the day's ceiling: 12 hours", async () => {
+    const { guard, advance } = guardWith();
+    await guard.ready(CLUB);
+    const perStep = FAMILY_CODE_LIMITS.club - 1;
+    let n = 0;
+
+    while (n < FAMILY_CODE_LIMITS.day) {
+      for (let i = 0; i < perStep && n < FAMILY_CODE_LIMITS.day; i++, n++) {
+        assert.equal(guard.refusalNow(CLUB, `10.3.${Math.floor(n / 10) % 250}.${n % 10}`), undefined, `open at guess ${n}`);
+        await guard.wrongNow(CLUB, `10.3.${Math.floor(n / 10) % 250}.${n % 10}`, code(n));
+      }
+
+      advance(TEN_MIN + 1);
+    }
+
+    assert.equal(guard.refusalNow(CLUB, "10.4.0.1")?.error, "Closed for about 12 hours.");
+  });
+
+  it("does the same for crew codes at their own numbers", async () => {
+    let clock = Date.parse("2026-11-23T19:00:00Z");
+    const guard = new CodeGuard(new MemoryStore(), () => clock, () => {}, "crewguard", CREW_CODE_LIMITS, (w) => `Closed for about ${w}.`, "Too many from here.",
+      { wrongWhat: "crew-pick badge codes", closedWhat: "crew picking from phones" });
+    await guard.ready(CLUB);
+
+    for (let i = 0; i < CREW_CODE_LIMITS.club; i++) {
+      await guard.wrongNow(CLUB, `10.0.${Math.floor(i / 5)}.${i % 5}`, code(i));
+    }
+
+    assert.equal(guard.refusalNow(CLUB, "10.9.9.9")?.error, "Closed for about 10 minutes.");
+    clock += LOCK_STEPS_MS[0] as number;
+    let n = 1000;
+
+    while (n < 1000 + CREW_CODE_LIMITS.day) {
+      for (let i = 0; i < CREW_CODE_LIMITS.club - 1 && n < 1000 + CREW_CODE_LIMITS.day; i++, n++) {
+        await guard.wrongNow(CLUB, `10.5.${Math.floor(n / 5) % 250}.${n % 5}`, code(n));
+      }
+
+      clock += TEN_MIN + 1;
+    }
+
+    assert.match(String(guard.refusalNow(CLUB, "10.9.9.9")?.error), /12 hours/);
+  });
+
   it("forgets everything when the club is deleted", async () => {
     const { guard, store } = guardWith();
     await guard.ready(CLUB);
@@ -267,6 +330,17 @@ describe("family links through the relay", () => {
     assert.equal(here.status, 429);
     assert.equal(here.body["error"], "Too many wrong family link codes from this connection. Try again in a few minutes.");
     assert.equal((await from(h, "10.250.0.8", "family/read", { code: link })).status, 200);
+  });
+
+  it("keeps both counts private: neither can be read or published over the API", async () => {
+    await wrongs(3);
+
+    for (const doc of ["familyguard", "crewguard"]) {
+      assert.equal((await call(h, "GET", `${API}/snapshot/${doc}`)).status, 404);
+      assert.equal((await call(h, "GET", `${API}/snapshot/${doc}`, { token: ACME_TOKEN })).status, 404);
+      const put = await call(h, "POST", `${API}/publish/${doc}?seq=1`, { token: ACME_TOKEN, json: { fails: [], level: 0, lockedUntil: 0 } });
+      assert.equal(put.status, 404, `${doc}: ${JSON.stringify(put.body)}`);
+    }
   });
 
   it("forgets the lockout with Delete Everything Published", async () => {

@@ -142,7 +142,7 @@ A sign-up does nothing by itself: the desk approves every one. Until it does, th
 
 ### Family links and crew picks
 
-A [family link](../online/index.md#family-links) carries a code of 24 random hexadecimal characters, and a crew pick from a driver's phone is sent with their QR check-in id (20 hexadecimal characters). Neither can be guessed, but since 23 November 2026 the relay limits wrong guesses at both, the same way it limits wrong PINs and counted apart from them, so guessing at one never closes another:
+A [family link](../online/index.md#family-links) carries a code of 24 random hexadecimal characters, and a crew pick from a driver's phone is sent with their QR check-in id (20 hexadecimal characters). Neither can be guessed, but since 23 November 2026 the relay limits wrong guesses at family link codes, and at the QR check-in id on crew picks, the same way it limits wrong PINs and counted apart from them, so guessing at one never closes another. A wrong QR check-in id sent anywhere else, for example to open a driver's night, is held by the per-address limits only, so nobody can close every driver's page by guessing:
 
 | Limit | Window | Counted per |
 |---|---|---|

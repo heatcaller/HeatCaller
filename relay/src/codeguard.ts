@@ -66,7 +66,12 @@ export interface CodeLimits {
  * Honest wrong codes are links a driver has stopped, links of a driver the
  * club has forgotten, and links copied with a piece missing. Counted once
  * each, a club night has a handful - a busy one with a hundred relatives
- * following might see a dozen. So twice the PIN numbers: 100 in ten
+ * following might see a dozen. The one bulk event is a club that stops
+ * sharing drivers' nights: every link goes, and nothing is counted while
+ * they are off; once they are back on, relatives' old pages ask with codes
+ * that are gone - but a page only asks while it is open on screen, and
+ * each old code counts once, so they trickle in rather than arrive at a
+ * hundred in ten minutes. So twice the PIN numbers: 100 in ten
  * minutes and 300 in a day across the club, 20 in ten minutes from one
  * address (a venue's Wi-Fi is one address for everybody on it). Even the
  * 300 a day, every day, is nothing against 96 bits: with ten links per

@@ -6,7 +6,7 @@ Do them in this order. 1 and 4 are done, 3 is registered and its page is live, 2
 
 ## 1. Name the security coordinator (security-program.md) - DONE 23 Nov 2026
 
-Asher is the coordinator at support@heatcaller.com, adopted 23 Nov 2026, next review 23 Nov 2027 (in the calendar). Support files are kept at most 90 days, security records three years, and family-link and crew codes have a wrong-guess limit (built 23 Nov 2026; the relay needs deploying for it to be live). Still blank in the draft: the list of people with admin access (section 5), which is just Asher for now.
+Asher is the coordinator at support@heatcaller.com, adopted 23 Nov 2026, next review 23 Nov 2027 (in the calendar). Support files are kept at most 90 days, security records three years, and family-link codes and crew picks have a wrong-guess limit (built 23 Nov 2026; the relay needs deploying for it to be live). There is no separate crew code: crew picks use the driver's badge code, which is counted on crew picks only - say if you want it counted on its other routes too. Still blank in the draft: the list of people with admin access (section 5), which is just Asher for now.
 
 The original steps, for the record:
 
