@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { FileStore } from "../src/store.js";
 import {
   activeOf,
+  applyTakedown,
+  restoreTakedown,
   garageWithoutTakenDown,
   NO_TAKEDOWNS,
   normaliseRef,
@@ -363,5 +365,67 @@ describe("takedowns: the admin commands", () => {
     assert.ok(snapshot.capabilities.includes("takedowns"));
     assert.deepEqual(snapshot.clubs.find((c: { club: string }) => c.club === "acme-rc").takedowns, { active: 1, last12Months: 1, repeat: false });
     assert.deepEqual(snapshot.clubs.find((c: { club: string }) => c.club === "brookside").takedowns, { active: 0, last12Months: 0, repeat: false });
+  });
+});
+
+describe("takedowns: held clips follow the clip rules", () => {
+  let dataDir: string;
+  const id = (n: number) => String(n).repeat(32).slice(0, 32);
+
+  beforeEach(async () => {
+    dataDir = await mkdtemp(join(tmpdir(), "hc-takedown-held-"));
+    const folder = join(dataDir, ".takedowns", "held", "acme-rc", "clip");
+    await mkdir(folder, { recursive: true });
+    for (const [n, at, driver] of [[1, "2026-11-10T00:00:00.000Z", "aaaaaaaaaaaaaaaaaaaa"], [2, "2026-11-22T00:00:00.000Z", "bbbbbbbbbbbbbbbbbbbb"]] as const) {
+      await writeFile(join(folder, `${id(n)}.mp3`), "ID3");
+      await writeFile(join(folder, `${id(n)}.json`), JSON.stringify({ id: id(n), driver, label: "Q1", at, bytes: 3 }));
+    }
+  });
+
+  afterEach(async () => {
+    await rm(dataDir, { recursive: true, force: true });
+  });
+
+  const held = (n: number) => existsSync(join(dataDir, ".takedowns", "held", "acme-rc", "clip", `${id(n)}.mp3`));
+
+  it("are swept after their week, as every clip is", async () => {
+    assert.equal(await new TakedownBook(dataDir).sweepHeldClips(Date.parse("2026-11-23T00:00:00.000Z")), 1);
+    assert.equal(held(1), false);
+    assert.equal(held(2), true);
+  });
+
+  it("go with a forgotten driver, and all go when nights close", async () => {
+    const book = new TakedownBook(dataDir);
+    assert.equal(await book.forgetHeldClips("acme-rc", (meta) => meta.driver !== "bbbbbbbbbbbbbbbbbbbb"), 1);
+    assert.equal(held(2), false);
+    assert.equal(await book.forgetHeldClips("acme-rc", () => false), 1);
+    assert.equal(held(1), false);
+  });
+});
+
+describe("takedowns: run as root, everything is handed to the relay's user", () => {
+  it("makes, moves and writes with an owner, as it does over fly ssh", async () => {
+    // On Windows lchown does nothing and succeeds; on Linux this is our own
+    // user, which any process may hand a file to. Either way the path Fly
+    // takes - every folder and file handed over - runs.
+    const owner = typeof process.getuid === "function" && typeof process.getgid === "function"
+      ? { uid: process.getuid(), gid: process.getgid() }
+      : { uid: 1000, gid: 1000 };
+    const dataDir = await mkdtemp(join(tmpdir(), "hc-takedown-owner-"));
+    const clip = "0123456789abcdef0123456789abcdef";
+
+    try {
+      await mkdir(join(dataDir, ".clips", "acme-rc"), { recursive: true });
+      await writeFile(join(dataDir, ".clips", "acme-rc", `${clip}.mp3`), "ID3");
+      const now = new Date("2026-11-23T00:00:00.000Z");
+      const down = await applyTakedown({ dataDir, club: "acme-rc", kind: "clip", ref: clip, notice: "N1", now, owner });
+      assert.equal(down.ok && down.held, true);
+      await rm(join(dataDir, ".clips"), { recursive: true });
+      const back = await restoreTakedown({ dataDir, club: "acme-rc", id: down.ok ? down.id : "", reason: "countered", now, owner });
+      assert.equal(back.ok && back.putBack, true);
+      assert.equal(existsSync(join(dataDir, ".clips", "acme-rc", `${clip}.mp3`)), true, "the club folder the delete took is made again");
+    } finally {
+      await rm(dataDir, { recursive: true, force: true });
+    }
   });
 });

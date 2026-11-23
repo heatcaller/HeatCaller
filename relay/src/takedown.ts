@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { lchown, lstat, mkdir, readFile, readdir, rename, rm, stat } from "node:fs/promises";
 import { join, relative as relativePath } from "node:path";
-import { CLIP_DIR, CLIP_ID } from "./clips.js";
+import { asClipMeta, CLIP_DIR, CLIP_ID, CLIP_KEEP_MS, type ClipMeta } from "./clips.js";
 import { CREW_SAMPLE_DIR, CREW_SAMPLE_KEY } from "./crewsamples.js";
 import type { Store } from "./store.js";
 import { isValidClubId } from "./tenancy.js";
@@ -455,6 +455,45 @@ export class TakedownBook {
   /** The held files of a club's taken-down clips and samples - when the club deletes everything. The records stay. */
   async wipeHeld(club: string): Promise<void> {
     await rm(join(this.dataDir, TAKEDOWN_DIR, TAKEDOWN_HELD_DIR, club), { recursive: true, force: true });
+  }
+
+  /**
+   * Held clips go by the clip rules too (23 Nov 2026): a taken-down clip is
+   * still a named driver's voice, so it must not outlive the week every
+   * clip is kept, the club closing drivers' nights, or the driver being
+   * forgotten. `keep` says which stay; the rest are deleted. A restore after
+   * that has nothing to put back - and a clip past its week would only have
+   * been swept again the moment it was.
+   */
+  async forgetHeldClips(club: string, keep: (meta: ClipMeta) => boolean): Promise<number> {
+    if (!isValidClubId(club)) return 0;
+    const folder = heldFolder(this.dataDir, club, "clip");
+    const names = await readdir(folder).catch(() => [] as string[]);
+    let dropped = 0;
+
+    for (const name of names) {
+      const id = name.endsWith(".json") ? name.slice(0, -5) : "";
+      if (!CLIP_ID.test(id)) continue;
+      const meta = asClipMeta(await readFile(join(folder, name), "utf8").then((t) => JSON.parse(t) as unknown, () => undefined));
+      if (meta !== undefined && keep(meta)) continue;
+      await rm(join(folder, `${id}.mp3`), { force: true });
+      await rm(join(folder, `${id}.json`), { force: true });
+      dropped += 1;
+    }
+
+    return dropped;
+  }
+
+  /** Every club's held clips past their week - on the relay's hourly clip sweep. */
+  async sweepHeldClips(nowMs: number): Promise<number> {
+    const clubs = await readdir(join(this.dataDir, TAKEDOWN_DIR, TAKEDOWN_HELD_DIR)).catch(() => [] as string[]);
+    let dropped = 0;
+
+    for (const club of clubs) {
+      dropped += await this.forgetHeldClips(club, (meta) => nowMs - Date.parse(meta.at) < CLIP_KEEP_MS).catch(() => 0);
+    }
+
+    return dropped;
   }
 }
 

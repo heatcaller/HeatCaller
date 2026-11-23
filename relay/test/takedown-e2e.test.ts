@@ -244,5 +244,21 @@ describe("a copyright takedown, end to end, on a real relay", () => {
     assert.equal(list.clubs[0].active, 7);
     assert.equal(list.clubs[0].takedowns.filter((t: { state: string }) => t.state === "active").length, ids.length);
   });
-});
 
+  it("lets a held clip go when the club closes drivers' nights, as every clip does", async () => {
+    // Restore the clip from the test before so it is the club's again, then hold it once more.
+    const list = await admin("takedown-list", "acme-rc");
+    const clip = list.clubs[0].takedowns.find((t: { kind: string; state: string }) => t.kind === "clip" && t.state === "active");
+    await admin("takedown-restore", "acme-rc", clip.id, "--reason", "test");
+    await wait(250);
+    assert.equal((await call(h(), "POST", `${API}/nights/open`, { token: ACME_TOKEN, json: { open: true } })).status, 200);
+    const sent = await raw(`${API}/clip/${CLIP}?driver=${DRIVER}&label=Q1`, {
+      method: "POST", headers: { authorization: `Bearer ${ACME_TOKEN}`, "content-type": "audio/mpeg" }, body: new Uint8Array(CLIP_BYTES),
+    });
+    assert.equal(sent.status, 200);
+    assert.equal((await admin("takedown", "acme-rc", "clip", CLIP, "--notice", "DMCA 2026-002")).held, true);
+
+    assert.equal((await call(h(), "POST", `${API}/nights/open`, { token: ACME_TOKEN, json: { open: false } })).status, 200);
+    assert.ok(!existsSync(join(dataDir, ".takedowns", "held", "acme-rc", "clip", `${CLIP}.mp3`)), "closing nights takes held clips too");
+  });
+});

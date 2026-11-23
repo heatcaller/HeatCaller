@@ -1960,8 +1960,11 @@ anything typed rather than uploaded (ask the club, or delete the club).
 - `dataDir/.takedowns/held/<club>/clip/<id>.mp3|.json` and
   `.../held/<club>/crewsample/<key>.mp3` - taken-down files, kept for a
   restore. A club's Delete Everything Published removes these with the rest
-  of what it published (the records stay); a restore after that marks the
-  record restored and has nothing to put back (`putBack: false`).
+  of what it published (the records stay). A held clip also goes by the
+  clip rules - after its week on the hourly sweep, when the club closes
+  drivers' nights, and when its driver is forgotten - since it is still a
+  named driver's voice. A restore after any of that marks the record
+  restored and has nothing to put back (`putBack: false`).
 - Every folder and file is handed to the relay's user (`RELAY_UID`/`RELAY_GID`,
   1000) before it is in place, since over `fly ssh` the commands run as root.
 
@@ -1980,7 +1983,12 @@ of a page's data for up to 12 hours.
 as `audit-append`'s entry is, so a track name or a notice reference with
 quotes never meets the machine's shell. With `--json` the answer is one JSON
 object on standard output, `{"ok":false,"error":"..."}` and exit code 1 when
-refused; without it, a sentence or a table.
+refused; without it, a sentence or a table. A failure before the command
+itself runs - a config that will not load, `RELAY_DATA` missing when run as
+root, or an unexpected error - prints no JSON: only a line on standard
+error and a non-zero exit code, as every admin command does. On Fly,
+`fly.toml` sets `RELAY_DATA`, so `fly ssh console -C "node /app/dist/src/index.js ..."`
+needs nothing else.
 
 ```
 node /app/dist/src/index.js takedown-find <club> <url> [--json]
@@ -2094,7 +2102,10 @@ named), oldest record first:
 - `active` - records not restored, any age.
 - `last12Months` - distinct notice references (compared without case or
   extra spaces) among records not restored and taken down in the last 12
-  months. One notice naming three items counts once.
+  months. One notice naming three items counts once. A second notice about
+  an item that is already down is not recorded (`takedown` answers the
+  existing takedown with `already: true`), so it does not count; keep it in
+  your own log, and take it into account by hand.
 - `repeat` - `last12Months` is 3 or more: the policy's repeat-infringer
   line. **A flag only.** Nothing closes or pauses a club; that is a person's
   decision.

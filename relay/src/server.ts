@@ -8534,6 +8534,10 @@ export class Relay {
     if (vault !== undefined) {
       await this.withLock(`${club}|clips`, () => vault.removeClub(club).catch(() => {}));
     }
+
+    // And any taken down after a copyright notice and held for a restore
+    // (23 Nov 2026, takedown.ts): nights closing takes every clip.
+    await this.takedowns?.forgetHeldClips(club, () => false).catch(() => 0);
   }
 
   /**
@@ -8562,6 +8566,12 @@ export class Relay {
           dropped += 1;
         }
       }).catch(() => {});
+    }
+
+    // Clips held after a copyright takedown are kept no longer than any
+    // other clip (23 Nov 2026, takedown.ts) - every club's, on the same timer.
+    if (clubs === undefined) {
+      dropped += await this.takedowns?.sweepHeldClips(this.now().getTime()).catch(() => 0) ?? 0;
     }
 
     return dropped;
@@ -9106,6 +9116,9 @@ export class Relay {
           }
         }
       });
+
+      // Theirs held after a copyright takedown too (23 Nov 2026, takedown.ts).
+      removed += await this.takedowns?.forgetHeldClips(club, (meta) => !badges.has(meta.driver)).catch(() => 0) ?? 0;
     }
 
     this.log(`[forget] "${club}": a driver forgotten (${removed} item${removed === 1 ? "" : "s"} removed).`);

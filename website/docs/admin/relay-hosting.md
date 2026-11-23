@@ -560,7 +560,7 @@ The kinds are `logo` (nothing after it), `sponsor`, `track`, `badge`, `video`, `
 
 The notice reference is for your own records: type the reference you gave the notice, never the sender's name, address or email. The relay keeps nothing else about the notice.
 
-Spaces and quotes don't survive the trip through `fly ssh console`, so keep the reference to one word, like `DMCA-2026-014`. For a track name with a space in it, send it encoded: `b64:` and then the name in base64url. In PowerShell:
+Keep the reference to one word, like `DMCA-2026-014`, so nothing in it depends on how your terminal and `fly ssh console` pass quotes along. For a track name with a space or a quote in it, or a restore reason in words, send the text encoded instead: `b64:` and then the text in base64url. In PowerShell:
 
 ```
 "b64:" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("Tight Layout")).TrimEnd('=').Replace('+','-').Replace('/','_')
@@ -574,7 +574,7 @@ Spaces and quotes don't survive the trip through `fly ssh console`, so keep the 
 fly ssh console -C "node /app/dist/src/index.js takedown-restore acme-rc td-3f9a1c2b4d5e --reason b64:..."
 ```
 
-It shows again within a few seconds, without the club publishing anything. The record stays, marked restored. A clip or crew sample taken down before the club pressed **Delete Everything Published** is gone with the rest of what the club deleted, so there's nothing to put back.
+It shows again within a few seconds, without the club publishing anything. The record stays, marked restored. A clip or crew sample taken down before the club pressed **Delete Everything Published** is gone with the rest of what the club deleted, so there's nothing to put back. A taken-down clip also goes when any clip would: after 7 days, when the club stops offering drivers their nights, or when its driver is forgotten.
 
 **See every takedown.** `takedown-list` shows every club's takedowns, or one club's with `takedown-list acme-rc`: what, when, the notice reference, and whether each was restored. For each club it also counts the notices in the last 12 months that weren't countered. At three, the line says REPEAT: that is the policy's repeat-infringer line, and it is only a flag. The relay never closes or pauses a club by itself; that's your decision. One notice naming three items counts once.
 
@@ -668,7 +668,7 @@ The data, all under the relay's data folder:
 | `<club>/snapshot/sponsorviews.json` | How many phones saw each sponsor on the club's pages, and how many tapped through, by the hour, for the last 45 days. | The relay only. |
 | `<club>/collection/driverphotos/` | Car photos sent from drivers' phones, waiting for the laptop to collect them. | The relay only. |
 | `.takedowns/<club>.json` | The club's [copyright takedowns](#copyright-takedowns): what, when, the notice reference, and whether each was restored. Kept when the club deletes everything. | `takedown` and `takedown-restore` only. The relay only reads it. |
-| `.takedowns/held/<club>/` | Clips and crew samples taken down, kept for a restore. | `takedown` and `takedown-restore`; the relay removes a club's when it deletes everything. |
+| `.takedowns/held/<club>/` | Clips and crew samples taken down, kept for a restore. A clip still goes after 7 days, like any clip. | `takedown` and `takedown-restore`. The relay only removes: a club's, when it deletes everything, and clips, by the clip rules. |
 
 Each file has one writer, so the running relay and a command run at the same moment can never save over each other. Run through ssh, the commands run as root; they hand every file and folder they make to the relay's own user, and refuse to run without `RELAY_DATA`, which is where the relay's data really is.
 
