@@ -141,11 +141,19 @@ public sealed class ResultEditForm : Form
         // Added on its own, after the plain text columns - see
         // HandicapSuggestForm for why a differently-typed column is added
         // separately rather than inside the same AddRange call.
+        //
+        // Drawn as the app's own drop-down by the theme (AppTheme.StyleGrid),
+        // not the grid's grey box. WHY the weight (22 Nov 2026, Asher): the
+        // app's chevron wants more room than the grid's arrow did, and at 60
+        // "Finished" was cut to "Finish..." in the Synthwave face; the room
+        // comes off Driver, the widest column.
+        _editGrid.Columns["driver"]!.FillWeight = 92;
+
         _editGrid.Columns.Add(new DataGridViewComboBoxColumn
         {
             Name = "outcome",
             HeaderText = "Outcome",
-            FillWeight = 60,
+            FillWeight = 78,
             Items = { "Finished", "DNF", "DQ" },
         });
 
