@@ -4,8 +4,8 @@
 # HeatCaller information security program
 
 **Owner:** HeatCaller LLC
-**Program coordinator:** ______________________ (name), ______________________ (email)
-**Adopted:** ______________ **Last reviewed:** ______________ **Next review due:** ______________
+**Program coordinator:** Asher Kent, support@heatcaller.com
+**Adopted:** 23 November 2026 **Last reviewed:** not yet **Next review due:** 23 November 2027
 
 ## 1. Purpose and scope
 
@@ -64,7 +64,7 @@ The first assessment is the DPIA (website/legal-drafts/dpia.md).
 - HTTPS only.
 - Each club's data is kept apart by its club key; one club cannot read another's.
 - Driver phone access is by personal PIN; junior sign-ins expire after 30 days.
-- Rate limits on PIN entry. Checked 16 Nov 2026: a club's PIN list closes after 50 wrong PINs within 10 minutes, counted across every address. It closes for 10 minutes the first time, and longer each time after that, up to 12 hours (relay/src/pinguard.ts). [CHECK: whether family-link and crew codes have a limit of their own.]
+- Rate limits on PIN entry. Checked 16 Nov 2026: a club's PIN list closes after 50 wrong PINs within 10 minutes, counted across every address. It closes for 10 minutes the first time, and longer each time after that, up to 12 hours (relay/src/pinguard.ts). Family-link and crew codes get a wrong-guess limit of their own as well (decided 23 Nov 2026; being built on branch `claude/code-guess-limit`).
 - The retention timers in Part 2 of the Terms run automatically, and are tested.
 - Logs do not record notes, PINs or email addresses. Checked 16 Nov 2026: the relay's own log lines name the club and the kind of document, never what is in it. Fly.io's edge keeps its own request logs, with IP addresses and page addresses, under Fly's retention.
 - Backups of relay data have the same retention. Checked 16 Nov 2026: Fly takes a daily snapshot of the relay's encrypted volume (relay_data) and keeps 5. Anything deleted on the relay is therefore gone from every Fly copy within about 5 days, and the retention schedule and Forget should say "within 5 days" for those copies. The other copy is backup.cmd's relay-data.tgz on the operator's PC, which is not encrypted (counsel brief 4.3). Keep it no longer than the newest backup needs, in an encrypted folder.
@@ -86,7 +86,7 @@ The first assessment is the DPIA (website/legal-drafts/dpia.md).
 - Test and demo data never uses real children's names.
 
 **Support.**
-- Support files and emails containing driver data are deleted once the issue is closed, and at most 90 days after. [CHECK the period]
+- Support files and emails containing driver data are deleted once the issue is closed, and at most 90 days after.
 - Support files are not shared outside HeatCaller LLC.
 
 ## 6. Service providers
@@ -115,7 +115,7 @@ Anyone with admin access reads this program and Part 2 of the Terms when they ge
 
 ## 9. Records
 
-Keep for at least three years [CHECK]:
+Keep for at least three years:
 
 - each annual risk assessment and what was done about it;
 - the list of people with admin access, and changes to it;

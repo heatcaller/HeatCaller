@@ -6,6 +6,9 @@
 >
 > **Updated 23 Nov 2026: DMCA agent registered.** HeatCaller LLC is registered in the Copyright Office's DMCA Designated Agent Directory as designation **DMCA-1087259**. The agent is "Copyright Agent, HeatCaller LLC", at the LLC's address (506 Pinyon Dr, Schenectady, NY 12303, which is also the owner's home), with support@heatcaller.com. The names listed are HeatCaller, heatcaller.com and heatcaller-relay.fly.dev. The takedown page (Part A of `copyright-takedown-policy.md`) carries the same details and is ready to publish as `/copyright` on heatcaller.com (heatcaller-site PR #38). Its two open choices were filled in as drafted: a notice passed to the club has the sender's phone number and postal address removed, and a repeat infringer is three valid, uncountered notices in 12 months. A per-item admin removal for the relay is being built. Question 14 is updated to match.
 
+>
+> **Updated 23 Nov 2026: the company record, security program and IP assignment.** New York's entity record shows HeatCaller LLC as DOS ID 8031449, a domestic LLC formed 26 September 2026 (Articles of Organization, file 260926000436), Albany County, with process mailed to Asher Kent at 506 Pinyon Dr, Schenectady, NY 12303. No Certificate of Publication is on file yet: the publication under LLC Law §206 is under way and due by about 24 January 2027. The first biennial statement is due 30 September 2028. The security program (`security-program.md`) is adopted with Asher Kent as coordinator (support@heatcaller.com), next review 23 November 2027, support files kept at most 90 days and security records three years, and a wrong-guess limit is being added to family-link and crew codes. The IP assignment (`founder-ip-assignment.md`) is filled in and ready to sign apart from the consideration; the founder confirms no employer or client contract claims any of it.
+
 # HeatCaller: brief for counsel
 
 ## 1. What we need from you
@@ -287,7 +290,7 @@ Retired, no review needed:
 8. **MisakiSharp.** Its Apache-2.0 code includes a fallback that "reproduces" phonemizer (GPL-3.0) behaviour, and HeatCaller reaches it for every word not in its dictionary. Is that a GPL obligation for us? Must we fork KokoroSharp to avoid it? Its number-reading code was ported from num2words (LGPL-2.1): do the LGPL terms we already meet for LibVLC suffice?
 9. **Reverse engineering.** The EasyLap decoder protocol was worked out from USB captures, cross-checked against Next Level Timing's debug log while running NLT under its licence. Is there exposure under NLT's EULA? The P3 reader was written from the published format. **[CHECK]** source documents.
 10. **LibVLC.** Is the written source offer plus an uploaded source tarball enough under LGPL-2.1 §6? Is a trimmed plugin set still "the Library"? The open items are listed in `LibVLC-plugins.txt`.
-11. **Founder IP and AI-written code.** Is the assignment draft complete? How much copyright protection does AI-assisted code have, and should we rely on contract and trade secrets instead?
+11. **Founder IP and AI-written code.** Is the assignment draft complete, now filled in? What should the consideration be: US$1 and other good and valuable consideration, or a capital contribution under the operating agreement? How much copyright protection does AI-assisted code have, and should we rely on contract and trade secrets instead?
 12. **Copies of everyone's data.** Are these acceptable, or must they be encrypted or limited?
     - relay backups on the operator's PC (unencrypted, all clubs);
     - the warm-standby zip on a club's second PC;
@@ -336,6 +339,7 @@ Retired, no review needed:
 **The owner's to do** (step by step in owner-todo.md):
 - ~~register the DMCA agent~~ (done 23 Nov 2026, DMCA-1087259) and publish the policy page (heatcaller-site PR #38);
 - send the vendor letters and file the answers;
-- sign the IP assignment;
-- name the security coordinator;
+- sign the IP assignment (ready to sign 23 Nov 2026; the consideration is question 11);
+- ~~name the security coordinator~~ (done 23 Nov 2026);
+- finish the New York publication and file the Certificate of Publication by about 24 January 2027;
 - run a real club night.
