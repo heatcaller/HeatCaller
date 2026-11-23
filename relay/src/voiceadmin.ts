@@ -13,6 +13,8 @@ import { checkKeys } from "./keycheck.js";
 import { checkVoiceAccount, type VoiceAccountCheck } from "./voiceaccount.js";
 import { autoGiven, type AutoGiven } from "./autotopup.js";
 import { appendAudit, readAudit, readAuditArgument } from "./adminaudit.js";
+import { readTakedowns, takedownCounts } from "./takedown.js";
+import { TAKEDOWN_COMMANDS, takedownAdmin, type TakedownCommand } from "./takedownadmin.js";
 import { closeRequests, closeRequestsRefusal, isMeterName, openRequests, type MeterName, type TopUpAsk } from "./topuprequests.js";
 import {
   monthOf,
@@ -65,6 +67,8 @@ export const ADMIN_COMMANDS = [
   "audit-append",
   "audit-log",
   "key-check",
+  // Copyright takedowns of one item (23 Nov 2026) - see takedownadmin.ts.
+  ...TAKEDOWN_COMMANDS,
 ] as const;
 
 export type AdminCommand = (typeof ADMIN_COMMANDS)[number];
@@ -441,6 +445,12 @@ export async function voiceAdmin(
     return 1;
   }
 
+  if ((TAKEDOWN_COMMANDS as readonly string[]).includes(command)) {
+    // 23 Nov 2026, asked for by Asher: one item down after a copyright
+    // notice, and back after a counter-notice - see takedownadmin.ts.
+    return takedownAdmin(command as TakedownCommand, args, config, now, owner, out, err);
+  }
+
   if (command === "admin-snapshot") {
     // --usage-since <ISO time | all> (round B): the first page of the usage
     // log after that moment comes back in the same answer, so the admin
@@ -759,6 +769,14 @@ export interface ClubSnapshot {
   readonly listInDirectory: boolean;
   readonly voice: MeterStanding;
   readonly commentary: MeterStanding;
+  /**
+   * Copyright takedowns (23 Nov 2026, takedown.ts): items down now, notices
+   * not countered in the last twelve months, and whether that is three or
+   * more - a flag for the admin only; nothing closes a club. An added
+   * field, so `version` stays 1. Null when the club's takedown file will
+   * not read - never a stand-in zero.
+   */
+  readonly takedowns: { readonly active: number; readonly last12Months: number; readonly repeat: boolean } | null;
 }
 
 /**
@@ -826,6 +844,12 @@ export async function adminSnapshot(
     ...(standing?.known === false ? { known: false as const } : {}),
   });
 
+  const takedowns = new Map<string, ClubSnapshot["takedowns"]>();
+
+  for (const tenant of config.tenants) {
+    takedowns.set(tenant.club, await readTakedowns(config.dataDir, tenant.club).then((file) => takedownCounts(file.takedowns, now), () => null));
+  }
+
   const clubs = config.tenants.map((tenant) => ({
     club: tenant.club,
     name: tenant.name,
@@ -834,6 +858,7 @@ export async function adminSnapshot(
     listInDirectory: tenant.listInDirectory === true,
     voice: meter(voice.find((standing) => standing.club === tenant.club)),
     commentary: meter(commentary.find((standing) => standing.club === tenant.club)),
+    takedowns: takedowns.get(tenant.club) ?? null,
   }));
 
   const open = await openRequests(config.dataDir, config.tenants.map((tenant) => tenant.club), now);
@@ -861,7 +886,7 @@ export async function adminSnapshot(
     requests: open.map(({ club, request }) => ({ club, ...request })),
     // What this build can do, so the admin app never sends a command an
     // older relay doesn't know (round E). Added to, never changed.
-    capabilities: ["usage-since", "auto-top-up", "audit", "build-info", "key-check"],
+    capabilities: ["usage-since", "auto-top-up", "audit", "build-info", "key-check", "takedowns"],
     autoTopUps: (await Promise.all(config.tenants.map(async (tenant) =>
       (await autoGiven(config.dataDir, tenant.club, monthOf(now))).map((given) => ({ club: tenant.club, ...given }))))).flat()
       .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)),
