@@ -3,6 +3,9 @@
 >
 > **Updated 16 Nov 2026: cookies.** A cookie policy for the club's web pages was written, reviewed and corrected on a separate branch, `claude/inbox-themes-followups` (not yet merged with this one). The facts about cookies and browser storage in sections 3.2, 3.3 and 4.4 were checked against that branch. Section 7 has the new questions (19-26).
 
+>
+> **Updated 23 Nov 2026: DMCA agent registered.** HeatCaller LLC is registered in the Copyright Office's DMCA Designated Agent Directory as designation **DMCA-1087259**. The agent is "Copyright Agent, HeatCaller LLC", at the LLC's address (506 Pinyon Dr, Schenectady, NY 12303, which is also the owner's home), with support@heatcaller.com. The names listed are HeatCaller, heatcaller.com and heatcaller-relay.fly.dev. The takedown page (Part A of `copyright-takedown-policy.md`) carries the same details and is ready to publish as `/copyright` on heatcaller.com (heatcaller-site PR #38). Its two open choices were filled in as drafted: a notice passed to the club has the sender's phone number and postal address removed, and a repeat infringer is three valid, uncountered notices in 12 months. A per-item admin removal for the relay is being built. Question 14 is updated to match.
+
 # HeatCaller: brief for counsel
 
 ## 1. What we need from you
@@ -290,7 +293,7 @@ Retired, no review needed:
     - the warm-standby zip on a club's second PC;
     - unencrypted profiles on the club laptop (protected only by the Windows sign-in).
 13. **Trademarks.** Is "HeatCaller" clear to register, in classes 9 and 42? Are our nominative uses of LiveTime, LiveRC, MYLAPS and others, with the footer disclaimer, fine? We renamed planned features to "Pole Shootout" and "Invitational (Reedy-style format)": is "Reedy-style" acceptable?
-14. **Copyright safe harbour.** Is the DMCA §512 policy adequate for a relay that hosts car photos, shout-outs and club content? Can we run it without a per-item admin takedown tool (today only whole-club delete exists)?
+14. **Copyright safe harbour.** The agent is registered (DMCA-1087259, 23 Nov 2026) and the policy page is ready to publish. Is the §512 policy adequate for a relay that hosts car photos, shout-outs and club content? Are the two choices we made acceptable: removing the sender's phone number and postal address from the copy sent to the club, and three valid uncountered notices in 12 months for a repeat infringer? Is publishing the owner's home as the agent address a problem worth fixing (the alternative is a registered-agent or mailbox service, about US$50-150 a year, which also needs a $6 amended designation)? A per-item admin removal for the relay is being built; until it is merged, a takedown means asking the club or a hand edit on the relay. Is that "expeditious" enough meanwhile?
 15. **Music and AI output.** Terms 7.5 grants clubs the right to play HeatCaller's own synthesised music on their PA and streams, and puts licensing of a club's own music on the club. Terms 7.6 says the club may use AI output, but we claim no ownership and promise nothing. Are these sound?
 16. **Patents.** Is a quick freedom-to-operate search worth doing before raising money? The areas are transponder timing, heat seeding and AI race commentary.
 
@@ -331,7 +334,7 @@ Retired, no review needed:
 - the VLC 3.0.24 and LibVLCSharp 3.10.1 sources published on HeatCaller-releases (the third-party-source release), and the About box links to them.
 
 **The owner's to do** (step by step in owner-todo.md):
-- register the DMCA agent and publish the policy page;
+- ~~register the DMCA agent~~ (done 23 Nov 2026, DMCA-1087259) and publish the policy page (heatcaller-site PR #38);
 - send the vendor letters and file the answers;
 - sign the IP assignment;
 - name the security coordinator;

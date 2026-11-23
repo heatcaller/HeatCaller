@@ -2,7 +2,7 @@
 
 # Owner to-do
 
-Do them in this order. 4 is done. 1 and 2 take about 15 minutes each, 3 about 20 minutes, and 5 is waiting on replies.
+Do them in this order. 4 is done, and 3 is registered (its page waits on a merge). 1 and 2 take about 15 minutes each, 3 about 20 minutes, and 5 is waiting on replies.
 
 ## 1. Name the security coordinator (security-program.md)
 
@@ -26,7 +26,17 @@ The repositories and the main accounts are already listed. You fill in:
 
 Print two copies, sign both (once as yourself, once for the company), and keep one with the company records. Counsel can look at it first; it is item 6 on the brief's reading list.
 
-## 3. Register the DMCA agent, then publish the takedown page (copyright-takedown-policy.md)
+## 3. Register the DMCA agent, then publish the takedown page (copyright-takedown-policy.md) - REGISTERED 23 Nov 2026
+
+Steps 1 to 4 are done: designation **DMCA-1087259**, agent "Copyright Agent, HeatCaller LLC", 506 Pinyon Dr, Schenectady, NY 12303, support@heatcaller.com (the LLC's own address was chosen). Part A of the policy has the same details. Left:
+
+- **The page:** heatcaller-site PR #38 adds `/copyright` and a Copyright link in the footer. It is live once you merge it.
+- **The renewal:** put the expiry date from the confirmation (about November 2029) in your calendar.
+- **One-item removal (step 6):** being built on branch `claude/takedown`. Until it merges, a takedown means asking the club, or a hand edit over `fly ssh`.
+- **The notice log:** keep one (date, club, URL, what was done). The removal tool will write one for you.
+
+The original steps, for the record:
+
 
 1. Go to <https://dmca.copyright.gov/> and create an account (free).
 2. Register **HeatCaller LLC**, with the name exactly as on the New York filing. List the names it is known by: "HeatCaller", `heatcaller.com` and `heatcaller-relay.fly.dev`.
