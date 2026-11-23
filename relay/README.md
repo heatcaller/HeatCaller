@@ -1920,6 +1920,206 @@ refused, no-model, failed - and at most an HTTP status; never a key. Nothing
 is spent. The app sets a new key with `fly secrets import`, the key on
 flyctl's input rather than its command line.
 
+### Copyright takedowns of one item (23 Nov 2026)
+
+The safe harbour (17 U.S.C. 512, see
+`website/legal-drafts/copyright-takedown-policy.md`) asks us to remove or
+disable access to the one thing a notice names, promptly. These commands do
+that for one item at a time, without touching the rest of the club, and put
+it back after a counter-notice. Code: `src/takedown.ts` (the rules and the
+running relay's side) and `src/takedownadmin.ts` (the commands).
+
+**Disabled where it is served, not deleted from what the laptop sent.** The
+laptop keeps publishing as before - refusing its publishes would stall its
+whole queue - and every route that serves a taken-down thing leaves it out
+before anything is cached. Restoring is then instant.
+
+| Kind | Ref | What happens |
+|---|---|---|
+| `logo` | (none) | `logo.png` answers 404; the logo is out of `/snapshot/site`, the pages' header, `og:image` (the club's icon is used instead) and the `/clubs` directory |
+| `sponsor` | the sponsor's `id` | the whole sponsor is out of `/snapshot/sponsors` (so off every page that shows sponsors): name, line, link and picture, not only the picture - the notice is about the tile people see |
+| `track` | the track's `name`, exactly | that track's `image` is out of `/snapshot/tracks`; its name, records and laps stay |
+| `badge` | the achievement's `id` | its `art` is out of `/snapshot/badges`; the achievement stays |
+| `video` | YouTube id (or a YouTube address) | never offered by `video/race`, `video/live` (live and `last`), `video/night`, a family link or the "videos are up" alert - treated like a video YouTube says is dead |
+| `clip` | the 32 hex characters in `/c/<club>/clip/<id>.mp3` | the `.mp3` and `.json` are moved to the held folder; the address and the driver's night list lose it; a re-send of that id is answered 200 and thrown away |
+| `crewsample` | the 12 hex characters in `/crew/sample/<key>.mp3` | the `.mp3` is moved to the held folder; the address answers 404; `GET crew/samples` still lists the key, and a re-upload of it is answered 200 and thrown away, so the laptop does not send it again and again |
+| `garagephoto` | the photo's id, `<12 hex>.jpg` | out of every car in that driver's garage (and not its cover) |
+
+Not covered one at a time: **Listen** audio and the **captions** (switch
+Listen off for the club - the laptop's own switch - or ask the club), driver
+photos on the check-in roster (ask the club to remove the photo), and
+anything typed rather than uploaded (ask the club, or delete the club).
+
+**Files.**
+
+- `dataDir/.takedowns/<club>.json` - the club's records,
+  `{ "version": 1, "club": "...", "takedowns": [record...] }`, written whole
+  to a temporary name and renamed. Beside the clubs, not in a club's folder,
+  so the club's own Delete Everything Published does not remove it and
+  publishing again cannot bring an item back.
+- `dataDir/.takedowns/held/<club>/clip/<id>.mp3|.json` and
+  `.../held/<club>/crewsample/<key>.mp3` - taken-down files, kept for a
+  restore. A club's Delete Everything Published removes these with the rest
+  of what it published (the records stay). A held clip also goes by the
+  clip rules - after its week on the hourly sweep, when the club closes
+  drivers' nights, and when its driver is forgotten - since it is still a
+  named driver's voice. A restore after any of that marks the record
+  restored and has nothing to put back (`putBack: false`).
+- Every folder and file is handed to the relay's user (`RELAY_UID`/`RELAY_GID`,
+  1000) before it is in place, since over `fly ssh` the commands run as root.
+
+**The running relay notices within seconds.** It looks at a club's file
+(stat only) at most every 2 seconds, on any request for that club and
+wherever a takedown-able thing is served. When it changed, it drops what it
+holds of the club - snapshot listings, the look (logo), cards, link
+previews, the merged stream, the last race's video, the directory - so the
+next request is served without the item. A file that will not read keeps
+the last set that did, and says so in the log. What phones and browsers
+already have is not ours to reach: `logo.png` and clips are cached for up to
+an hour, a crew sample up to a day, and the phone pages keep their own copy
+of a page's data for up to 12 hours.
+
+**Commands.** Any value may be given as `b64:<base64url of the UTF-8 text>`,
+as `audit-append`'s entry is, so a track name or a notice reference with
+quotes never meets the machine's shell. With `--json` the answer is one JSON
+object on standard output, `{"ok":false,"error":"..."}` and exit code 1 when
+refused; without it, a sentence or a table. A failure before the command
+itself runs - a config that will not load, `RELAY_DATA` missing when run as
+root, or an unexpected error - prints no JSON: only a line on standard
+error and a non-zero exit code, as every admin command does. On Fly,
+`fly.toml` sets `RELAY_DATA`, so `fly ssh console -C "node /app/dist/src/index.js ..."`
+needs nothing else.
+
+```
+node /app/dist/src/index.js takedown-find <club> <url> [--json]
+node /app/dist/src/index.js takedown <club> <kind> [<ref>] --notice "<short reference>" [--json]
+node /app/dist/src/index.js takedown-restore <club> <takedown-id> --reason "<text>" [--json]
+node /app/dist/src/index.js takedown-list [<club>] [--json]
+```
+
+`takedown-find` is read only. It maps an address from a notice to what
+could be taken down: `logo.png` to `logo`; `/c/<club>/clip/<id>.mp3` to
+`clip`; `/api/v1/c/<club>/crew/sample/<key>.mp3` to `crewsample`; a page
+(`/c/<club>`, `/live`, `/tracks`, `/badges`, `/results/<sid>`) to the logo
+plus what that page draws - sponsors on Home and Live, track pictures on
+Home and Tracks, artwork on Badges, the race's video on a race's page;
+`/api/v1/c/<club>/snapshot/<site|sponsors|tracks|badges>` to that
+document's items; a youtube.com or youtu.be address to `video`. The club's
+short address works in place of its id; another club's address is refused.
+
+```json
+{
+  "ok": true,
+  "club": "acme-rc",
+  "url": "https://heatcaller-relay.fly.dev/c/acme-rc/live",
+  "candidates": [
+    { "kind": "logo", "ref": "", "label": "The club's logo (every page, and the picture on shared links)", "present": true, "takedownId": null },
+    { "kind": "sponsor", "ref": "sp-7", "label": "Sponsor \"Hobby Hut\" (with a picture)", "present": true, "takedownId": "td-3f9a1c2b4d5e" }
+  ],
+  "note": "Pick the one the notice describes and run takedown with its kind and ref."
+}
+```
+
+`present` is whether the club has it published (or held) now; `takedownId`
+is the active takedown already on it, or `null`.
+
+`takedown` applies one. `--notice` is required: a short reference the admin
+types ("DMCA 2026-014") and nothing else - no complainant's name, address
+or email is stored. The same target already down answers its existing
+takedown with `already: true` and records nothing new. A clip or sample
+that is not there is still recorded (its address 404s all the same), with
+`held: false`. Appends a `takedown` entry to the shared audit log.
+
+```json
+{
+  "ok": true,
+  "id": "td-3f9a1c2b4d5e",
+  "club": "acme-rc",
+  "kind": "sponsor",
+  "ref": "sp-7",
+  "notice": "DMCA 2026-014",
+  "state": "active",
+  "takenDownAt": "2026-11-23T18:04:11.512Z",
+  "already": false,
+  "held": null
+}
+```
+
+`held` is `true`/`false` for `clip` and `crewsample` (whether a file was
+found and is held), `null` for every other kind.
+
+`takedown-restore` puts one back after a counter-notice. `--reason` is
+required. The record stays, marked restored. Appends a `takedown-restore`
+entry to the shared audit log.
+
+```json
+{
+  "ok": true,
+  "id": "td-3f9a1c2b4d5e",
+  "club": "acme-rc",
+  "kind": "sponsor",
+  "ref": "sp-7",
+  "state": "restored",
+  "restoredAt": "2026-12-09T10:00:00.000Z",
+  "reason": "counter-notice 2026-11-27, no suit filed",
+  "putBack": null
+}
+```
+
+`putBack` is `true`/`false` for `clip` and `crewsample` (whether a held
+file was put back), `null` for every other kind.
+
+`takedown-list` lists every club that has a takedown file (or the one
+named), oldest record first:
+
+```json
+{
+  "ok": true,
+  "generatedAt": "2026-11-23T18:05:00.000Z",
+  "clubs": [
+    {
+      "club": "acme-rc",
+      "active": 1,
+      "last12Months": 1,
+      "repeat": false,
+      "takedowns": [
+        {
+          "id": "td-3f9a1c2b4d5e",
+          "kind": "sponsor",
+          "ref": "sp-7",
+          "notice": "DMCA 2026-014",
+          "state": "active",
+          "takenDownAt": "2026-11-23T18:04:11.512Z",
+          "restoredAt": null,
+          "restoreReason": null
+        }
+      ]
+    }
+  ]
+}
+```
+
+- `active` - records not restored, any age.
+- `last12Months` - distinct notice references (compared without case or
+  extra spaces) among records not restored and taken down in the last 12
+  months. One notice naming three items counts once. A second notice about
+  an item that is already down is not recorded (`takedown` answers the
+  existing takedown with `already: true`), so it does not count; keep it in
+  your own log, and take it into account by hand.
+- `repeat` - `last12Months` is 3 or more: the policy's repeat-infringer
+  line. **A flag only.** Nothing closes or pauses a club; that is a person's
+  decision.
+
+**admin-snapshot** gives each club `takedowns` (an added field; `version`
+stays 1) and lists `takedowns` in `capabilities`:
+
+```json
+"takedowns": { "active": 1, "last12Months": 1, "repeat": false }
+```
+
+It is `null` for a club whose takedown file will not read - never a
+stand-in zero. A club with no file is all zeros and `false`.
+
 ### Which build is running
 
 `npm run build` writes `dist/src/build-info.json` beside the compiled relay:
