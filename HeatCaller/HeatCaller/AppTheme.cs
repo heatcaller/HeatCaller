@@ -1666,6 +1666,162 @@ public static class AppTheme
         // box in the app is drawn, rather than Windows' 13px glyph.
         grid.CellPainting -= TickCellPaint;
         grid.CellPainting += TickCellPaint;
+
+        // And a list in a cell as the app's own drop-down: the pick and the
+        // chevron (DropArrow), the skinned field while it is picked from,
+        // and one click to open it.
+        // WHY (22 Nov 2026, Asher): Edit Result's Outcome column was the
+        // grid's own list - Windows' pale grey box and arrow in every row of
+        // a dark window. Only the CSV import window had the themed one, as
+        // handlers of its own; they live here now, so every grid has them.
+        grid.CellPainting -= ListCellPaint;
+        grid.CellPainting += ListCellPaint;
+        grid.EditingControlShowing -= ListCellEditorShowing;
+        grid.EditingControlShowing += ListCellEditorShowing;
+        grid.CellClick -= ListCellClick;
+        grid.CellClick += ListCellClick;
+    }
+
+    /// <summary>Whether this cell of the grid holds a list to pick from. By the cell, not its column: the CSV import window puts lists in the first row of text columns.</summary>
+    internal static bool IsListCell(DataGridView grid, int rowIndex, int columnIndex) =>
+        rowIndex >= 0 && rowIndex < grid.RowCount
+        && columnIndex >= 0 && columnIndex < grid.ColumnCount
+        && grid.Rows[rowIndex].Cells[columnIndex] is DataGridViewComboBoxCell;
+
+    /// <summary>
+    /// A list in a cell, closed: the cell as the grid paints it, less its
+    /// own arrow and text, and then the pick and the app's chevron
+    /// (DropArrow) - the text kept clear of the chevron's zone.
+    /// </summary>
+    private static void ListCellPaint(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.Handled || e.Graphics is not { } g || sender is not DataGridView grid
+            || !IsListCell(grid, e.RowIndex, e.ColumnIndex))
+        {
+            return;
+        }
+
+        var bounds = e.CellBounds;
+        var style = e.CellStyle ?? grid.DefaultCellStyle;
+        var selected = (e.State & DataGridViewElementStates.Selected) != 0;
+        var ink = selected ? style.SelectionForeColor : style.ForeColor;
+
+        // The background filled here, not by the grid: asked for a list
+        // cell's background, the grid also paints the list's own field
+        // inside the padding, in Windows' colour - a pale box behind the
+        // pick on a striped or chosen row.
+        using (var back = new SolidBrush(selected ? style.SelectionBackColor : style.BackColor))
+        {
+            g.FillRectangle(back, bounds);
+        }
+
+        e.Paint(e.ClipBounds, DataGridViewPaintParts.Border);
+        var zone = DropArrow.ZoneIn(bounds.Width, bounds.Height);
+
+        zone.Offset(bounds.Left, bounds.Top);
+
+        var text = new Rectangle(
+            bounds.Left + style.Padding.Left + UiLayout.AtDpi(4),
+            bounds.Top,
+            Math.Max(1, zone.Left - bounds.Left - style.Padding.Left - UiLayout.AtDpi(4)),
+            bounds.Height - 1);
+
+        TextRenderer.DrawText(
+            g,
+            e.FormattedValue as string ?? string.Empty,
+            style.Font ?? grid.Font,
+            text,
+            ink,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+
+        // A list that cannot be picked from keeps its words and loses its arrow.
+        if (!grid.ReadOnly && !grid.Rows[e.RowIndex].Cells[e.ColumnIndex].ReadOnly)
+        {
+            DropArrow.Draw(g, zone, TextMuted);
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// The list itself, while it is in a cell being picked from, has the
+    /// app's closed field and chevron (ComboBoxSkin) rather than the grid's.
+    /// Only the skin: styling it the way StyleComboBox does changes its
+    /// FlatStyle and DrawMode, and either makes Windows build its window
+    /// again - which the grid, holding it in the cell as it shows it, is not
+    /// expecting. The grid makes one list and uses it for every cell; the
+    /// skin goes on it once.
+    /// </summary>
+    private static void ListCellEditorShowing(object? sender, DataGridViewEditingControlShowingEventArgs e)
+    {
+        if (e.Control is ComboBox list)
+        {
+            ComboBoxSkin.Attach(list);
+
+            list.DropDownClosed -= ListCellListClosed;
+            list.DropDownClosed += ListCellListClosed;
+        }
+    }
+
+    /// <summary>
+    /// Once the list closes - a pick made, or none - the cell goes back to
+    /// being a cell. The field the grid leaves in it sits inside the cell's
+    /// padding with a chevron of its own, so in a narrow column it read
+    /// "Finis..." until another cell was clicked. Posted, so the pick is the
+    /// cell's before the edit ends.
+    /// </summary>
+    private static void ListCellListClosed(object? sender, EventArgs e)
+    {
+        if (sender is not IDataGridViewEditingControl { EditingControlDataGridView: { IsHandleCreated: true } grid })
+        {
+            return;
+        }
+
+        grid.BeginInvoke(new Action(() =>
+        {
+            if (!grid.IsDisposed && grid.IsCurrentCellInEditMode && grid.CurrentCell is DataGridViewComboBoxCell)
+            {
+                grid.EndEdit();
+            }
+        }));
+    }
+
+    /// <summary>
+    /// One click on a list opens it, wherever on the cell it lands - its
+    /// drawn arrow is wider than the button the grid itself answers to, and
+    /// the grid's own way wants one click to choose the cell and another, on
+    /// its arrow, to open it. After the click, once the grid has made the
+    /// cell the current one.
+    /// </summary>
+    private static void ListCellClick(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (sender is not DataGridView { IsHandleCreated: true } grid || !IsListCell(grid, e.RowIndex, e.ColumnIndex))
+        {
+            return;
+        }
+
+        grid.BeginInvoke(new Action(() =>
+        {
+            if (grid.IsDisposed
+                || grid.CurrentCell is not DataGridViewComboBoxCell { ReadOnly: false } current
+                || current.RowIndex != e.RowIndex
+                || current.ColumnIndex != e.ColumnIndex)
+            {
+                return;
+            }
+
+            // A grid that waits for a key before it edits (Edit Result) has
+            // no list in the cell yet.
+            if (grid.EditingControl is null && !grid.BeginEdit(selectAll: true))
+            {
+                return;
+            }
+
+            if (grid.EditingControl is ComboBox { DroppedDown: false } list)
+            {
+                list.DroppedDown = true;
+            }
+        }));
     }
 
     /// <summary>The grid's colours, faces and padding - see StyleGrid, which holds the rows' sizing off while these are set.</summary>
