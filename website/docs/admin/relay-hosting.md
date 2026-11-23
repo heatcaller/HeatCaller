@@ -525,6 +525,66 @@ To switch a club off for a while without losing anything, pause it instead: add 
 
 Take the line out, or set it to `true`, to switch the club back on with the same token. Anything but `true` or `false` stops the relay at start-up, so a hand-typed `"false"` can't quietly read as on.
 
+### Copyright takedowns
+
+When a copyright notice names something a club published on the relay - its logo, a sponsor's tile, a picture of a track, an achievement's artwork, a race video, a driver's race clip, a crew voice sample or a car photo in a driver's garage - you can take that one item down without touching the rest of the club, and put it back after a counter-notice. The relay stops serving it within a few seconds. Nothing the club's laptop sends is refused or rewritten: it goes on publishing as normal, and the relay leaves the item out wherever it would show, even after the laptop sends it again and even after the club presses **Delete Everything Published** and starts over.
+
+The commands run on the Fly machine through `fly ssh console`, like the top-up commands. Each one takes `--json` too, for the relay admin app.
+
+**1. Find what the notice points at.** Copy the address from the notice and ask the relay what it could be:
+
+```
+fly ssh console -C "node /app/dist/src/index.js takedown-find acme-rc https://heatcaller-relay.fly.dev/c/acme-rc/live"
+```
+
+It lists what can be taken down at that address, each with its kind and its name: the logo (which is on every page), the sponsors on Home and Live, the track pictures on Home and Tracks, the artwork on Badges, a race's video on that race's results page, and the one file for a clip's or a crew sample's address. A youtube.com or youtu.be address gives that video. It changes nothing.
+
+**2. Take it down.** Give the kind, the name `takedown-find` showed, and a short reference for the notice:
+
+```
+fly ssh console -C "node /app/dist/src/index.js takedown acme-rc sponsor sp-7 --notice DMCA-2026-014"
+```
+
+The kinds are `logo` (nothing after it), `sponsor`, `track`, `badge`, `video`, `clip`, `crewsample` and `garagephoto`. It answers with the takedown's id, such as `td-3f9a1c2b4d5e`; keep it for a restore. Running it again for the same item gives the same id and changes nothing.
+
+| Kind | What people stop seeing |
+|---|---|
+| `logo` | The logo on every page, at `logo.png`, and as the picture on shared links (the club's icon is used instead). |
+| `sponsor` | That sponsor's whole tile - name, line, link and picture. The club's other sponsors stay. |
+| `track` | That track's picture. The track, its records and its laps stay. |
+| `badge` | That achievement's artwork. The achievement and who won it stay. |
+| `video` | That YouTube video on every race, the live video, a driver's night and family links. The video itself stays on YouTube. |
+| `clip` | The clip's address and its place on the driver's night. The file is moved aside, not deleted. |
+| `crewsample` | The sample's address. The file is moved aside, not deleted. |
+| `garagephoto` | The photo in that driver's garage. |
+
+The notice reference is for your own records: type the reference you gave the notice, never the sender's name, address or email. The relay keeps nothing else about the notice.
+
+Keep the reference to one word, like `DMCA-2026-014`, so nothing in it depends on how your terminal and `fly ssh console` pass quotes along. For a track name with a space or a quote in it, or a restore reason in words, send the text encoded instead: `b64:` and then the text in base64url. In PowerShell:
+
+```
+"b64:" + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("Tight Layout")).TrimEnd('=').Replace('+','-').Replace('/','_')
+```
+
+**3. Tell the club.** The relay never sends email. Email the club yourself: what was taken down, and a copy of the notice with the sender's telephone number and postal address taken out, as the copyright policy says. Tell them they can send a counter-notice if they think it was a mistake.
+
+**4. Restore it after a counter-notice.** Once a valid counter-notice has been forwarded, and the sender hasn't told you within 10 business days that they have gone to court, put the item back with its id and a reason:
+
+```
+fly ssh console -C "node /app/dist/src/index.js takedown-restore acme-rc td-3f9a1c2b4d5e --reason b64:..."
+```
+
+It shows again within a few seconds, without the club publishing anything. The record stays, marked restored. A clip or crew sample taken down before the club pressed **Delete Everything Published** is gone with the rest of what the club deleted, so there's nothing to put back. A taken-down clip also goes when any clip would: after 7 days, when the club stops offering drivers their nights, or when its driver is forgotten.
+
+**See every takedown.** `takedown-list` shows every club's takedowns, or one club's with `takedown-list acme-rc`: what, when, the notice reference, and whether each was restored. For each club it also counts the notices in the last 12 months that weren't countered. At three, the line says REPEAT: that is the policy's repeat-infringer line, and it is only a flag. The relay never closes or pauses a club by itself; that's your decision. One notice naming three items counts once.
+
+`takedown` and `takedown-restore` each add a line to the shared audit log, which the relay admin app shows. The records are kept in `.takedowns/<club>.json` on the volume, and a taken-down clip or sample in `.takedowns/held/`.
+
+!!! note
+    Phones and browsers may still have a copy for a while. A logo or clip they already loaded can stay in their cache for up to an hour, a crew sample for up to a day, and the club's pages on a phone keep their own copy of what they last showed for up to 12 hours. The relay can't reach those copies; they go when they run out or the page next loads.
+
+**Not covered one at a time:** the Listen audio and the captions (ask the club to switch Listen off, or pause the club), driver photos on the check-in list, and anything the club typed rather than uploaded. For those, ask the club to remove it, which is the fastest way anyway, or pause the club.
+
 ### Monthly allowances and top-ups
 
 Each club's AI commentary is counted in lines and its HeatCaller voice in characters, a calendar month (UTC) at a time. The clubs see their own figures in HeatCaller's **This Month** window, on the pages that use them and on the manager's phone page, and can press **Ask for More** when one runs low. See [This month: every allowance in one place](../announcer/commentary.md#this-month-every-allowance-in-one-place). Those figures come from routes a relay only has once it has been deployed again; until then a laptop's This Month window says "This relay can't show the monthly allowances yet."
@@ -607,6 +667,8 @@ The data, all under the relay's data folder:
 | `<club>/collection/pushsubs/` | The phones signed up for each driver's alerts. | The relay only. |
 | `<club>/snapshot/sponsorviews.json` | How many phones saw each sponsor on the club's pages, and how many tapped through, by the hour, for the last 45 days. | The relay only. |
 | `<club>/collection/driverphotos/` | Car photos sent from drivers' phones, waiting for the laptop to collect them. | The relay only. |
+| `.takedowns/<club>.json` | The club's [copyright takedowns](#copyright-takedowns): what, when, the notice reference, and whether each was restored. Kept when the club deletes everything. | `takedown` and `takedown-restore` only. The relay only reads it. |
+| `.takedowns/held/<club>/` | Clips and crew samples taken down, kept for a restore. A clip still goes after 7 days, like any clip. | `takedown` and `takedown-restore`. The relay only removes: a club's, when it deletes everything, and clips, by the clip rules. |
 
 Each file has one writer, so the running relay and a command run at the same moment can never save over each other. Run through ssh, the commands run as root; they hand every file and folder they make to the relay's own user, and refuse to run without `RELAY_DATA`, which is where the relay's data really is.
 

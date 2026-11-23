@@ -10,6 +10,7 @@ import { TenantRegistry } from "./tenancy.js";
 import { removeLeftoverVideos } from "./oldvideos.js";
 import { DiskClipVault } from "./clips.js";
 import { DiskCrewSampleVault } from "./crewsamples.js";
+import { TakedownBook } from "./takedown.js";
 import { ElevenLabsLogging, elevenLabsRenderer, elevenLabsStreamer, migrateVoiceFolder, noLoggingFromEnv, VoiceService } from "./voice.js";
 import { LAP_VOICE_DIR, LapVoiceLibrary } from "./lapvoice.js";
 import { TopUpRequests } from "./topuprequests.js";
@@ -167,6 +168,9 @@ async function serve(): Promise<number> {
     clips: new DiskClipVault(config.dataDir),
     // Crew voice samples from the club's PC - see crewsamples.ts (19 Nov 2026).
     crewSamples: new DiskCrewSampleVault(config.dataDir),
+    // Copyright takedowns of one item (23 Nov 2026), written by the admin
+    // commands and read here - see takedown.ts.
+    takedowns: new TakedownBook(config.dataDir, { log: (line) => console.log(line) }),
     brain,
     topUpRequests: new TopUpRequests({ dataDir: config.dataDir, log: (line) => console.log(line) }),
     // One line per voice and commentary request, for the relay admin app's
