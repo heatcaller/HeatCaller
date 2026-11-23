@@ -140,6 +140,27 @@ An invite to [sign up online](../online/sign-up.md) is an eight-digit code that 
 
 A sign-up does nothing by itself: the desk approves every one. Until it does, the relay holds what the driver typed - including a transponder number, the one place the relay ever holds one - and forgets it once the laptop has answered, or after 14 days.
 
+### Family links and crew picks
+
+A [family link](../online/index.md#family-links) carries a code of 24 random hexadecimal characters, and a crew pick from a driver's phone is sent with their QR check-in id (20 hexadecimal characters). Neither can be guessed, but since 23 November 2026 the relay limits wrong guesses at family link codes, and at the QR check-in id on crew picks, the same way it limits wrong PINs and counted apart from them, so guessing at one never closes another. A wrong QR check-in id sent anywhere else, for example to open a driver's night, is held by the per-address limits only, so nobody can close every driver's page by guessing:
+
+| Limit | Window | Counted per |
+|---|---|---|
+| 20 wrong family link codes | 10 minutes | Club and device address |
+| 100 wrong family link codes | 10 minutes, then a growing lockout | Club, from every address together |
+| 300 wrong family link codes | 1 day, then a 12-hour lockout | Club, from every address together |
+| 10 wrong codes on crew picks | 10 minutes | Club and device address |
+| 50 wrong codes on crew picks | 10 minutes, then a growing lockout | Club, from every address together |
+| 150 wrong codes on crew picks | 1 day, then a 12-hour lockout | Club, from every address together |
+
+The lockouts grow as the PIN one does: 10 minutes, then 30 minutes, 2 hours, 6 hours, and 12 hours, starting again after a day with no lockout. While family links are closed, a link opened then is answered "Too many wrong family link codes have been tried for this club, so family links are closed for about *N* minutes", whether its code is right or wrong, so a lockout can't be used to test codes. While crew picks are closed, a crew pick sent without a sign-in is answered "Too many wrong codes have been tried for this club, so crew picks from phones are closed for about *N* minutes", right code or wrong.
+
+- **A family page that has already opened keeps working.** The first time its code works, the relay gives the page a pass, which it keeps and sends back each time it checks for news. A pass opens only its own link, and stops working when the driver stops the link.
+- **A driver signed in with their personal PIN keeps picking their crew.** Crew picks need that PIN anyway. The rest of a driver's page, and every other kind of request, carries on as normal.
+- **The same wrong code counts once a day.** A relative's page left open on a link the driver has stopped asks again every 30 seconds; it counts as one wrong code, not hundreds.
+- **Nothing is counted while the club isn't sharing drivers' nights** or taking requests from phones, because then every honest phone would be "wrong".
+- **Delete Everything Published** forgets both counts and any lockout.
+
 ## The relay's own protections
 
 - **Every club is separate.** Every address and every stored file is under a club id, and the id is checked in one place before it is used. Besides `/healthz` and the lap voice's clips (`/lap-voice`, the same fixed recordings for every club, taking nothing from a caller), three voice routes are the only ones outside `/api/v1/c/<club>/`: the two that serve [voice samples](relay-hosting.md#hearing-a-voice-before-choosing-it) take no token and name no club, and they read nothing a club published and write nothing — the words they speak are one fixed line built into the relay. **Preview** names no club in its address either, but it carries the club's publish token, so the token *is* the club: there is nothing in the address that could name a different one, and the only thing it writes is that club's own count of previews for the day.

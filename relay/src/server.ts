@@ -7,6 +7,7 @@ import { isActive, isValidClubId, type Tenant, type TenantRegistry } from "./ten
 import { CHANNELS, channelSpec, type ChannelSpec, type StoredDocument } from "./types.js";
 import { cardVersionOf, clubCard, sessionCard } from "./card.js";
 import { PinGuard } from "./pinguard.js";
+import { CodeGuard, CREW_CODE_LIMITS, FAMILY_CODE_LIMITS, familyPass } from "./codeguard.js";
 import { previewCard, previewsIn, type PagePreview, type SessionPreview } from "./preview.js";
 import {
   badgesPage,
@@ -1257,6 +1258,10 @@ export class Relay {
   private readonly signupPinGuard: PinGuard;
   /** signin, status and submit together, per club and address. */
   private readonly signupTraffic: Limiter;
+  /** Wrong family-link codes, per club and per address (23 Nov 2026) - see codeguard.ts. */
+  private readonly familyCodeGuard: CodeGuard;
+  /** Wrong badge codes on crew picks, per club and per address (23 Nov 2026) - see codeguard.ts. */
+  private readonly crewCodeGuard: CodeGuard;
   /** Slow PIN hashes paid, per club and address, across check-in, the manager and sign-up together. See SLOW_HASHES_PER_ADDRESS. */
   private readonly slowHashes: Limiter;
   /** The same for the whole relay, one key. See SLOW_HASHES_IN_ALL. */
@@ -1557,6 +1562,36 @@ export class Relay {
     // a club night's newcomers may all be on the venue's one address - so
     // more room than the manager's, still a wall for a script.
     this.signupTraffic = new Limiter(300, 60 * 1000, () => this.now().getTime());
+
+    // WHY (23 Nov 2026, Asher, security program section 5): family-link
+    // codes and the badge code a crew pick is sent with get a wrong-guess
+    // limit of their own, like the PINs above and kept apart from them, so
+    // guessing at one never closes another. The numbers, and why a lockout
+    // leaves phones already holding a working code alone, are in codeguard.ts.
+    this.familyCodeGuard = new CodeGuard(
+      this.store,
+      () => this.now().getTime(),
+      this.log,
+      "familyguard",
+      FAMILY_CODE_LIMITS,
+      (wait) =>
+        `Too many wrong family link codes have been tried for this club, so family links are closed for about ${wait}. ` +
+        "Family pages already open on a phone keep working.",
+      "Too many wrong family link codes from this connection. Try again in a few minutes.",
+      { wrongWhat: "family-link codes", closedWhat: "the family-link list" },
+    );
+    this.crewCodeGuard = new CodeGuard(
+      this.store,
+      () => this.now().getTime(),
+      this.log,
+      "crewguard",
+      CREW_CODE_LIMITS,
+      (wait) =>
+        `Too many wrong codes have been tried for this club, so crew picks from phones are closed for about ${wait}. ` +
+        "Drivers signed in with their personal PIN can still pick their crew.",
+      "Too many wrong codes from this connection. Try again in a few minutes.",
+      { wrongWhat: "crew-pick badge codes", closedWhat: "crew picking from phones" },
+    );
 
     // Every slow PIN hash, right guess or wrong. The PIN limits above only
     // count wrong ones, so a racer with their own PIN could sign in over
@@ -5565,7 +5600,12 @@ export class Relay {
       try {
         await this.pinGuard.forget(club, () =>
           this.managePinGuard.forget(club, () =>
-            this.signupPinGuard.forget(club, () => this.forgetPushSubs(club, () => this.store.deleteClub(club))),
+            this.signupPinGuard.forget(club, () =>
+              // The code guards too (23 Nov 2026, Asher): their counts are in the folder the wipe removes.
+              this.familyCodeGuard.forget(club, () =>
+                this.crewCodeGuard.forget(club, () => this.forgetPushSubs(club, () => this.store.deleteClub(club))),
+              ),
+            ),
           ),
         );
       } finally {
@@ -8005,17 +8045,40 @@ export class Relay {
 
     this.checkinReads.hit(who);
     const body = await readBody(request, response, CHECKIN_MAX_BODY);
-    const code = isPlainObject(body) && typeof body["code"] === "string" ? body["code"].trim().toLowerCase() : "";
+    const code = isPlainObject(body) && typeof body["code"] === "string" ? body["code"].trim().toLowerCase().slice(0, 64) : "";
 
-    if (!FAMILY_CODE.test(code) || !(await this.nightsOpenFor(club))) {
+    // WHY (23 Nov 2026, Asher, security program section 5): a wrong code
+    // used to be answered "Not found" as often as anybody asked. It is now
+    // counted - see codeguard.ts - and a run of them closes the club's
+    // family links for a while. Everything that has to be waited for is
+    // read first; then the lockout, the code and the count are judged in
+    // one step with no await between, so a burst cannot slip past the count.
+    await this.familyCodeGuard.ready(club);
+    const open = await this.nightsOpenFor(club);
+    const link = open && FAMILY_CODE.test(code) ? await this.store.getItem(club, FAMILY_CHANNEL, code).catch(() => undefined) : undefined;
+    const id = link !== undefined && isPlainObject(link.body) && typeof link.body["d"] === "string" ? link.body["d"] : "";
+    const key = DRIVER_ID.test(id) ? await this.passKeyOf(club).catch(() => undefined) : undefined;
+    const offered = isPlainObject(body) && typeof body["pass"] === "string" && PASS.test(body["pass"]) ? body["pass"] : "";
+
+    // A page whose code has already worked sends the pass it was given,
+    // and carries on through a lockout somebody else caused. Anything else
+    // - a right code with no pass among it - gets the lockout's one answer.
+    const passed = key !== undefined && offered !== "" && sameHash(offered, familyPass(key, club, code));
+    const refusal = passed ? undefined : this.familyCodeGuard.refusalNow(club, clientAddress(request));
+
+    if (refusal !== undefined) {
+      sendJson(response, refusal.status, { ok: false, error: refusal.error });
+      return;
+    }
+
+    // Nights closed is not a wrong code: every family page would count.
+    if (!open) {
       sendJson(response, 404, { ok: false, error: "Not found" });
       return;
     }
 
-    const link = await this.store.getItem(club, FAMILY_CHANNEL, code).catch(() => undefined);
-    const id = link !== undefined && isPlainObject(link.body) && typeof link.body["d"] === "string" ? link.body["d"] : "";
-
     if (!DRIVER_ID.test(id)) {
+      await this.familyCodeGuard.wrongNow(club, clientAddress(request), code);
       sendJson(response, 404, { ok: false, error: "Not found" });
       return;
     }
@@ -8050,6 +8113,8 @@ export class Relay {
       races: races.map((r) => familyRaceFrom(r)),
       next: next === null ? null : familyNextFrom(next as Record<string, unknown>),
       videos,
+      // What keeps this page working through a lockout - see familyPass.
+      ...(key !== undefined ? { pass: familyPass(key, club, code) } : {}),
     });
   }
 
@@ -8765,6 +8830,35 @@ export class Relay {
   }
 
   /**
+   * Whether a crew pick's code is a wrong guess (23 Nov 2026): the club is
+   * taking drivers' asks with check-in on, and the code belongs to nobody -
+   * not on the check-in list, no night page, no live entry. A closed club
+   * is never counted, or every honest phone would count while it was shut.
+   */
+  private async crewCodeIsWrong(club: string, id: string): Promise<boolean> {
+    if (!(await this.nightsOpenFor(club)) || !(await this.driverAsksOpenFor(club))) {
+      return false;
+    }
+
+    const checkin = await this.checkinOf(club).catch(() => undefined);
+
+    if (checkin === undefined || !checkin.enabled) {
+      return false;
+    }
+
+    if (!DRIVER_ID.test(id)) {
+      return true;
+    }
+
+    if (checkin.drivers.some((d) => d.id === id)) {
+      return false;
+    }
+
+    return (await this.store.getItem(club, NIGHTS_CHANNEL, id).catch(() => undefined)) === undefined
+      && (await this.liveEntryOf(club, id)) === undefined;
+  }
+
+  /**
    * A driver asking the desk for something, with their badge code - see
    * driverasks.ts. Held until the laptop collects it; never acted on here.
    */
@@ -8788,12 +8882,45 @@ export class Relay {
       return;
     }
 
-    const id = typeof body["id"] === "string" ? body["id"].trim().toLowerCase() : "";
+    const id = typeof body["id"] === "string" ? body["id"].trim().toLowerCase().slice(0, 64) : "";
+
+    // A crew pick's code is counted when wrong (23 Nov 2026) - read the
+    // count before anything else is awaited; see the crew check below.
+    const crewPick = body["kind"] === "crew";
+
+    if (crewPick) {
+      await this.crewCodeGuard.ready(club);
+    }
 
     // ONE ANSWER for a code that is not a code, a club that is closed and a
     // driver who is not on tonight's list - as readOneNight does, so this
     // route tells a stranger nothing about which codes are real.
     const checkin = DRIVER_ID.test(id) ? await this.askGateOf(club, id) : undefined;
+
+    // WHY (23 Nov 2026, Asher, security program section 5): crew codes get
+    // a wrong-guess limit - see codeguard.ts. A crew pick's code is the
+    // driver's badge code. Wrong means the club is taking asks and the code
+    // is nobody's at all (not on the list, no night, no live entry): a
+    // driver who is merely not on tonight's list is not guessing. Judged
+    // after every await, with the lockout, in one step.
+    if (crewPick) {
+      const wrong = checkin === undefined && await this.crewCodeIsWrong(club, id);
+      const crewPass = typeof body["pass"] === "string" && PASS.test(body["pass"]) ? body["pass"] : "";
+      // Signed in with their own PIN: that pass is the proof, as at check-in.
+      const passed = checkin !== undefined && crewPass !== "" && racerByPass(checkin, crewPass)?.id === id;
+      const refusal = passed ? undefined : this.crewCodeGuard.refusalNow(club, clientAddress(request));
+
+      if (refusal !== undefined) {
+        sendJson(response, refusal.status, { ok: false, error: refusal.error });
+        return;
+      }
+
+      if (wrong) {
+        await this.crewCodeGuard.wrongNow(club, clientAddress(request), id);
+        sendJson(response, 404, { ok: false, error: "Not found" });
+        return;
+      }
+    }
 
     // "I'm coming" has a gate of its own, with no check-in - see comingGateOf.
     const comingOnly = checkin === undefined && body["kind"] === "coming" && await this.comingGateOf(club, id);

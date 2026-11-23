@@ -20916,6 +20916,18 @@ function famCode() {
 }
 const FCODE = famCode();
 let famText = '';
+// WHY (23 Nov 2026, Asher, security program section 5): wrong family link
+// codes are now limited, and a run of them closes a club's family links for
+// a while. The relay answers a working code with a pass, kept here and sent
+// with every poll, so this page carries on through a lockout somebody else
+// caused - even after the phone reloads it.
+const FPASS_KEY = 'hc-fampass-' + CLUB + '-' + FCODE;
+let famPass = '';
+try { famPass = localStorage.getItem(FPASS_KEY) || ''; } catch (e) { famPass = ''; }
+function famKeepPass(p) {
+  famPass = p;
+  try { if (p) localStorage.setItem(FPASS_KEY, p); else localStorage.removeItem(FPASS_KEY); } catch (e) { /* kept in memory */ }
+}
 
 function famOrdinal(n) {
   const t = n % 100, e = n % 10;
@@ -21001,12 +21013,26 @@ async function loadFam() {
   if (!FCODE) { fam.innerHTML = '<p class="note">This link isn\\u2019t complete. Ask for it to be sent again.</p>'; return; }
   let r;
   try {
-    r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/family/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: FCODE }), cache: 'no-store' });
+    r = await fetch('/api/v1/c/' + encodeURIComponent(CLUB) + '/family/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(famPass ? { code: FCODE, pass: famPass } : { code: FCODE }), cache: 'no-store' });
   } catch (e) { return; }
-  if (r.status === 404) { fam.innerHTML = '<p class="note">This family link has been stopped, or the club isn\\u2019t sharing drivers\\u2019 nights just now.</p>'; famText = ''; return; }
+  if (r.status === 404) { famKeepPass(''); fam.innerHTML = '<p class="note">This family link has been stopped, or the club isn\\u2019t sharing drivers\\u2019 nights just now.</p>'; famText = ''; return; }
+  if (r.status === 429) {
+    // Too many wrong codes tried: the relay's own words, and the poll
+    // carries on, so the page fills in by itself once it opens again.
+    let said = '';
+    try { const e = await r.json(); said = e && typeof e.error === 'string' ? e.error : ''; } catch (e) { said = ''; }
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = said || 'Too many wrong family link codes have been tried. Try again in a few minutes.';
+    fam.textContent = '';
+    fam.appendChild(p);
+    famText = '';
+    return;
+  }
   if (r.status !== 200) return;
   let d = {};
   try { d = await r.json(); } catch (e) { return; }
+  if (d && typeof d.pass === 'string' && /^[0-9a-f]{64}$/.test(d.pass) && d.pass !== famPass) famKeepPass(d.pass);
   const text = JSON.stringify(d);
   if (text === famText) return;
   famText = text;
