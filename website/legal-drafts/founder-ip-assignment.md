@@ -1,17 +1,19 @@
 > **DRAFT for review by a licensed attorney - not legal advice, not in force.**
 > Written 15 Nov 2026 for HeatCaller LLC (plans/children-privacy-and-ip-plan.md, item 3.7). A short confirmatory assignment, so that everything HeatCaller is built on belongs to the company, including what was made before the LLC existed and what was made with AI tools. Points marked **[CHECK]** need a fact or counsel's wording. Sign two copies; keep one with the company records.
+>
+> **Updated 23 Nov 2026:** the addresses, formation date, title, accounts and the employer question are filled in from Asher's answers and New York's entity record (DOS ID 8031449). Still open: the consideration (section 4) and the AI tools' terms (section 5.4), both for counsel, and the date, on signing.
 
 # Intellectual property assignment
 
 **This assignment** is made on ______________ 2026 (the "Effective Date")
 
-**by** Asher Kent, of [ADDRESS - CHECK] (the "Founder"),
+**by** Asher Kent, of 506 Pinyon Dr, Schenectady, NY 12303 (the "Founder"),
 
-**to** HeatCaller LLC, a New York limited liability company, of [ADDRESS - CHECK] (the "Company").
+**to** HeatCaller LLC, a New York limited liability company (DOS ID 8031449), of 506 Pinyon Dr, Schenectady, NY 12303 (the "Company").
 
 ## 1. Background
 
-The Founder created the HeatCaller software and related materials, some before the Company was formed on [DATE OF FORMATION - CHECK] and some since. The Founder and the Company want all of it to belong to the Company. This assignment confirms that it does, and transfers anything that does not already.
+The Founder created the HeatCaller software and related materials, some before the Company was formed on 26 September 2026 and some since. The Founder and the Company want all of it to belong to the Company. This assignment confirms that it does, and transfers anything that does not already.
 
 ## 2. What is assigned
 
@@ -21,7 +23,7 @@ The Founder created the HeatCaller software and related materials, some before t
 - **Assets:** audio (music, sound packs, show music, imaging and recorded or generated voice lines), images, logos, icons, video, fonts the Founder made, and the data files that ship with the software;
 - **Writing:** documentation, the website, plans, designs, mock-ups and marketing material;
 - **Names and marks:** the names "HeatCaller" and any other product or feature names, logos and slogans, with the goodwill of the business they represent, and any applications to register them;
-- **Domains and accounts:** the domain heatcaller.com and any other domains, and the accounts used to run HeatCaller (code hosting, app hosting, email, the voice and AI providers, payment and app-store accounts), as far as they can be transferred (on 16 Nov 2026: the heatcaller GitHub organization, the Fly.io app heatcaller-relay and its volume, the Cloudflare account holding R2 video, and the ElevenLabs and Anthropic API accounts. [CHECK: add the domain registrar, the email provider, and any payment or app-store accounts]);
+- **Domains and accounts:** the domain heatcaller.com and any other domains, and the accounts used to run HeatCaller (code hosting, app hosting, email, the voice and AI providers, payment and app-store accounts), as far as they can be transferred (on 16 Nov 2026: the heatcaller GitHub organization, the Fly.io app heatcaller-relay and its volume, the Cloudflare account holding R2 video, the ElevenLabs and Anthropic API accounts, the Porkbun account that registers heatcaller.com, and the Google account that runs the heatcaller.com email [CHECK: confirm it is Google Workspace]. There are no payment or app-store accounts yet);
 - **Know-how:** inventions, ideas, methods, decoder-protocol notes, and trade secrets; and
 - **AI-assisted work:** anything above made with the help of AI tools (including code, text, audio and images generated or edited with them), to the full extent the Founder has any rights in it.
 
@@ -41,7 +43,7 @@ The Founder confirms that, to the Founder's knowledge:
 
 1. the Founder made the HeatCaller IP or has the right to assign it;
 2. the Founder has not assigned or licensed it to anyone else, other than open-source licences of third-party parts that HeatCaller uses under their own terms;
-3. it was not made in the course of employment or under a contract that gives anyone else rights in it [CHECK: any past or current employer's IP or moonlighting clause, and any client work]; and
+3. it was not made in the course of employment or under a contract that gives anyone else rights in it; and
 4. where AI tools were used, the Founder used them under terms that do not give the tool's provider ownership of the output [CHECK: the terms of each tool used, e.g. Anthropic's for Claude, ElevenLabs' for generated audio].
 
 The Founder makes no promise that AI-generated parts are protected by copyright. The Company accepts that some may not be.
@@ -72,7 +74,7 @@ Date: ______________
 
 Signature: ______________________________
 
-Name: ______________________  Title: [Managing Member - CHECK]
+Name: Asher Kent  Title: Managing Member
 
 Date: ______________
 
@@ -82,9 +84,10 @@ Date: ______________
 
 | Item | Details | Transferred on |
 |---|---|---|
-| Domain | heatcaller.com | |
-| Code repositories | | |
-| Hosting (relay) | Fly.io app | |
+| Domain | heatcaller.com, registered with Porkbun | |
+| Code repositories | github.com/heatcaller: HeatCaller, HeatCaller-releases, heatcaller-site, HeatCaller-Admin | |
+| Hosting (relay) | Fly.io app heatcaller-relay and its volume | |
+| Video storage | Cloudflare account (R2) | |
 | Voice provider account | ElevenLabs | |
 | AI provider account | Anthropic | |
-| Email | support@heatcaller.com | |
+| Email | support@heatcaller.com, on Google [CHECK: Workspace] | |

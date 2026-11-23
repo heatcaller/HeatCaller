@@ -100,6 +100,7 @@ import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES,
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
 import { DIRECTORY_HELD_MS, directoryEntry, directoryFacts, directoryOrder, isListed, type DirectoryEntry, type DirectoryFacts } from "./directory.js";
 import { looksLikeABot, type DirectoryVisits } from "./directoryvisits.js";
+import { garageWithoutTakenDown, NO_TAKEDOWNS, withoutTakenDown, type ActiveTakedowns, type TakedownBook } from "./takedown.js";
 import { addCounts, countableEvents, PAGE_COUNTS, PAGE_COUNTS_DAYS, PAGE_COUNTS_MAX_BODY, PAGE_COUNTS_PER_ADDRESS, totalsOver } from "./pagecounts.js";
 
 /** The public pages under /c/<club>/, by their last path segment. */
@@ -1162,6 +1163,11 @@ export interface RelayOptions {
    */
   readonly crewSamples?: CrewSampleVault | undefined;
   /**
+   * Copyright takedowns of one item (23 Nov 2026) - see takedown.ts. Absent
+   * means nothing is ever taken down, which is every test that predates it.
+   */
+  readonly takedowns?: TakedownBook | undefined;
+  /**
    * The commentary brain. Absent means this relay writes no commentary:
    * clubs use Ollama on the race laptop, or go without, exactly as
    * before this existed.
@@ -1310,6 +1316,8 @@ export class Relay {
   private readonly clips: ClipVault | undefined;
   /** Crew voice samples - see crewsamples.ts (19 Nov 2026). */
   private readonly crewSamples: CrewSampleVault | undefined;
+  /** What is taken down after a copyright notice, per club - see takedown.ts and takedownsOf. */
+  private readonly takedowns: TakedownBook | undefined;
   private readonly push: PushService | undefined;
   /** Phones fetching a clip, per club and address - an audio player asks in ranges too. */
   private readonly clipReads: Limiter;
@@ -1599,6 +1607,7 @@ export class Relay {
     // 22 Oct 2026, driver experience: clips and drivers' asks. See the fields.
     this.clips = options.clips;
     this.crewSamples = options.crewSamples;
+    this.takedowns = options.takedowns;
     this.push = options.push;
     // What the checks learnt is kept in the club's private "videocheck"
     // snapshot, so a restart neither forgets a dead video nor asks again.
@@ -1915,7 +1924,10 @@ export class Relay {
     try {
       return await this.shared(this.siteLoads, club, () => this.siteEpochs.get(club) ?? 0, async () => {
         const entry: SiteEntry = {
-          look: lookFrom(await this.store.getSnapshot(club, "site"), undefined),
+          // A logo taken down after a copyright notice is not in the look
+          // at all (23 Nov 2026, takedown.ts): no logo.png, no link to it,
+          // no og:image of it - and the directory, which reads this, too.
+          look: lookFrom(await this.siteDocOf(club), undefined),
           card: undefined,
         };
         return entry;
@@ -1983,6 +1995,47 @@ export class Relay {
       });
 
     return done;
+  }
+
+  /** The club's site document as it may be served: anything taken down left out. */
+  private async siteDocOf(club: string): Promise<StoredDocument | undefined> {
+    const doc = await this.store.getSnapshot(club, "site");
+    const active = await this.takedownsOf(club);
+    return doc === undefined || !active.logo ? doc : { ...doc, body: withoutTakenDown("site", doc.body, active) };
+  }
+
+  /**
+   * What is taken down for a club right now (23 Nov 2026, asked for by
+   * Asher - copyright takedowns, see takedown.ts).
+   *
+   * The admin command that takes something down runs in another process,
+   * so the only news of it is the club's file changing. Asked at the top of
+   * every request for the club and wherever something that can be taken
+   * down is served; looks at the file at most every couple of seconds.
+   * When it changed, everything held of the club is thrown away - listings,
+   * look, cards, previews, the merged stream, the last race's video and
+   * the directory - through the same forgets a publish uses, so a read
+   * already under way is not kept either. Restoring is the same in reverse.
+   */
+  private async takedownsOf(club: string): Promise<ActiveTakedowns> {
+    if (this.takedowns === undefined) {
+      return NO_TAKEDOWNS;
+    }
+
+    const { active, changed } = await this.takedowns.of(club);
+
+    if (changed) {
+      this.log(`[takedown] "${club}": its takedowns changed; dropping what is held of it.`);
+      this.forgetClubListings(club);
+      this.forgetSite(club);
+      this.forgetPreviews(club);
+      this.mergedStreams.delete(club);
+      this.lastRaceVideos.delete(club);
+      this.directoryHeld = undefined;
+      this.directoryEpoch++;
+    }
+
+    return active;
   }
 
   /** Called after every write to a club's site document. */
@@ -2517,6 +2570,12 @@ export class Relay {
           return;
         }
 
+        // Before anything held of the club is served: a takedown made a
+        // moment ago drops it (23 Nov 2026, see takedownsOf).
+        if (tenant !== undefined) {
+          await this.takedownsOf(tenant.club);
+        }
+
         if (tenant !== undefined && segments.length === 2) {
           // The short address is the one people will type, and the one on
           // the poster - so it is a page in its own right that points at
@@ -2864,6 +2923,12 @@ export class Relay {
         error: "This club is paused on the HeatCaller relay. Ask HeatCaller to switch it back on.",
       });
       return;
+    }
+
+    // Before anything held of the club is served: a takedown made a moment
+    // ago drops it (23 Nov 2026, see takedownsOf).
+    if (known !== undefined) {
+      await this.takedownsOf(club);
     }
 
     if (known === undefined) {
@@ -4029,6 +4094,9 @@ export class Relay {
     // every phone, and "badges" carries the artwork, up to the whole body
     // limit - fifty people opening the badges page at once was fifty copies
     // of it in a 256 MB machine, for anyone with no password at all.
+    // Asked before the cache is looked at, so a takedown made since the
+    // last look drops what is held first (23 Nov 2026, takedown.ts).
+    const takenDown = await this.takedownsOf(club);
     const key = this.listingKey(club, channel, false);
     const held = this.listings.get(key);
 
@@ -4058,7 +4126,11 @@ export class Relay {
         // And again here, for a programme stored before publish took them
         // out: the laptop only resends it when it changes, so a club
         // between meetings would have gone on serving the old one's names.
-        const served = channel === "programme" && !rosterAllowed ? { ...doc, body: withoutLineups(doc.body) } : doc;
+        const unlined = channel === "programme" && !rosterAllowed ? { ...doc, body: withoutLineups(doc.body) } : doc;
+        // Anything taken down after a copyright notice - the logo, a
+        // sponsor, a track's picture, an achievement's artwork - left out
+        // before it is cached (23 Nov 2026, takedown.ts).
+        const served = takenDown.any ? { ...unlined, body: withoutTakenDown(channel, unlined.body, takenDown) } : unlined;
 
         return Buffer.from(JSON.stringify(served), "utf8");
       },
@@ -5524,6 +5596,13 @@ export class Relay {
       // nothing. (The podium videos were wiped here the same way until 28
       // Oct 2026, when they stopped coming to the relay.)
       await this.wipeClips(club);
+
+      // The clips and samples held after a copyright takedown go too (23
+      // Nov 2026): the club asked for everything it published to be
+      // forgotten. The takedown records stay, beside the clubs, so
+      // publishing again cannot bring a taken-down item back; a restore
+      // after this finds nothing to put back, which is what the club asked.
+      await this.takedowns?.wipeHeld(club).catch(() => undefined);
 
       // Its crew voice samples (19 Nov 2026) - no one's words, but the club's.
       const samples = this.crewSamples;
@@ -8229,6 +8308,15 @@ export class Relay {
       return;
     }
 
+    // Taken down after a copyright notice (23 Nov 2026, takedown.ts): the
+    // laptop never sends a clip twice, but if it did, it is thrown away
+    // with the ordinary answer rather than refused into a retry.
+    if ((await this.takedownsOf(club)).clips.has(id)) {
+      await discardRest(request, response);
+      sendJson(response, 200, { ok: true, clip: `/c/${club}/clip/${id}.mp3` });
+      return;
+    }
+
     this.clipUploadsInFlight += 1;
     let bytes: Buffer | "too-big" | "unreadable";
 
@@ -8340,7 +8428,13 @@ export class Relay {
       return;
     }
 
-    sendJson(response, 200, { ok: true, keys: await this.crewSamples.keys(club).catch(() => [] as string[]) });
+    // A sample taken down after a copyright notice is listed as held
+    // (23 Nov 2026, takedown.ts): the laptop sends whatever is not listed,
+    // and would otherwise send it again every time it looked.
+    const keys = await this.crewSamples.keys(club).catch(() => [] as string[]);
+    const down = [...(await this.takedownsOf(club)).crewSamples].filter((key) => !keys.includes(key));
+
+    sendJson(response, 200, { ok: true, keys: [...keys, ...down] });
   }
 
   /** One crew voice sample from the laptop: the mp3 is the body, the key the address. */
@@ -8389,6 +8483,14 @@ export class Relay {
       return;
     }
 
+    // Taken down after a copyright notice (23 Nov 2026, takedown.ts): taken
+    // and thrown away, with the laptop's ordinary answer - a refusal would
+    // only have it try again.
+    if ((await this.takedownsOf(club)).crewSamples.has(key)) {
+      sendJson(response, 200, { ok: true });
+      return;
+    }
+
     const kept = await this.withLock(`${club}|crewsamples`, async () => {
       const held = await vault.keys(club);
 
@@ -8411,7 +8513,8 @@ export class Relay {
   /** A crew voice sample, to a phone's Play button. A fixed line in a voice - nobody's words - so anyone may have it. */
   private async sendCrewSample(response: ServerResponse, club: string, file: string): Promise<void> {
     const key = file.endsWith(".mp3") ? file.slice(0, -4).toLowerCase() : "";
-    const clip = this.crewSamples !== undefined && CREW_SAMPLE_KEY.test(key)
+    // Never one taken down after a copyright notice, even put back by hand (23 Nov 2026).
+    const clip = this.crewSamples !== undefined && CREW_SAMPLE_KEY.test(key) && !(await this.takedownsOf(club)).crewSamples.has(key)
       ? await this.crewSamples.read(club, key).catch(() => undefined)
       : undefined;
 
@@ -8431,6 +8534,10 @@ export class Relay {
     if (vault !== undefined) {
       await this.withLock(`${club}|clips`, () => vault.removeClub(club).catch(() => {}));
     }
+
+    // And any taken down after a copyright notice and held for a restore
+    // (23 Nov 2026, takedown.ts): nights closing takes every clip.
+    await this.takedowns?.forgetHeldClips(club, () => false).catch(() => 0);
   }
 
   /**
@@ -8461,6 +8568,12 @@ export class Relay {
       }).catch(() => {});
     }
 
+    // Clips held after a copyright takedown are kept no longer than any
+    // other clip (23 Nov 2026, takedown.ts) - every club's, on the same timer.
+    if (clubs === undefined) {
+      dropped += await this.takedowns?.sweepHeldClips(this.now().getTime()).catch(() => 0) ?? 0;
+    }
+
     return dropped;
   }
 
@@ -8472,8 +8585,12 @@ export class Relay {
 
     const held = await this.clips.list(club).catch(() => [] as ClipMeta[]);
     const stale = new Set(clipsToDrop(held, this.now().getTime()).map((c) => c.id));
+    // Nor one taken down after a copyright notice (23 Nov 2026,
+    // takedown.ts) - moved to the held folder by the admin, so this only
+    // matters for one put back by hand, or sent again.
+    const down = (await this.takedownsOf(club)).clips;
 
-    return held.filter((c) => !stale.has(c.id));
+    return held.filter((c) => !stale.has(c.id) && !down.has(c.id));
   }
 
   /** One driver's clips, newest first, as the night page shows them. */
@@ -8999,6 +9116,9 @@ export class Relay {
           }
         }
       });
+
+      // Theirs held after a copyright takedown too (23 Nov 2026, takedown.ts).
+      removed += await this.takedowns?.forgetHeldClips(club, (meta) => !badges.has(meta.driver)).catch(() => 0) ?? 0;
     }
 
     this.log(`[forget] "${club}": a driver forgotten (${removed} item${removed === 1 ? "" : "s"} removed).`);
@@ -9086,7 +9206,8 @@ export class Relay {
 
     sendJson(response, 200, {
       ok: true,
-      garage: doc === undefined || !isPlainObject(doc.body) ? null : doc.body,
+      // Without any car photo taken down after a copyright notice (23 Nov 2026, takedown.ts).
+      garage: doc === undefined || !isPlainObject(doc.body) ? null : garageWithoutTakenDown(doc.body, await this.takedownsOf(club)),
       pin: hasRacerPin(checkin, id),
       signedIn: pass !== "" && racerByPass(checkin, pass)?.id === id,
       asks,
@@ -10271,7 +10392,7 @@ export class Relay {
     }
 
     await this.videoCheck?.ready(club);
-    const stream = streamFrom(merged.body, this.videoCheck?.dead(club), STREAM_MAX_PIECES * (STREAM_NIGHTS_KEPT + 1));
+    const stream = streamFrom(merged.body, await this.deadOrTakenDown(club), STREAM_MAX_PIECES * (STREAM_NIGHTS_KEPT + 1));
     // Only pieces still inside their week of checks: an older night's video,
     // forgotten to make room for a new one, is not asked about all over again.
     // Plus every dead one (bug hunt 20): streamFrom has dropped its pieces,
@@ -10288,7 +10409,20 @@ export class Relay {
   private async latestStreamOf(club: string): Promise<Stream | undefined> {
     const doc = await this.store.getSnapshot(club, "stream").catch(() => undefined);
     await this.videoCheck?.ready(club);
-    return streamFrom(doc?.body, this.videoCheck?.dead(club));
+    return streamFrom(doc?.body, await this.deadOrTakenDown(club));
+  }
+
+  /**
+   * The videos a race may not be offered: YouTube's dead ones, and any
+   * taken down after a copyright notice (23 Nov 2026, takedown.ts) - which
+   * every route that offers a video already skips, so a taken-down one
+   * goes from video/race, video/live, the last race, a driver's night and
+   * the "videos are up" alert alike. videoHealth still says only YouTube's.
+   */
+  private async deadOrTakenDown(club: string): Promise<ReadonlySet<string> | undefined> {
+    const dead = this.videoCheck?.dead(club);
+    const down = (await this.takedownsOf(club)).videos;
+    return down.size === 0 ? dead : new Set([...(dead ?? []), ...down]);
   }
 
   /** streamOf's copy, per club. */

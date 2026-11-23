@@ -1,4 +1,6 @@
-> **DRAFT for review by a licensed attorney - not legal advice, not in force.**
+> **DRAFT for review by a licensed attorney - not legal advice.**
+>
+> **Updated 23 Nov 2026: the agent is registered.** Asher registered HeatCaller LLC with the Copyright Office's DMCA Designated Agent Directory: designation **DMCA-1087259**, agent "Copyright Agent, HeatCaller LLC", at the LLC's address with support@heatcaller.com. Part A below has those details, and the page is live at https://heatcaller.com/copyright (heatcaller-site PR #38, merged 23 Nov 2026). The two policy choices left open are filled in as the draft suggested; counsel may still change them.
 > Written 15 Nov 2026 for HeatCaller LLC (plans/children-privacy-and-ip-plan.md, item 3.6). Part A is a page for heatcaller.com. Part B is the owner's checklist for registering a designated agent with the US Copyright Office, which Asher files himself. Points marked **[CHECK]** need a fact or a lawyer's wording before the page goes live. The page must not go live until the agent is registered: the safe harbour in 17 U.S.C. §512(c) depends on it.
 
 # Copyright and takedown policy
@@ -16,8 +18,9 @@ We respect copyright, and we expect clubs to as well. If you believe something o
 Send it to our designated agent:
 
 > **Copyright Agent, HeatCaller LLC**
-> [POSTAL ADDRESS - CHECK: the address registered with the Copyright Office]
-> Email: [copyright@heatcaller.com - CHECK: create the mailbox, or use support@heatcaller.com]
+> 506 Pinyon Dr
+> Schenectady, NY 12303
+> Email: support@heatcaller.com
 
 Your notice must include:
 
@@ -33,7 +36,7 @@ A notice missing any of these may not be valid, and we may ask you to complete i
 ### What we do with a notice
 
 - We remove the material, or disable access to it, promptly.
-- We tell the club that published it, and pass on a copy of the notice. **[CHECK]** whether to remove the sender's personal details from the copy.
+- We tell the club that published it, and pass on a copy of the notice, with the sender's telephone number and postal address taken out.
 - We keep a record of the notice.
 
 ### Counter-notice
@@ -52,7 +55,7 @@ We forward a valid counter-notice to the person who sent the original notice. Un
 We will, in appropriate circumstances, end the online services (the relay, the HeatCaller voice and online commentary) for any club or user who repeatedly infringes others' copyright. As a guide:
 
 - We keep a record of each valid notice against each club.
-- A club with **three** valid notices that were not successfully countered within any 12 months is a repeat infringer, and its relay account is closed. **[CHECK]** the number and the period.
+- A club with **three** valid notices that were not successfully countered within any 12 months is a repeat infringer, and its relay account is closed.
 - We may act sooner for a clear or wilful case.
 - A club whose account is closed may not open a new one without our agreement.
 
@@ -62,16 +65,18 @@ For trademark complaints, a driver's or parent's privacy request, or anything el
 
 ## Part B: owner's checklist for the designated agent
 
+Done 23 Nov 2026: designation **DMCA-1087259**. The first seven boxes are ticked; the page is live at https://heatcaller.com/copyright since 23 Nov 2026.
+
 The Copyright Office runs an online directory of designated agents. Asher files this himself.
 
-- [ ] Create an account on the DMCA Designated Agent Directory: <https://dmca.copyright.gov/>. **[CHECK]** the current address and fee (checked 16 Nov 2026: the account is free, and each designation, renewal or change costs US$6. Confirm on the payment page).
-- [ ] Register HeatCaller LLC as the service provider, with its legal name exactly as on the New York filing.
-- [ ] List every name the service is known by: "HeatCaller", and the relay's public domain(s). Checked 16 Nov 2026: the relay answers only at heatcaller-relay.fly.dev, with no custom domain on the Fly app. List that and heatcaller.com. If a heatcaller.com subdomain is pointed at the relay later, change the designation that day ($6).
-- [ ] Name the agent. It can be a role ("Copyright Agent") with Asher's details or a registered agent service. The postal address is published, so consider a business address or a registered-agent address rather than a home address.
-- [ ] Give the agent's email and phone. Use a mailbox someone reads, such as copyright@heatcaller.com.
-- [ ] Pay the fee and save the confirmation.
-- [ ] Put the same agent details on the heatcaller.com page (Part A), so the page and the directory match exactly.
-- [ ] Set a reminder: the designation **expires after three years** unless renewed. Renew before the expiry date shown on the confirmation. Update it straight away if the address or email changes.
+- [x] Create an account on the DMCA Designated Agent Directory: <https://dmca.copyright.gov/>. **[CHECK]** the current address and fee (checked 16 Nov 2026: the account is free, and each designation, renewal or change costs US$6. Confirm on the payment page).
+- [x] Register HeatCaller LLC as the service provider, with its legal name exactly as on the New York filing.
+- [x] List every name the service is known by: "HeatCaller", and the relay's public domain(s). Checked 16 Nov 2026: the relay answers only at heatcaller-relay.fly.dev, with no custom domain on the Fly app. List that and heatcaller.com. If a heatcaller.com subdomain is pointed at the relay later, change the designation that day ($6).
+- [x] Name the agent. It can be a role ("Copyright Agent") with Asher's details or a registered agent service. The postal address is published, so consider a business address or a registered-agent address rather than a home address.
+- [x] Give the agent's email and phone. Use a mailbox someone reads, such as copyright@heatcaller.com.
+- [x] Pay the fee and save the confirmation.
+- [x] Put the same agent details on the heatcaller.com page (Part A), so the page and the directory match exactly.
+- [ ] Set a reminder: the designation **expires after three years** unless renewed (about November 2029; the exact date is on the confirmation). Renew before the expiry date shown on the confirmation. Update it straight away if the address or email changes.
 - [ ] Set up a simple log for notices, counter-notices and action taken (date, club, URL, outcome). It is the evidence for the repeat-infringer policy.
-- [ ] Check how to remove one item from the relay for one club. `deleteClub` removes everything; the desk can delete its own items. Checked 16 Nov 2026: an admin can't. The relay's only delete removes the whole club, and it needs the club's own token. Until a removal for one item is built, either ask the club to take the item down from the desk (the fastest way), or remove it by hand from the club's folder on /data over `fly ssh console`, and log what you did. That removal is worth building before this page goes live.
+- [x] Check how to remove one item from the relay for one club. Built 23 Nov 2026 (branch `claude/takedown`): the relay admin commands `takedown-find`, `takedown`, `takedown-restore` and `takedown-list` take down one logo, sponsor, track picture, achievement artwork, race video, race clip, crew voice sample or garage photo for one club within seconds, keep it down when the club publishes again or deletes everything, and put it back after a counter-notice. `takedown-list` counts each club's uncountered notices over 12 months and flags three (it never closes a club). Steps are in the relay hosting guide, "Copyright takedowns". Listen audio and captions are not covered one at a time: ask the club to switch Listen off, or pause the club. It works once the relay is deployed with it.
 - [ ] Add a link to the page from the heatcaller.com footer and from the Terms (Part 1, section 7.4 already says we may remove content on a complaint).
