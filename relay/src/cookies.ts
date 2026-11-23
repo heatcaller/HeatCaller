@@ -18,7 +18,7 @@
  */
 
 /** The policy's version and date, shown at its top and named by Part 3 of the terms. */
-export const COOKIE_POLICY_VERSION = "Version 4, 19 November 2026";
+export const COOKIE_POLICY_VERSION = "Version 5, 23 November 2026";
 
 /** The policy as the page shows it - static, no driver or club data in it. */
 export const COOKIE_POLICY_HTML = `<div class="policy">
@@ -47,6 +47,7 @@ export const COOKIE_POLICY_HTML = `<div class="policy">
 <li><b>hg-me-out-&lt;club&gt;</b> (this tab): a note that this tab signed out, so Back goes to the PIN.</li>
 <li><b>hg-pin-&lt;club&gt;</b> (this tab): on the check-in page only, the PIN typed (a driver's or the desk's), with the pass it earned and whether it was a driver's. Gone when the tab closes; a driver's goes at <b>Sign out</b>.</li>
 <li><b>hg-signup-&lt;club&gt;</b> (this phone): the pass for one sign-up in progress, so its answer shows when you come back. It opens that sign-up and nothing else.</li>
+<li><b>hc-fampass-&lt;club&gt;-&lt;code&gt;</b> (this phone): on a family link's page, the pass the relay gave that link the first time it opened, so the page keeps working if somebody else's wrong codes close the club's family links for a while. It opens that link and nothing else, and goes when the link is stopped.</li>
 <li><b>hg-manage-&lt;club&gt;</b> and <b>hg-manage-pinkey-&lt;club&gt;</b> (this tab): a manager's pass, and a key worked out from the manager PIN that the page signs its requests with. Anyone holding that key in the open tab could act as the manager, so close the tab or sign out on a shared phone. The PIN itself is not kept.</li>
 <li><b>hg-manage-key-&lt;club&gt;</b> and <b>hg-manage-id-&lt;club&gt;</b> (this phone): a random id the phone puts on its requests to the club's computer, so its log can tell phones apart, and, if the club enrols the phone for managing, the key that lets the club's computer recognise it. Signing out keeps these; clearing the site's data removes them.</li>
 </ul>
@@ -108,6 +109,7 @@ export const COOKIE_POLICY_HTML = `<div class="policy">
 
 <h2>What changed</h2>
 <ul>
+<li><b>Version 5, 23 November 2026</b>: a family link's page keeps the pass it was given (hc-fampass-&lt;club&gt;-&lt;code&gt;), so it keeps working if wrong codes close the club's family links for a while.</li>
 <li><b>Version 4, 19 November 2026</b>: the anonymous counts also say which page was opened (by its name, such as Live or Results) and how long a visit lasted, in three bands. Nothing new is kept on the phone.</li>
 <li><b>Version 3, 16 November 2026</b>: a junior signed in on a phone is signed out after 30 days (hg-me-at-&lt;club&gt;); push addresses unused for 180 days are forgotten; juniors can't be followed by name.</li>
 <li><b>Version 2, 15 November 2026</b>: every item named; offline copies, anonymous counts, internet addresses, push services and children added; the visit count for the home-screen offer stopped, and the list of clubs now kept only where a driver is signed in.</li>

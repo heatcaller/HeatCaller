@@ -540,6 +540,8 @@ A family link is a read-only link to one driver's night for someone at home. Any
 
 The family page shows, in plain words, where the driver finished in each race ("3rd of 8"), their laps and best lap, their next race, and their race videos. A junior's videos are included, because it's the family's own link. It never shows the badge code, the coaching card, penalties, the garage, check-in or change requests. A stopped link, or one opened while the club isn't sharing drivers' nights, says so instead. The family page is always in the club's own colors, whatever look the driver has picked on their phone, and has no **Look** button.
 
+If somebody tries a lot of wrong family link codes for your club, the relay closes family links for a while, and a page opened then says "Too many wrong family link codes have been tried for this club, so family links are closed for about 10 minutes." A family page that had already opened keeps working through it. See [Family links and crew picks](../admin/security-and-privacy.md#family-links-and-crew-picks) for the limits.
+
 ### Sharing a race video
 
 **Share this race** in the race video window sends YouTube's own link, starting at that race (or at the lap you opened). It's there wherever the video window is: on a driver's own night, and on the public results when the club shows video there.

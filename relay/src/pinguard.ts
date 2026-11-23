@@ -54,6 +54,28 @@ export const DAY_FAIL_LIMIT = 150;
 /** How far back DAY_FAIL_LIMIT's wrong PINs are counted. */
 export const DAY_FAIL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * What a guard counts, when it is not a PIN (23 Nov 2026, Asher, security
+ * program section 5): family-link codes and the badge code a crew pick is
+ * sent with get a guard of their own - see codeguard.ts. Every field has
+ * the PIN guards' value as its default, so those are exactly as they were.
+ */
+export interface GuardOptions {
+  /** Wrong guesses, from every address together, in CLUB_FAIL_WINDOW_MS before the club closes. */
+  readonly clubFailLimit?: number;
+  /** Wrong guesses in DAY_FAIL_WINDOW_MS before the paced-guesser lockout. */
+  readonly dayFailLimit?: number;
+  /** Read "wrong ___" in the log lines. Defaults to "<guardedPins> PINs". */
+  readonly wrongWhat?: string;
+  /** Read "___ is closed" in the log lines. */
+  readonly closedWhat?: string;
+}
+
+interface Limits {
+  readonly club: number;
+  readonly day: number;
+}
+
 interface GuardState {
   /** When each recent wrong PIN arrived, oldest first, milliseconds. */
   fails: number[];
@@ -130,6 +152,9 @@ export class PinGuard {
   private readonly forgetting = new Set<string>();
   private lastWriteError = 0;
   private lastReadError = 0;
+  private readonly limits: Limits;
+  private readonly wrongWhat: string;
+  private readonly closedWhat: string;
 
   constructor(
     private readonly store: Store,
@@ -145,7 +170,12 @@ export class PinGuard {
     private readonly guardedPins: string = "check-in",
     /** Read "___ changed, so its wrong-PIN count starts again." - the one PIN whose change reopens the list (reset is never called for the others). */
     private readonly resetSubject: string = "the staff PIN",
-  ) {}
+    options: GuardOptions = {},
+  ) {
+    this.limits = { club: options.clubFailLimit ?? CLUB_FAIL_LIMIT, day: options.dayFailLimit ?? DAY_FAIL_LIMIT };
+    this.wrongWhat = options.wrongWhat ?? `${guardedPins} PINs`;
+    this.closedWhat = options.closedWhat ?? "the PIN list";
+  }
 
   /**
    * Reads the club's count from disk if it has not been yet. Never throws:
@@ -201,31 +231,32 @@ export class PinGuard {
     // The guesses leaving the ten-minute count go on counting for the day.
     const agedOut = state.fails.filter((t) => t <= now - CLUB_FAIL_WINDOW_MS);
 
-    state.earlier = [...state.earlier, ...agedOut].filter((t) => t > now - DAY_FAIL_WINDOW_MS).slice(-DAY_FAIL_LIMIT);
+    state.earlier = [...state.earlier, ...agedOut].filter((t) => t > now - DAY_FAIL_WINDOW_MS).slice(-this.limits.day);
     state.fails = [...state.fails.filter((t) => t > now - CLUB_FAIL_WINDOW_MS), now];
 
-    if (state.fails.length >= CLUB_FAIL_LIMIT) {
+    if (state.fails.length >= this.limits.club) {
       state.level = Math.min(state.level + 1, LOCK_STEPS_MS.length);
       state.lockedUntil = now + (LOCK_STEPS_MS[state.level - 1] as number);
       state.fails = [];
 
       this.log(
-        `[relay] "${club}": ${CLUB_FAIL_LIMIT} wrong ${this.guardedPins} PINs - the PIN list is closed for ` +
+        `[relay] "${club}": ${this.limits.club} wrong ${this.wrongWhat} - ${this.closedWhat} is closed for ` +
           `${Math.round((state.lockedUntil - now) / 60000)} minutes (lockout ${state.level} in a row).`,
       );
-    } else if (state.earlier.length + state.fails.length >= DAY_FAIL_LIMIT) {
+    } else if (state.earlier.length + state.fails.length >= this.limits.day) {
       // Paced to stay under the fifty, all day: closed for the longest
       // step, and the next lockout of any kind is the longest too. The
       // day's count is kept (only the ten-minute one is answered by this),
       // so the next wrong PIN after this one ends closes it again.
       state.level = LOCK_STEPS_MS.length;
       state.lockedUntil = now + (LOCK_STEPS_MS[LOCK_STEPS_MS.length - 1] as number);
-      state.earlier = [...state.earlier, ...state.fails].slice(-DAY_FAIL_LIMIT);
+      state.earlier = [...state.earlier, ...state.fails].slice(-this.limits.day);
       state.fails = [];
 
       this.log(
-        `[relay] WARNING "${club}": ${DAY_FAIL_LIMIT} wrong ${this.guardedPins} PINs in a day, paced to stay under ` +
-          `the ten-minute limit - somebody is working through PINs. The PIN list is closed for ` +
+        `[relay] WARNING "${club}": ${this.limits.day} wrong ${this.wrongWhat} in a day, paced to stay under ` +
+          `the ten-minute limit - somebody is working through ${this.wrongWhat.split(" ").pop() ?? "PINs"}. ` +
+          `${this.closedWhat.charAt(0).toUpperCase()}${this.closedWhat.slice(1)} is closed for ` +
           `${Math.round((state.lockedUntil - now) / 60000)} minutes, and again after each wrong PIN until the day's have aged out.`,
       );
     }
@@ -345,7 +376,7 @@ export class PinGuard {
         }
 
         // Counted in memory while the file could not be read: both count.
-        const merged = current.resetUnsaved ? { ...current, loaded: true, resetUnsaved: false } : merge(disk, current);
+        const merged = current.resetUnsaved ? { ...current, loaded: true, resetUnsaved: false } : merge(disk, current, this.limits);
 
         this.states.set(club, merged);
         void this.save(club);
@@ -361,7 +392,7 @@ export class PinGuard {
   /** What the file says, or undefined when it could not be read this time. Never throws. */
   private async read(club: string): Promise<GuardState | undefined> {
     try {
-      return clean((await this.store.getSnapshot(club, this.docName))?.body, this.clock());
+      return clean((await this.store.getSnapshot(club, this.docName))?.body, this.clock(), this.limits);
     } catch (error) {
       if (error instanceof StoreReadError && error.corrupt) {
         // Read, but not JSON: that will not mend itself, and the next
@@ -441,9 +472,9 @@ export class PinGuard {
 }
 
 /** The file's count and the one kept in memory while it could not be read, together. */
-function merge(disk: GuardState, memory: GuardState): GuardState {
-  const fails = [...disk.fails, ...memory.fails].sort((a, b) => a - b).slice(-CLUB_FAIL_LIMIT);
-  const earlier = [...disk.earlier, ...memory.earlier].sort((a, b) => a - b).slice(-DAY_FAIL_LIMIT);
+function merge(disk: GuardState, memory: GuardState, limits: Limits): GuardState {
+  const fails = [...disk.fails, ...memory.fails].sort((a, b) => a - b).slice(-limits.club);
+  const earlier = [...disk.earlier, ...memory.earlier].sort((a, b) => a - b).slice(-limits.day);
 
   return {
     fails,
@@ -466,7 +497,7 @@ function fresh(): GuardState {
  * clock that jumped, must not close a club's list for longer than any real
  * lockout could.
  */
-function clean(value: unknown, now: number): GuardState {
+function clean(value: unknown, now: number, limits: Limits): GuardState {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return fresh();
   }
@@ -477,13 +508,13 @@ function clean(value: unknown, now: number): GuardState {
   const fails = Array.isArray(raw["fails"])
     ? (raw["fails"] as unknown[])
         .filter((t): t is number => typeof t === "number" && Number.isFinite(t) && t <= now)
-        .slice(-CLUB_FAIL_LIMIT)
+        .slice(-limits.club)
     : [];
 
   const earlier = Array.isArray(raw["earlier"])
     ? (raw["earlier"] as unknown[])
         .filter((t): t is number => typeof t === "number" && Number.isFinite(t) && t <= now && t > now - DAY_FAIL_WINDOW_MS)
-        .slice(-DAY_FAIL_LIMIT)
+        .slice(-limits.day)
     : [];
 
   const level =
