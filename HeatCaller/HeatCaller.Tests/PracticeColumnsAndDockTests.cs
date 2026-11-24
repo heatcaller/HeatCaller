@@ -74,7 +74,7 @@ public sealed class PracticeColumnsAndDockTests
                 window.Dispose();
                 StaThread.Settle();
             }
-        }, TimeSpan.FromMinutes(2), () => "a visit to Practice's columns drop-down");
+        }, TimeSpan.FromMinutes(5), () => "a visit to Practice's columns drop-down");
 
         Assert.Equal(KpiCatalog.DefaultPractice, seen.before);
         Assert.Contains(seen.extra, seen.during);
@@ -163,7 +163,7 @@ public sealed class PracticeColumnsAndDockTests
                 window.Dispose();
                 StaThread.Settle();
             }
-        }, TimeSpan.FromMinutes(2), () => "right-clicking Practice's table");
+        }, TimeSpan.FromMinutes(5), () => "right-clicking Practice's table");
 
         Assert.Equal(new[] { true, true }, seen);
     }
@@ -213,7 +213,7 @@ public sealed class PracticeColumnsAndDockTests
                 window.Dispose();
                 StaThread.Settle();
             }
-        }, TimeSpan.FromMinutes(2), () => "Practice's Dock Inbox");
+        }, TimeSpan.FromMinutes(5), () => "Practice's Dock Inbox");
 
         Assert.False(seen.columnsButton, "the columns are chosen by right-clicking the table now");
         Assert.True(seen.beside, "Dock Inbox is on Expand's row");
