@@ -766,6 +766,12 @@ public sealed class ThemeStore
         // fader - so it stays put for the same reason the voice volume does.
         soundCopy.Volume = soundStore.Current.Volume;
 
+        // And whether effects play over each other (24 Nov 2026): a choice
+        // the club made on the Sound Effects page, not part of a style, so
+        // a soundscape saved before the switch existed doesn't turn it back
+        // on.
+        soundCopy.EffectsOverlap = soundStore.Current.EffectsOverlap;
+
         soundStore.Save(soundCopy);
 
         // The music store is no longer changed here - see ApplyBackground.

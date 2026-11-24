@@ -60,11 +60,15 @@ The rows with a weight are the per-lap sounds; only they have **Weight** and **C
 
 The race-moment sounds (such as the **Race started** horn, the **Race time over (last lap)** buzzer and the **Race completed** fanfare) play as well as the announcer's spoken call for that moment, not instead of it. The sound plays first and the call follows. The start and time-up calls wait at most about 3 seconds; if the sound is longer, it's cut off so the call isn't late. The finish call waits up to 8 seconds and never cuts the fanfare short.
 
-A flag call cuts off a sound effect that's still playing. Crowd surges (for a fast lap or a lead change, say) aren't cut short when the announcer speaks.
+A flag call cuts off any sound effects still playing. Crowd surges (for a fast lap or a lead change, say) aren't cut short when the announcer speaks.
+
+Sound effects can play over each other, so two cars on a good lap are both heard as they cross. Each car's sounds play as they happen, up to 3 at once. When a second copy of the same sound starts at the same moment, it comes a fraction of a second after the first, so you hear two chimes rather than one louder one. Each sound that joins others playing is a little quieter, so a pile-up doesn't drown the mix. The race-moment sounds (**Race staging**, **Countdown started**, **Countdown ticks (a beep a second for the last five)**, **Race started**, the flags, **Race time over (last lap)** and **Race completed**) still play one after another, in order, and a lap chime doesn't wait for them. None of this changes how sounds and the announcer share the speaker.
 
 On a busy track, per-lap sounds are kept close to the action: a lap chime that's fallen more than about 3 seconds behind the crossing is skipped, and no more than 3 wait to play at a time.
 
 On the **Per lap** card under the list, **Max sounds per lap (good / invalid / fast / streak / leader change):** (1 to 5, default 3) sets how many per-lap sounds can play on one lap; when more fire, only the highest-weight ones play.
+
+Below it, **Let sound effects play over each other** (on by default) turns this on. Untick it to have every effect wait for the one before to end, the way HeatCaller always used to. The page says why: "On: when several cars earn a sound at once, each one plays as it happens. Off: they play one after another. The start, finish and flag sounds always play in order."
 
 How loud the effects and lap beeps play is the **Sound effects** fader on the [Mixer](#mixer). How many clean laps make a streak, for the streak sound and the spoken streak call alike, is set on the **How often** card of **Voice → Race Calls**; see [How often](voice.md#how-often). Both were on this tab before 17 October.
 
@@ -207,7 +211,7 @@ The recap can still be speaking when the next heat is staged. If that heat has b
 
 ### What a soundscape holds
 
-- **The sound effects.** Everything on **Sounds → Effects**: which sounds are on for races and for practice, the pack or your own file on each row, the weights and **Caution** ticks, **Max sounds per lap (good / invalid / fast / streak / leader change):**, and the streak thresholds (on the **How often** card of **Voice → Race Calls**). Not the **Sound effects** level on the **Mixer**.
+- **The sound effects.** Everything on **Sounds → Effects**: which sounds are on for races and for practice, the pack or your own file on each row, the weights and **Caution** ticks, **Max sounds per lap (good / invalid / fast / streak / leader change):**, and the streak thresholds (on the **How often** card of **Voice → Race Calls**). Not the **Sound effects** level on the **Mixer**, and not **Let sound effects play over each other**, which stays as you set it when you apply a soundscape.
 - **The announcer's words.** Everything on **Voice → Race Calls**: the lines, the **Race** and **Practice** ticks, the weights, speeds and **Caution** ticks, and the extra settings on some rows.
 - **The announcer's delivery.** The tuning on **Voice → Voice**: **Stability:**, **Similarity boost:**, **Style:**, **Speed:**, **Speaker boost** and **Text normalize:**, and **Max spoken announcements per lap:** on **Voice → Race Calls**. The HeatCaller voice's own sound is set on the relay, so most of this tuning only changes your own ElevenLabs voice; the Kokoro voice uses **Speed:**, and every voice uses **Max spoken announcements per lap:**. See [What the Kokoro voice uses](voice.md#what-the-kokoro-voice-uses).
 - **Its imaging**: the jingles, sweepers, bumpers, stingers and music beds on **Sounds → Imaging**. See [Imaging](#imaging).
