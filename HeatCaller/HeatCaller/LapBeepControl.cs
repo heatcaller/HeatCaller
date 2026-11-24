@@ -115,6 +115,21 @@ public sealed class LapBeepControl : UserControl
         });
     }
 
+    /// <summary>
+    /// The drivers this page lists, counts and hands cues to: real drivers
+    /// only, by name.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the list and Auto-Assign All read
+    /// every raceable profile, ghost cars included. A ghost was listed and
+    /// counted as a driver, handed a tone of its own (with more than eight
+    /// profiles, the same tone as a real driver, who then heard "their" lap
+    /// when the ghost crossed), and seven drivers plus two ghosts were asked
+    /// "There are 9 drivers and only 8 cues". A cue is for somebody driving
+    /// to hear their own lap, and nobody drives a ghost.
+    /// </summary>
+    internal static List<DriverProfile> CueDrivers(ProfileStore profiles) =>
+        profiles.All.OrderBy(p => p.DriverName).ToList();
+
     private string DriverName(string transponder) =>
         _profiles.AllRaceable.FirstOrDefault(p => string.Equals(p.Transponder, transponder, StringComparison.OrdinalIgnoreCase))?.DriverName
         ?? transponder;
@@ -284,7 +299,8 @@ public sealed class LapBeepControl : UserControl
         var selected = SelectedTransponder;
         _grid.Rows.Clear();
 
-        var drivers = _profiles.AllRaceable.OrderBy(p => p.DriverName).ToList();
+        // WHY (23 Nov 2026, bug hunt 24): real drivers only - see CueDrivers.
+        var drivers = CueDrivers(_profiles);
 
         // The cues of the drivers listed, which is what the line under the
         // list counts. A cue outlives its driver - deleted, or given another
@@ -405,7 +421,9 @@ public sealed class LapBeepControl : UserControl
 
     private void AutoAssign()
     {
-        var drivers = _profiles.AllRaceable.OrderBy(p => p.DriverName).Select(p => p.Transponder).ToList();
+        // WHY (23 Nov 2026, bug hunt 24): ghosts are not handed a cue or
+        // counted in the "more drivers than cues" question - see CueDrivers.
+        var drivers = CueDrivers(_profiles).Select(p => p.Transponder).ToList();
 
         if (drivers.Count == 0)
         {

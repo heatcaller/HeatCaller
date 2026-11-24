@@ -132,7 +132,11 @@ public partial class AnnouncerControl
         {
             if (_battlesNotYetHeard.TryRemove(pair, out _))
             {
-                Director?.BattleUnheard();
+                // WHY (23 Nov 2026, bug hunt 24, F083): with the two cars, so the
+                // director gives back the fight's fact, its cooldown and its
+                // promise too - only the turn came back, and the fight could not
+                // be called again that race.
+                Director?.BattleUnheard(pair.AheadId, pair.BehindId);
             }
         };
     }
@@ -446,11 +450,77 @@ public partial class AnnouncerControl
                 + "Unmute it on the Mixer and try again.";
         }
 
-        // Not for the listen-along page (17 Oct 2026, Bug Hunt 8, A06-10).
-        await treatment.RunAsync(() => _announcer.SpeakReminder(ShowTestLine, showOnScreens: false, forListeners: false)).ConfigureAwait(true);
+        // WHY (23 Nov 2026, bug hunt 24): the test asked only for the music
+        // and the mute, so pressed while a race was on, or while the recap,
+        // a driver's night or a director's block was on air, it opened a
+        // second opener and bed over the top of it and put the test line on
+        // the PA. It now refuses in the same words the other show buttons
+        // use - see ShowTestRefusal.
+        if (ShowTestRefusal(_race.State, ShowFloor.Busy, ShowFloor.HeldBy, _segmentInFlight, ShowOnAir.Playing) is { } refused)
+        {
+            return refused;
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): and it holds the director off for
+        // as long as it runs. It used to claim nothing, so the director's
+        // next segment could open its own show over a test still playing.
+        var claimed = !_segmentInFlight;
+        _segmentInFlight = true;
+
+        try
+        {
+            // Not for the listen-along page (17 Oct 2026, Bug Hunt 8, A06-10).
+            await treatment.RunAsync(() => _announcer.SpeakReminder(ShowTestLine, showOnScreens: false, forListeners: false)).ConfigureAwait(true);
+        }
+        finally
+        {
+            if (claimed)
+            {
+                _segmentInFlight = false;
+            }
+        }
 
         return null;
     }
+
+    /// <summary>
+    /// Why the show music test must not play now, or null when it may (23
+    /// Nov 2026, bug hunt 24): not while a race is staged, counting down or
+    /// on track, not while something holds the broadcast floor, and not
+    /// while a commentary segment or show is on air. The same checks, in
+    /// the same words, as tonight's recap and a driver's night.
+    /// </summary>
+    internal static string? ShowTestRefusal(RaceState state, bool floorBusy, string? heldBy, bool segmentInFlight, bool showOnAir)
+    {
+        if (state is RaceState.Staging or RaceState.Countdown or RaceState.Racing)
+        {
+            return "A race is on. Wait for the flag and try again.";
+        }
+
+        if (floorBusy)
+        {
+            return $"{heldBy ?? "Something else"} is on air. Wait for it to finish and try again.";
+        }
+
+        if (segmentInFlight || showOnAir)
+        {
+            return "A commentary segment is on air. Wait for it to finish and try again.";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether the last of tonight's recap, a driver's night or the season's
+    /// piece to play was recorded to a file. False until its recorder starts.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the Recording page said the piece was
+    /// saved whenever its Record switch was on, but the recorder is skipped
+    /// for a full disk or when the recording tap is already held, and only
+    /// this side knows. The page reads this to tell the director the truth.
+    /// </remarks>
+    public bool LastPieceWasSaved { get; private set; }
 
     /// <summary>
     /// Writes tonight's recap, plays it out once with the show round it,
@@ -470,6 +540,8 @@ public partial class AnnouncerControl
     /// </summary>
     public async Task<string?> PlayTonightsRecapAsync()
     {
+        LastPieceWasSaved = false;
+
         if (Director is not { } director || _commentary is not { IsAvailable: true })
         {
             return "The commentary isn't set up on this PC yet, so there is nothing to write the recap with.";
@@ -652,12 +724,17 @@ public partial class AnnouncerControl
             // used to be queued as text and each made only once the one
             // before it had finished, so the room heard a round trip of
             // silence at every seam of a four-minute piece.
+            // WHY (23 Nov 2026, bug hunt 24): the mute count as the read
+            // starts, so a mute during it is answered as a cut-off - see
+            // CutOffByMute.
+            var mutedAt = _announcer.MutedGeneration;
             var voiced = VoiceTheReadAhead(chunks, readToken);
 
             await FirstPieceVoicedAsync(voiced, readToken).ConfigureAwait(true);
 
             // Started once there is something to record. See the note above.
             recording = BookendRecording.StartForTheNight(line => StatusMessage?.Invoke(line));
+            LastPieceWasSaved = recording is not null;
 
             // THE SIGN-OFF'S OWN TREATMENT, because that is what this is
             // shaped like: the opener in front, the bed under it and the
@@ -683,7 +760,7 @@ public partial class AnnouncerControl
                     caption: NightRecap.OnTheBand,
                     ct: readToken).ConfigureAwait(true))
             {
-                return null;
+                return AfterTheRead(mutedAt, TheNightRecap);
             }
 
             // RunLongAsync answers false when there was no music to put
@@ -710,7 +787,7 @@ public partial class AnnouncerControl
             // differently.
             await treatment.WaitForTheReadAsync(NightRecap.LongestRead, readToken).ConfigureAwait(true);
 
-            return null;
+            return AfterTheRead(mutedAt, TheNightRecap);
         }
         catch (OperationCanceledException) when (nextRace.IsCancellationRequested)
         {
@@ -751,6 +828,42 @@ public partial class AnnouncerControl
     private const string TheSeasonPiece = "the season's piece";
 
     /// <summary>
+    /// What a long read answers once it has run: null for "it went out", or
+    /// the cut-off sentence when the announcer was muted during it - see
+    /// CutOffByMute.
+    /// </summary>
+    private string? AfterTheRead(long mutedAt, string piece)
+    {
+        if (CutOffByMute(_announcer.Muted, mutedAt, _announcer.MutedGeneration, piece) is not { } cutOff)
+        {
+            return null;
+        }
+
+        StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [show] Cut off - the announcer was muted during {piece}.");
+
+        return cutOff;
+    }
+
+    /// <summary>
+    /// WHY (23 Nov 2026, bug hunt 24): a long read that the announcer's Mute
+    /// stopped was answered as if it had gone out. A mute bins the queue and
+    /// stops the feeding (see ReadIsOver) but cancels nothing, so the show
+    /// ran on to its end and the Recording page said "Played, and saved"
+    /// for a piece the room heard only the start of, or none of. Muted now,
+    /// or muted at any point since the read began (even if lifted again),
+    /// is now a cut-off, said plainly. Null when it was not muted.
+    /// </summary>
+    internal static string? CutOffByMute(bool mutedNow, long mutedAt, long mutedGenerationNow, string piece)
+    {
+        if (!mutedNow && mutedGenerationNow == mutedAt)
+        {
+            return null;
+        }
+
+        return $"The announcer was muted, so {piece} was cut off. Unmute it on the Mixer and play it again.";
+    }
+
+    /// <summary>
     /// One championship as the season's piece needs it - the season, its
     /// races as EventSpine.SessionsFor resolves them, and its table as
     /// SeasonStore.ComputeStandings returns it, in that order. Handed in by
@@ -783,6 +896,8 @@ public partial class AnnouncerControl
     /// <param name="seasonId">The championship, by its id.</param>
     public async Task<string?> PlayTheSeasonAsync(string? seasonId)
     {
+        LastPieceWasSaved = false;
+
         if (_commentary is not { IsAvailable: true })
         {
             return "The commentary isn't set up on this PC yet, so there is nothing to write the piece with.";
@@ -876,6 +991,8 @@ public partial class AnnouncerControl
                 $"{AppTime.LogStampNow()}  [show] {named}'s season: {Plural.Of(chunks.Count, "piece")} to read, "
                 + $"about {SponsorCopy.SpokenLength(script!).TotalSeconds:0} seconds. Playing it now.");
 
+            // WHY (23 Nov 2026, bug hunt 24): see CutOffByMute.
+            var mutedAt = _announcer.MutedGeneration;
             var voiced = VoiceTheReadAhead(chunks, readToken);
 
             await FirstPieceVoicedAsync(voiced, readToken).ConfigureAwait(true);
@@ -887,6 +1004,7 @@ public partial class AnnouncerControl
             // recorder started before this wait put up to 15 seconds of
             // silence at the top of the file played at the presentation.
             recording = BookendRecording.StartForASeason(found.Season.Name, line => StatusMessage?.Invoke(line));
+            LastPieceWasSaved = recording is not null;
 
             var band = SeasonPiece.OnTheBand(found.Season.Name);
 
@@ -898,7 +1016,7 @@ public partial class AnnouncerControl
                     caption: band,
                     ct: readToken).ConfigureAwait(true))
             {
-                return null;
+                return AfterTheRead(mutedAt, TheSeasonPiece);
             }
 
             readToken.ThrowIfCancellationRequested();
@@ -906,7 +1024,7 @@ public partial class AnnouncerControl
 
             await treatment.WaitForTheReadAsync(SeasonPiece.LongestRead, readToken).ConfigureAwait(true);
 
-            return null;
+            return AfterTheRead(mutedAt, TheSeasonPiece);
         }
         catch (OperationCanceledException) when (nextRace.IsCancellationRequested)
         {
@@ -967,6 +1085,8 @@ public partial class AnnouncerControl
     /// <param name="driverName">Their name, as it should be said and as the file is named.</param>
     public async Task<string?> PlayADriversNightAsync(string? transponder, string? driverName)
     {
+        LastPieceWasSaved = false;
+
         if (_commentary is not { IsAvailable: true })
         {
             return "The commentary isn't set up on this PC yet, so there is nothing to write the piece with.";
@@ -1094,9 +1214,14 @@ public partial class AnnouncerControl
             // ahead from now, as tonight's recap is - see VoiceTheReadAhead.
             // Started BEFORE the clip, so the first pieces are made while the
             // cold open plays, and waited for after it.
+            // WHY (23 Nov 2026, bug hunt 24): counted before the clip, so a
+            // mute pressed during the clip counts too - see CutOffByMute.
+            var mutedAt = _announcer.MutedGeneration;
             var voiced = VoiceTheReadAhead(chunks, readToken);
 
             recording = BookendRecording.StartForADriver(named, line => StatusMessage?.Invoke(line));
+
+            LastPieceWasSaved = recording is not null;
 
             // THEIR OWN NIGHT, AS IT SOUNDED (13 Oct 2026). A cold open:
             // a line of handoff, then a few seconds of the race audio this
@@ -1148,7 +1273,7 @@ public partial class AnnouncerControl
                     caption: DriverCut.OnTheBand(driverName),
                     ct: readToken).ConfigureAwait(true))
             {
-                return null;
+                return AfterTheRead(mutedAt, $"{named}'s night");
             }
 
             // WHY (20 Oct 2026, Bug Hunt 8): false from a cancelled run is
@@ -1162,7 +1287,7 @@ public partial class AnnouncerControl
             // word had been said.
             await treatment.WaitForTheReadAsync(NightRecap.LongestRead, readToken).ConfigureAwait(true);
 
-            return null;
+            return AfterTheRead(mutedAt, $"{named}'s night");
         }
         catch (OperationCanceledException) when (nextRace.IsCancellationRequested)
         {
@@ -1993,7 +2118,22 @@ public partial class AnnouncerControl
             // laps and how much road is left - exact under a lap limit,
             // worked out from the clock in a timed race. See
             // RaceHorizon.LapsLeftIn and RoadFor below.
-            director.Standings(PairsFrom(ordered), ordered.Count > 0 ? ordered[0].Laps : 0, RoadFor(ordered));
+            // WHY (23 Nov 2026, bug hunt 24): NOT UNDER A RED. A red stops
+            // the timing taking crossings, so the board is frozen, and Battle
+            // watch counts its ticks by the clock - two cars that last
+            // crossed half a second apart became a "fight" after fifteen
+            // seconds of standing still, its length mostly the stoppage. The
+            // red now ends every fight being followed (a restart is a new
+            // story), and the frozen board is not fed in until it lifts.
+            if (_race.Flag == FlagState.Red)
+            {
+                director.Battles.Observe(Array.Empty<PairGap>());
+            }
+            else
+            {
+                director.Standings(PairsFrom(ordered), ordered.Count > 0 ? ordered[0].Laps : 0, RoadFor(ordered));
+            }
+
             FeedLaps(ordered);
         }
 
@@ -2079,8 +2219,26 @@ public partial class AnnouncerControl
             return;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): AND NOT WHILE A FLAG IS OUT. A red
+        // or a yellow leaves the race Racing, and nothing here looked at the
+        // flag, so the AI went on writing and saying in-race lines - fights,
+        // pace notes - while every template lap call was held for the flag.
+        // Held the same way the template calls are (see InRaceLinesHeldBy);
+        // the feeding above keeps the director current through it.
+        if (racing && InRaceLinesHeldBy(_race.Flag))
+        {
+            return;
+        }
+
         _ = SpeakNextSegmentAsync(director);
     }
+
+    /// <summary>
+    /// Whether the AI's in-race lines wait for a flag (23 Nov 2026, bug hunt
+    /// 24): a yellow or a red, the same caution that holds the template's
+    /// lap and battle calls (AnnouncementService.IsUnderCaution).
+    /// </summary>
+    internal static bool InRaceLinesHeldBy(FlagState flag) => flag is FlagState.Yellow or FlagState.Red;
 
     /// <summary>
     /// The sponsors' paid reads on their own, for a night with no AI
@@ -2466,6 +2624,8 @@ public partial class AnnouncerControl
                 // And a record lap or threat raised from it is not said
                 // (bug hunt 15) - see CommentaryDirector.ForgetLaps.
                 director.ForgetLaps(standing.TransponderId, surviving);
+                // WHY (23 Nov 2026, bug hunt 24): the record watch kept the lap taken off as the driver's best, so every later record-in-danger call for them was refused as implausible - see RecordWatch.Forget.
+                watch.Forget(standing.TransponderId, surviving);
                 continue;
             }
 
@@ -2748,6 +2908,17 @@ public partial class AnnouncerControl
             return _race.State == RaceState.Racing
                 ? "the race went green while it was being written"
                 : "the race finished while it was being written";
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): and an in-race line written across
+        // a red or a yellow goes back unspent rather than out over the flag
+        // - FeedTheDirector's own rule, asked again once the write is back.
+        if (said is not null
+            && CommentaryDirector.InRace(said.Kind)
+            && _race.State == RaceState.Racing
+            && InRaceLinesHeldBy(_race.Flag))
+        {
+            return "a flag came out while it was being written";
         }
 
         return null;

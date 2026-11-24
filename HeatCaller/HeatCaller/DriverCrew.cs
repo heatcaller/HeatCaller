@@ -142,7 +142,43 @@ internal static class DriverCrew
             return false;
         }
 
-        return clean.All(c => char.IsLetter(c) || c is ' ' or '-' or '\'' or '’' or '.');
+        return AllNameChars(clean);
+    }
+
+    /// <summary>
+    /// Whether every character is one a name may have: a letter of any
+    /// script with its marks, a space, hyphen, apostrophe or full stop.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): this was char.IsLetter on each
+    /// UTF-16 unit, which is false for combining marks (Hindi and Tamil
+    /// vowel signs, Thai vowels and tone marks, Arabic vowel marks, an
+    /// accent typed as its own mark) and for letters outside the basic
+    /// plane. The relay and the phone allow letters and marks
+    /// (/^[\p{L}\p{M} '’.-]*$/u), so a name the phone took was refused at
+    /// the desk and passed over when said. Walking by Rune matches the
+    /// relay; a lone surrogate comes through as U+FFFD and is still refused.
+    /// </remarks>
+    private static bool AllNameChars(string text)
+    {
+        foreach (var rune in text.EnumerateRunes())
+        {
+            if (Rune.IsLetter(rune) || rune.Value is 0x20 or 0x2D or 0x27 or 0x2019 or 0x2E) // space, hyphen, apostrophe, ’, full stop
+            {
+                continue;
+            }
+
+            var category = Rune.GetUnicodeCategory(rune);
+
+            if (category is not (System.Globalization.UnicodeCategory.NonSpacingMark
+                or System.Globalization.UnicodeCategory.SpacingCombiningMark
+                or System.Globalization.UnicodeCategory.EnclosingMark))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>Control characters out, runs of space made one, trimmed - the relay's own cleaning.</summary>
@@ -163,7 +199,7 @@ internal static class DriverCrew
 
         return clean.Length > 0
                && clean.Length <= SaidAsMaxChars
-               && clean.All(c => char.IsLetter(c) || c is ' ' or '-' or '\'' or '’' or '.');
+               && AllNameChars(clean);
     }
 
     /// <summary>
@@ -379,6 +415,72 @@ internal static class DriverCrew
 
     /// <summary>How many days after its night a held goal waits for the next race night.</summary>
     public const int HeldGoalDays = 8;
+
+    /// <summary>
+    /// The night and held flag a goal should be saved with once it has been
+    /// given to the commentary at <paramref name="nowLocal"/>: a held goal
+    /// that <see cref="GoalTonight"/> gives tonight lands on tonight and is
+    /// no longer held; anything else keeps the profile's own values.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): a held goal was given on every race
+    /// night in the <see cref="HeldGoalDays"/> after it, so at a club that
+    /// races Wednesday and Saturday the driver's "goal for tonight" was
+    /// quoted on Saturday and again the next Wednesday. Saving what this
+    /// returns when the goal is first said keeps it to that one night. Call
+    /// it only where the goal is actually said in a race, not where it is
+    /// merely shown, or opening the app on a non-race day would use it up.
+    /// </remarks>
+    public static (DateTime? Night, bool Held) LandHeldGoal(DriverProfile? profile, DateTime nowLocal)
+    {
+        if (profile is null)
+        {
+            return (null, false);
+        }
+
+        if (profile.CrewGoalHeld && GoalTonight(profile, nowLocal).Length > 0)
+        {
+            return (TonightAtTheTrack.NightOf(nowLocal).Date, false);
+        }
+
+        return (profile.CrewGoalNight, profile.CrewGoalHeld);
+    }
+
+    /// <summary>
+    /// Saves a held goal as tonight's once the commentary has been given it
+    /// (see <see cref="LandHeldGoal"/>). UI thread only: it reads the driver
+    /// as now on file, so a goal sent or changed since the commentary read
+    /// it is left alone, and calling it twice saves once. Returns whether
+    /// anything was saved.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Nov 2026, bug hunt 24 #163, Asher): LandHeldGoal was worked
+    /// out but nothing saved it, so a held goal was still quoted on every race
+    /// night in the eight days after it. The commentary gives the goal on the
+    /// thread pool, where the profile store cannot be written, so it says so
+    /// (CommentaryService.HeldGoalGiven) and the window saves it here.
+    /// </remarks>
+    public static bool SaveLandedGoal(ProfileStore profiles, string transponder, DateTime nowLocal)
+    {
+        if (string.IsNullOrWhiteSpace(transponder) || profiles.Get(transponder) is not { CrewGoalHeld: true } onFile)
+        {
+            return false;
+        }
+
+        var (night, held) = LandHeldGoal(onFile, nowLocal);
+
+        // Still held: not given tonight (the same night, or past the window).
+        if (held)
+        {
+            return false;
+        }
+
+        var landed = ProfileStore.Snapshot(onFile);
+        landed.CrewGoalNight = night;
+        landed.CrewGoalHeld = false;
+        profiles.Upsert(landed);
+        return true;
+    }
 
     /// <summary>
     /// The night a goal sent at <paramref name="askedLocal"/> is for: that

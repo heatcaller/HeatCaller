@@ -145,6 +145,22 @@ public sealed partial class RaceControlControl
         var roundId = race.Id;
         _gridBeforeSkip[$"{roundId}|{transponder}"] = undo.GridBefore;
 
+        // WHY (23 Nov 2026, bug hunt 24): each skip remembered the grid as it
+        // was at that skip, without the drivers already skipped from it. Skip
+        // A then B (A on pole, B second), put A back then B back: B's grid
+        // had nobody ahead of them, so B went in front of A. Now the drivers
+        // still skipped from this race go back into the remembered grid in
+        // their own slots, so a later put-back finds them ahead.
+        var earlier = (race.SkippedDns ?? new List<string>())
+            .Where(t => !string.Equals(t, transponder, StringComparison.OrdinalIgnoreCase))
+            .Select(t => (t, _gridBeforeSkip.TryGetValue($"{roundId}|{t}", out var g) ? (IReadOnlyList<string>?)g : null))
+            .ToList();
+
+        if (earlier.Count > 0)
+        {
+            _gridBeforeSkip[$"{roundId}|{transponder}"] = GridWithEarlierSkips(undo.GridBefore, earlier);
+        }
+
         _undo.Capture($"Skip {name} in {race.RoundLabel} (DNS)", () =>
         {
             var current = _rounds?.Get(roundId) ?? race;
@@ -296,6 +312,31 @@ public sealed partial class RaceControlControl
         _rounds?.Update(race);
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] {SpokenNameOf(transponder)} is back in {race.RoundLabel} - no DNS.");
         RefreshNextUpAfterSkip();
+    }
+
+    /// <summary>
+    /// The grid a driver was skipped from, with the drivers still skipped
+    /// from the same race before them put back in it in their own slots
+    /// (bug hunt 24), so putting back in any order keeps the grid's order.
+    /// </summary>
+    internal static List<string> GridWithEarlierSkips(IReadOnlyList<string> gridBefore,
+        IEnumerable<(string Transponder, IReadOnlyList<string>? GridBefore)> stillSkipped)
+    {
+        var grid = gridBefore.ToList();
+
+        // In skip order, each by the grid they were skipped from. One with
+        // none remembered (a restart since) is left out rather than guessed.
+        foreach (var (them, theirs) in stillSkipped)
+        {
+            if (theirs is null || grid.Contains(them, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            grid = BackInTheirSlot(grid, theirs, them);
+        }
+
+        return grid;
     }
 
     /// <summary>

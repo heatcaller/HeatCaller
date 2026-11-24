@@ -167,8 +167,9 @@ public sealed partial class AnnouncementService
         // (The same rule as HeatCallerSavedLinesPassedOver, read here in the
         // one look above.) So is a consent that is missing or taken back: a
         // saved take is the person's voice as surely as a new one.
-        if (!allowanceSpent
-            && !HeatCallerConsentWithheld(profile)
+        // Not with Kokoro unable to speak (23 Nov 2026, bug hunt 24) - see
+        // PassesOverSavedHeatCaller.
+        if (!PassesOverSavedHeatCaller(profile, HeatCallerConsentWithheld(profile), allowanceSpent, KokoroSpeech.IsAvailable)
             && await VoiceLibrary.Shared.TryLoadAsync(profile, text) is { } saved)
         {
             return new SynthesisResult(saved, LineSource.Library);
@@ -899,11 +900,33 @@ public sealed partial class AnnouncementService
             return true;
         }
 
+        bool allowanceSpent;
+
         lock (_heatCallerLock)
         {
-            return _heatCallerAllowanceSpent;
+            allowanceSpent = _heatCallerAllowanceSpent;
         }
+
+        return PassesOverSavedHeatCaller(profile, consentWithheld: false, allowanceSpent, KokoroSpeech.IsAvailable);
     }
+
+    /// <summary>
+    /// The rule behind HeatCallerSavedLinesPassedOver, with what it reads
+    /// handed in so it can be tested: the HeatCaller voice chosen, and either
+    /// its consent withheld, or its allowance spent with Kokoro able to speak.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the spent allowance passed saved
+    /// takes over even when Kokoro could not speak on this PC, so every line
+    /// failed - yellow, red and the finish included - though their takes were
+    /// saved and cost nothing to play. With nothing to say a line instead, a
+    /// saved take is better than silence, as ElevenLabs' rule has it
+    /// (PassesOverSavedElevenLabs). A withheld consent still passes them over:
+    /// a saved take is the person's voice as surely as a new one.
+    /// </remarks>
+    internal static bool PassesOverSavedHeatCaller(VoiceProfile profile, bool consentWithheld, bool allowanceSpent, bool kokoroReady) =>
+        profile.EffectiveEngine == VoiceEngine.HeatCaller
+        && (consentWithheld || (allowanceSpent && kokoroReady));
 
     /// <summary>
     /// True when the consent gate would refuse this profile's HeatCaller

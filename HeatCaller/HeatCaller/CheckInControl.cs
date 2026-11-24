@@ -724,7 +724,10 @@ public sealed partial class CheckInControl : UserControl
         {
             box.Clear();
 
-            var scanned = _profiles.All.FirstOrDefault(p => string.Equals(p.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
+            // WHY (23 Nov 2026, bug hunt 24): then by any of their other
+            // transponders, as ProfileStore.Get does for the rest of the app.
+            var scanned = _profiles.All.FirstOrDefault(p => string.Equals(p.Transponder, transponder, StringComparison.OrdinalIgnoreCase))
+                          ?? _profiles.Get(transponder);
 
             if (scanned is null)
             {
@@ -784,8 +787,33 @@ public sealed partial class CheckInControl : UserControl
                         || string.Equals(p.Transponder, typed, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
+        // WHY (23 Nov 2026, bug hunt 24): a driver's second (or spare) car's
+        // transponder is theirs too. Only the main one was looked at, so the
+        // desk typing the number off the car in front of them was told "No
+        // driver called ..." for a driver on the list.
+        if (exact.Count == 0 && _profiles.Get(typed) is { } owner)
+        {
+            exact.Add(owner);
+        }
+
         return exact.Count > 0 ? exact : _profiles.All.Where(p => Matches(p, typed)).ToList();
     }
+
+    /// <summary>
+    /// The driver cell's words on Who's Racing: the name (or the transponder,
+    /// with no name) and, for a driver who is here, the new-to-racing badge.
+    /// </summary>
+    internal static string RosterName(DriverProfile profile, bool here, NewDrivers.RacedBefore? before) =>
+        (string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName) + (here ? NewDrivers.Badge(profile, before) : string.Empty);
+
+    /// <summary>Desk mode's card headline for a driver just checked in at the desk.</summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): through AppTime, as the desk log
+    /// beside it is. It was written with Windows' short time (":t"), so with
+    /// the 24-hour tick on Themes the card read "7:05 PM" while the log line
+    /// for the same check-in read "19:05" (and the other way round).
+    /// </remarks>
+    internal static string CheckedInHeadline(DateTime at) => $"Checked in · {AppTime.TimeOfDay(at)}";
 
     /// <summary>
     /// Checks one driver in from the desk - a scan, or a name typed - and
@@ -811,7 +839,7 @@ public sealed partial class CheckInControl : UserControl
         _checkIns.SetCheckedIn(profile.Transponder, true);
         CheckInChangedAtDesk?.Invoke(profile.Transponder);
         LogDesk(DisplayName(profile), $"checked in {how}");
-        ShowOnDesk(profile, $"Checked in · {DateTime.Now:t}", AppTheme.Success);
+        ShowOnDesk(profile, CheckedInHeadline(DateTime.Now), AppTheme.Success);
         RefreshDriverList();
         SetScanStatus($"Checked in: {DisplayName(profile)}", AppTheme.Success);
     }
@@ -1250,6 +1278,18 @@ public sealed partial class CheckInControl : UserControl
     private void RefreshDriverList()
     {
         MarksDayChanged();
+
+        // WHY (23 Nov 2026, bug hunt 24): a gate the night no longer has for
+        // the class picked - a class with no tech picked under Needs tech,
+        // the fee taken off under Owes - goes back to everyone BEFORE the
+        // rows are drawn. RefreshCounts only went back afterwards, so the
+        // list was drawn empty under a lit Everyone chip ("0 of 0 checked
+        // in"), and clicking Everyone did nothing.
+        if (!ShowIsOffered(_show))
+        {
+            _show = RosterShow.Everyone;
+        }
+
         _suppressGridEvents = true;
         try
         {
@@ -1263,7 +1303,7 @@ public sealed partial class CheckInControl : UserControl
                 // means no races before tonight, which an absent member who has
                 // never raced would otherwise show every week.
                 var here = _checkIns.IsCheckedIn(profile.Transponder);
-                var displayName = (string.IsNullOrWhiteSpace(profile.DriverName) ? profile.Transponder : profile.DriverName) + (here ? NewDrivers.Badge(profile, before) : string.Empty);
+                var displayName = RosterName(profile, here, before);
                 var rowIndex = _grid.Rows.Add(here, displayName, ClassCellText(profile));
 
                 _grid.Rows[rowIndex].Tag = profile;

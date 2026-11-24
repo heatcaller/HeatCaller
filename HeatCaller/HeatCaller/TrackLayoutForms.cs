@@ -1157,6 +1157,94 @@ public sealed class TrackLayoutManagerControl : UserControl
             .ToList();
     }
 
+    /// <summary>What a layout rename moved onto the new name tonight: whether the open day moved, and which of its unrun rounds did - for the undo.</summary>
+    internal sealed record RenameCarry(bool DayMoved, IReadOnlyList<string> RoundIds)
+    {
+        public static readonly RenameCarry None = new(false, Array.Empty<string>());
+    }
+
+    /// <summary>
+    /// Carries a layout's new name onto the open race day and its unrun
+    /// rounds that name the old one. Pure but for the store writes.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): renaming a layout only renamed the
+    /// layout. The open day and every heat left to run still named the old
+    /// name, and they are looked up by name - so with nothing said the page
+    /// dropped RACING TONIGHT from the layout being raced, the marshal rota
+    /// for the rest of the night came back empty (no layout of that name, so
+    /// no posts), and picking a round no longer moved the Track box. Rounds
+    /// already run keep the old name: saved races are matched by name, and
+    /// that history starting again after a rename is the documented limit.
+    /// The rounds go first, as Use Tonight does, so saving the day tells the
+    /// Track box after the round it reads has its new name.
+    /// </remarks>
+    internal static RenameCarry CarryRenameToTonight(RaceEvent? day, RaceEventStore? events, RoundDefinitionStore? rounds, string oldName, string newName)
+    {
+        var was = (oldName ?? string.Empty).Trim();
+        var now = (newName ?? string.Empty).Trim();
+
+        // Ordinal, so a fix of the name's capitals carries too.
+        if (day is null || events is null || was.Length == 0 || now.Length == 0 || string.Equals(was, now, StringComparison.Ordinal))
+        {
+            return RenameCarry.None;
+        }
+
+        bool OnOld(string? name) => string.Equals(name?.Trim(), was, StringComparison.OrdinalIgnoreCase);
+
+        var moved = new List<string>();
+        if (rounds is not null)
+        {
+            foreach (var round in (day.RoundIds ?? new List<string>()).Select(rounds.Get).OfType<RoundDefinition>().ToList())
+            {
+                if (!round.IsRecorded && OnOld(round.TrackLayoutName))
+                {
+                    round.TrackLayoutName = now;
+                    rounds.Update(round);
+                    moved.Add(round.Id);
+                }
+            }
+        }
+
+        var dayMoved = OnOld(day.TrackLayoutName);
+        if (dayMoved)
+        {
+            day.TrackLayoutName = now;
+            events.Upsert(day);
+        }
+
+        return dayMoved || moved.Count > 0 ? new RenameCarry(dayMoved, moved) : RenameCarry.None;
+    }
+
+    /// <summary>
+    /// The undo of <see cref="CarryRenameToTonight"/>: the rounds it moved
+    /// and the day go back to the old name - each only while it still names
+    /// the new one (and a round only while still unrun), as Use Tonight's
+    /// undo does.
+    /// </summary>
+    internal static void UndoRenameCarry(RenameCarry carry, string? dayId, RaceEventStore? events, RoundDefinitionStore? rounds, string oldName, string newName)
+    {
+        var was = (oldName ?? string.Empty).Trim();
+        var now = (newName ?? string.Empty).Trim();
+
+        foreach (var roundId in carry.RoundIds)
+        {
+            if (rounds?.Get(roundId) is { IsRecorded: false } round
+                && string.Equals(round.TrackLayoutName, now, StringComparison.Ordinal))
+            {
+                round.TrackLayoutName = was;
+                rounds.Update(round);
+            }
+        }
+
+        if (carry.DayMoved && events?.Get(dayId) is { } day
+            && string.Equals(day.TrackLayoutName, now, StringComparison.Ordinal))
+        {
+            day.TrackLayoutName = was;
+            events.Upsert(day);
+        }
+    }
+
     /// <summary>The designer on a blank floor, for a new layout - New Layout's first choice.</summary>
     private void DesignNew()
     {
@@ -1226,6 +1314,16 @@ public sealed class TrackLayoutManagerControl : UserControl
             var attachmentChanged = form.AttachmentChanged;
             var setAside = form.SetAsideAttachment;
             var store = _store;
+
+            // WHY (23 Nov 2026, bug hunt 24): a rename is carried onto
+            // tonight's day and unrun heats (see CarryRenameToTonight) - filled
+            // in after the save below, before the undo can ever run.
+            var events = _events;
+            var rounds = _rounds;
+            var newName = form.Result.Name;
+            var dayId = Tonight?.Id;
+            var carry = RenameCarry.None;
+
             _undo.Capture($"Edit track layout '{before.Name}'", () =>
             {
                 if (store.Get(trackId) is not { } target)
@@ -1260,9 +1358,12 @@ public sealed class TrackLayoutManagerControl : UserControl
                 target.MarshalPostCount = before.MarshalPostCount;
                 target.PreferPlanImage = before.PreferPlanImage;
                 store.Upsert(target);
+
+                UndoRenameCarry(carry, dayId, events, rounds, before.Name, newName);
             });
 
             _store.Upsert(form.Result);
+            carry = CarryRenameToTonight(Tonight, _events, _rounds, before.Name, form.Result.Name);
             RefreshList();
         }
     }
@@ -1382,6 +1483,15 @@ public sealed class TrackLayoutManagerControl : UserControl
         // after an undo, so the undo never reaches into a page that may have
         // gone.
         var store = _store;
+
+        // WHY (23 Nov 2026, bug hunt 24): a rename saved from the designer is
+        // carried onto tonight's day and unrun heats too (see
+        // CarryRenameToTonight) - filled in after the save below.
+        var events = _events;
+        var rounds = _rounds;
+        var dayId = Tonight?.Id;
+        var carry = RenameCarry.None;
+
         _undo.Capture(isNew ? $"Add track '{chosenName}'" : $"Track plan for '{track.Name}'", () =>
         {
             if (isNew)
@@ -1397,6 +1507,8 @@ public sealed class TrackLayoutManagerControl : UserControl
                 target.Name = previousName;
                 target.PreferPlanImage = previousPreference;
                 store.Upsert(target);
+
+                UndoRenameCarry(carry, dayId, events, rounds, previousName, chosenName);
             }
         });
 
@@ -1416,6 +1528,12 @@ public sealed class TrackLayoutManagerControl : UserControl
         track.PreferPlanImage = useAsPhoto && !chosenDesign.IsEmpty;
 
         _store.Upsert(track);
+
+        // A new layout has no old name for tonight to be on.
+        if (!isNew)
+        {
+            carry = CarryRenameToTonight(Tonight, _events, _rounds, previousName, chosenName);
+        }
 
         _settings.LastViewedTrackLayoutName = track.Name;
         _settings.Save();

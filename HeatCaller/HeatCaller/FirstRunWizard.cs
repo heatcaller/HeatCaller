@@ -232,6 +232,14 @@ public sealed partial class FirstRunWizard : Form
     private string? _doneTiming;
     private string? _doneTrack;
     private readonly List<string> _doneClasses = new();
+
+    // WHY (23 Nov 2026, bug hunt 24): what THIS run of the wizard made, as
+    // against what was there before it opened. A class or track it made can
+    // follow a later answer (a corrected spelling, a changed race length)
+    // when the director goes Back; one that was already there never is.
+    private readonly HashSet<string> _madeTypedClasses = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _madeListedClasses = new(StringComparer.OrdinalIgnoreCase);
+    private string? _madeTrackId;
     private int _doneDrivers;
     private int _skippedDrivers;
 
@@ -1308,9 +1316,33 @@ public sealed partial class FirstRunWizard : Form
             return;
         }
 
-        if (!_trackLayouts.All.Any(t => string.Equals(t.Name, trackName, StringComparison.OrdinalIgnoreCase)))
+        // WHY (23 Nov 2026, bug hunt 24): a track renamed after going Back
+        // used to be added beside the first name, so a misspelt "Clubb" stayed
+        // on Track Layouts as a spare layout. The one layout this run made now
+        // takes the new name instead (or goes, when the new name is a layout
+        // that was already there). A layout that was there before is never
+        // touched.
+        var made = _madeTrackId is null ? null : _trackLayouts.Get(_madeTrackId);
+        var named = _trackLayouts.All.FirstOrDefault(t => string.Equals(t.Name, trackName, StringComparison.OrdinalIgnoreCase));
+
+        if (named is null)
         {
-            _trackLayouts.Upsert(new TrackLayout { Name = trackName });
+            if (made is not null)
+            {
+                made.Name = trackName;
+                _trackLayouts.Upsert(made);
+            }
+            else
+            {
+                var layout = new TrackLayout { Name = trackName };
+                _trackLayouts.Upsert(layout);
+                _madeTrackId = layout.Id;
+            }
+        }
+        else if (made is not null && made.Id != named.Id)
+        {
+            _trackLayouts.Delete(made.Id);
+            _madeTrackId = null;
         }
 
         _settings.LastTrackLayoutName = trackName;
@@ -1320,13 +1352,34 @@ public sealed partial class FirstRunWizard : Form
 
     private void SaveClasses()
     {
-        foreach (var name in TypedClasses())
+        var typed = TypedClasses().ToList();
+
+        // WHY (23 Nov 2026, bug hunt 24): this step only ever added, so a
+        // class corrected after going Back ("Stok", Next, Back, "Stock")
+        // left the misspelt one on the Classes page and first in the list
+        // the Drivers step opens on - drivers were filed under it. A class
+        // this run made that is no longer typed goes now, unless a driver
+        // has already been saved in it.
+        var inUse = _profiles.All.SelectMany(p => p.AllClasses);
+        foreach (var gone in ClassesToDrop(_madeTypedClasses, typed, inUse))
+        {
+            foreach (var stale in _raceClasses.All.Where(c => string.Equals(c.Name, gone, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                _raceClasses.Delete(stale.Id);
+            }
+
+            _madeTypedClasses.Remove(gone);
+            _doneClasses.RemoveAll(n => string.Equals(n, gone, StringComparison.OrdinalIgnoreCase));
+        }
+
+        foreach (var name in typed)
         {
             if (!_raceClasses.All.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
             {
                 // With a race length (setup plan A5): see RaceFormat.ForNewClass.
                 // And with the length and finish asked for on this step (setup plan step 8).
                 _raceClasses.Upsert(new RaceClass { Name = name, Format = _classLength.Format() });
+                _madeTypedClasses.Add(name);
             }
 
             if (!_doneClasses.Contains(name, StringComparer.OrdinalIgnoreCase))
@@ -1334,6 +1387,36 @@ public sealed partial class FirstRunWizard : Form
                 _doneClasses.Add(name);
             }
         }
+
+        // WHY (23 Nov 2026, bug hunt 24): a class was given the length on
+        // screen the first time the step was left and never again, so a
+        // length or finish changed after going Back was dropped without a
+        // word - though the card says every class typed above gets it. The
+        // classes this run made (typed here, or brought by Import a List)
+        // now take the length as it stands each time the step is left.
+        // Classes that were there before the wizard keep their own.
+        foreach (var made in _raceClasses.All
+                     .Where(c => _madeTypedClasses.Contains(c.Name) || _madeListedClasses.Contains(c.Name))
+                     .ToList())
+        {
+            made.Format = _classLength.Format();
+            _raceClasses.Upsert(made);
+        }
+    }
+
+    /// <summary>
+    /// The classes this run of the wizard made (<paramref name="madeHere"/>)
+    /// that should go on a later pass of the Classes step: no longer
+    /// <paramref name="typed"/> in the box, and with no saved driver in them
+    /// (<paramref name="inUse"/>). A class the wizard did not make is never
+    /// in <paramref name="madeHere"/>, so it is never dropped.
+    /// </summary>
+    internal static IReadOnlyList<string> ClassesToDrop(IEnumerable<string> madeHere, IEnumerable<string> typed, IEnumerable<string> inUse)
+    {
+        var keep = new HashSet<string>(typed.Select(t => t.Trim()), StringComparer.OrdinalIgnoreCase);
+        keep.UnionWith(inUse.Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n.Trim()));
+
+        return madeHere.Where(m => !keep.Contains(m.Trim())).ToList();
     }
 
     private void SaveDrivers()
@@ -1424,7 +1507,12 @@ public sealed partial class FirstRunWizard : Form
         // As wide as the longest class's name, now the list holds them.
         FitPicker(_cmbDriverClass, DriverClassWidth);
 
-        var wanted = !string.IsNullOrEmpty(previous) ? previous : _doneClasses.FirstOrDefault() ?? names.FirstOrDefault() ?? string.Empty;
+        // WHY (23 Nov 2026, bug hunt 24): a class picked on an earlier visit
+        // that has gone since (a spelling corrected on the Classes step) falls
+        // back to the first class made, as a first visit does - it used to
+        // leave the picker blank.
+        var stillThere = !string.IsNullOrEmpty(previous) && names.Contains(previous, StringComparer.OrdinalIgnoreCase);
+        var wanted = stillThere ? previous! : _doneClasses.FirstOrDefault() ?? names.FirstOrDefault() ?? string.Empty;
         _cmbDriverClass.SelectedItem = _cmbDriverClass.Items.Contains(wanted) ? wanted : string.Empty;
         _cmbDriverClass.Enabled = names.Count > 0;
     }

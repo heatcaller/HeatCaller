@@ -257,8 +257,19 @@ public sealed partial class AnnouncementService
         Action answered = heatCaller ? () => { } : NoteElevenLabsAnswered;
 
         // From here the gate and the response are the download's to give back.
+        //
+        // WHY (23 Nov 2026, bug hunt 24): the download's stop was tied to the
+        // limit above, which had been running since the line came off the
+        // queue - through the wait for a slot, the wait for the speaker and
+        // all of the download. A long line on a slow model, or one that
+        // waited for the speaker, was cut off mid-sentence 30 seconds after
+        // it was asked for (or never heard at all), with nothing in the
+        // console, and counted as said. The limit is for getting the stream
+        // open; once it is, only a cut or the end of play stops it, and a
+        // stream that goes quiet is ended by ReadWhileItArrivesAsync, which
+        // says so.
         var line = new StreamingVoiceLine(gain, LeadSecondsFor(lead));
-        using var stopDownload = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+        using var stopDownload = new CancellationTokenSource();
         Task? download = null;
 
         try
@@ -307,6 +318,12 @@ public sealed partial class AnnouncementService
                 if (drop is null && honourMute && Muted)
                 {
                     drop = "the announcer was muted before it spoke";
+
+                    // WHY (23 Nov 2026, bug hunt 24): off the screens too, as
+                    // the whole-clip path's mute drop is. Every other drop here
+                    // took the line back; this one left a call nobody heard on
+                    // the Big Screen and in the Announcer feed as if said.
+                    WithdrawAnnouncementText(_dequeuedFreshness.Value.Shown);
                 }
 
                 if (drop is not null)
@@ -396,11 +413,21 @@ public sealed partial class AnnouncementService
 
         if (line.Underruns > 0)
         {
-            StatusMessage?.Invoke($"[voice] Streamed \"{text}\" ran ahead of ElevenLabs {Plural.Of(line.Underruns, "time")} - heard as a gap. Untick streaming on the Voice page if this keeps happening.");
+            StatusMessage?.Invoke(StreamGapWords(text, line.Underruns, heatCaller));
         }
 
         return true;
     }
+
+    /// <summary>
+    /// The console line for a streamed line that ran ahead of its audio.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): it always blamed ElevenLabs, so a
+    /// club on the HeatCaller voice - with no ElevenLabs account at all -
+    /// was told ElevenLabs was slow when the audio came through the relay.
+    /// </summary>
+    internal static string StreamGapWords(string text, int underruns, bool heatCaller) =>
+        $"[voice] Streamed \"{text}\" ran ahead of {(heatCaller ? "the HeatCaller voice" : "ElevenLabs")} {Plural.Of(underruns, "time")} - heard as a gap. Untick streaming on the Voice page if this keeps happening.";
 
     /// <summary>Reads the stream into the line as it arrives, then ends it. Gives the synthesis slot and the response back however it ends.</summary>
     private async Task DownloadIntoAsync(
@@ -411,22 +438,23 @@ public sealed partial class AnnouncementService
 
         try
         {
-            await using var body = await response.Content.ReadAsStreamAsync(stop);
-            var buffer = new byte[StreamChunkBytes];
             var first = true;
-            int read;
 
-            while ((read = await body.ReadAsync(buffer, stop)) > 0)
-            {
-                if (first)
+            await ReadWhileItArrivesAsync(
+                quiet => response.Content.ReadAsStreamAsync(quiet),
+                (buffer, read) =>
                 {
-                    timing?.RenderEnded(TimingClock.NowMs);
-                    first = false;
-                }
+                    if (first)
+                    {
+                        timing?.RenderEnded(TimingClock.NowMs);
+                        first = false;
+                    }
 
-                line.Add(buffer.AsSpan(0, read));
-                all.Write(buffer, 0, read);
-            }
+                    line.Add(buffer.AsSpan(0, read));
+                    all.Write(buffer, 0, read);
+                },
+                StreamQuietLimit,
+                stop);
 
             answered();
 
@@ -455,6 +483,58 @@ public sealed partial class AnnouncementService
         {
             line.Complete(tailSeconds);
             GiveBackTheStream(response);
+        }
+    }
+
+    /// <summary>How long a stream being played may send nothing before it is given up on.</summary>
+    internal static readonly TimeSpan StreamQuietLimit = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Reads a stream to its end, handing on each piece as it arrives.
+    /// Throws OperationCanceledException when <paramref name="stop"/> is
+    /// cancelled (a cut, or the end of play), and TimeoutException when
+    /// nothing has come for <paramref name="quietLimit"/>.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the only limit on a stream was 30
+    /// seconds from when the line came off the queue, however much of it
+    /// was still arriving - see TryStreamAndPlayAsync. What a stream needs
+    /// stopping for is a connection gone quiet, which would otherwise hold
+    /// the speaker and a synthesis slot for good; so the clock starts again
+    /// with every piece, and running out is said in the console rather than
+    /// passed off as a cut.
+    /// </remarks>
+    internal static async Task ReadWhileItArrivesAsync(
+        Func<CancellationToken, Task<Stream>> open, Action<byte[], int> piece, TimeSpan quietLimit, CancellationToken stop)
+    {
+        using var quiet = CancellationTokenSource.CreateLinkedTokenSource(stop);
+
+        try
+        {
+            quiet.CancelAfter(quietLimit);
+
+            await using var body = await open(quiet.Token);
+            var buffer = new byte[StreamChunkBytes];
+
+            while (true)
+            {
+                quiet.CancelAfter(quietLimit);
+
+                var read = await body.ReadAsync(buffer, quiet.Token);
+
+                if (read <= 0)
+                {
+                    return;
+                }
+
+                piece(buffer, read);
+            }
+        }
+        catch (OperationCanceledException) when (quiet.IsCancellationRequested && !stop.IsCancellationRequested)
+        {
+            throw new TimeoutException("nothing came for " + (quietLimit.TotalSeconds >= 2
+                ? Math.Round(quietLimit.TotalSeconds).ToString("0", System.Globalization.CultureInfo.InvariantCulture) + " seconds"
+                : "a moment"));
         }
     }
 

@@ -81,6 +81,16 @@ public partial class MainForm
                 _daySchedule.MarkStarted(startedRound.Id, DateTime.UtcNow);
             }
 
+            // WHY (23 Nov 2026, bug hunt 24): which round this green is
+            // for, so a Stage or Countdown that abandons the race can take
+            // that round's start stamp off again (see RaceAbandoned in
+            // WireRaceAbandonedSchedule). By then a program start has already
+            // moved the active round on to the next heat.
+            if (state == RaceState.Racing)
+            {
+                _roundRacingId = !_race.IsPracticeMode && !_race.IsDemoMode ? _activeRound?.Id : null;
+            }
+
             // An automatic backup that came due during a race was put off
             // (see CheckAutoBackup) - made now the track has gone quiet,
             // rather than waiting up to an hour for the next check.
@@ -314,19 +324,48 @@ public partial class MainForm
             return;
         }
 
-        var ordered = _race.GetOrderedStandings();
-        if (ordered.Count < 2)
-        {
-            return;
-        }
-
-        // A real lap down, not just the leader crossing the line first -
-        // which is what the old lap-count comparison fired on, on lap one.
-        if (RaceGaps.Between(ordered[^1], ordered[0]).LapsDown >= 1)
+        if (LeaderHasLappedSomeone(_race.GetOrderedStandings(), _race.IsPracticeMode))
         {
             _ambienceLappedFired = true;
             _ambience.Surge(reason: "Car lapped");
         }
+    }
+
+    /// <summary>
+    /// Whether the leader has really put a car a lap down - the rule behind
+    /// the "Car lapped" crowd surge.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the old check compared the leader
+    /// with the last row whatever it was. On a hand-released grid every car
+    /// is on the board at 0 laps from the green, so a car still held at the
+    /// line (or a no-show) read as lapped the moment the first car round
+    /// crossed twice; in practice a driver who joined late read as lapped
+    /// at once. The once-per-race surge was spent on nobody being lapped,
+    /// and the real first lapping later got no crowd reaction. Now practice
+    /// never surges, and the leader is compared with the last car that has
+    /// actually completed a lap.
+    /// </summary>
+    internal static bool LeaderHasLappedSomeone(IReadOnlyList<RacerStanding> ordered, bool isPractice)
+    {
+        if (isPractice || ordered.Count < 2)
+        {
+            return false;
+        }
+
+        var leader = ordered[0];
+        RacerStanding? lastStarted = null;
+        for (var i = ordered.Count - 1; i > 0; i--)
+        {
+            if (ordered[i].Laps >= 1)
+            {
+                lastStarted = ordered[i];
+                break;
+            }
+        }
+
+        // A real lap down, not just the leader crossing the line first -
+        // which is what the old lap-count comparison fired on, on lap one.
+        return lastStarted is not null && RaceGaps.Between(lastStarted, leader).LapsDown >= 1;
     }
 
     /// <summary>
@@ -703,8 +742,23 @@ public partial class MainForm
         {
             _ambience.Settings = _ambienceStore.Current;
 
+            // WHY (23 Nov 2026, bug hunt 24): the crowd opened at the mood it
+            // was stopped at, in one step, before the race's mood was applied -
+            // a crowd muted during the last finish cheer came back at full
+            // roar over this heat's staging call. Set first, it opens right.
+            _ambience.SetOpeningMood(AmbienceMoodFor(_race.State, _race.Flag));
+
             // ignoreEnabledSetting, for the same reason as music above.
             _ambience.Start(ignoreEnabledSetting: true);
+
+            // WHY (23 Nov 2026, bug hunt 24): belt and braces for the Ambience
+            // page - a Preview crowd stopped and this fresh one started inside
+            // one message, before the page's own timer notices, is still
+            // handed to the session, so the page's Stop Preview leaves it be.
+            if (_ambience.IsRunning)
+            {
+                _ambienceControl?.SessionAdoptedAmbience();
+            }
 
             OnClientRawMessage(_ambience.IsRunning
                 ? $"{AppTime.LogStampNow()}  [audio] Ambience started for the new session."
@@ -766,6 +820,42 @@ public partial class MainForm
 
     /// <summary>The music was opened and paused by On Air, for the staging call to carry on - see ReadySessionAudioForOnAir.</summary>
     private bool _musicReadiedForOnAir;
+
+    /// <summary>The programme round the race now on track went green for, or null for a freeform race, practice or a demo. Set at each green.</summary>
+    private string? _roundRacingId;
+
+    /// <summary>
+    /// Hands Race Control what to do to the run sheet when Stage or
+    /// Countdown abandons a running race: the abandoned heat's start stamp is
+    /// taken off, and Undo of the abandon puts it back. UI thread.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): nothing on the abandon path touched
+    /// the run sheet. MarkStarted keeps the first stamp only, so the abandoned
+    /// heat read "on track - started 7:42 PM" until it was run again, and
+    /// then was timed from the start that was thrown away.
+    /// </summary>
+    private void WireRaceAbandonedSchedule()
+    {
+        _raceControlControl.RaceAbandoned = () =>
+            ClearStartOfAbandonedRound(_roundRacingId, _daySchedule.ClearStarted, _daySchedule.MarkStarted);
+    }
+
+    /// <summary>
+    /// Takes the start stamp off <paramref name="roundId"/> with
+    /// <paramref name="clear"/> and gives back what puts it back with
+    /// <paramref name="mark"/> - or null when there is no round, or it had no
+    /// stamp to take (a heat already ticked done keeps its own). Pure.
+    /// </summary>
+    internal static Action? ClearStartOfAbandonedRound(
+        string? roundId, Func<string, DateTime?> clear, Action<string, DateTime> mark)
+    {
+        if (string.IsNullOrEmpty(roundId) || clear(roundId) is not { } was)
+        {
+            return null;
+        }
+
+        return () => mark(roundId, was);
+    }
 
     /// <summary>
     /// Opens the session's music and crowd when On Air is pressed, silent,
@@ -943,6 +1033,16 @@ public partial class MainForm
 
             if (_ambienceStoppedByMute && !crowdWasEnding)
             {
+                // WHY (23 Nov 2026, bug hunt 24): the crowd opened at the mood
+                // it was stopped at, in one step, before the race's mood was
+                // applied. Only when the race moved on while it was off, so an
+                // unmute inside the finish celebration still comes back to
+                // the cheer. The SetIntensity below then finds nothing to do.
+                if (_ambienceMoodMissed)
+                {
+                    _ambience.SetOpeningMood(AmbienceMoodFor(_race.State, _race.Flag));
+                }
+
                 _ambience.Start(ignoreEnabledSetting: true);
 
                 // The race moved on while it was off (see _ambienceMoodMissed).

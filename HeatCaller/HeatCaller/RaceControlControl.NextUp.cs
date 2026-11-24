@@ -118,16 +118,53 @@ public sealed partial class RaceControlControl
     /// </summary>
     private List<string> UninspectedDrivers(RoundDefinition? round, TechInspectionStore tech)
     {
-        var lines = new List<string>();
-
-        if (round is null || ClassFor(round) is not { WarnOnUninspected: true } raceClass)
+        if (round is not { } heat)
         {
-            return lines;
+            return new List<string>();
         }
 
-        if (!TechIsRunFor(raceClass, tech))
+        return UninspectedDriversOf(
+            heat,
+            _raceClasses.All,
+            tech,
+            t => MixedHeats.ClassOfDriver(heat, t, _profiles),
+            t => _profiles.Get(t)?.DriverName);
+    }
+
+    /// <summary>
+    /// The rule behind <see cref="UninspectedDrivers"/>, away from the
+    /// control: each car on the roster is judged in its own class of the
+    /// round (classOfDriver), with that class's "Warn about uninspected
+    /// drivers" and whether it runs tech at all.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): this judged every car against the
+    /// heat's main class. In a shared heat (Stock + Mod) a Mod car passed
+    /// under Mod was listed "not inspected" against Stock, and when Stock
+    /// had the warning off or ran no tech the Mod cars were never checked.
+    /// For a one-class round every car's class is the round's class, so
+    /// nothing changes there.
+    /// </summary>
+    internal static List<string> UninspectedDriversOf(RoundDefinition round, IEnumerable<RaceClass> classes, TechInspectionStore tech,
+        Func<string, string> classOfDriver, Func<string, string?> nameOf)
+    {
+        var lines = new List<string>();
+        var all = classes.ToList();
+
+        // Per class name, the class to judge in, or null when its cars are not checked. Cached because the bar asks every second.
+        var judged = new Dictionary<string, RaceClass?>(StringComparer.OrdinalIgnoreCase);
+
+        RaceClass? JudgedClass(string className)
         {
-            return lines;
+            if (!judged.TryGetValue(className, out var raceClass))
+            {
+                raceClass = all.FirstOrDefault(c => string.Equals(c.Name, className, StringComparison.OrdinalIgnoreCase)) is { WarnOnUninspected: true } found
+                            && TechIsRunFor(found, tech)
+                    ? found
+                    : null;
+                judged[className] = raceClass;
+            }
+
+            return raceClass;
         }
 
         var roster = round.AssignedTransponders
@@ -136,12 +173,19 @@ public sealed partial class RaceControlControl
 
         foreach (var transponder in roster)
         {
+            var className = classOfDriver(transponder);
+
+            if (string.IsNullOrEmpty(className) || JudgedClass(className) is not { } raceClass)
+            {
+                continue;
+            }
+
             if (tech.IsClearedToday(transponder, raceClass.Name))
             {
                 continue;
             }
 
-            var profileName = _profiles.Get(transponder)?.DriverName;
+            var profileName = nameOf(transponder);
             var name = string.IsNullOrWhiteSpace(profileName) ? transponder : profileName;
             var state = tech.Latest(transponder, raceClass.Name) is { } latest ? latest.ResultText : "not inspected";
 
@@ -307,19 +351,60 @@ public sealed partial class RaceControlControl
             return new List<RoundDefinition>();
         }
 
-        var all = _rounds.All;
+        return ProgramOfDay(_events?.Current, _rounds.All, _activeRound?.Invoke()?.Id);
+    }
 
+    /// <summary>
+    /// The rounds of <paramref name="current"/> in running order (all of
+    /// them on the legacy holder or with no day), as OrderedProgram gives
+    /// them. On a CLOSED real day, only its recorded rounds and the round
+    /// in <paramref name="keepRoundId"/> (a race already under way on it) -
+    /// none of its leftover heats is offered as still to run. Pure.
+    /// </summary>
+    internal static List<RoundDefinition> ProgramOfDay(RaceEvent? current, IReadOnlyList<RoundDefinition> all, string? keepRoundId)
+    {
         // A real current event bounds the day; the legacy holder does not -
         // on it, the whole program is the day, which is how the app worked
         // before events existed.
-        if (_events?.Current is { IsLegacy: false } current)
+        if (current is { IsLegacy: false })
         {
             var members = new HashSet<string>(current.RoundIds, StringComparer.Ordinal);
-            return all.Where(r => members.Contains(r.Id)).ToList();
+
+            // WHY (23 Nov 2026, bug hunt 24): a closed day picked on The Day
+            // to look at last week's results is the current day, and this
+            // offered its leftover unrun heats - the C-Main dropped when the
+            // light went - as next: the Next Up bar named it, Start Next
+            // started it and Auto start counted down to it, and tonight's race
+            // was filed into last week's meeting. RoundPicker.RaceDayOpen
+            // already refuses that for the automatic pick; nothing new joins
+            // a closed day until it is reopened.
+            return all.Where(r => members.Contains(r.Id)
+                                  && (current.IsOpen
+                                      || r.IsRecorded
+                                      || string.Equals(r.Id, keepRoundId, StringComparison.Ordinal)))
+                .ToList();
         }
 
         return all.ToList();
     }
+
+    /// <summary>How many real cars on <paramref name="roster"/> are not checked in - a ghost never is, and is never missing. Pure.</summary>
+    internal static int NotCheckedInCount(IEnumerable<string> roster, Func<string, bool> isCheckedIn) =>
+        roster.Count(t => !GhostService.IsGhost(t) && !isCheckedIn(t));
+
+    /// <summary>
+    /// Who Redo Remaining Heats counts as here: the checked in, and a ghost
+    /// car already on a heat - it can never be checked in, and is the
+    /// director's to take off, not the re-deal's (bug hunt 24). Pure.
+    /// </summary>
+    internal static Func<string, bool> PresentForRedo(Func<string, bool> isCheckedIn) =>
+        t => GhostService.IsGhost(t) || isCheckedIn(t);
+
+    /// <summary>The Next Up bar's words when nothing is next, or null when the bar says what it always did. Pure.</summary>
+    internal static string? ClosedDayNextText(RaceEvent? current) =>
+        current is { IsLegacy: false, IsOpen: false }
+            ? $"{current.DisplayName} is closed - reopen it to run its heats, or start tonight's race day"
+            : null;
 
     /// <summary>
     /// What runs after the round in hand: the first not-yet-recorded round
@@ -462,17 +547,22 @@ public sealed partial class RaceControlControl
 
         if (next is null)
         {
-            nextText = program.Count == 0
-                ? "no program - Quick Race is one press away"
-                : "program complete";
+            // A closed day says why nothing is next (bug hunt 24, see ProgramOfDay).
+            nextText = ClosedDayNextText(_events?.Current)
+                       ?? (program.Count == 0
+                           ? "no program - Quick Race is one press away"
+                           : "program complete");
         }
         else
         {
             var roster = next.AssignedTransponders;
 
+            // WHY (23 Nov 2026, bug hunt 24): a ghost car can never be checked
+            // in, so a heat with a ghost on it read "1 not checked in" in the
+            // warning colour while the run sheet said everyone was here.
             var missing = _checkIns is null
                 ? 0
-                : roster.Count(t => !_checkIns.IsCheckedIn(t));
+                : NotCheckedInCount(roster, _checkIns.IsCheckedIn);
 
             // Only from the shared Tech Log: this runs every second, and the
             // fallback in TechStoreForCheck reads the file from disk.
@@ -783,7 +873,9 @@ public sealed partial class RaceControlControl
                 .Where(p => p.RunsClass(className) && checkIns.IsCheckedIn(p.Transponder))
                 .Select(p => p.Transponder)
                 .ToList(),
-            checkIns.IsCheckedIn,
+            // WHY (23 Nov 2026, bug hunt 24): a ghost on a heat is never
+            // checked in, so it was silently dropped from every heat redone.
+            PresentForRedo(checkIns.IsCheckedIn),
             (round, transponder) => MixedHeats.ClassOfDriver(round, transponder, _profiles));
 
         skipped.AddRange(redo.NobodyIn);
@@ -895,7 +987,10 @@ public sealed partial class RaceControlControl
 
             roster.AddRange(addedByHand);
 
-            if (roster.Count == 0)
+            // A ghost kept on its heat is not somebody checked in (bug hunt
+            // 24): a class with only ghosts left is still nobody in, and its
+            // heats are left as they are.
+            if (roster.All(GhostService.IsGhost))
             {
                 nobodyIn.Add(className);
                 continue;
@@ -998,7 +1093,7 @@ public sealed partial class RaceControlControl
             .Where(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
             .GroupBy(r =>
             {
-                if (HeatBalanceForm.RoundKeyFor(r, classDayRounds) is { } round)
+                if (RedoRoundKey(r, classDayRounds) is { } round)
                 {
                     return (Round: (string?)round, Label: string.Empty);
                 }
@@ -1024,7 +1119,7 @@ public sealed partial class RaceControlControl
                 // Q2 Heat 2 as well - a second Q2 heat that counted.
                 var raced = classDayRounds
                     .Where(r => r.Kind == RoundKind.Qualifier && r.IsRecorded
-                                && HeatBalanceForm.RoundKeyFor(r, classDayRounds) == key)
+                                && RedoRoundKey(r, classDayRounds) == key)
                     .SelectMany(r => r.AssignedTransponders)
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -1053,6 +1148,38 @@ public sealed partial class RaceControlControl
         }
 
         return dealt;
+    }
+
+    /// <summary>
+    /// The qualifying round Redo Remaining Heats counts a heat towards:
+    /// HeatBalanceForm.RoundKeyFor, except that an unnumbered qualifier
+    /// ("Heat 2") is round 1 while the class has no numbered first round -
+    /// the rule the build (RaceProgramControl.BuildRoundOf) and the points
+    /// (QualifyingCalculator) have used since bug hunt 17.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a one-round race day's "Heat 1" and
+    /// "Heat 2", with Q2 built beside them after the round count was
+    /// raised, read here as heats added by hand that belong to no round.
+    /// So the "already raced" check was skipped and Redo dealt the whole
+    /// class, Heat 1's drivers included, into Heat 2 - a second round-1
+    /// heat that counted. A heat added by hand beside a numbered Q1 still
+    /// belongs to no round.
+    /// </summary>
+    private static string? RedoRoundKey(RoundDefinition round, IReadOnlyList<RoundDefinition> classDayRounds)
+    {
+        if (HeatBalanceForm.RoundKeyFor(round, classDayRounds) is { } key)
+        {
+            return key;
+        }
+
+        if (HeatBalanceForm.QualifyingRoundOf(round) is not { Length: 0 })
+        {
+            return null;
+        }
+
+        var hasNumberedFirstRound = classDayRounds.Any(r => HeatBalanceForm.QualifyingRoundOf(r) == "Q1");
+
+        return hasNumberedFirstRound ? null : "Q1";
     }
 
     /// <summary>
@@ -1329,9 +1456,18 @@ public sealed partial class RaceControlControl
     /// as before, and a race with no round is left exactly as it was.
     /// UI thread.
     /// </summary>
-    private string TypedLabelFor(RoundDefinition? round)
+    private string TypedLabelFor(RoundDefinition? round) =>
+        TypedLabelFor(_txtSessionLabel.Text, round, _rounds?.All);
+
+    /// <summary>
+    /// TypedLabelFor's rule on its own: <paramref name="typedText"/> is the
+    /// name box's text, <paramref name="allRounds"/> every round there is
+    /// (null with no round store). Pure, so the tests can hold it to the
+    /// stale-name rule without a form (bug hunt 24).
+    /// </summary>
+    internal static string TypedLabelFor(string? typedText, RoundDefinition? round, IEnumerable<RoundDefinition>? allRounds)
     {
-        var typed = _txtSessionLabel.Text.Trim();
+        var typed = (typedText ?? string.Empty).Trim();
 
         if (round is null || typed.Length == 0)
         {
@@ -1345,8 +1481,8 @@ public sealed partial class RaceControlControl
             return typed;
         }
 
-        var staleRoundName = _rounds is not null
-            && _rounds.All.Any(r =>
+        var staleRoundName = allRounds is not null
+            && allRounds.Any(r =>
                 !string.Equals(r.Id, round.Id, StringComparison.Ordinal)
                 && string.Equals(typed, DerivedRoundName(r), StringComparison.OrdinalIgnoreCase));
 
@@ -1356,9 +1492,16 @@ public sealed partial class RaceControlControl
     /// <summary>
     /// The name MainForm puts in the Name box for a round picked in the Round
     /// box (ApplyRoundToSessionSetup). Kept in step with that by hand.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): this still built the one-class name
+    /// ("Stock - Q1 Heat 1") after MainForm started writing both classes of
+    /// a shared heat ("Stock + Mod - Q1 Heat 1", Phase 4.1). The two never
+    /// matched for a shared heat, so its leftover name was never seen as
+    /// stale and the next heat was filed, read out and published under it
+    /// a second time. It now uses MixedHeats.ClassLabel, as MainForm does.
     /// </summary>
-    private static string DerivedRoundName(RoundDefinition round) =>
-        $"{round.ClassName} - {round.RoundLabel}".Trim();
+    internal static string DerivedRoundName(RoundDefinition round) =>
+        $"{MixedHeats.ClassLabel(round)} - {round.RoundLabel}".Trim();
 
     /// <summary>The ways AppTime.TimeOfDay writes the Quick Race stamp's time.</summary>
     private static readonly string[] QuickRaceStampTimes = { "HH:mm", "h:mm tt", "h:mm" }; // read with TryParseExact, never written

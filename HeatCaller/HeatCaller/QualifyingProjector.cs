@@ -189,7 +189,12 @@ public sealed class QualifyingProjector
                 s.LapTimesMs,
                 // 20 Oct 2026: the in-race penalty, so best-consecutive-laps
                 // qualifying charges it on the running heat too.
-                s.PenaltyMs)).ToList());
+                s.PenaltyMs,
+                // WHY (23 Nov 2026, bug hunt 24): the credited-start flag, so
+                // the running heat's window skips the dash after a credited
+                // start lap. It was never handed over, so the projection and
+                // the provisional pole call still counted that dash.
+                StartLapCredited: s.StartLapCredited)).ToList());
 
         // Without the running heat: where qualifying stood when this one
         // went out. This is the baseline every arrow is measured from.

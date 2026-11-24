@@ -276,12 +276,25 @@ public static class RaceHonours
 
         var order = new List<string>();
         var byDriver = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        var behind = new Dictionary<string, (string Transponder, List<AchievementUnlock> Unlocks)>(StringComparer.OrdinalIgnoreCase);
+        var behind = new Dictionary<string, (string Driver, string Transponder, List<AchievementUnlock> Unlocks)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var unlock in unlocks)
         {
-            var who = CommentaryFacts.Clean(unlock.DriverName);
+            var said = CommentaryFacts.Clean(unlock.DriverName);
             var badge = CommentaryFacts.Clean(unlock.Badge.Name);
+
+            // WHY (23 Nov 2026, bug hunt 24): grouped by WHO the driver is
+            // (their transponder), not by the name said. Keyed on the name,
+            // two different drivers who share a name ran together as one:
+            // a badge both earned was dropped as a repeat, they shared one
+            // MostEach cap, and the pick carried the first driver's
+            // transponder against the second driver's badges - so the AI's
+            // read was given one driver's badge history for the other's
+            // badges. The name is still what is read out; with no
+            // transponder the name is all there is to go on, as before.
+            var who = string.IsNullOrWhiteSpace(unlock.Transponder)
+                ? "name:" + said
+                : "transponder:" + unlock.Transponder.Trim();
 
             // Nothing is read out that cannot be said properly. A badge
             // with nobody's name against it would be "unlocks Nail-Biter"
@@ -289,7 +302,7 @@ public static class RaceHonours
             // "Billy Bob picks up" - either one read over a PA sounds like
             // the app has broken rather than like somebody has won
             // something.
-            if (who.Length == 0 || badge.Length == 0)
+            if (said.Length == 0 || badge.Length == 0)
             {
                 continue;
             }
@@ -305,7 +318,7 @@ public static class RaceHonours
 
                 badges = new List<string>();
                 byDriver[who] = badges;
-                behind[who] = (unlock.Transponder, new List<AchievementUnlock>());
+                behind[who] = (said, unlock.Transponder, new List<AchievementUnlock>());
                 order.Add(who);
             }
 
@@ -321,7 +334,7 @@ public static class RaceHonours
         }
 
         return order
-            .Select(who => new HonoursPick(who, behind[who].Transponder, byDriver[who], behind[who].Unlocks))
+            .Select(who => new HonoursPick(behind[who].Driver, behind[who].Transponder, byDriver[who], behind[who].Unlocks))
             .ToList();
     }
 

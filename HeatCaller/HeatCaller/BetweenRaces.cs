@@ -467,7 +467,16 @@ internal sealed class GapState
     private bool _marshalsSaid;
     private bool _notCheckedInSaid;
     private readonly HashSet<string> _twoOutSaidFor = new(StringComparer.Ordinal);
-    private readonly HashSet<int> _marksSaid = new();
+    // WHY (23 Nov 2026, bug hunt 24): each mark said, with the due time it
+    // was said for (null when not known). It was a plain set, so a mark said
+    // stayed said after the race was pushed back: the room heard "1 minute to
+    // Heat 3", a driver got 5 more minutes, and no mark was called again - the
+    // last word was a minute that had become six. See MarkDue.
+    private readonly Dictionary<int, DateTime?> _marksSaid = new();
+
+    // The due time MarkDue was last asked about, for a SaidMark that does
+    // not pass its own.
+    private DateTime? _lastMarkDueUtc;
     private int _pushedBackMinutes;
 
     /// <summary>A refusal already put in the console this gap, so each is said once rather than every second.</summary>
@@ -496,6 +505,20 @@ internal sealed class GapState
     public int CallUps
     {
         get { lock (_gate) { return _callUps; } }
+    }
+
+    /// <summary>
+    /// Whether a call-up has actually been said for the next race - a Skip
+    /// counts toward CallUps but puts nothing on air.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the call-up's wording read CallUps > 0,
+    /// so after Skip Next Call-up the first call the room heard was a repeat:
+    /// "Reminder, Heat 3 is up next" for a race it was never told about.
+    /// </remarks>
+    public bool CallUpSaid
+    {
+        get { lock (_gate) { return _lastSaidCallUpUtc is not null; } }
     }
 
     /// <summary>
@@ -748,11 +771,12 @@ internal sealed class GapState
     }
 
     /// <summary>A countdown mark was called (0 is time's up). Marks are not lines: they do not count toward the cap.</summary>
-    public void SaidMark(int minutes, DateTime nowUtc)
+    /// <param name="dueUtc">The due time it was called for; left out, the one MarkDue was last asked about.</param>
+    public void SaidMark(int minutes, DateTime nowUtc, DateTime? dueUtc = null)
     {
         lock (_gate)
         {
-            _marksSaid.Add(minutes);
+            _marksSaid[minutes] = dueUtc ?? _lastMarkDueUtc;
             _lastLineUtc = nowUtc;
         }
     }
@@ -966,6 +990,14 @@ internal sealed class GapState
                     : null,
                 GapLine.Notice => _noticeSaid ? "the club's notice has been said this gap"
                     : GapWords.Sort(rules.CustomLines).Notices.Count == 0 ? "none of the custom lines is a notice"
+                    // WHY (23 Nov 2026, bug hunt 24): a notice that cannot be
+                    // filled in ("{minutes}" with no run-sheet time) came out
+                    // empty, but was still booked as said - a silent line that
+                    // used up one of the gap's lines and held the next real
+                    // one for the space between lines. Now it waits until one
+                    // fills, so a time that turns up later in the gap still
+                    // gets it said.
+                    : !GapWords.AnyNoticeFills(facts, rules, nowUtc) ? "none of the club's notices can be filled in right now"
                     : null,
                 GapLine.LongBreak => _longBreakSaid ? "already said"
                     : facts.DueUtc is not { } dueAt || dueAt - nowUtc < TimeSpan.FromMinutes(rules.LongBreakMinutes)
@@ -1030,6 +1062,8 @@ internal sealed class GapState
 
         lock (_gate)
         {
+            _lastMarkDueUtc = due;
+
             if (_floorFreeSinceUtc is null)
             {
                 return null;
@@ -1041,7 +1075,7 @@ internal sealed class GapState
             {
                 var at = due - TimeSpan.FromMinutes(mark);
 
-                if (nowUtc >= at && nowUtc - at < MarkWindow && !_marksSaid.Contains(mark))
+                if (nowUtc >= at && nowUtc - at < MarkWindow && !MarkSaidFor(mark, due))
                 {
                     return mark;
                 }
@@ -1050,6 +1084,21 @@ internal sealed class GapState
             return null;
         }
     }
+
+    /// <summary>
+    /// WHY (23 Nov 2026, bug hunt 24): a mark counts as said only for the
+    /// due time it was said for. Once the race is pushed back (a minute from
+    /// Call Up, or a driver's "Need 5 minutes") the due moves by whole
+    /// minutes and the mark is due again at its new time, so the room hears
+    /// the countdown move with the race. Half a minute's give, so the small
+    /// drift of a late run sheet or a held Auto start does not say it twice;
+    /// and a push-back that does not move the start (Auto start waiting on a
+    /// promised time) leaves the due where it was, so nothing repeats. Under
+    /// the lock.
+    /// </summary>
+    private bool MarkSaidFor(int mark, DateTime due) =>
+        _marksSaid.TryGetValue(mark, out var saidFor)
+        && (saidFor is not { } said || due - said < TimeSpan.FromSeconds(30));
 
     /// <summary>
     /// The next of Race Control's own lines that may go now, in the order a
@@ -1294,16 +1343,37 @@ internal static class GapWords
     {
         var notices = Sort(rules.CustomLines).Notices;
 
-        for (var i = 0; i < notices.Count; i++)
+        if (Pick("notice", notices) is null)
         {
-            if (Pick("notice", notices) is { } template && Fill(template, facts, nowUtc) is { Length: > 0 } filled)
+            return string.Empty;
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): a random first pick (never the last
+        // one said), then every notice in turn from there. It made
+        // notices.Count random picks, which only avoid the last pick, so with
+        // three notices it could go A, C, A and never try the one that fills.
+        lock (LastPicked)
+        {
+            var start = LastPicked.TryGetValue("notice", out var picked) ? picked : 0;
+
+            for (var i = 0; i < notices.Count; i++)
             {
-                return filled;
+                var index = (start + i) % notices.Count;
+
+                if (Fill(notices[index], facts, nowUtc) is { Length: > 0 } filled)
+                {
+                    LastPicked["notice"] = index;
+                    return filled;
+                }
             }
         }
 
         return string.Empty;
     }
+
+    /// <summary>Whether any of the club's notices fills in now - see GapState.WhyNot's notice rule.</summary>
+    public static bool AnyNoticeFills(GapFacts facts, GapRules rules, DateTime nowUtc) =>
+        Sort(rules.CustomLines).Notices.Any(n => Fill(n, facts, nowUtc).Length > 0);
 
     /// <summary>The club's lines, sorted by what they are for.</summary>
     internal sealed record Sorted(IReadOnlyList<string> CallUps, IReadOnlyList<string> MarshalCalls, IReadOnlyList<string> Notices);
@@ -1516,7 +1586,7 @@ internal static class GapPreview
 
             if (state.MarkDue(rules, now, facts, held: false) is { } mark)
             {
-                state.SaidMark(mark, now);
+                state.SaidMark(mark, now, facts.DueUtc);
                 Add(GapLine.Countdown, GapWords.Mark(mark, facts.Round), false);
                 continue;
             }
@@ -1572,7 +1642,9 @@ internal static class GapPreview
     /// <summary>The words for one of Race Control's lines, as the night would say them.</summary>
     internal static string TextFor(GapLine kind, GapRules rules, GapFacts facts, DateTime nowUtc, GapState state) => kind switch
     {
-        GapLine.CallUp => GapWords.CallUp(facts, rules, repeat: state.CallUps > 0, nowUtc),
+        // WHY (23 Nov 2026, bug hunt 24): CallUpSaid, not CallUps > 0 - a
+        // skipped call-up made the first one said a "Reminder".
+        GapLine.CallUp => GapWords.CallUp(facts, rules, repeat: state.CallUpSaid, nowUtc),
         GapLine.Marshals => GapWords.Marshals(facts, rules, nowUtc),
         GapLine.NotCheckedIn => GapWords.NotCheckedIn(facts),
         GapLine.TwoOut => GapWords.TwoOut(facts.TwoOutRound, facts.TwoOutClassName),

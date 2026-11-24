@@ -80,6 +80,22 @@ public partial class MainForm
         raceOnTrack && !closingOnRunningRace;
 
     /// <summary>
+    /// Whether the race on the track once the clips question is answered is
+    /// one the person agreed to close on: only a race that was already on
+    /// the track before that question went up, because "A race is running.
+    /// Close HeatCaller anyway?" is asked just before it and at no other time.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the race was looked at only after the
+    /// clips question was answered. A race staged while that question sat on
+    /// screen (Auto start, or the phone remote) was taken as agreed to, so
+    /// when the last clip landed HeatCaller closed by itself in the middle of
+    /// a race nobody had been asked about.
+    /// </remarks>
+    internal static bool AgreedToCloseOnRace(bool raceOnTrackBeforeQuestion, bool raceOnTrackAfter) =>
+        raceOnTrackBeforeQuestion && raceOnTrackAfter;
+
+    /// <summary>
     /// Asks, when there is something to ask about. True when the close is to
     /// be refused for now because the answer was to wait.
     /// </summary>
@@ -92,6 +108,9 @@ public partial class MainForm
             StopWaitingForClips();
             return false;
         }
+
+        // Read before the question goes up - see AgreedToCloseOnRace.
+        var raceOnTrackBeforeQuestion = _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
 
         var answer = AppDialog.Choose(
             this,
@@ -120,6 +139,11 @@ public partial class MainForm
 
         // Reaching here mid-race means the person said to close anyway.
         _closingOnRunningRace = _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
+
+        // ...but only a race that was running before the question went up
+        // (bug hunt 24). One that started under it leaves this false, and the
+        // first tick of the wait stops it with "A race has started".
+        _closingOnRunningRace = AgreedToCloseOnRace(raceOnTrackBeforeQuestion, _closingOnRunningRace);
 
         Text = ClipsWaitingTitle(AppVersion.Full, races, withVideos);
         return true;

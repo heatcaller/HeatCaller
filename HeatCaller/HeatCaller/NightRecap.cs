@@ -262,12 +262,24 @@ internal static class NightRecap
     /// </summary>
     private static readonly string[] Farewells =
     {
-        "see you", "see ya", "goodnight", "good night", "until next", "next time",
-        "that's all", "thats all", "that is all", "from me", "from all of us",
+        "see you", "see ya", "goodnight", "until next",
+        "that's all", "thats all", "that is all", "from all of us",
         "signing off", "sign off", "take care", "drive safe", "safe home",
         "thanks for listening", "thanks for joining", "thank you for listening",
         "thank you for joining", "goodbye", "good bye", "bye for now",
     };
+
+    // WHY (23 Nov 2026, bug hunt 24): these three are just as often real
+    // writing as a goodbye. The old test counted any sentence that held
+    // them anywhere, so a closing "It was a good night of racing at
+    // Riverside." or "Dave will want that one back next time." was thrown
+    // away and never read to the hall. They now count only where a goodbye
+    // puts them: at the start of the sentence ("Good night, everyone.",
+    // "Next time, then."), or - for "from me" - at its very end ("That's
+    // it from me.").
+    private static readonly string[] FarewellsAtTheStart = { "good night", "next time", "from me" };
+
+    private static readonly string[] FarewellsAtTheEnd = { "from me" };
 
     /// <summary>
     /// The longest a sentence may run and still be read as a goodbye
@@ -288,15 +300,101 @@ internal static class NightRecap
 
         var lower = sentence.ToLowerInvariant();
 
+        // WHY (23 Nov 2026, bug hunt 24): whole words only. The old plain
+        // substring test found "from me" inside "from Megan", so a closing
+        // result like "Carl took the A-main from Megan by two tenths." was
+        // taken for a goodbye and cut from the read.
         foreach (var mark in Farewells)
         {
-            if (lower.Contains(mark, StringComparison.Ordinal))
+            if (WholeWordAt(lower, mark).Count > 0)
             {
                 return true;
             }
         }
 
+        var first = FirstLetterOrDigit(lower);
+        var last = LastLetterOrDigit(lower);
+
+        foreach (var mark in FarewellsAtTheStart)
+        {
+            if (WholeWordAt(lower, mark).Contains(first))
+            {
+                return true;
+            }
+        }
+
+        foreach (var mark in FarewellsAtTheEnd)
+        {
+            foreach (var at in WholeWordAt(lower, mark))
+            {
+                if (at + mark.Length - 1 == last)
+                {
+                    return true;
+                }
+            }
+        }
+
         return false;
+    }
+
+    /// <summary>
+    /// Every place <paramref name="mark"/> appears in
+    /// <paramref name="lower"/> as whole words - not run into a letter or
+    /// digit on either side.
+    /// </summary>
+    private static List<int> WholeWordAt(string lower, string mark)
+    {
+        var found = new List<int>();
+        var from = 0;
+
+        while (from <= lower.Length - mark.Length)
+        {
+            var at = lower.IndexOf(mark, from, StringComparison.Ordinal);
+
+            if (at < 0)
+            {
+                break;
+            }
+
+            var end = at + mark.Length;
+            var clearBefore = at == 0 || !char.IsLetterOrDigit(lower[at - 1]);
+            var clearAfter = end == lower.Length || !char.IsLetterOrDigit(lower[end]);
+
+            if (clearBefore && clearAfter)
+            {
+                found.Add(at);
+            }
+
+            from = at + 1;
+        }
+
+        return found;
+    }
+
+    private static int FirstLetterOrDigit(string text)
+    {
+        for (var at = 0; at < text.Length; at++)
+        {
+            if (char.IsLetterOrDigit(text[at]))
+            {
+                return at;
+            }
+        }
+
+        return -1;
+    }
+
+    private static int LastLetterOrDigit(string text)
+    {
+        for (var at = text.Length - 1; at >= 0; at--)
+        {
+            if (char.IsLetterOrDigit(text[at]))
+            {
+                return at;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>

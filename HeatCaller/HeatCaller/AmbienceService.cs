@@ -568,6 +568,38 @@ public sealed class AmbienceService : IDisposable
     }
 
     /// <summary>
+    /// Sets the mood a stopped crowd opens at when it is next started.
+    /// Does nothing to a crowd that is running (or fading out) - that one
+    /// follows SetIntensity as usual. Returns whether the mood was set.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a crowd stopped by the mute button,
+    /// the Stop button or a sound device going away kept the mood it was
+    /// stopped at, because nothing follows the race while the crowd is off.
+    /// The next Start forced every layer to that old mood's level in one
+    /// step (StartBeds ends with ApplyIntensity(_current, force: true)), and
+    /// only then did the race's own mood fade it down - so a crowd muted
+    /// during the finish cheer opened at full roar over the next heat's
+    /// staging call and took the fade-down time to settle. Called before
+    /// Start with the race's mood, the bed opens at the right level at once.
+    /// Any surge or finish celebration left over from before the stop is
+    /// ended too, so its timer cannot change the new mood later.
+    /// </summary>
+    public bool SetOpeningMood(Intensity intensity)
+    {
+        lock (_lock)
+        {
+            if (_running)
+            {
+                return false;
+            }
+
+            _surgeUntilUtc = DateTime.MinValue;
+            _current = intensity;
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Stops the beds and opens them again, to pick up new settings - a
     /// soundscape applied, a layer edited, an undo. Layers are opened when
     /// the crowd starts, so a change to them needs this.

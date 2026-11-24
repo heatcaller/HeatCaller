@@ -58,8 +58,13 @@ public sealed class Theme
     /// 15: a driver's own bests - personal bests, streaks, qualifying
     /// improvements, achievements - lose [excited] and [shouting]; their
     /// [cheerful] and [awe] stay (11 Nov 2026).
+    /// 16: Podium's and Pit Lane's personal-best lines stop saying "never
+    /// gone faster" / "than ever" (23 Nov 2026, bug hunt 24).
     /// </summary>
-    public const int CurrentBuiltInVersion = 15;
+    // WHY (23 Nov 2026, bug hunt 24): raised from 15 so saved copies of
+    // Podium and Pit Lane are rewritten with the corrected personal-best
+    // lines; at 15 a PC that already had them kept the old wording.
+    public const int CurrentBuiltInVersion = 16;
 
     /// <summary>
     /// Built-ins that were renamed when the packs arrived, old name to new.
@@ -272,18 +277,23 @@ public sealed class Theme
             "[shouting] Splendid driving - {driver}, the fastest yet at {time}.",
             "{driver} sets a new standard for this race - {time}.",
             "[shouting] A lap to remember from {driver} - {time}!");
+        // WHY (23 Nov 2026, bug hunt 24): a personal best is the driver's
+        // best lap of THIS race (BestEverHere owns their all-time best), so
+        // the old "has never gone faster" and "quicker than ever before"
+        // told the room something false about a driver who was quicker on
+        // another night - and could say it several times in one race.
         Lines(v, AnnouncementEventType.PersonalBestLap, false, 45,
             "[cheerful] A personal best for {driver}.",
             "[cheerful] {driver} improves once again - {time}.",
             "[cheerful] A new personal best for {driver} - {time}.",
-            "[cheerful] {driver} has never gone faster - {time}.",
+            "[cheerful] {driver} goes faster again - {time}.",
             "[cheerful] A fine improvement from {driver}.",
             "[cheerful] Well driven, {driver} - a personal best.",
             "[cheerful] {driver} lowers their own best to {time}.",
             "[cheerful] Progress for {driver} - a new personal best.",
             "[cheerful] {driver} finds a little more - {time}.",
             "[cheerful] A personal best, beautifully taken, for {driver}.",
-            "[cheerful] {driver} goes quicker than ever before - {time}.",
+            "[cheerful] {driver} goes quicker than before - {time}.",
             "[cheerful] Another step forward for {driver} - a personal best.");
         Lines(v, AnnouncementEventType.TrackRecord, true, 100,
             "[awe] A new track record! {driver}, {time} - congratulations!",
@@ -876,7 +886,9 @@ public sealed class Theme
             "Personal best for {driver}!",
             "{driver} finds more speed - {time}!",
             "New personal best for {driver}!",
-            "{driver} goes faster than ever - {time}!",
+            // WHY (23 Nov 2026, bug hunt 24): was "goes faster than ever" -
+            // an all-time claim for a this-race best (see Podium's).
+            "{driver} goes faster again - {time}!",
             "Personal best - way to go, {driver}!",
             "{driver} beats their own best - {time}!",
             "Big improvement for {driver}!",

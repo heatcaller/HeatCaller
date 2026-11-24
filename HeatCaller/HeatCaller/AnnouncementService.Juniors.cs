@@ -59,17 +59,55 @@ public sealed partial class AnnouncementService
     /// </summary>
     private async Task<SynthesisResult> RenderJuniorLineAsync(VoiceProfile profile, string text)
     {
+        NoteJuniorLine(KokoroSpeech.UnavailableReason);
+
         if (KokoroSpeech.UnavailableReason is { } unavailable)
         {
-            LogStandInOnce("junior-kokoro:" + unavailable,
-                $"[voice] A line naming a junior wasn't said: \"Offline voices for juniors\" is on and the Kokoro voice can't speak ({unavailable}). "
-                + "It isn't sent to a cloud voice instead. Said once for this reason.");
             throw new InvalidOperationException($"The Kokoro voice can't speak - {unavailable}. {GetKokoroAdvice}");
         }
 
-        LogStandInOnce("junior-kokoro",
-            "[voice] Lines that name a junior are said by the Kokoro voice on this PC (\"Offline voices for juniors\" is on). Said once.");
-
         return new SynthesisResult(await KokoroSpeech.RenderAsync(profile, text, renderingAhead: RenderingAhead.Value), LineSource.Kokoro);
     }
+
+    /// <summary>The junior notes already in the console, by reason. Locked on itself; never emptied.</summary>
+    private readonly HashSet<string> _juniorNotesSaid = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The console's note that a line naming a junior is said on this PC -
+    /// or, when Kokoro can't speak (<paramref name="unavailable"/> says why),
+    /// that it wasn't said at all. Each once: the first once a run, the
+    /// second once for each reason.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): these went through LogStandInOnce,
+    /// whose list is emptied every time a cloud voice answers a line - right
+    /// for a stand-in reason, which is news again once the voice has come
+    /// back, but this is how the club has set things up, not a fault that
+    /// ends. So "Said once." was said again after nearly every line the
+    /// cloud voice made, dozens of times a night, pushing real warnings up
+    /// the console. They keep their own list now, as NoteVoiceRelayOnce
+    /// keeps its own flag for the same reason.
+    /// </remarks>
+    internal void NoteJuniorLine(string? unavailable)
+    {
+        bool first;
+
+        lock (_juniorNotesSaid)
+        {
+            first = _juniorNotesSaid.Add(unavailable is null ? "said-here" : "lost:" + unavailable);
+        }
+
+        if (!first)
+        {
+            return;
+        }
+
+        StatusMessage?.Invoke(unavailable is null
+            ? "[voice] Lines that name a junior are said by the Kokoro voice on this PC (\"Offline voices for juniors\" is on). Said once."
+            : $"[voice] A line naming a junior wasn't said: \"Offline voices for juniors\" is on and the Kokoro voice can't speak ({unavailable}). "
+              + "It isn't sent to a cloud voice instead. Said once for this reason.");
+    }
+
+    /// <summary>What a line answered by ElevenLabs does to the console's said-once notes, for tests - which have no cloud voice to answer one.</summary>
+    internal void CloudVoiceAnsweredForTest() => NoteElevenLabsAnswered();
 }

@@ -152,7 +152,15 @@ public sealed class AmbienceControl : UserControl
 
         // 100ms keeps the meters moving smoothly during a fade without
         // repainting more often than the eye resolves.
-        _monitorTimer.Tick += (_, _) => _monitor.Invalidate();
+        _monitorTimer.Tick += (_, _) =>
+        {
+            _monitor.Invalidate();
+
+            // WHY (23 Nov 2026, bug hunt 24): the same tick notices a crowd
+            // stopped from outside the page (Race Control's Reset, the end of
+            // a session) - see ForgetPreviewIfCrowdStopped.
+            ForgetPreviewIfCrowdStopped();
+        };
         _monitorTimer.Start();
     }
 
@@ -264,6 +272,11 @@ public sealed class AmbienceControl : UserControl
                 _ambience.Settings = _store.Current;
                 _ambience.Stop();
             }
+
+            // WHY (23 Nov 2026, bug hunt 24): a preview playing when the
+            // switch went off kept saying "Stop Preview" - see
+            // ForgetPreviewIfCrowdStopped.
+            ForgetPreviewIfCrowdStopped();
 
             UpdateEnabledState();
         };
@@ -388,6 +401,10 @@ public sealed class AmbienceControl : UserControl
 
         var btnPreview = new Button { Text = "Preview" };
         btnPreview.Click += (_, _) => TogglePreview(btnPreview);
+
+        // Kept so a preview whose crowd was stopped some other way can put
+        // the button back - see ForgetPreviewIfCrowdStopped.
+        _btnPreview = btnPreview;
 
         // What will actually be heard, under the list it counts - wrapping
         // rather than cut short, and as tall as the longest thing it says.
@@ -1318,6 +1335,49 @@ public sealed class AmbienceControl : UserControl
     /// <summary>True when a race session took over the crowd this page's Preview started - see SessionAdoptedAmbience.</summary>
     private bool _pagePreviewAdoptedBySession;
 
+    /// <summary>The page's Preview button - see ForgetPreviewIfCrowdStopped.</summary>
+    private Button? _btnPreview;
+
+    /// <summary>
+    /// Ends the page's preview when its crowd is no longer playing.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a crowd the preview started and that
+    /// was then stopped some other way - the Enable ambience switch turned
+    /// off, the only playable layer deleted or its Play side changed, Race
+    /// Control's Reset - left the page still owning the preview. The button
+    /// kept saying "Stop Preview" with nothing playing and needed two presses
+    /// to play again, and when a race later opened a crowd of its own (staged
+    /// without On Air), pressing it mid-race stopped the race's crowd for the
+    /// rest of the race. Now the preview is forgotten as soon as its crowd is
+    /// gone, with the mood put back as Stop Preview would have.
+    /// </summary>
+    private void ForgetPreviewIfCrowdStopped()
+    {
+        if (!_pagePreviewing || _ambience.IsRunning)
+        {
+            return;
+        }
+
+        // As in TogglePreview's stop: the preview's race level is not left on
+        // a stopped crowd for the next start between races, unless something
+        // has asked for a mood since.
+        if (!_pagePreviewAdoptedBySession
+            && _ambience.CurrentIntensity == AmbienceService.Intensity.Racing
+            && _ambience.MoodsAsked == _pagePreviewMoodsAsked)
+        {
+            _ambience.SetIntensity(_pagePreviewMoodBefore);
+        }
+
+        _pagePreviewing = false;
+        _pagePreviewStartedAmbience = false;
+        _pagePreviewAdoptedBySession = false;
+
+        if (_btnPreview is not null)
+        {
+            _btnPreview.Text = "Preview";
+        }
+    }
+
     /// <summary>The Add/Edit layer dialog while it is open, so a session start can hand it the news too.</summary>
     private AmbienceLayerForm? _openLayerForm;
 
@@ -1349,6 +1409,15 @@ public sealed class AmbienceControl : UserControl
         // crowd is playing. Going by IsRunning, Preview pressed mid-race -
         // the button still said "Preview" - stopped the session crowd for
         // the rest of the race.
+        // WHY (23 Nov 2026, bug hunt 24): a preview whose crowd has since
+        // stopped is over - one press plays a new one, rather than the first
+        // press only stopping a preview nobody could hear.
+        if (_pagePreviewing && !_ambience.IsRunning)
+        {
+            ForgetPreviewIfCrowdStopped();
+            btnPreview.Text = "Preview";
+        }
+
         if (_pagePreviewing)
         {
             _pagePreviewing = false;
@@ -1480,6 +1549,12 @@ public sealed class AmbienceControl : UserControl
         {
             _ambience.Start();
         }
+
+        // WHY (23 Nov 2026, bug hunt 24): a restart with nothing left to play
+        // (the only playable layer deleted, the other Play side picked) stops
+        // the crowd - and a preview of it kept saying "Stop Preview". See
+        // ForgetPreviewIfCrowdStopped.
+        ForgetPreviewIfCrowdStopped();
     }
 }
 

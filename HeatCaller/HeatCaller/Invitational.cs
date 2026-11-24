@@ -159,6 +159,18 @@ public static class Invitational
 
         /// <summary>The top of the table - the leader, or the winner once Final.</summary>
         public AMainLegs.Standing? Leader => Rows.Count > 0 ? Rows[0] : null;
+
+        // WHY (23 Nov 2026, bug hunt 24): the call and the recap fact said
+        // "after main N of 5" with N = MainsRun, the COUNT of mains filed. With
+        // a main skipped (main 1 filed, main 2 never run, main 3 just finished)
+        // the voice said "After main 2 of 5" for main 3, disagreeing with the
+        // phones, which name the round's own number. This is the number of the
+        // main just finished (or the highest filed one when none is passed).
+        /// <summary>The number of the main these standings are read after: the one just run, else the last one filed.</summary>
+        public int AfterMain { get; init; }
+
+        /// <summary>The main's number to say: AfterMain, falling back to LastMain.</summary>
+        public int MainNumber => AfterMain > 0 ? AfterMain : LastMain;
     }
 
     /// <summary>
@@ -213,7 +225,13 @@ public static class Invitational
             "Main",
             entrants);
 
-        return new Table(rows, filed.Count, mains, counting, filed[^1].Main);
+        // WHY (23 Nov 2026, bug hunt 24): remember which main was just run, so
+        // the call names its own number rather than how many mains are filed.
+        var afterMain = justRun is { } ran && filed.Any(f => f.Main == ran.Round.InvitationalMain)
+            ? ran.Round.InvitationalMain
+            : filed[^1].Main;
+
+        return new Table(rows, filed.Count, mains, counting, filed[^1].Main) { AfterMain = afterMain };
     }
 
     /// <summary>
@@ -312,7 +330,8 @@ public static class Invitational
 
         var points = leader.Points == 1 ? "1 point" : $"{leader.Points} points";
 
-        return $"After main {table.MainsRun} of {table.Mains}, {name} leads the {ShortName} on {points}.";
+        // WHY (23 Nov 2026, bug hunt 24): the main's own number, not the count filed.
+        return $"After main {table.MainNumber} of {table.Mains}, {name} leads the {ShortName} on {points}.";
     }
 
     /// <summary>The recap's fact line: where the series stands, and the top three.</summary>
@@ -320,7 +339,8 @@ public static class Invitational
     {
         var top = table.Rows.Take(3).Select((s, i) => $"{i + 1}. {nameOf(s)} {s.Words()}");
 
-        return $"This was main {table.MainsRun} of {table.Mains} of the {ShortName}, where the whole field races every "
+        // WHY (23 Nov 2026, bug hunt 24): the main's own number, not the count filed.
+        return $"This was main {table.MainNumber} of {table.Mains} of the {ShortName}, where the whole field races every "
                + $"main and the best {AMainLegs.Words(table.Counting)} count, fewest points wins. "
                + (table.Final ? "Final result: " : "Standings: ")
                + string.Join(", ", top) + "."

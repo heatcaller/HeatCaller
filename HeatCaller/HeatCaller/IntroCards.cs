@@ -37,6 +37,8 @@ public sealed record IntroCard(
 /// line. So the drivers are taken in grid order - the order the model is told
 /// to introduce them in - and a driver named in passing in someone else's
 /// sentence only gets their card there when nothing later names them again.
+/// Someone else's sentence is one that names an earlier driver first, or
+/// one that opens with "He", "She" or "They" once a card is up (bug hunt 24).
 ///
 /// A card goes up where its driver's sentence STARTS ("From pole, with the
 /// fastest lap of the night, it's Sam Parker"), so the face is there as the
@@ -118,6 +120,33 @@ internal static class IntroCards
             }
         }
 
+        // Whether a sentence is still about a driver whose card is already
+        // up: it names one of them before the driver due, or it opens with
+        // "He" / "She" / "They" once a card is up. Names alone cannot tell
+        // more than that, so "Alongside him, Bill Hargrove." still counts as
+        // Bill's own line.
+        bool StillOnAnEarlierDriver(Sentence sentence, int index, int dueAt)
+        {
+            var anyPlaced = false;
+
+            for (var d = 0; d < count; d++)
+            {
+                if (placedAt[d] is null)
+                {
+                    continue;
+                }
+
+                anyPlaced = true;
+
+                if (named[index, d] >= 0 && named[index, d] < dueAt)
+                {
+                    return true;
+                }
+            }
+
+            return anyPlaced && OpensWithAPronoun(words, sentence);
+        }
+
         // FIRST PASS, in grid order: each sentence introduces the driver due
         // next when it names them - and then the one after, and so on, for
         // "Sam on pole, Bill alongside".
@@ -133,6 +162,17 @@ internal static class IntroCards
 
                 if (!placedHere)
                 {
+                    // WHY (23 Nov 2026, bug hunt 24): the pass-by check below
+                    // only ran when another card had gone up in the same
+                    // sentence, so a passing mention in a sentence of its own
+                    // ("From pole, it's Sam Parker. He was a tenth clear of
+                    // Bill Hargrove. Starting second, Bill Hargrove.") put
+                    // Bill's face up while the voice was still on Sam.
+                    if (StillOnAnEarlierDriver(sentences[s], s, at) && NamedFrom(next, s + 1))
+                    {
+                        break;
+                    }
+
                     // Their sentence's start: the voice is starting on them.
                     placedAt[next] = sentences[s].Start;
                     placedHere = true;
@@ -280,6 +320,13 @@ internal static class IntroCards
             }
         }
     }
+
+    /// <summary>A sentence that opens on a driver already spoken of: "He was a tenth clear...", "Her best lap...".</summary>
+    private static readonly Regex PronounOpening = new(@"\G(?:He|She|They|His|Her|Their)(?![\p{L}\p{N}])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>Whether <paramref name="sentence"/> opens with he, she, they, his, her or their.</summary>
+    private static bool OpensWithAPronoun(string text, Sentence sentence) =>
+        PronounOpening.Match(text, sentence.Start, sentence.End - sentence.Start).Success;
 
     /// <summary>Where in <paramref name="text"/>, inside <paramref name="sentence"/>, a driver is first named - or -1.</summary>
     private static int FirstMatch(string text, Sentence sentence, Regex[] patterns)

@@ -689,16 +689,40 @@ internal sealed class RaceAudioStore
 
             var bytes = 0L;
 
-            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            // WHY (23 Nov 2026, bug hunt 24): the old walk used
+            // SearchOption.AllDirectories, which throws the moment it meets a
+            // folder Windows will not list - "System Volume Information" at
+            // the top of a drive, or the "My Music" junction in Documents.
+            // That throw reached the catch below and the page said no nights
+            // and 0 MB beside gigabytes of recordings. Now a folder that
+            // cannot be listed is stepped over, junctions are not followed
+            // (so nothing is counted twice or walked in a loop), hidden files
+            // still count as before, and the night count already worked out
+            // is kept even if the size walk fails part-way.
+            var options = new EnumerationOptions
             {
-                try
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true,
+                AttributesToSkip = FileAttributes.ReparsePoint,
+            };
+
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(root, "*", options))
                 {
-                    bytes += new FileInfo(file).Length;
+                    try
+                    {
+                        bytes += new FileInfo(file).Length;
+                    }
+                    catch
+                    {
+                        // A file deleted between the listing and the measuring.
+                    }
                 }
-                catch
-                {
-                    // A file deleted between the listing and the measuring.
-                }
+            }
+            catch
+            {
+                // The size so far, rather than throwing away the night count.
             }
 
             return (nights, bytes / (1024 * 1024));

@@ -61,17 +61,23 @@ public sealed partial class BackupRestoreControl
 
         _txtStandbyPrimary.Text = _settings.StandbyPrimaryAddress;
         _txtStandbyPrimary.PlaceholderText = "192.168.1.20:8080";
-        _txtStandbyPrimary.Leave += (_, _) =>
+        _txtStandbyPrimary.Leave += (_, _) => CommitStandbyPrimary(pressedEnter: false);
+
+        // WHY (23 Nov 2026, bug hunt 24): RestoredSettings.StandbyMessage
+        // tells the director to click in this box and press Enter to take on
+        // a timing PC address that came from a restored backup - and Enter
+        // here did nothing, so a held standby stayed paused for good.
+        _txtStandbyPrimary.KeyDown += (_, e) =>
         {
-            var typed = _txtStandbyPrimary.Text.Trim();
-            if (!string.Equals(typed, _settings.StandbyPrimaryAddress, StringComparison.Ordinal))
+            if (e.KeyCode != Keys.Enter)
             {
-                _settings.StandbyPrimaryAddress = typed;
-                _settings.Save();
-                StandbySettingsChanged?.Invoke();
+                return;
             }
 
-            RefreshStandby();
+            // No ding: a single-line box has nothing to do with Enter itself.
+            e.SuppressKeyPress = true;
+            e.Handled = true;
+            CommitStandbyPrimary(pressedEnter: true);
         };
 
         _chkStandbyServe.Text = "Let a standby PC copy this one (this is the timing PC)";
@@ -125,6 +131,18 @@ public sealed partial class BackupRestoreControl
             _settings.StandbyPrimaryAddress = _txtStandbyPrimary.Text.Trim();
             _settings.StandbyModeEnabled = _chkStandbyMode.Checked;
 
+            // WHY (23 Nov 2026, bug hunt 24): ticked by hand, with the
+            // address in the box beside it, is the club saying this is the
+            // timing PC to copy - so an address from a restored backup is
+            // taken on (RestoredSettings), as Enter in the box does.
+            // WHY (24 Nov 2026, bug hunt 24 review): only a real tick. Make
+            // This a Standby Again ticks the box itself, and that took on a
+            // restored timing-PC address without anyone looking at it.
+            if (TickConfirmsRestoredAddress(_chkStandbyMode.Checked, tickedByHand: !_tickingStandbyInCode))
+            {
+                RestoredSettings.Confirm(RestoredSettings.Part.Standby);
+            }
+
             if (_chkStandbyMode.Checked && _chkStandbyServe.Checked)
             {
                 _settings.StandbyServeEnabled = false;
@@ -141,6 +159,10 @@ public sealed partial class BackupRestoreControl
         _textSize.Wear(_lblStandbyServe, () => AppTheme.SmallFont);
 
         _lblStandbyStatus.AutoSize = true;
+
+        // RestoredSettings.StandbyMessage names "Backup & Restore": the & is
+        // a character, not a shortcut key.
+        _lblStandbyStatus.UseMnemonic = false;
         _lblStandbyStatus.ForeColor = AppTheme.TextMuted;
         _textSize.ReserveLines(_lblStandbyStatus, 2);
 
@@ -210,6 +232,40 @@ public sealed partial class BackupRestoreControl
         return card;
     }
 
+    /// <summary>
+    /// The Timing PC address box committed: left, or Enter pressed in it.
+    /// A changed address is saved, and is the club's own, so it is no longer
+    /// held as one from a restored backup. Enter takes on the address even
+    /// unchanged - somebody pressing a key in the box with it in front of
+    /// them - which is what RestoredSettings.StandbyMessage asks for. Just
+    /// leaving the box unchanged does not, so tabbing through it never lets
+    /// the PIN go to an address nobody looked at.
+    /// </summary>
+    private void CommitStandbyPrimary(bool pressedEnter)
+    {
+        var typed = _txtStandbyPrimary.Text.Trim();
+        var changed = !string.Equals(typed, _settings.StandbyPrimaryAddress, StringComparison.Ordinal);
+        var wasHeld = RestoredSettings.IsHeld(RestoredSettings.Part.Standby);
+
+        if (changed)
+        {
+            _settings.StandbyPrimaryAddress = typed;
+            _settings.Save();
+        }
+
+        if (wasHeld && typed.Length > 0 && (changed || pressedEnter))
+        {
+            RestoredSettings.Confirm(RestoredSettings.Part.Standby);
+        }
+
+        if (changed || (wasHeld && !RestoredSettings.IsHeld(RestoredSettings.Part.Standby)))
+        {
+            StandbySettingsChanged?.Invoke();
+        }
+
+        RefreshStandby();
+    }
+
     /// <summary>Saves the PIN as typed, once it is good enough - a half-typed one is never passed to the server.</summary>
     private void SaveStandbyPin()
     {
@@ -222,13 +278,42 @@ public sealed partial class BackupRestoreControl
 
         if (typed.Length > 0 && !WarmStandby.IsUsablePin(typed))
         {
-            _lblStandbyServe.Text = "The standby PIN needs eight letters or digits or more - not saved.";
+            // WHY (23 Nov 2026, bug hunt 24): the refusal used to be written
+            // straight into the label, which RefreshStandby rewrites on every
+            // 2-second tick (and at once after a tick box) - so within two
+            // seconds the card read "On the standby, type this PC's
+            // address..." as if the new PIN had taken, while the old one was
+            // still in force. RefreshStandby now says it for as long as the
+            // box holds the refused PIN (while the box isn't being typed in).
+            _lblStandbyServe.Text = StandbyPinRefusal(typed, _settings.StandbyPin, typing: false) ?? string.Empty;
             return;
         }
 
         _settings.StandbyPin = typed;
         _settings.Save();
         StandbySettingsChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// What to say when the PIN in the box was turned down and not saved, or
+    /// null when there is nothing to say: the box is empty, holds the saved
+    /// PIN, holds a good PIN, or is still being typed in.
+    /// </summary>
+    internal static string? StandbyPinRefusal(string? typedPin, string? savedPin, bool typing)
+    {
+        var typed = (typedPin ?? string.Empty).Trim();
+
+        if (typing
+            || typed.Length == 0
+            || string.Equals(typed, savedPin, StringComparison.Ordinal)
+            || WarmStandby.IsUsablePin(typed))
+        {
+            return null;
+        }
+
+        return WarmStandby.IsUsablePin(savedPin)
+            ? "The standby PIN needs eight letters or digits or more - not saved. The old PIN is still the one in use."
+            : "The standby PIN needs eight letters or digits or more - not saved.";
     }
 
     /// <summary>The card brought up to date: what this PC is, how fresh the copy is, and which buttons make sense. UI thread.</summary>
@@ -238,7 +323,11 @@ public sealed partial class BackupRestoreControl
         var pinOk = WarmStandby.IsUsablePin(_settings.StandbyPin);
 
         // --- The timing PC side ---
-        if (!_settings.StandbyServeEnabled)
+        if (StandbyPinRefusal(_txtStandbyPin.Text, _settings.StandbyPin, typing: _txtStandbyPin.Focused) is { } refusal)
+        {
+            _lblStandbyServe.Text = refusal;
+        }
+        else if (!_settings.StandbyServeEnabled)
         {
             _lblStandbyServe.Text = "Off: no PC can copy this one.";
         }
@@ -267,10 +356,15 @@ public sealed partial class BackupRestoreControl
             status = status with { TakenOverUtc = taken.AtUtc };
         }
 
-        _lblStandbyStatus.Text = WarmStandby.Line(status, DateTime.UtcNow)
-                                 ?? "Not a standby. Tick the box above on the second laptop, not on the timing PC.";
-
         var mirroring = _settings.StandbyModeEnabled && taken is null;
+
+        // WHY (23 Nov 2026, bug hunt 24): while the timing PC's address is
+        // held as one from a restored backup, the mirror copies nothing, and
+        // this card said nothing about why. It says so, and what to do.
+        _lblStandbyStatus.Text = mirroring && RestoredSettings.IsHeld(RestoredSettings.Part.Standby)
+            ? RestoredSettings.StandbyMessage
+            : WarmStandby.Line(status, DateTime.UtcNow)
+              ?? "Not a standby. Tick the box above on the second laptop, not on the timing PC.";
         _txtStandbyPrimary.Enabled = taken is null;
         // Always there, greyed unless mirroring: a bar with every button
         // hidden collapses to nothing (and the layout check says so).
@@ -443,9 +537,29 @@ public sealed partial class BackupRestoreControl
         }
 
         // Ticked here, which saves the setting and has the host start the
-        // mirror - and Start reads the marker afresh, now gone.
-        _chkStandbyMode.Checked = true;
+        // mirror - and Start reads the marker afresh, now gone. Marked as
+        // ticked in code, so it does not take on a restored address.
+        _tickingStandbyInCode = true;
+        try
+        {
+            _chkStandbyMode.Checked = true;
+        }
+        finally
+        {
+            _tickingStandbyInCode = false;
+        }
+
         StandbySettingsChanged?.Invoke();
         RefreshStandby();
     }
+
+    /// <summary>True while the standby box is being ticked by the app itself, not by someone at the PC.</summary>
+    private bool _tickingStandbyInCode;
+
+    /// <summary>
+    /// Whether ticking the standby box takes on a timing-PC address that
+    /// came with a restored backup: only a tick someone made by hand, with
+    /// the address in the box beside it. See RestoredSettings.Part.Standby.
+    /// </summary>
+    internal static bool TickConfirmsRestoredAddress(bool ticked, bool tickedByHand) => ticked && tickedByHand;
 }

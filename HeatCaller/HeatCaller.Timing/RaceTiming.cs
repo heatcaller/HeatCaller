@@ -1125,7 +1125,23 @@ public sealed class RaceTiming
 
             // At Idle with no practice started, the engine ignores the pass
             // (bar its clock reference), exactly as it did inline.
-            Engine.ProcessLapEvent(lap);
+            // WHY (23 Nov 2026, bug hunt 24): the raises this pass makes carry
+            // its decoder-mapped crossing to the UI, as ProcessLapEvent's
+            // threaded branch does. The old code judged it without setting
+            // _crossingBeingJudgedMs, so with timing on its own thread every
+            // real line pass reached the announcer with no crossing time and
+            // its calls were timed from when the pass got here, not from when
+            // the car crossed - the 21 Nov anchor never applied to a real car.
+            _crossingBeingJudgedMs = lap.CrossedMs;
+
+            try
+            {
+                Engine.ProcessLapEvent(lap);
+            }
+            finally
+            {
+                _crossingBeingJudgedMs = 0;
+            }
         });
     }
 

@@ -693,7 +693,16 @@ internal sealed class DriverBatteriesPanel : UserControl
 
         Change(() =>
         {
-            BatteryActions.TagSession(_store, _undo, session.Id, session.Label, key, DriverName, chosen?.Id, PackTagSource.DriverHub, intoCar: false);
+            // WHY (23 Nov 2026, bug hunt 24): TagSession now refuses a pack that
+            // was removed while the picker was open. The old code said nothing
+            // and reported a change, so the desk saw nothing happen and no reason.
+            if (!BatteryActions.TagSession(_store, _undo, session.Id, session.Label, key, DriverName, chosen?.Id, PackTagSource.DriverHub, intoCar: false))
+            {
+                AppDialog.Show(this, "That pack was removed while this was open, so nothing was changed.", "Pack removed",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return false;
+            }
+
             return true;
         });
     }

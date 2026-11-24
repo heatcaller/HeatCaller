@@ -408,22 +408,50 @@ internal static class RcpPlanPrinter
         {
             var code = RcpBuildList.Code(tile.Piece) + (custom.Contains((tile.Col, tile.Row)) ? "*" : string.Empty);
 
-            if (code.Length == 0 || tile.Kind == RcpTileKind.Infield
-                || tile.Col < tiles.Left - 1e-4f || tile.Col + 1 > tiles.Right + 1e-4f
-                || tile.Row < tiles.Top - 1e-4f || tile.Row + 1 > tiles.Bottom + 1e-4f)
+            // WHY (23 Nov 2026, bug hunt 24): a tile was marked only when its
+            // whole square was on the sheet. Sheets don't overlap and their
+            // edges don't fall on grid lines, so every tile on a sheet join
+            // failed that on both sheets and its mark was printed nowhere -
+            // and the legend reads an unmarked tile as a plain one. Each tile
+            // is now marked on the one sheet that holds its middle.
+            if (code.Length == 0 || tile.Kind == RcpTileKind.Infield || !MarksTileOnSheet(tile.Col, tile.Row, tiles))
             {
                 continue;
             }
 
+            var corner = MarkCorner(tile.Col, tile.Row, tiles);
             var at = new PointF(
-                box.Left + (float)((tile.Col - tiles.Left) * mmPerTile) + 0.6f,
-                box.Top + (float)((tile.Row - tiles.Top) * mmPerTile) + 0.6f);
+                box.Left + (float)((corner.X - tiles.Left) * mmPerTile) + 0.6f,
+                box.Top + (float)((corner.Y - tiles.Top) * mmPerTile) + 0.6f);
             var size = g.MeasureString(code, font);
 
             g.FillRectangle(back, at.X, at.Y, size.Width, size.Height);
             g.DrawString(code, font, ink, at);
         }
     }
+
+    /// <summary>
+    /// Whether the tile at <paramref name="col"/>, <paramref name="row"/> has
+    /// its piece mark on the sheet showing <paramref name="tiles"/>: the sheet
+    /// that holds the tile's middle. Half-open, so with sheets that meet edge
+    /// to edge every tile is marked on exactly one of them (bug hunt 24).
+    /// </summary>
+    internal static bool MarksTileOnSheet(int col, int row, RectangleF tiles)
+    {
+        var x = col + 0.5f;
+        var y = row + 0.5f;
+
+        return x >= tiles.Left && x < tiles.Right && y >= tiles.Top && y < tiles.Bottom;
+    }
+
+    /// <summary>
+    /// Where on the grid a tile's mark goes on the sheet showing
+    /// <paramref name="tiles"/>: the tile's top-left corner, or the sheet's
+    /// edge when the tile starts on the sheet before - so a tile cut by a
+    /// sheet join is marked on the part of it this sheet shows.
+    /// </summary>
+    internal static PointF MarkCorner(int col, int row, RectangleF tiles) =>
+        new(Math.Max(col, tiles.Left), Math.Max(row, tiles.Top));
 
     /// <summary>The grid's column letters above the drawing and row numbers beside it - spaced out when the tiles are too small to name every one.</summary>
     private static void DrawGridNames(Graphics g, RectangleF box, RectangleF tiles, double mmPerTile, (int Col, int Row) origin, Font font, Brush brush)

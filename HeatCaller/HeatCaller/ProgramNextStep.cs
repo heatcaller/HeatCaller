@@ -390,10 +390,18 @@ internal static class ProgramNextStep
         //     Auto start stayed closed and the card lost Start, Call and
         //     Skip for every main. A final started from the program says
         //     the director has gone on, and the class is offered again at 7.
-        if (next is { Kind: RoundKind.Main }
+        //     WHY (23 Nov 2026, bug hunt 24): a Pole Shootout run counts as a
+        //     final here. Seeding a class with Pole Shootout on puts its
+        //     shootout runs ahead of its mains, and the old test looked only
+        //     for a main next - so those runs went out with the other class's
+        //     finals unbuilt, off the program and the heat sheet, and Start
+        //     Next turned into the build button once the runs were done. A
+        //     shootout run raced from the program says the director has gone
+        //     on, the same as a main.
+        if (next is { Kind: RoundKind.Main or RoundKind.Shootout }
             && !clubNight
             && !dayRounds.Any(r => r.Kind == RoundKind.Qualifier && !r.IsRecorded)
-            && !dayRounds.Any(r => r.Kind == RoundKind.Main && r.IsRecorded)
+            && !dayRounds.Any(r => (r.Kind is RoundKind.Main or RoundKind.Shootout) && r.IsRecorded)
             && ClassToSeed(classes, dayRounds) is { } waiting)
         {
             return waiting;

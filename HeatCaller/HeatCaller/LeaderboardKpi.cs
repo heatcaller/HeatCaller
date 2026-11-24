@@ -612,7 +612,7 @@ public static class KpiCatalog
             }),
 
         new("gained", "Gained", "Positions made up - or lost - since the grid.", 55,
-            (s, index, _) =>
+            (s, index, ctx) =>
             {
                 // Zero means the grid was never known, which is not the same
                 // as starting where you are now. Without a round selected or
@@ -622,14 +622,21 @@ public static class KpiCatalog
                     return new KpiValue("-");
                 }
 
-                var moved = s.StartPosition - (index + 1);
-
-                return moved switch
+                // WHY (23 Nov 2026, bug hunt 24): this was the raw grid slot
+                // less the board row. A stated roster is never renumbered, so
+                // with the slot-3 driver a no-show the cars from slots 4, 5
+                // and 6 read "+1" in green having passed nobody, and a ghost
+                // row at the top made the pole-sitter read "-1". Both places
+                // are now counted among the real cars with a lap, the way the
+                // Rating column on the same row counts them.
+                if (ctx?.Ordered is null)
                 {
-                    > 0 => new KpiValue($"+{moved}", KpiEmphasis.Good),
-                    < 0 => new KpiValue(moved.ToString(), KpiEmphasis.Bad),
-                    _ => new KpiValue("="),
-                };
+                    return GainedValue(s.StartPosition - (index + 1));
+                }
+
+                return LiveGridPlaces.PlacesGained(ctx.Ordered, s) is { } gained
+                    ? GainedValue(gained)
+                    : new KpiValue("-");
             }),
 
         new("clean", "Clean %", "Share of this driver's passes that counted as laps - low means mistakes rather than pace.", 65,
@@ -727,6 +734,14 @@ public static class KpiCatalog
         s.Warnings.Count == 0
             ? new KpiValue(name)
             : new KpiValue(name + WarningRules.Badge(s.Warnings), KpiEmphasis.Bad);
+
+    /// <summary>"+2" in green, "-1" in red, "=" for no change - the Gained column's cell.</summary>
+    private static KpiValue GainedValue(int moved) => moved switch
+    {
+        > 0 => new KpiValue($"+{moved}", KpiEmphasis.Good),
+        < 0 => new KpiValue(moved.ToString(System.Globalization.CultureInfo.InvariantCulture), KpiEmphasis.Bad),
+        _ => new KpiValue("="),
+    };
 
     /// <summary>
     /// A number on the board with a decimal point whatever the PC's region
@@ -859,4 +874,56 @@ public static class KpiCatalog
     // is a desktop nicety. Everything else stays one tick away on the Web
     // Server page.
     public static readonly string[] DefaultWeb = { "pos", "driver", "laps", "last", "best", "gap", "trend" };
+}
+
+/// <summary>
+/// Places made up or lost since the grid, for the live Gained column.
+/// </summary>
+/// <remarks>
+/// WHY (23 Nov 2026, bug hunt 24): the column took the raw grid slot less
+/// the row on the board. A stated roster is never renumbered over the cars
+/// that started, and the board has no row for a no-show but does have one
+/// for a ghost, so drivers who had passed nobody read "+1" and a pole-sitter
+/// leading every real car read "-1". Both places are counted here among the
+/// real cars with a lap - DriverRating.ForStandings' field - so the column
+/// agrees with the Rating beside it and the phone's "Gained N places" after.
+/// </remarks>
+public static class LiveGridPlaces
+{
+    /// <summary>
+    /// Grid place less current place, both among the real cars in
+    /// <paramref name="ordered"/> (board order) with a lap; null for a ghost,
+    /// a car with no lap yet, or one whose grid slot was never known.
+    /// </summary>
+    public static int? PlacesGained(IReadOnlyList<RacerStanding> ordered, RacerStanding car)
+    {
+        if (car is null
+            || string.IsNullOrWhiteSpace(car.TransponderId)
+            || GhostService.IsGhost(car.TransponderId)
+            || car.Laps < 1
+            || car.StartPosition <= 0)
+        {
+            return null;
+        }
+
+        var real = (ordered ?? Array.Empty<RacerStanding>())
+            .Where(s => s is not null
+                && !string.IsNullOrWhiteSpace(s.TransponderId)
+                && !GhostService.IsGhost(s.TransponderId)
+                && s.Laps >= 1)
+            .ToList();
+
+        var place = real.FindIndex(s => string.Equals(s.TransponderId, car.TransponderId, StringComparison.OrdinalIgnoreCase));
+
+        if (place < 0)
+        {
+            return null;
+        }
+
+        var gridPlace = 1 + real.Count(s => s.StartPosition > 0
+            && s.StartPosition < car.StartPosition
+            && !string.Equals(s.TransponderId, car.TransponderId, StringComparison.OrdinalIgnoreCase));
+
+        return gridPlace - (place + 1);
+    }
 }

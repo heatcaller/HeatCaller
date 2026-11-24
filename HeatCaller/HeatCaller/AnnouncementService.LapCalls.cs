@@ -1429,12 +1429,27 @@ public sealed partial class AnnouncementService
     /// would make exactly those calls, so this sets them as
     /// KeepInStepWithCorrection does a correction.
     /// </remarks>
-    public void SeedStandings(IEnumerable<RaceStanding> standings)
+    /// <param name="leads">
+    /// The race's lead change tally as it stood before (LeadTracker.Snapshot),
+    /// or null to leave the count as it is.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the count went back to nothing after an
+    /// undone Stage or Reset, so the fifth lead change of a race was called
+    /// the first, the broadcast tower dropped to one leader and the recap was
+    /// short of the race's real lead changes.
+    /// </param>
+    public void SeedStandings(IEnumerable<RaceStanding> standings, (int Changes, IReadOnlyDictionary<string, int> TimesLed)? leads = null)
     {
         lock (_voiceQueueLock)
         {
             _standings.Clear();
             _lapCrossings.Clear();
+
+            // Before the leader is corrected below, which keeps the count as it is.
+            if (leads is { } tally)
+            {
+                _leads.Restore(tally.Changes, tally.TimesLed);
+            }
 
             foreach (var standing in standings)
             {
@@ -1920,6 +1935,13 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
+    /// The once-per-race mark for a close battle between two cars: the same
+    /// whichever of them is in front (23 Nov 2026, bug hunt 24).
+    /// </summary>
+    internal static string BattlePairKey(string a, string b) =>
+        string.Compare(a, b, StringComparison.OrdinalIgnoreCase) <= 0 ? $"{a}|{b}" : $"{b}|{a}";
+
+    /// <summary>
     /// Announces two cars on the same lap running within a second of each
     /// other - once per pair per race, as the event's own description says.
     ///
@@ -2020,7 +2042,11 @@ public sealed partial class AnnouncementService
             // A pair already on offer is skipped too (see _battlesPending),
             // or every standings update before its batch settles added
             // another copy to the front car's batch.
-            var key = $"{front.Transponder}|{chaser.Transponder}";
+            // WHY (23 Nov 2026, bug hunt 24): the same key whichever car is in
+            // front. It was built in running order, so once the two swapped places
+            // they were a new pair and the battle was called a second time - and a
+            // pair cooling after the pacing dial held it was offered again at once.
+            var key = BattlePairKey(front.Transponder, chaser.Transponder);
             var now = DateTime.UtcNow;
             BattleOffer offer;
 
@@ -2439,10 +2465,16 @@ public sealed partial class AnnouncementService
         // is straight back past - and that swap's own rivalry line says so.
         using var tagged = AboutBattle(passed);
 
+        // WHY (23 Nov 2026, bug hunt 24): stamped as the pass for position it
+        // is. With no stamp of its own the borrowed LeaderChange key chose one
+        // (TemplateFactsFor, 21 Nov), and that says the lead matters - so a
+        // rivalry swap for fifth still waiting to be said was thrown away,
+        // "the lead has changed hands", when two other cars swapped the lead.
         EnqueueVoiceWork(AnnouncementEventType.LeaderChange, overtakerTransponder, () => SynthesizeAndPlayAsync(text, "[voice] Rivalry announcement",
             "[voice] Skipped rivalry announcement - ElevenLabs API key or voice not configured."),
             displayText: text,
             routineWeight: rivalryWeight,
+            facts: TemplateFactsFor(AnnouncementEventType.CloseBattle),
             renderAhead: () => RenderLineAheadAsync(text, AnnouncementEventType.LeaderChange, speed: null));
     }
 
@@ -2659,7 +2691,12 @@ public sealed partial class AnnouncementService
         // layer, P4b): a cue that arrives late is worse than none, as above.
         // Nor for a rejected pass (13 Nov 2026, bug hunt 17): the cue tells a
         // driver their lap counted, and a double read at the loop did not.
-        if (gate.Valid && !Muted && LapBeeps?.ToneFor(transponder) is { } toneIndex && !SkippedAsStale())
+        // Nor for a ghost while ghosts are not announced (23 Nov 2026, bug hunt
+        // 24): the cue is played here directly rather than through
+        // ConsiderPerLapAction, so it was the one per-lap sound that escaped the
+        // "Announce ghosts like real drivers" switch - a ghost given a cue earlier
+        // still beeped at every crossing.
+        if (gate.Valid && !Muted && !MutedGhost(transponder) && LapBeeps?.ToneFor(transponder) is { } toneIndex && !SkippedAsStale())
         {
             var beepVolume = (float)_soundStore.Current.Volume;
             _ = ToneGenerator.PlayDriverLapAsync(toneIndex, beepVolume);

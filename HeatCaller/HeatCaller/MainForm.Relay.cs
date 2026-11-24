@@ -901,6 +901,11 @@ public partial class MainForm
             PublishCheckInRosterSoon();
             _checkInControl?.RefreshCheckInMarks();
 
+            // WHY (23 Nov 2026, bug hunt 24): the Driver Hub used to read
+            // check-ins only when it was opened, so a phone check-in left it
+            // saying "Not in yet" while it stayed up.
+            RefreshDriverHubCheckIns();
+
             return true;
         }
         catch (Exception ex)
@@ -1138,16 +1143,19 @@ public partial class MainForm
                 : e.DriverName ?? string.Empty).ToList();
             var names = RelayPublisher.DisplayNames(shownAs, abbreviate, entries.Select(e => (string?)e.Transponder).ToList(), privacy);
 
-            var plan = MainsBuilder.PlanSeeding(entries.Select(e => e.Transponder).ToList(), raceClass.MainSize);
-            var tierOf = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var ranked = entries.Select(e => e.Transponder).ToList();
+            var plan = MainsBuilder.PlanSeeding(ranked, raceClass.MainSize);
 
-            for (var tier = 0; tier < plan.Tiers.Count; tier++)
-            {
-                foreach (var t in plan.Tiers[tier])
-                {
-                    tierOf.TryAdd(t, tier);
-                }
-            }
+            // WHY (23 Nov 2026, bug hunt 24): the letters came from the plain
+            // split by main size, so with "one main fewer" chosen a driver
+            // whose night ends with qualifying was told "B main", and an
+            // Invitational class (the whole field in every main) showed A
+            // and B mains it does not have. Now the same cut as the program.
+            var letters = QualifyingMainLetters(
+                ranked,
+                raceClass.MainSize,
+                oneMainFewer: _raceEvents.Active is { IsLegacy: false, FinalsOneMainFewer: true },
+                invitational: raceClass.Invitational);
 
             // The protest window (11 Nov 2026) - see MainForm.ProtestWindow.
             var (provisional, provisionalUntil) = ProvisionalFor(raceClass.Name);
@@ -1165,7 +1173,7 @@ public partial class MainForm
                     pos = i + 1,
                     name = names[i],
                     tag = Ghosts.IsGhost(e.Transponder) ? null : _webServer.RelayRowTag(e.Transponder),
-                    main = MainsBuilder.SeedPlan.LetterFor(tierOf.TryGetValue(e.Transponder, out var tier) ? tier : 0),
+                    main = letters[i],
                     laps = e.BestLaps,
                     timeMs = e.BestElapsedMs,
                     consecutiveMs = e.BestConsecutiveMs,
@@ -1181,6 +1189,46 @@ public partial class MainForm
         }
 
         return JsonSerializer.Serialize(new { classes });
+    }
+
+    /// <summary>
+    /// The main each qualifier is in, for the qualifying page, in the order
+    /// given: the program's own seeding (RaceProgramControl's
+    /// FinalsPlanTonight) - the split by main size, less the lowest main
+    /// when "one main fewer" is chosen. Null for a driver in no main (their
+    /// night ends with qualifying) and for every driver of an Invitational
+    /// class, whose mains each hold the whole field. See the bug hunt 24
+    /// note in BuildQualifyingDocument.
+    /// </summary>
+    internal static IReadOnlyList<string?> QualifyingMainLetters(
+        IReadOnlyList<string> ranked,
+        int mainSize,
+        bool oneMainFewer,
+        bool invitational)
+    {
+        if (invitational)
+        {
+            return ranked.Select(_ => (string?)null).ToList();
+        }
+
+        var plan = MainsBuilder.PlanSeeding(ranked, mainSize);
+        if (oneMainFewer)
+        {
+            plan = NightPlan.OneMainFewer(plan);
+        }
+
+        var tierOf = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (var tier = 0; tier < plan.Tiers.Count; tier++)
+        {
+            foreach (var t in plan.Tiers[tier])
+            {
+                tierOf.TryAdd(t, tier);
+            }
+        }
+
+        return ranked
+            .Select(t => tierOf.TryGetValue(t, out var tier) ? MainsBuilder.SeedPlan.LetterFor(tier) : null)
+            .ToList();
     }
 
     private string BuildStandingsDocument()
@@ -1313,6 +1361,14 @@ public partial class MainForm
     /// meeting, and qualifying is unchanged between rounds. Sponsors still
     /// go only when RelaySponsors.Publishable says so, and their logos are
     /// cached, so the extra send is cheap.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the juniors' privacy rules, added on
+    /// 15 Nov, were left out the same way. A relay that lost them (an empty
+    /// volume after a redeploy) treats every junior as an adult - anyone
+    /// can follow them by name, and pages naming them can be listed by
+    /// search engines - and the laptop never sent them again until a
+    /// junior's details changed or the app restarted. The document is a
+    /// few hundred bytes and the relay applies it the same way each time.
     /// </summary>
     internal static readonly RelayChannel[] RelayDocumentsForgottenOnRefresh =
     [
@@ -1328,6 +1384,7 @@ public partial class MainForm
         RelayChannel.Sponsors,
         RelayChannel.NextNight,
         RelayChannel.Stream,
+        RelayChannel.Privacy,
     ];
 
     /// <summary>
@@ -1713,6 +1770,16 @@ public partial class MainForm
         [JsonPropertyName("endedUtc")]
         public DateTime EndedUtc { get; init; }
 
+        /// <summary>
+        /// The results-index year this session is filed under (the local race
+        /// night, RelayResultsIndex.YearOf), so the relay can take a result
+        /// down by the same year as its index. Left out for a session with no
+        /// time at all. See IndexYearOnResult (bug hunt 24).
+        /// </summary>
+        [JsonPropertyName("year")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Year { get; init; }
+
         /// <summary>The race's time limit in seconds, for "Length: 3:00 Timed" and pace. Left out for a race without one.</summary>
         [JsonPropertyName("lengthS")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -1989,6 +2056,17 @@ public partial class MainForm
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<long>? LapsMs { get; init; }
 
+        /// <summary>
+        /// How many entries at the front of LapsMs are still the start, not
+        /// flying laps - 1 for a driver credited with the start lap, whose
+        /// first entry is the dash from the grid. Left out (0) for everybody
+        /// else, so their rows are byte for byte what they were. See
+        /// StartLapsInLapsMs (bug hunt 24).
+        /// </summary>
+        [JsonPropertyName("startLaps")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? StartLaps { get; init; }
+
         /// <summary>Their position after each of those laps (LapByLap), in step with LapsMs. Races only.</summary>
         [JsonPropertyName("posAt")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -2230,6 +2308,39 @@ public partial class MainForm
         return ids.Any(id => id.Length > 0 && words.Any(word => string.Equals(word, id, StringComparison.OrdinalIgnoreCase)));
     }
 
+    /// <summary>
+    /// The "startLaps" of a result row: how many entries of its lapsMs (the
+    /// laps after the start slot) are still the start. 1 for a driver
+    /// credited with the start lap (SessionResultEntry.StartSlots is 2),
+    /// null otherwise.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the row sent the credited driver's dash
+    /// from the grid, a few seconds long, as their first lap with nothing to
+    /// say so - a qualifier's row looks the same - so the results page's
+    /// View Laps counted it in their average, top 5 and best consecutive
+    /// laps ("Top 2 consec." far under anybody's in the race). The app's own
+    /// figures leave it out with StartSlots; this tells the page to as well.
+    /// </remarks>
+    internal static int? StartLapsInLapsMs(SessionResultEntry result) =>
+        result.LapTimesMs is { Count: > 1 } laps && result.StartSlots(laps) > 1
+            ? result.StartSlots(laps) - 1
+            : null;
+
+    /// <summary>
+    /// The "year" of a result document: the results-index year the session is
+    /// filed under (RelayResultsIndex.YearOf, the local race night), or null
+    /// for a session saved with no time at all, which is unknown, not old.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the relay took a result down by the UTC
+    /// year of its start while it took the index down by the local race-night
+    /// year, so around New Year the two disagreed. Sent so the relay can
+    /// judge the result by the index's year.
+    /// </remarks>
+    internal static string? IndexYearOnResult(SessionRecord session) =>
+        RelayResultsIndex.EffectiveStart(session) == DateTime.MinValue ? null : RelayResultsIndex.YearOf(session);
+
     /// <summary>The championship a round is part of, or the meeting's own name, or nothing.</summary>
     private string? SeasonLabelFor(string? roundId)
     {
@@ -2282,7 +2393,15 @@ public partial class MainForm
 
         // Older than the club keeps online (15 Nov 2026, children's privacy
         // 2.6) - a privacy republish of an old season must not put it back.
-        if (RelayPrivacyDocument.TooOld(RelayResultsIndex.EffectiveStart(session), _settings.RelayUnpublishAfterYears, DateTime.UtcNow))
+        //
+        // WHY (23 Nov 2026, bug hunt 24): by the year the results index files
+        // it under (the local race night) against the local now, the test
+        // PublishResultsIndexForYear makes. It was the UTC start against the
+        // UTC now, so around New Year a session and its index year were
+        // judged in different years: a New Year's Eve race west of UTC came
+        // back after its year was taken down, and a New Year's Day morning
+        // race east of UTC stopped getting its corrections a year early.
+        if (RelayPrivacyDocument.SessionTooOld(session, _settings.RelayUnpublishAfterYears, DateTime.Now))
         {
             return;
         }
@@ -2324,6 +2443,7 @@ public partial class MainForm
                 RoundId = session.RoundId,
                 StartedUtc = session.StartedAtUtc,
                 EndedUtc = session.EndedAtUtc,
+                Year = IndexYearOnResult(session),
                 LengthS = session.TimeLimitSeconds is > 0 ? session.TimeLimitSeconds : null,
                 LapLimit = session.LapLimit is > 0 ? session.LapLimit : null,
                 Results = session.Results.Select((r, i) => new RelayResultRow
@@ -2364,6 +2484,7 @@ public partial class MainForm
                     Qual = r.StartPosition > 0 ? r.StartPosition : null,
                     StartMs = r.LapTimesMs is { Count: > 1 } ? r.LapTimesMs[0] : null,
                     LapsMs = r.LapTimesMs is { Count: > 1 } ? r.LapTimesMs.Skip(1).ToList() : null,
+                    StartLaps = StartLapsInLapsMs(r),
                     PosAt = positions is not null && positions[i].Length > 0 ? positions[i] : null,
                 }).ToList(),
                 Corrections = PublicCorrections(session, names),

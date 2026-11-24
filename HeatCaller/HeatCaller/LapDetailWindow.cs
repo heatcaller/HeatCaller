@@ -366,6 +366,15 @@ public sealed class LapDetailWindow : Form
         private long _penaltyMs;
         private int _currentRun;
 
+        // WHY (23 Nov 2026, bug hunt 24): a car past the line at the green is
+        // credited with the start lap (a zero at index 0), so its next
+        // crossing - index 1 - is the rest of its start, timed from before
+        // the green and kept out of best lap. This window only ever treated
+        // index 0 as the start, so that lap went into the Average tile and the
+        // pace-bar scale and could read "their best"; the leaderboard's
+        // Average (RaceGaps.PaceLaps) already left it out.
+        private bool _startLapCredited;
+
         // Every dimension is scaled with the app's font scale, so the panel
         // grows with the text instead of clipping it at larger sizes.
         private static int Px(float value) => UiLayout.AtTextSize(value);
@@ -625,6 +634,7 @@ public sealed class LapDetailWindow : Form
                 _bestMs = 0;
                 _penaltyMs = 0;
                 _currentRun = 0;
+                _startLapCredited = false;
             }
             else
             {
@@ -665,6 +675,7 @@ public sealed class LapDetailWindow : Form
                 _bestMs = standing.FastestLapMs;
                 _penaltyMs = standing.PenaltyMs;
                 _currentRun = standing.ConsecutiveValidLaps;
+                _startLapCredited = standing.StartLapCredited;
 
                 // Scrolled back to read older laps, a new one coming in moves
                 // the count along with it, so the same laps stay on screen
@@ -790,24 +801,8 @@ public sealed class LapDetailWindow : Form
         /// RaceGaps.PaceLaps, so this reads the same as the leaderboard's
         /// Average column for the same driver.
         /// </summary>
-        private double AverageFlyingMs()
-        {
-            long total = 0;
-            var count = 0;
-
-            for (var i = 1; i < _lapMs.Length; i++)
-            {
-                if (_recoveryLaps.Contains(i))
-                {
-                    continue;
-                }
-
-                total += _lapMs[i];
-                count++;
-            }
-
-            return count > 0 ? total / (double)count : 0;
-        }
+        private double AverageFlyingMs() =>
+            LapDetailFigures.AverageFlyingMs(_lapMs, _recoveryLaps, _startLapCredited);
 
         /// <summary>
         /// The app's stat tile (StatTile), painted: the value on top and its
@@ -935,7 +930,10 @@ public sealed class LapDetailWindow : Form
 
             for (var i = Math.Max(first, 1); i < last; i++)
             {
-                if (_recoveryLaps.Contains(i))
+                // WHY (23 Nov 2026, bug hunt 24): nor the rest of a credited
+                // start (LapDetailFigures.IsStartRow) - a short one set the
+                // scale and made every real lap look alike.
+                if (_recoveryLaps.Contains(i) || LapDetailFigures.IsStartRow(_lapMs, i, _startLapCredited))
                 {
                     continue;
                 }
@@ -994,6 +992,12 @@ public sealed class LapDetailWindow : Form
             // wrong for a season.
             var isStartLap = lapIndex == 0;
 
+            // WHY (23 Nov 2026, bug hunt 24): the lap after a credited start
+            // is the rest of the start, not a lap: drawn muted with no bar,
+            // never the best row and never "their best". It used to read
+            // "their best" whenever it was shorter than the Best tile's time.
+            var isStartRow = LapDetailFigures.IsStartRow(_lapMs, lapIndex, _startLapCredited);
+
             // The clean-run count as it stood after this lap. Laps recorded
             // before this was tracked - and any lap added by hand - have no
             // entry, so the run column is simply left blank rather than
@@ -1003,7 +1007,7 @@ public sealed class LapDetailWindow : Form
 
             var inRun = streak >= _streakThreshold;
             var endedRun = streak == 1 && previous >= _streakThreshold;
-            var isBest = !isStartLap && _bestMs > 0 && lapMs == _bestMs;
+            var isBest = !isStartRow && _bestMs > 0 && lapMs == _bestMs;
 
             var rowRect = new RectangleF(left - Px(4), top + 1, right - left + Px(8), RowHeight - 2);
 
@@ -1051,7 +1055,7 @@ public sealed class LapDetailWindow : Form
                 new RectangleF(left, top, Px(40), RowHeight), near);
 
             using var timeFont = Display(11.5f);
-            using var timeBrush = new SolidBrush(isBest ? AppTheme.Primary : isStartLap ? AppTheme.TextMuted : AppTheme.TextDark);
+            using var timeBrush = new SolidBrush(isBest ? AppTheme.Primary : isStartRow ? AppTheme.TextMuted : AppTheme.TextDark);
 
             g.DrawString($"{lapMs / 1000.0:0.000}", timeFont, timeBrush,
                 new RectangleF(TimeX(left), top, Px(76), RowHeight), near);
@@ -1063,7 +1067,7 @@ public sealed class LapDetailWindow : Form
                 // dash for a lap without them (a split missed, the start lap).
                 DrawSectors(g, BarLeft(left), BarRight(right), top, lapIndex);
             }
-            else if (!isStartLap)
+            else if (!isStartRow)
             {
                 var track = new RectangleF(BarLeft(left), top + RowHeight / 2f - Px(4), BarRight(right) - BarLeft(left), Px(8));
 
@@ -1089,13 +1093,14 @@ public sealed class LapDetailWindow : Form
 
             var delta = isStartLap
                 ? "green to line"
+                : isStartRow ? LapDetailFigures.RestOfStartWords
                 : _bestMs <= 0 ? string.Empty
                 : lapMs <= _bestMs ? "their best"
                 : $"+{(lapMs - _bestMs) / 1000.0:0.000}";
 
             // The start lap has no bar, so its words may run left into the
             // bar's room: in the figures' own column it read "green to lin".
-            var deltaLeft = isStartLap ? BarLeft(left) + Px(24) : DeltaLeft(right);
+            var deltaLeft = isStartRow ? BarLeft(left) + Px(24) : DeltaLeft(right);
 
             g.DrawString(delta, AppTheme.SmallFont, isBest ? timeBrush : muted,
                 new RectangleF(deltaLeft, top, DeltaRight(right) - deltaLeft, RowHeight), far);
@@ -1270,5 +1275,50 @@ public sealed class LapDetailWindow : Form
             (int)Math.Round(from.R + (to.R - from.R) * amount),
             (int)Math.Round(from.G + (to.G - from.G) * amount),
             (int)Math.Round(from.B + (to.B - from.B) * amount));
+    }
+}
+
+/// <summary>
+/// The lap window's figures as pure rules, so they can be tested without a
+/// window (23 Nov 2026, bug hunt 24).
+/// </summary>
+internal static class LapDetailFigures
+{
+    /// <summary>What the lap after a credited start says in place of how far off best it was.</summary>
+    internal const string RestOfStartWords = "rest of start";
+
+    /// <summary>
+    /// Whether this lap is part of the start rather than a flying lap: the
+    /// green-to-line pass at index 0, and - when the car was credited with
+    /// the start lap at the green (a zero at index 0) - index 1 too, the
+    /// rest of its start, timed from a crossing before the green. The same
+    /// rule as SessionResultEntry.StartSlots.
+    /// </summary>
+    internal static bool IsStartRow(IReadOnlyList<long> lapMs, int index, bool startLapCredited) =>
+        index == 0 || (startLapCredited && index == 1 && lapMs.Count > 1 && lapMs[0] == 0);
+
+    /// <summary>
+    /// The average over flying laps only: not the start rows, and not laps
+    /// that ran through a crash recovery - matching RaceGaps.PaceLaps, so the
+    /// window reads the same as the leaderboard's Average column. Zero when
+    /// there is no flying lap yet.
+    /// </summary>
+    internal static double AverageFlyingMs(IReadOnlyList<long> lapMs, ISet<int> recoveryLaps, bool startLapCredited)
+    {
+        long total = 0;
+        var count = 0;
+
+        for (var i = 1; i < lapMs.Count; i++)
+        {
+            if (recoveryLaps.Contains(i) || IsStartRow(lapMs, i, startLapCredited))
+            {
+                continue;
+            }
+
+            total += lapMs[i];
+            count++;
+        }
+
+        return count > 0 ? total / (double)count : 0;
     }
 }

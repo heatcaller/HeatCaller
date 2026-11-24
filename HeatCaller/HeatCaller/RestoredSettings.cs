@@ -58,7 +58,23 @@ internal static class RestoredSettings
         Mail = 4,
 
         All = PublishRelay | VoiceRelay | Mail,
+
+        // WHY (23 Nov 2026, bug hunt 24): the warm standby (11 Nov 2026) is a
+        // fourth destination with the same shape - StandbyPrimaryAddress and
+        // StandbyModeEnabled are plain text in settings.json, StandbyPin is
+        // sealed to this laptop - and it was not on this list, so a backup
+        // edited to point the standby at another address on the track's
+        // network sent this laptop's Standby PIN there (as the X-Pin header,
+        // every few seconds) from the first tick after the restart, and that
+        // PIN is all the real timing PC asks before handing out every
+        // driver's name, phone and email. Kept out of All on purpose: All
+        // means the three the 25 Sep audit covers, and tests pin it so.
+        /// <summary>The warm standby's timing PC address: StandbyPrimaryAddress, with StandbyModeEnabled on.</summary>
+        Standby = 8,
     }
+
+    /// <summary>Every part this record knows - All plus the standby.</summary>
+    private const Part Tracked = Part.All | Part.Standby;
 
     internal sealed record Record(DateTime RestoredUtc, List<string> Held);
 
@@ -98,7 +114,8 @@ internal static class RestoredSettings
                     {
                         if (Enum.TryParse<Part>(name, out var part))
                         {
-                            held |= part & Part.All;
+                            // WHY (23 Nov 2026, bug hunt 24): Tracked, not All, or a held standby read back as not held.
+                            held |= part & Tracked;
                         }
                     }
 
@@ -178,6 +195,18 @@ internal static class RestoredSettings
             parts |= Part.Mail;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): the standby's timing PC address is
+        // where this laptop's sealed Standby PIN goes. Held only when the
+        // restored settings would actually copy (standby mode on) from an
+        // address this laptop was not already using; an address the mirror
+        // would refuse anyway (blank, or off the track's network) sends
+        // nothing, so it holds nothing.
+        if (BoolSetting(restored, nameof(AppSettings.StandbyModeEnabled))
+            && NewAddress(StandbyAddress(restored), StandbyAddress(live)))
+        {
+            parts |= Part.Standby;
+        }
+
         return parts;
     }
 
@@ -189,7 +218,8 @@ internal static class RestoredSettings
     /// </summary>
     public static void Hold(Part parts)
     {
-        parts &= Part.All;
+        // WHY (23 Nov 2026, bug hunt 24): Tracked, not All, so the standby can be held at all.
+        parts &= Tracked;
 
         if (parts == Part.None)
         {
@@ -262,6 +292,19 @@ internal static class RestoredSettings
         $"\"{host.Trim()}\" came from a restored backup, so nothing is emailed until you check it: "
         + "if it's your club's mail server, press Send Test Email on the Club Website page.";
 
+    /// <summary>Why this PC is not copying the timing PC, for the Standby PC card on Backup &amp; Restore (bug hunt 24).</summary>
+    public const string StandbyMessage =
+        "The timing PC's address came from a restored backup, so this PC isn't copying it until you check it: "
+        + "if it's the right timing PC, click in the Timing PC address box on Backup & Restore and press Enter.";
+
+    /// <summary>
+    /// What the standby's copier should be told instead of copying, or null
+    /// when the address is not held (bug hunt 24): MainForm's StandbyTarget
+    /// hands this back as the problem, with no address and no PIN, so the
+    /// PIN never leaves while the address is unchecked.
+    /// </summary>
+    public static string? StandbyHeldProblem() => IsHeld(Part.Standby) ? StandbyMessage : null;
+
     /// <summary>One line for the log at startup, or null when nothing is held.</summary>
     public static string? StartupNote()
     {
@@ -289,6 +332,11 @@ internal static class RestoredSettings
             what.Add("PIN and invite emails (the mail settings on the Club Website page)");
         }
 
+        if ((held & Part.Standby) != 0)
+        {
+            what.Add("copying the timing PC (check the Timing PC address on Backup & Restore)");
+        }
+
         return $"[restore] These settings came from a restored backup with addresses this laptop hadn't used. Paused until "
                + $"somebody checks them: {string.Join("; ", what)}.";
     }
@@ -299,7 +347,7 @@ internal static class RestoredSettings
         new Record(
             DateTime.UtcNow,
             Enum.GetValues<Part>()
-                .Where(p => (p is Part.PublishRelay or Part.VoiceRelay or Part.Mail) && (held & p) != 0)
+                .Where(p => (p is Part.PublishRelay or Part.VoiceRelay or Part.Mail or Part.Standby) && (held & p) != 0)
                 .Select(p => p.ToString())
                 .ToList()),
         new JsonSerializerOptions { WriteIndented = true });
@@ -332,6 +380,20 @@ internal static class RestoredSettings
     // otherwise the club's own pre-rename backup reads as a new address.
     private static string RelayAddress(JsonElement? settings, string name) =>
         RelayPublisher.NormaliseBaseUrl(AppSettings.MovedOffLegacyRelay(Text(settings, name, string.Empty)));
+
+    /// <summary>A true/false setting; missing or not a bool reads as false, AppSettings' default for StandbyModeEnabled.</summary>
+    private static bool BoolSetting(JsonElement? settings, string name) =>
+        settings is { } s && s.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
+
+    /// <summary>
+    /// The standby's timing PC address as the copier would use it
+    /// (WarmStandby.SnapshotAddress, port 8080 when none is typed), so
+    /// "192.168.1.20" and "http://192.168.1.20:8080/" are the same; blank
+    /// when the copier would refuse it and so send nothing.
+    /// </summary>
+    private static string StandbyAddress(JsonElement? settings) =>
+        WarmStandby.SnapshotAddress(Text(settings, nameof(AppSettings.StandbyPrimaryAddress), string.Empty), 8080, out _)?.AbsoluteUri
+        ?? string.Empty;
 
     /// <summary>A missing SmtpHost is AppSettings' default, as a fresh laptop reads it.</summary>
     private static string MailHost(JsonElement? settings) =>

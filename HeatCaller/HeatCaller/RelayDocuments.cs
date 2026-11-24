@@ -553,9 +553,17 @@ internal static class RelayDocuments
         // A record set by a car nobody had named yet carries its
         // transponder as the holder's "name". A profile under that exact
         // id, or a result that raced under it, is how to tell.
+        //
+        // WHY (23 Nov 2026, bug hunt 24): those two tests only know cars
+        // that have a profile or a SAVED result. A car on its first race
+        // that took the record had neither until that race was saved (and
+        // never, if it was abandoned), so the public Tracks page - rebuilt
+        // every 30 seconds, mid-race - named the holder "4012345". A holder
+        // with a digit and no letter in it is now treated as a number too.
         bool IsTransponder(string name) =>
             name.Length > 0
-            && (profiles.Get(name) is not null
+            && (LooksLikeBareNumber(name)
+                || profiles.Get(name) is not null
                 || sessions.Any(s => s.Results.Any(r =>
                     string.Equals((r.Transponder ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase))));
 
@@ -607,6 +615,22 @@ internal static class RelayDocuments
             image = imageSize.IsEmpty ? null : ImageFor(track, imageSize, imageCache),
             best = best.Select(b => new { name = shown[b.Name], ms = b.Ms, whenUtc = b.When }).ToList(),
         };
+    }
+
+    /// <summary>
+    /// True when a record holder's "name" has a digit and no letter in it -
+    /// a transponder number standing in for a car nobody has named, which
+    /// must not go out on a public page.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the Tracks page only caught a number
+    /// it could match to a profile or a saved result, so a first-race car's
+    /// record went out under its bare transponder until the race was saved.
+    /// </remarks>
+    internal static bool LooksLikeBareNumber(string? name)
+    {
+        var text = (name ?? string.Empty).Trim();
+        return text.Any(char.IsDigit) && !text.Any(char.IsLetter);
     }
 
     private static List<(string Name, long Ms, DateTime When)> BestLaps(

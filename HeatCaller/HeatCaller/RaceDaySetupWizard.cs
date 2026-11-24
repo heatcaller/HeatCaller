@@ -1963,7 +1963,40 @@ internal sealed partial class RaceDaySetupWizard : Form
 
         // Ticked: somebody adding a class tonight is adding it to race.
         _lstClasses.Items.Add(form.ClassName, true);
+
+        // WHY (23 Nov 2026, bug hunt 24): the small window says the class is
+        // "ticked for tonight", but the tick only reached the day when the
+        // step was left with Next, Back, the rail or Skip setup. Closing Set
+        // Up Tonight with its X kept the class on file and left it off the
+        // day, so its drivers got no heats. Now it goes on the day straight
+        // away, as a class's format already does. Only the new class: the
+        // other ticks on the step are still saved on leaving it.
+        if (OpenDay is { } day && ClassesRacingAfterAdd(day.ClassNames, form.ClassName) is { } racing)
+        {
+            _host.SetClassesRacing(racing);
+        }
+
         FillFormatRows();
+    }
+
+    /// <summary>
+    /// The day's racing classes once a class has been added from the
+    /// Classes step, or null when the day needs no change.
+    ///
+    /// Null for a day with no classes of its own: that day races every class
+    /// with drivers, the new one included, and writing a one-name list would
+    /// cut tonight down to the new class alone. Null too when the day already
+    /// names it.
+    /// </summary>
+    internal static IReadOnlyList<string>? ClassesRacingAfterAdd(IReadOnlyList<string>? dayClassNames, string added)
+    {
+        if (dayClassNames is null || dayClassNames.Count == 0 || string.IsNullOrWhiteSpace(added)
+            || dayClassNames.Contains(added, StringComparer.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return dayClassNames.Append(added).ToList();
     }
 
     /// <summary>

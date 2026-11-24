@@ -125,6 +125,34 @@ public sealed class RoundDefinition
     public int ShootoutQualifyingPlace { get; set; }
 
     /// <summary>
+    /// On a Pole Shootout run: the qualifying field (best first) the runs
+    /// were built for, or last moved to follow. Null on every other round,
+    /// and on runs built before 23 Nov 2026.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): without it a run the director gave
+    /// another driver by hand could not be told from a change in
+    /// qualifying, so the qualifier was put back after every filed race -
+    /// with a status line claiming a new qualifying order. See
+    /// PoleShootout.Refresh.
+    /// </remarks>
+    public List<string>? ShootoutField { get; set; }
+
+    /// <summary>
+    /// On a Pole Shootout run: the drivers the director took out of the
+    /// shootout by deleting their run from the programme. Kept on every run
+    /// still there. Null or empty when nobody was left out.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Nov 2026, bug hunt 24 #269): a run deleted by hand used to
+    /// come back the next time any race was filed - the runs left still
+    /// counted it, so the shootout looked a run short and was built again
+    /// "for the new qualifying order" though qualifying had not changed.
+    /// See PoleShootout.LeaveOut and PoleShootout.Refresh.
+    /// </remarks>
+    public List<string>? ShootoutLeftOut { get; set; }
+
+    /// <summary>
     /// On a main: its grid has been put in Pole Shootout order, once, after
     /// the shootout's last run. A grid the desk changes by hand afterwards
     /// is then left alone.

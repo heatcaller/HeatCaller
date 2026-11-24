@@ -137,7 +137,28 @@ public sealed partial class RelaySettingsControl
 
         if (Stream is { } stream)
         {
-            stream.Changed += () => { if (IsHandleCreated && !IsDisposed) BeginInvoke(DrawPiecesWhenFree); };
+            // WHY (23 Nov 2026, bug hunt 24): a change is never dropped. The
+            // old handler did nothing when the page had no window handle yet
+            // - OBS already streaming when HeatCaller opened lands in the
+            // few seconds before the page is first built on screen - so the
+            // card said "Nothing streamed tonight yet." under "connected, and
+            // streaming", with no row to paste the link into, till the stream
+            // stopped. Now it is marked stale (a bool, safe from any thread)
+            // and the card's one-second timer, which ticks without a handle,
+            // redraws it.
+            stream.Changed += () =>
+            {
+                _piecesStale = true;
+
+                try
+                {
+                    if (IsHandleCreated && !IsDisposed) BeginInvoke(DrawPiecesWhenFree);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+                {
+                    // The handle went between the check and the call; the timer redraws.
+                }
+            };
         }
 
         DrawPieces();
@@ -198,11 +219,30 @@ public sealed partial class RelaySettingsControl
         DrawPieces();
     }
 
+    /// <summary>
+    /// The old rows taken off the card and let go.
+    /// WHY (23 Nov 2026, bug hunt 24): the card used to only Clear() them,
+    /// which unparents but does not dispose - every nudge, Hide tick or link
+    /// save left about 11 live window handles a piece behind (and each link
+    /// box's save timer, which goes only when its box is disposed), as
+    /// ThemesControl once did. Disposed over a copy, then cleared.
+    /// </summary>
+    internal static void DisposeRows(Control panel)
+    {
+        var old = panel.Controls.Cast<Control>().ToList();
+        panel.Controls.Clear();
+
+        foreach (var row in old)
+        {
+            row.Dispose();
+        }
+    }
+
     /// <summary>One row a piece: when it ran, its YouTube link, and the nudge.</summary>
     private void DrawPieces()
     {
         _pieces.SuspendLayout();
-        _pieces.Controls.Clear();
+        DisposeRows(_pieces);
         var pieces = Stream?.Pieces ?? Array.Empty<StreamTonight.Piece>();
 
         if (pieces.Count == 0)

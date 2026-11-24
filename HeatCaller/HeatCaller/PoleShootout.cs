@@ -52,11 +52,20 @@ public static class PoleShootout
     /// changed - every car's clock from its own first crossing (the out lap
     /// is free), a lap limit of the timed laps plus that first crossing, and
     /// a time limit only as a stop for a car that never comes round.
+    /// <para>A class with no format of its own (null) follows the app
+    /// default, so <paramref name="appDefault"/> is what the run starts from
+    /// then; the built-in values only when neither is given.</para>
     /// </summary>
-    public static RaceFormat RunFormat(RaceFormat? classFormat, int timedLaps)
+    public static RaceFormat RunFormat(RaceFormat? classFormat, int timedLaps, RaceFormat? appDefault = null)
     {
         var laps = Math.Clamp(timedLaps, 1, MaxTimedLaps);
-        var format = (classFormat ?? new RaceFormat()).Clone();
+
+        // WHY (23 Nov 2026, bug hunt 24): a class that follows the app default
+        // has a null Format, and this used to fall straight to the built-in
+        // values (3 s min lap, automatic 15 s + 5 s start), not the club's own
+        // default - so at a club with a lower min lap no timed lap counted and
+        // nobody took pole, while the same class's heats and mains raced fine.
+        var format = (classFormat ?? appDefault ?? new RaceFormat()).Clone();
 
         format.StartType = RaceStartType.Qualifier;
         format.LapLimit = laps + 1;
@@ -78,19 +87,33 @@ public static class PoleShootout
     /// The runs for a field (best qualifier first), in running order: the
     /// slowest of the field first, the top qualifier last. Fewer than two
     /// drivers is no shootout at all, and builds nothing.
+    /// <para><paramref name="leftOut"/>: drivers the director took out of the
+    /// shootout by deleting their run (bug hunt 24 #269). They get no run;
+    /// the others keep their own qualifying places, and the runs remember
+    /// the whole field and who was left out, so the next Refresh sees
+    /// nothing has changed.</para>
     /// </summary>
-    public static List<RoundDefinition> BuildRuns(string className, IReadOnlyList<string> field, int timedLaps, RaceFormat? classFormat, string trackLayoutName)
+    public static List<RoundDefinition> BuildRuns(string className, IReadOnlyList<string> field, int timedLaps, RaceFormat? classFormat, string trackLayoutName, RaceFormat? appDefault = null, IReadOnlyCollection<string>? leftOut = null)
     {
         var runs = new List<RoundDefinition>();
+        var skip = new HashSet<string>(leftOut ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
 
-        if (field.Count < MinDrivers)
+        // Each driver who runs, with their place in the whole field (1 = top qualifier).
+        var running = field
+            .Select((t, i) => (Transponder: t, Place: i + 1))
+            .Where(d => !skip.Contains(d.Transponder))
+            .ToList();
+
+        if (running.Count < MinDrivers)
         {
             return runs;
         }
 
-        for (var run = 1; run <= field.Count; run++)
+        var kept = skip.Count == 0 ? null : skip.OrderBy(t => t, StringComparer.OrdinalIgnoreCase).ToList();
+
+        for (var run = 1; run <= running.Count; run++)
         {
-            var place = field.Count - run + 1;
+            var driver = running[running.Count - run];
 
             runs.Add(new RoundDefinition
             {
@@ -98,15 +121,91 @@ public static class PoleShootout
                 RoundLabel = RunLabel(run),
                 Kind = RoundKind.Shootout,
                 ShootoutRun = run,
-                ShootoutRunCount = field.Count,
-                ShootoutQualifyingPlace = place,
+                ShootoutRunCount = running.Count,
+                ShootoutQualifyingPlace = driver.Place,
                 TrackLayoutName = trackLayoutName,
-                AssignedTransponders = new List<string> { field[place - 1] },
-                FormatOverride = RunFormat(classFormat, timedLaps),
+                AssignedTransponders = new List<string> { driver.Transponder },
+                FormatOverride = RunFormat(classFormat, timedLaps, appDefault),
+
+                // The field the runs were built for, so Refresh can tell a
+                // hand change from a change in qualifying (bug hunt 24).
+                ShootoutField = field.ToList(),
+                ShootoutLeftOut = kept?.ToList(),
             });
         }
 
         return runs;
+    }
+
+    /// <summary>
+    /// The driver a run stands for: the qualifier in its place in the field
+    /// it was built for - even when the desk has since given the run to
+    /// somebody else - or, on runs saved before the field was kept, the
+    /// driver in it.
+    /// </summary>
+    public static string SlotDriver(RoundDefinition run) =>
+        run.ShootoutField is { } built && run.ShootoutQualifyingPlace >= 1 && run.ShootoutQualifyingPlace <= built.Count
+            ? built[run.ShootoutQualifyingPlace - 1]
+            : run.AssignedTransponders.FirstOrDefault() ?? string.Empty;
+
+    /// <summary>Everyone the director has left out of the shootout, from any of its runs.</summary>
+    public static List<string> LeftOut(IEnumerable<RoundDefinition> runs) =>
+        runs.SelectMany(r => r.ShootoutLeftOut ?? new List<string>())
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    /// <summary>
+    /// Writes onto the runs still on the programme that the
+    /// <paramref name="deleted"/> runs were taken off it by hand: their
+    /// drivers are left out, and the shootout has as many runs as are left,
+    /// so it still finishes and still sets the front of the A-Main.
+    /// Called with no deleted runs after an undo puts some back: who is left
+    /// out and the run count are worked out again from the runs there now,
+    /// so two deletes undone in either order both come out right. Returns
+    /// the runs it changed, for the caller to save.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Nov 2026, bug hunt 24 #269): the runs left used to go on
+    /// counting a deleted run, so Refresh read the gap as a change in
+    /// qualifying and built the run again after every filed race - and,
+    /// once a run had been raced, the shootout could never be complete,
+    /// so nobody was called on pole.
+    /// </remarks>
+    public static List<RoundDefinition> LeaveOut(IReadOnlyList<RoundDefinition> runsLeft, IEnumerable<RoundDefinition> deleted)
+    {
+        var changed = new List<RoundDefinition>();
+
+        if (runsLeft.Count == 0)
+        {
+            return changed;
+        }
+
+        var stillRunning = runsLeft.Select(SlotDriver).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var leftOut = LeftOut(runsLeft)
+            .Concat(deleted.Select(SlotDriver))
+            .Where(t => !string.IsNullOrWhiteSpace(t) && !stillRunning.Contains(t))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var run in runsLeft)
+        {
+            var was = run.ShootoutLeftOut ?? new List<string>();
+
+            if (run.ShootoutRunCount == runsLeft.Count && was.SequenceEqual(leftOut, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            run.ShootoutRunCount = runsLeft.Count;
+            run.ShootoutLeftOut = leftOut.Count == 0 ? null : leftOut.ToList();
+            changed.Add(run);
+        }
+
+        return changed;
     }
 
     /// <summary>What Refresh found.</summary>
@@ -144,6 +243,47 @@ public static class PoleShootout
             return RefreshResult.Frozen;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): qualifying is what the runs follow,
+        // not the runs themselves. When the field is the one they were built
+        // for, nothing in qualifying moved, so a run the director gave
+        // another driver by hand stands. This used to read that hand change
+        // as a new qualifying order and put the qualifier back after every
+        // filed race. Runs built before the field was kept fall through to
+        // the old comparison.
+        //
+        // WHY (24 Nov 2026, bug hunt 24 #269): a run the director deleted is
+        // written onto the runs left (LeaveOut), so the field is the same
+        // field less the drivers left out. That used to read as a field of
+        // another size and build the deleted run again after every filed
+        // race, "for the new qualifying order". A run that is missing with
+        // nobody recorded as left out is still built again, as before.
+        var leftOut = LeftOutOf(runs, field);
+        var running = field.Count - leftOut.Count;
+
+        if (runs.Count == running
+            && runs.Any(r => r.ShootoutField is { } built && built.SequenceEqual(field, StringComparer.OrdinalIgnoreCase)))
+        {
+            return RefreshResult.Unchanged;
+        }
+
+        if (leftOut.Count > 0)
+        {
+            // Runs saved before the field was kept: nothing changed while
+            // they still hold the field less the drivers left out, in order.
+            var expected = field.Where(t => !leftOut.Contains(t, StringComparer.OrdinalIgnoreCase)).ToList();
+            var holding = runs.OrderBy(r => r.ShootoutQualifyingPlace).Select(r => r.AssignedTransponders.FirstOrDefault() ?? string.Empty).ToList();
+
+            if (runs.All(r => r.ShootoutField is null) && holding.SequenceEqual(expected, StringComparer.OrdinalIgnoreCase))
+            {
+                return RefreshResult.Unchanged;
+            }
+
+            // Qualifying really changed. The runs have gaps where the
+            // deleted ones were, so they can't be moved in place: built
+            // again, still without the drivers left out (BuildRuns' leftOut).
+            return RefreshResult.Rebuild;
+        }
+
         if (runs.Count != field.Count)
         {
             return RefreshResult.Rebuild;
@@ -173,8 +313,21 @@ public static class PoleShootout
             }
         }
 
+        if (changed)
+        {
+            // The field the runs now follow (bug hunt 24), on every run.
+            foreach (var run in runs)
+            {
+                run.ShootoutField = field.ToList();
+            }
+        }
+
         return changed ? RefreshResult.Updated : RefreshResult.Unchanged;
     }
+
+    /// <summary>The drivers left out of the shootout who are in <paramref name="field"/> - the ones a rebuild must not give a run.</summary>
+    public static List<string> LeftOutOf(IEnumerable<RoundDefinition> runs, IReadOnlyList<string> field) =>
+        LeftOut(runs).Where(t => field.Contains(t, StringComparer.OrdinalIgnoreCase)).ToList();
 
     /// <summary>
     /// A run's time: the best of its timed laps, with any time penalty the

@@ -123,9 +123,16 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>Each driver's name and Announcer name ("" for one not given), in a settled order.</summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): single-spaced, not just trimmed. A
+    /// name saved as "Mia  Kent" (two spaces, or a pasted tab) was a key the
+    /// line never matched - every line is tidied to "Mia Kent" before it is
+    /// said - so that one driver went to the cloud voice, the captions and
+    /// listen-along in full while the box to shorten names was ticked.
+    /// </remarks>
     private List<(string Driver, string Spoken)> NamesToShorten() =>
         _profiles.All.ToList()
-            .Select(profile => (Driver: (profile.DriverName ?? string.Empty).Trim(), Spoken: (profile.SpokenName ?? string.Empty).Trim()))
+            .Select(profile => (Driver: SingleSpaced(profile.DriverName), Spoken: SingleSpaced(profile.SpokenName)))
             .Where(name => name.Driver.Length > 0 || name.Spoken.Length > 0)
             .Distinct()
             .OrderBy(name => name.Driver, StringComparer.Ordinal)
@@ -240,7 +247,14 @@ public sealed partial class AnnouncementService
     }
 
     private static string FirstWord(string? name) =>
-        (name ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+        SingleSpaced(name).Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+
+    /// <summary>
+    /// A name with every run of spaces or tabs inside it made one space, and
+    /// none at the ends - the name as a tidied line carries it (bug hunt 24).
+    /// </summary>
+    internal static string SingleSpaced(string? name) =>
+        string.Join(' ', (name ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     /// <summary>
     /// Each full name (two words or more) and the short form the club's
@@ -250,7 +264,8 @@ public sealed partial class AnnouncementService
     {
         var full = names
             .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select(name => name.Trim())
+            // Single-spaced (23 Nov 2026, bug hunt 24) - see NamesToShorten.
+            .Select(name => SingleSpaced(name))
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
@@ -280,9 +295,13 @@ public sealed partial class AnnouncementService
             return null;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): the words of a name match across
+        // any run of spaces or tabs, so a line that kept a doubled space (a
+        // hand-typed one) is shortened too; the match is looked up
+        // single-spaced - see ShortenNames.
         var alternatives = map.Keys
             .OrderByDescending(name => name.Length)
-            .Select(Regex.Escape);
+            .Select(name => string.Join(@"\s+", name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(Regex.Escape)));
 
         var pattern = new Regex(
             $@"(?<![\w])(?:{string.Join('|', alternatives)})(?![\w])",
@@ -303,5 +322,5 @@ public sealed partial class AnnouncementService
     }
 
     private static string ShortenNames(string text, Regex pattern, Dictionary<string, string> map) =>
-        pattern.Replace(text, match => map.TryGetValue(match.Value, out var shortName) ? shortName : match.Value);
+        pattern.Replace(text, match => map.TryGetValue(SingleSpaced(match.Value), out var shortName) ? shortName : match.Value);
 }

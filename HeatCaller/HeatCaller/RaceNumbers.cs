@@ -118,15 +118,20 @@ internal static class RaceNumbers
 
     // "twelve-nine-four-five": a whole number and three digits, hyphened
     // into one word with no "point" at all.
+    //
+    // WHY (23 Nov 2026, bug hunt 24): the run starts a word, not after a
+    // hyphen, as SpelledPoint's does. With a plain \b it began mid-run, so a
+    // typed or model-written countdown "five-four-three-two-one" became
+    // "five-4.321s" and was read as a lap. SpelledTail gets the same guard.
     private static readonly System.Text.RegularExpressions.Regex SpelledRun = new(
-        $@"\b(?<whole>{WholeWord})(?<digits>(?:-(?:{DigitWord})){{3}})\b(?![-\w])",
+        $@"(?<![\w-])(?<whole>{WholeWord})(?<digits>(?:-(?:{DigitWord})){{3}})\b(?![-\w])",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant
         | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     // "a thirteen fifty-six-nine": the commentator's form with the
     // thousandth hung off the end as one more digit.
     private static readonly System.Text.RegularExpressions.Regex SpelledTail = new(
-        $@"\b(?<whole>{WholeWord}) (?<tens>{TensWord})-(?<unit>one|two|three|four|five|six|seven|eight|nine)-(?<digit>{DigitWord})\b(?![-\w])",
+        $@"(?<![\w-])(?<whole>{WholeWord}) (?<tens>{TensWord})-(?<unit>one|two|three|four|five|six|seven|eight|nine)-(?<digit>{DigitWord})\b(?![-\w])",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant
         | System.Text.RegularExpressions.RegexOptions.Compiled);
 
@@ -152,7 +157,9 @@ internal static class RaceNumbers
         }
 
         text = SpelledPoint.Replace(text, m => Figure(m.Groups["whole"].Value, Digits(m.Groups["digits"].Value)) ?? m.Value);
-        text = SpelledRun.Replace(text, m => Figure(m.Groups["whole"].Value, Digits(m.Groups["digits"].Value)) ?? m.Value);
+        text = SpelledRun.Replace(text, m => IsPlainCount(m.Groups["whole"].Value, m.Groups["digits"].Value)
+            ? m.Value
+            : Figure(m.Groups["whole"].Value, Digits(m.Groups["digits"].Value)) ?? m.Value);
 
         return SpelledTail.Replace(text, m =>
         {
@@ -164,6 +171,41 @@ internal static class RaceNumbers
                 ? m.Value
                 : Figure(m.Groups["whole"].Value, $"{tens}{unit}{digit}") ?? m.Value;
         });
+    }
+
+    /// <summary>
+    /// True for "four-three-two-one" or "one-two-three-four": a single digit
+    /// and three more that step by exactly one, all the same way.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): that is a count, not a time. It was
+    /// turned into "4.321s" and read as a lap, "four three twenty-one". A
+    /// two-digit whole ("twelve-three-four-five") is never a count and is
+    /// still put into figures.
+    /// </summary>
+    internal static bool IsPlainCount(string spelledWhole, string spelledDigits)
+    {
+        if (WholeValue(spelledWhole) is not { } whole || whole > 9 || Digits(spelledDigits) is not { } digits)
+        {
+            return false;
+        }
+
+        var all = whole.ToString(System.Globalization.CultureInfo.InvariantCulture) + digits;
+        var step = all[1] - all[0];
+
+        if (step is not (1 or -1))
+        {
+            return false;
+        }
+
+        for (var i = 2; i < all.Length; i++)
+        {
+            if (all[i] - all[i - 1] != step)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>"-three-zero-four" as "304", or null when a word is not a digit.</summary>

@@ -198,6 +198,18 @@ internal static class AppUpdates
     /// </summary>
     internal static Func<Action, bool>? RunInstallOnUiThread { get; set; }
 
+    /// <summary>
+    /// Tells the director, in a window, that "Update now" failed after the
+    /// saves were frozen and HeatCaller has to be closed and opened again
+    /// (the words are InstallFailedWords). Set once by MainForm, and must
+    /// open the window on the UI thread. Unset, only the console and the
+    /// Updates card say so.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the failure was told to the console
+    /// only, and the app carried on with every save switched off.
+    /// </summary>
+    internal static Action<string>? TellInstallFailed { get; set; }
+
     /// <summary>Where this class says things. The console, by way of MainForm.</summary>
     internal static Action<string>? Log { get; set; }
 
@@ -564,16 +576,16 @@ internal static class AppUpdates
                             }
                         });
 
-                        if (failed is not null)
+                        // WHY (23 Nov 2026, bug hunt 24): a failed install
+                        // after the freeze was told to the console only, and
+                        // the card got "The console says why." - so the
+                        // director pressed Update now, saw nothing happen,
+                        // and carried on in a run that could not save
+                        // anything. Now the host is told (a dialog) and the
+                        // card line says saving has stopped.
+                        if (AfterInstallAttempt(failed, ran, TellInstallFailed) is { } line)
                         {
-                            // The saves were frozen just before the install,
-                            // so nothing more is written this run.
-                            Say($"The update couldn't be installed ({failed.GetType().Name}: {failed.Message}) - nothing was changed, "
-                                + "but HeatCaller has stopped saving for this run. Close it and open it again before carrying on.");
-                        }
-                        else if (!ran)
-                        {
-                            Say("HeatCaller is closing down - not installing now. It will be offered again.");
+                            return line;
                         }
                     }
                     else
@@ -608,6 +620,60 @@ internal static class AppUpdates
                 Say($"{newVersion} was left for now. It will be offered again next time HeatCaller starts.");
                 return $"{newVersion} was left for now. Check again whenever you're ready.";
         }
+    }
+
+    /// <summary>
+    /// What the director is told when "Update now" was pressed, the saves
+    /// were frozen for the install, and the install then failed: nothing
+    /// was changed, but nothing more can be saved until HeatCaller is
+    /// closed and opened again.
+    /// </summary>
+    internal static string InstallFailedWords(Exception failed) =>
+        $"The update couldn't be installed ({failed.GetType().Name}: {failed.Message}). Nothing was changed, "
+        + "but HeatCaller has stopped saving for this run. Close it and open it again before carrying on.";
+
+    /// <summary>
+    /// After the install was handed to the UI thread: says what happened on
+    /// the console, tells the host when the install failed after the freeze,
+    /// and hands back the line for the Updates card - or null when nothing
+    /// went wrong that this knows of (the generic line is used then).
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): pulled out of Offer so the failed
+    /// install can be tested without Velopack. The old code only wrote the
+    /// console line here and returned "The console says why.", which the
+    /// quiet check threw away - nothing on screen said saving had stopped.
+    /// </summary>
+    /// <param name="failed">What the install threw, or null.</param>
+    /// <param name="ran">Whether the UI thread took the install at all (false when the window is closing).</param>
+    /// <param name="tell">The host's dialog, or null when none is wired up.</param>
+    internal static string? AfterInstallAttempt(Exception? failed, bool ran, Action<string>? tell)
+    {
+        if (failed is not null)
+        {
+            // The saves were frozen just before the install, so nothing
+            // more is written this run.
+            var words = InstallFailedWords(failed);
+            Say(words);
+
+            try
+            {
+                tell?.Invoke(words);
+            }
+            catch (Exception)
+            {
+                // A dialog that could not be shown must not hide the line
+                // for the card as well.
+            }
+
+            return "The update wasn't installed, and HeatCaller has stopped saving for this run. Close it and open it again before carrying on.";
+        }
+
+        if (!ran)
+        {
+            Say("HeatCaller is closing down - not installing now. It will be offered again.");
+        }
+
+        return null;
     }
 
     /// <summary>

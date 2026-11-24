@@ -108,11 +108,7 @@ internal static class SupportInfo
         // holding every form of every driver's name - and reading and
         // zipping the files goes to the background: a big club's roster is
         // a noticeable pause, and a race may be running.
-        var people = profiles.All
-            .Select(p => new Redactor.Person(
-                new[] { p.DriverName, p.AnnouncerName }.Where(n => !string.IsNullOrWhiteSpace(n)).ToList(),
-                new[] { p.Contact, p.Email }.Where(c => !string.IsNullOrWhiteSpace(c)).ToList()))
-            .ToList();
+        var people = PeopleFor(profiles.All);
 
         // 5 Nov 2026, Bug hunt 11: the ElevenLabs key is the voice settings'
         // (VoiceProfile.ApiKey), not AppSettings.ApiKey - that one is the
@@ -139,6 +135,72 @@ internal static class SupportInfo
         }, zipPath));
 
         return (zipPath, outcome);
+    }
+
+    /// <summary>
+    /// Everybody whose name is kept in Driver Hub, for the Redactor: each
+    /// driver first (so driver numbers stay as they were), then the other
+    /// people named on a profile - the Team Principal and Technical Lead
+    /// (with how each is said), the mentor and the waiver's guardian - each
+    /// as their own person, and once only when the same name is on more
+    /// than one profile.
+    /// </summary>
+    internal static List<Redactor.Person> PeopleFor(IEnumerable<DriverProfile> profiles)
+    {
+        var list = profiles.ToList();
+
+        var people = list
+            .Select(p => new Redactor.Person(
+                new[] { p.DriverName, p.AnnouncerName }.Where(n => !string.IsNullOrWhiteSpace(n)).ToList(),
+                new[] { p.Contact, p.Email }.Where(c => !string.IsNullOrWhiteSpace(c)).ToList()))
+            .ToList();
+
+        // WHY (23 Nov 2026, bug hunt 24): the list used to hold only each
+        // driver's own name and announcer's name, so a crew name typed into
+        // Driver Hub - often a junior's parent - went into the support zip as
+        // typed, from lines like "[commentary] At the flag: down to pit lane
+        // for a word with ..." and the spoken interview itself, though the
+        // README says only names not in Driver Hub are left in. Mentor and
+        // guardian are people's names kept there too, so they go in as well.
+        static string Key(string name) =>
+            string.Join(" ", name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
+
+        var seen = new HashSet<string>(
+            people.SelectMany(p => p.Names).Select(Key),
+            StringComparer.Ordinal);
+
+        foreach (var p in list)
+        {
+            var others = new[]
+            {
+                new[] { p.CrewPrincipalName, p.CrewPrincipalSaidAs },
+                new[] { p.CrewTechName, p.CrewTechSaidAs },
+                new[] { p.Mentor },
+                new[] { p.WaiverGuardian },
+            };
+
+            foreach (var names in others)
+            {
+                var fresh = names
+                    .Where(n => !string.IsNullOrWhiteSpace(n) && !seen.Contains(Key(n)))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (fresh.Count == 0)
+                {
+                    continue;
+                }
+
+                foreach (var n in fresh)
+                {
+                    seen.Add(Key(n));
+                }
+
+                people.Add(new Redactor.Person(fresh, Array.Empty<string>()));
+            }
+        }
+
+        return people;
     }
 
     /// <summary>The console line, the message saying what went in, and the folder opened on the file.</summary>

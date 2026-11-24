@@ -48,12 +48,6 @@ public static partial class RaceCoach
     /// <summary>The most news items the feed shows. More than five and it stops being the headlines.</summary>
     public const int MostNews = 5;
 
-    /// <summary>
-    /// How far back from the last session a race night reaches. Twelve
-    /// hours takes in a night that runs past midnight, and never two nights.
-    /// </summary>
-    public static readonly TimeSpan NightLength = TimeSpan.FromHours(12);
-
     /// <summary>A typical best lap that moved less than this in a month has not really moved.</summary>
     public const long SteadyMonthMs = 20;
 
@@ -89,8 +83,15 @@ public static partial class RaceCoach
 
     /// <summary>
     /// The sessions of the last race night, oldest first: every scored
-    /// session that started within <see cref="NightLength"/> of the last
-    /// one. Empty when nothing has been raced.
+    /// session on the same 6am-to-6am night as the last one. Empty when
+    /// nothing has been raced.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): this was every session within twelve
+    /// hours of the last one. An all-day meeting (practice from 9:00, the
+    /// last main at 21:30) lost its morning, which then counted as "before":
+    /// a first-time visitor was told they took time off their best, and a
+    /// layout's first day reported a record that "has stood since" the
+    /// morning. A race night is 6am to 6am, as everywhere else in the app.
     /// </summary>
     public static List<SessionRecord> LastNight(IEnumerable<SessionRecord> sessions)
     {
@@ -101,12 +102,23 @@ public static partial class RaceCoach
             return new List<SessionRecord>();
         }
 
-        var last = scored.Max(s => s.StartedAtUtc);
+        var night = NightOf(scored.Max(s => s.StartedAtUtc));
 
         return scored
-            .Where(s => s.StartedAtUtc > last - NightLength)
+            .Where(s => NightOf(s.StartedAtUtc) == night)
             .OrderBy(s => s.StartedAtUtc)
             .ToList();
+    }
+
+    /// <summary>The race night (6am to 6am, local) a session that started at <paramref name="startedUtc"/> belongs to.</summary>
+    private static DateTime NightOf(DateTime startedUtc)
+    {
+        var local = DateTime.SpecifyKind(startedUtc, DateTimeKind.Utc).ToLocalTime();
+
+        // A session saved with no time at all is DateTime.MinValue, and six
+        // hours before that is no date - it goes under its own day, as
+        // RaceHistoryControl.NightOf has it.
+        return local < DateTime.MinValue.AddDays(1) ? local.Date : TonightAtTheTrack.NightOf(local);
     }
 
     /// <summary>

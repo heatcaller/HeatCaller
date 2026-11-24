@@ -269,6 +269,55 @@ public static class CommentaryTones
     public static ToneProfile? Find(CommentaryTone tone) => ByTone.GetValueOrDefault(tone);
 
     /// <summary>
+    /// The character tone's entry as the prompts should use it tonight:
+    /// <see cref="Find(CommentaryTone)"/>, put through <see cref="ForDial"/>.
+    /// </summary>
+    public static ToneProfile? Find(CommentaryTone tone, AppSettings settings) =>
+        Find(tone) is { } profile ? ForDial(profile, settings) : null;
+
+    /// <summary>
+    /// The tone's coaching for the Sailor-mouth dial. Every tone, and
+    /// Sailor-mouth with the dial at 1 or more, comes back as it is.
+    /// </summary>
+    // WHY (23 Nov 2026, bug hunt 24): with the swear dial at 0 ("none, just
+    // crude") RuleFor said "SWEARING: none at all", but the same prompt still
+    // carried Sailor-mouth's fixed coaching - "the f-word is your go-to", a
+    // sworn worked example, "with an f-bomb in it", "who the fuck won". Told to
+    // swear and not to swear at once, the model swore, and ScreenWords then
+    // dropped the line (nothing was said) or a long piece kept the swears. At 0
+    // the coaching is now crude but swear-free, so the prompt agrees with itself.
+    public static ToneProfile ForDial(ToneProfile tone, AppSettings settings)
+    {
+        if (tone.Tone != CommentaryTone.SailorMouth || SwearsPerLine(settings) > 0)
+        {
+            return tone;
+        }
+
+        return tone with
+        {
+            ToneLine =
+                "Call it like a blunt, cheeky pit crew chief who has had a long night - crude and rude about the "
+                + "race, the track, a corner, a car or the luck, never a driver, but with no swear words at all. "
+                + "Quick and funny with it, and still clear about who is where. "
+                + "Example of the VOICE wanted: given \"P1 leads P2 by 0.4s on lap 12\", write something like "
+                + "\"Four lousy tenths, Sam, and Bill is stuck there like gum on a shoe on lap twelve.\" - "
+                + "not \"Sam leads Bill by 0.4 seconds.\"",
+            Segment =
+                " A crude, cheeky aside between races - one piece of news from the facts, told the way the crew tells "
+                + "it at the back of the pits, with no swear words. Crude about the race, never about a driver.",
+            Exchange =
+                " Two blunt pit crew chiefs between races, giving each other grief about the race. Each turn answers "
+                + "the last, and the second adds a fact the first didn't give. Short and cheeky, with no swear words.",
+            Close =
+                " Close the race the way the crew would at the bar afterwards - who won, by how much, and who got "
+                + "robbed by the luck. Blunt but exact, no swear words, and nobody's mocked.",
+            Host =
+                "The host is a blunt, cheeky but friendly pit-lane reporter - crude about the race, never at the guest, "
+                + "and no swear words.",
+        };
+    }
+
+    /// <summary>
     /// Whether the voice-tag pass does anything for this tone - the
     /// Enthusiastic tone's [excited], or a character tone's own cues.
     /// Neutral and Dry stay untagged: nobody who picked calm asked for it.

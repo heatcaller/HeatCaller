@@ -1111,7 +1111,7 @@ function meAskCheckIn() {
   if (typeof meOpenSheet !== 'function' || !document.getElementById('me-sheet')) {
     let yes = false;
     try { yes = window.confirm(question); } catch (e) { yes = false; }
-    if (yes) { if (typeof hcCount === 'function') hcCount('checkin_tapped'); tapCheckIn(); }
+    if (yes) meYesCheckIn();
     return;
   }
   meOpenSheet('Are you at the track?', (body) => {
@@ -1128,12 +1128,22 @@ function meAskCheckIn() {
       const ticked = (typeof also.querySelectorAll === 'function' ? Array.from(also.querySelectorAll('input[data-code]')) : []).filter((t) => t.checked)
         .map((t) => ({ c: t.getAttribute('data-code'), n: t.getAttribute('data-name') || '' }));
       meCloseSheet();
-      if (typeof hcCount === 'function') hcCount('checkin_tapped');
-      tapCheckIn();
+      meYesCheckIn();
       if (ticked.length > 0) void meAlsoCheckIn(ticked);
     }));
     body.appendChild(tapButton('Not yet', 'go quiet', meCloseSheet));
   }, true);
+}
+
+// WHY (23 Nov 2026, bug hunt 24): Yes on "Are you at the track?" only ever
+// checks in. It used to call the night's toggle straight away, so a driver
+// the desk (or another phone) checked in while the question was open was
+// checked OUT by their own Yes - "You are checked out." and left off the
+// heats. Now, already in, it says so and sends nothing.
+function meYesCheckIn() {
+  if (checkedIn()) { toast('You are already checked in.'); return; }
+  if (typeof hcCount === 'function') hcCount('checkin_tapped');
+  tapCheckIn();
 }
 
 // The others on this phone who could be checked in with them: on tonight's

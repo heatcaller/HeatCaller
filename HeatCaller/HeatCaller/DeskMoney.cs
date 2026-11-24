@@ -333,6 +333,31 @@ public static class DeskMoney
         return (new EntryPayment { How = how, Amount = fee, Note = note, AtUtc = atUtc }, fee, false);
     }
 
+    /// <summary>
+    /// Of the drivers picked for Paid Cash or Paid Card, the ones a press
+    /// should settle: when anybody picked still owes, only those; when nobody
+    /// does, everybody (the desk putting right how somebody paid). Comp and
+    /// Still Owing are explicit changes of state, so they take everybody.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the right-click menu and the picked
+    /// bar settled every driver picked. A family of three with one already
+    /// paid "Cash $15.00 + Card $10.00" and two owing, then Paid Card, refiled
+    /// the settled one as "Card $25.00" - cash $15 under and card $15 over the
+    /// till - and the same loop wrote Cash over a comp and lost its reason.
+    /// The Driver Paid slip already kept to this rule (bug hunt 17).
+    /// </summary>
+    public static IReadOnlyList<T> WhoToSettle<T>(IReadOnlyList<T> picked, PaidHow how, Func<T, EntryPayment?> paymentOf, Func<T, decimal> feeOf)
+    {
+        if (how is not (PaidHow.Cash or PaidHow.Card))
+        {
+            return picked.ToList();
+        }
+
+        var owing = picked.Where(driver => StillOwed(paymentOf(driver), feeOf(driver)) > 0).ToList();
+
+        return owing.Count > 0 ? owing : picked.ToList();
+    }
+
     /// <summary>Money as the club writes it, in this PC's currency format: "$15.00".</summary>
     public static string Money(decimal amount) => amount.ToString("C", CultureInfo.CurrentCulture);
 

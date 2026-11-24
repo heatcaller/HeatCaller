@@ -66,6 +66,18 @@ public sealed class ChampionshipSwing
 
     /// <summary>How many races the championship has counted, this one included.</summary>
     public required int RoundsCounted { get; init; }
+
+    /// <summary>
+    /// More than one driver is on the top total now, whether or not they all
+    /// raced in this one.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the recap could only see a tie among
+    /// the drivers in <see cref="Moves"/> and the leader, so when P1 raced and
+    /// a driver level with them did not, P1 was still told "leads the
+    /// championship". The whole table is here; this says what it shows.
+    /// </remarks>
+    public bool LevelAtTop { get; init; }
 }
 
 /// <summary>
@@ -208,6 +220,7 @@ public static class Championship
                 Moves = moves,
                 Leader = MoveFor(0, racedHere.Contains(after[0].DriverName)),
                 RoundsCounted = counted.Count,
+                LevelAtTop = after.Count > 1 && after[1].TotalPoints == after[0].TotalPoints,
             };
         }
 

@@ -705,6 +705,14 @@ public sealed partial class RaceControlSession
     /// </summary>
     private static readonly TimeSpan FinishGrace = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// How long after the checkered the race waits for stragglers: the
+    /// minute's grace, plus the last car's own window only when the clock
+    /// brought the flag out (bug hunt 24 - see Tick).
+    /// </summary>
+    internal static TimeSpan StragglerGrace(bool finishingOnTime, TimeSpan lastWindowExtension) =>
+        FinishGrace + (finishingOnTime ? lastWindowExtension : TimeSpan.Zero);
+
     /// <summary>Whether this driver has already taken the checkered flag.</summary>
     public bool HasTakenFlag(string transponderId) => _tookTheFlag.Contains(transponderId);
 
@@ -902,6 +910,18 @@ public sealed partial class RaceControlSession
         _standings.Remove(standing.TransponderId);
         Log($"{standing.TransponderId} taken off the board - it was put there by hand.");
         SafeRaise(StandingRemoved, h => h(standing), nameof(StandingRemoved));
+
+        // WHY (23 Nov 2026, bug hunt 24): taken off after the checkered, it
+        // may have been the last car the finish was waiting on - as for a
+        // ghost switched off (RemoveGhostStanding). The old code never asked
+        // again, so with every car left on the board home the race sat on
+        // its last lap until the 60 s straggler wait ran out.
+        if (IsFinishing && EveryExpectedCarHasTakenTheFlag())
+        {
+            Log("Every car has taken the flag.");
+            Finish(_finishingOnTime);
+        }
+
         return true;
     }
 
@@ -2985,9 +3005,31 @@ public sealed partial class RaceControlSession
         // for clearing at staging rather than at the start.
         ClearJumpStartWindow();
 
+        // WHY (23 Nov 2026, bug hunt 24): a race abandoned on its last lap
+        // takes its finish with it. Only the green used to clear it, so the
+        // next race's whole staging and countdown still read as "finishing"
+        // and the stream overlay showed "Final lap" where the countdown goes.
+        ClearAbandonedFinish();
+
         SetState(RaceState.Staging);
         SetFlag(FlagState.None);
         Log("Staging - racers called to the grid.");
+    }
+
+    /// <summary>
+    /// Forgets a last lap that was under way: the checkered being out, when
+    /// it came out and who has taken it. For a race abandoned under the
+    /// checkered by a Stage or a countdown - the undo snapshot of that race
+    /// is taken by the caller first, so Undo still puts the finish back.
+    /// </summary>
+    private void ClearAbandonedFinish()
+    {
+        IsFinishing = false;
+        _finishingOnTime = false;
+        _finishingSinceUtc = null;
+        _finishingSinceClockMs = null;
+        _checkeredOutAtClockMs = null;
+        _tookTheFlag.Clear();
     }
 
     /// <summary>
@@ -3029,6 +3071,15 @@ public sealed partial class RaceControlSession
         // Bug hunt 14: read here too - a countdown that did not come
         // through Stage (nor restarts one) is a fresh start, see below.
         var freshStart = State is not (RaceState.Staging or RaceState.Countdown);
+
+        // WHY (23 Nov 2026, bug hunt 24): a countdown straight over a race on
+        // its last lap abandons that finish too - see ClearAbandonedFinish
+        // and Stage. Only over a running race: a finished race has already
+        // cleared its finish, and its board keeps who took the flag.
+        if (overRunningRace)
+        {
+            ClearAbandonedFinish();
+        }
 
         // A countdown that did not come through Stage opens the jump-start
         // window itself. Only Stage used to, so a countdown started straight
@@ -4461,7 +4512,13 @@ public sealed partial class RaceControlSession
         // The grace covers the stagger as well, or the cars the extension
         // above was meant to protect would be cut off by the very timeout
         // that exists for cars which have stopped.
-        var grace = FinishGrace + LastWindowExtension;
+        //
+        // WHY (23 Nov 2026, bug hunt 24): only for a finish on the clock. On
+        // a lap limit the flag applies to every car at once (FlagAppliesTo),
+        // so no car has a later window to protect - the old code still added
+        // the biggest release delay, and one broken car on a staggered or
+        // hand-released start held the result for minutes past the minute.
+        var grace = StragglerGrace(_finishingOnTime, LastWindowExtension);
 
         // On the monotonic clock - see _raceStartClockMs.
         if (IsFinishing && _finishingSinceUtc is { } since

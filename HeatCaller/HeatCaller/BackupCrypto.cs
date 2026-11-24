@@ -178,18 +178,43 @@ internal static class BackupCrypto
     /// Whether <paramref name="password"/> opens the locked backup at
     /// <paramref name="path"/>, by opening its first piece only. Slow on
     /// purpose (the key stretching), so not on a timer.
+    ///
+    /// False only when the password is what stops it. A backup that can't
+    /// be read for another reason - cut short, damaged, locked by a newer
+    /// HeatCaller, or the file can't be opened just now - is true here, so
+    /// the restore goes on and its own unlocking says what is really wrong
+    /// (before anything in the data folder is touched).
     /// </summary>
     public static bool PasswordOpens(string path, string password)
     {
+        // An empty password never locked a backup (Encrypt refuses one).
+        if (string.IsNullOrEmpty(password))
+        {
+            return false;
+        }
+
         try
         {
             using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             Decrypt(input, Stream.Null, password, firstPieceOnly: true);
             return true;
         }
-        catch
+        catch (WrongBackupPasswordException)
         {
             return false;
+        }
+        catch
+        {
+            // WHY (23 Nov 2026, bug hunt 24): this used to return false for
+            // every failure, so a locked backup that was cut short, damaged
+            // or locked by a newer HeatCaller was reported as "That password
+            // doesn't open this backup" - even for the right password, try
+            // after try - and the real reason was never shown. Now only a
+            // wrong password is false; anything else lets the restore run,
+            // and BackupService.RestoreBackup's unlocking refuses it with the
+            // worded reason ("cut short", "damaged", "Update HeatCaller")
+            // before any file is replaced.
+            return true;
         }
     }
 

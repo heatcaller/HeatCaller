@@ -29,9 +29,14 @@ internal static class SponsorVideoEngine
 
     /// <summary>
     /// Whether a background warm-up has been started - see
-    /// <see cref="WarmUp"/>. Read and written under <see cref="Gate"/>.
+    /// <see cref="WarmUp"/>. 0 until the first ask, 1 from then on.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): this was a bool read and written
+    /// under <see cref="Gate"/>, the lock the load itself holds from start
+    /// to finish. It is now only ever touched with Interlocked, so asking
+    /// "is a warm-up already running" never waits for the one that is.
     /// </summary>
-    private static bool _warming;
+    private static int _warmAsked;
 
     /// <summary>
     /// Whether the one attempt at loading the engine has FINISHED, either
@@ -185,14 +190,22 @@ internal static class SponsorVideoEngine
     /// </summary>
     internal static void WarmUp(Action<string>? say = null)
     {
-        lock (Gate)
+        // WHY (23 Nov 2026, bug hunt 24): this used to open with lock (Gate)
+        // to read "already tried / already warming". The warm-up it had
+        // started holds that same lock for the whole of the load, so a
+        // SECOND ask from the UI thread - another video slide selected,
+        // Preview Video pressed, or the Big Screen reaching a video while
+        // the Sponsors page's warm-up was still running - waited there
+        // until the player had finished loading, and the whole window
+        // froze with it (43 seconds on the club's PC). Every caller checks
+        // Settled first, which is false for exactly that stretch, so the
+        // check sent them straight into the lock. Now nothing here takes
+        // it. An engine that something else already loaded or failed to
+        // load is Settled; one being loaded right now without a warm-up
+        // just makes the task below wait its turn on a pool thread.
+        if (!ClaimWarmUp(ref _warmAsked, _settled))
         {
-            if (_tried || _warming)
-            {
-                return;
-            }
-
-            _warming = true;
+            return;
         }
 
         Task.Run(() =>
@@ -221,6 +234,15 @@ internal static class SponsorVideoEngine
             }
         });
     }
+
+    /// <summary>
+    /// Whether this ask is the one that should start the background load:
+    /// true once only, and never once the attempt is over. Takes no lock,
+    /// so it cannot wait - see the note in <see cref="WarmUp"/>.
+    /// (23 Nov 2026, bug hunt 24.)
+    /// </summary>
+    internal static bool ClaimWarmUp(ref int asked, bool settled) =>
+        !settled && Interlocked.CompareExchange(ref asked, 1, 0) == 0;
 
     /// <summary>
     /// Whether this build could play a video at all, without making the

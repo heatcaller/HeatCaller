@@ -93,6 +93,20 @@ internal sealed class TitleRaceView : Control
         _ => AppTheme.TextMuted,
     };
 
+    private const string LevelWord = "level";
+
+    /// <summary>
+    /// The words beside a driver's name: the leader's points, or how far
+    /// behind the leader the driver is. WHY (23 Nov 2026, bug hunt 24): with
+    /// rounds still to go a driver level on points with the leader sits in
+    /// place 2 with a gap of 0, and the old line printed "−0" - minus
+    /// nothing. A driver level with the leader now reads "level".
+    /// </summary>
+    internal static string GapWords(Row row) =>
+        row.Place == 1 ? $"{row.Points}"
+        : row.Gap == 0 ? LevelWord
+        : $"−{-row.Gap}";
+
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
@@ -126,8 +140,10 @@ internal sealed class TitleRaceView : Control
 
             var words = Words(row.State);
             var chipWidth = TextRenderer.MeasureText(g, words, AppTheme.SmallFont, Size.Empty, TextFormatFlags.NoPadding).Width + UiLayout.AtDpi(34);
-            var gap = row.Place == 1 ? $"{row.Points}" : $"−{-row.Gap}";
-            var gapWidth = TextRenderer.MeasureText(g, "−999", AppTheme.SmallFont, Size.Empty, TextFormatFlags.NoPadding).Width + UiLayout.AtDpi(8);
+            var gap = GapWords(row);
+            var gapWidth = Math.Max(
+                TextRenderer.MeasureText(g, "−999", AppTheme.SmallFont, Size.Empty, TextFormatFlags.NoPadding).Width,
+                TextRenderer.MeasureText(g, LevelWord, AppTheme.SmallFont, Size.Empty, TextFormatFlags.NoPadding).Width) + UiLayout.AtDpi(8);
 
             var nameX = box.Right + UiLayout.AtDpi(10);
             var nameWidth = Math.Max(1, Width - nameX - chipWidth - gapWidth - UiLayout.AtDpi(8));

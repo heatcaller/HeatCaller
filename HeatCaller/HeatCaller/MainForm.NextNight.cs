@@ -77,6 +77,9 @@ public partial class MainForm
         PublishNextNightNow();
         OnClientRawMessage($"{AppTime.LogStampNow()}  [program] {NextNight.When(night.Day)} called off.");
 
+        // Whether that reached the phones - see CalledOffWords.
+        var websiteOn = _settings.RelayEnabled;
+
         // A push to every phone signed up for alerts (setup plan step 7).
         string? pushed = null;
 
@@ -89,9 +92,9 @@ public partial class MainForm
 
         if (!form.Email || regulars.Count == 0 || mailProblem is not null)
         {
-            if (pushed is not null && !IsDisposed)
+            if (CalledOffWords(websiteOn, emailsTried: false, emailsOk: true, null, pushed) is { } said && !IsDisposed)
             {
-                AppDialog.Show(this, $"The night is off on the phones - and {pushed}", "Called off", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppDialog.Show(this, said, "Called off", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
 
             return;
@@ -125,10 +128,47 @@ public partial class MainForm
 
         if (!IsDisposed)
         {
-            var push = pushed is null ? string.Empty : $"\r\n\r\nPush: {pushed}";
-            AppDialog.Show(this, (result.Ok ? $"The night is off on the phones, and the emails went: {result.Message}" : $"The night is off on the phones, but the emails didn't all go: {result.Message}") + push,
+            AppDialog.Show(this, CalledOffWords(websiteOn, emailsTried: true, result.Ok, result.Message, pushed) ?? string.Empty,
                 "Called off", MessageBoxButtons.OK, result.Ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
+    }
+
+    /// <summary>
+    /// What the desk is told once a night is called off, or null for nothing
+    /// to say: whether the phones have it, how the emails went, and the push.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the words always began "The night is
+    /// off on the phones". With the club website switched off nothing is sent
+    /// to the phones at all (PublishNextNightNow), so the director was told
+    /// they showed the night as off when they still showed it as on - and
+    /// with no email to send, was told nothing. Now it says what Announce
+    /// the next night says: saved, but the phones won't see it until the
+    /// website is on.
+    /// </remarks>
+    internal static string? CalledOffWords(bool websiteOn, bool emailsTried, bool emailsOk, string? emailMessage, string? pushed)
+    {
+        if (websiteOn)
+        {
+            if (!emailsTried)
+            {
+                return pushed is null ? null : $"The night is off on the phones - and {pushed}";
+            }
+
+            return (emailsOk
+                    ? $"The night is off on the phones, and the emails went: {emailMessage}"
+                    : $"The night is off on the phones, but the emails didn't all go: {emailMessage}")
+                + (pushed is null ? string.Empty : $"\r\n\r\nPush: {pushed}");
+        }
+
+        var words = "The night is saved as called off - but the club website is switched off on the Club Website page, so the phones won't see it until it's on.";
+
+        if (emailsTried)
+        {
+            words += "\r\n\r\n" + (emailsOk ? $"The emails went: {emailMessage}" : $"The emails didn't all go: {emailMessage}");
+        }
+
+        return words + (pushed is null ? string.Empty : $"\r\n\r\nPush: {pushed}");
     }
 
     /// <summary>Sends the next-night card now rather than on the next tick.</summary>

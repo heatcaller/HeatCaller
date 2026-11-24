@@ -320,6 +320,12 @@ public partial class MainForm
             FirstNight = t => DriverIsOnFirstNight(t, nowUtc, nowLocal),
             AsksOf = asksFor,
 
+            // WHY (23 Nov 2026, bug hunt 24 #335): the desk's answer was stamped
+            // by this laptop's clock, so with the laptop more than 15 minutes
+            // slow the phone never showed it as news. It is now put on the
+            // relay's clock, the clock the phone compares it with.
+            RelayAhead = _relayPublisher.RelayClockOffset,
+
             // 29 Oct 2026, spoken laps on My Night: the driver's row tags on
             // the public board, and their target laps, so their own page
             // can read their laps out.

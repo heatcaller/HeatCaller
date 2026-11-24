@@ -120,8 +120,32 @@ internal static class LowerThird
         var hits = new List<(int At, string Shown)>();
         var taken = new List<(int Start, int End)>();
 
-        foreach (var candidate in candidates
-                     .Where(one => Trimmed(one.Said).Length >= ShortestName && Trimmed(one.Shown).Length > 0)
+        // WHY (23 Nov 2026, bug hunt 24): two DIFFERENT drivers announced by
+        // the same name - the club typed Announcer name "Bill" for both Bill
+        // Hargrove and Bill Fenwick - used to both reach the loop below in
+        // standings order, and the first one claimed the name. So the band
+        // put up whichever Bill was higher on the board, although the line
+        // cannot say which Bill it meant: a guess, and half the time the
+        // wrong driver on the wall. Now a spoken name that belongs to more
+        // than one board name is not looked for at all. The same driver on
+        // two transponders (same spoken AND board name) is still one person
+        // and still matched.
+        var usable = candidates
+            .Where(one => Trimmed(one.Said).Length >= ShortestName && Trimmed(one.Shown).Length > 0)
+            .ToList();
+
+        var ambiguous = new HashSet<string>(
+            usable
+                .GroupBy(one => Trimmed(one.Said), StringComparer.CurrentCultureIgnoreCase)
+                .Where(group => group
+                    .Select(one => Trimmed(one.Shown))
+                    .Distinct(StringComparer.CurrentCultureIgnoreCase)
+                    .Count() > 1)
+                .Select(group => group.Key),
+            StringComparer.CurrentCultureIgnoreCase);
+
+        foreach (var candidate in usable
+                     .Where(one => !ambiguous.Contains(Trimmed(one.Said)))
                      .OrderByDescending(one => Trimmed(one.Said).Length))
         {
             var said = Trimmed(candidate.Said);
@@ -185,7 +209,7 @@ internal static class LowerThird
             var clear = (at == 0 || !IsNameish(line[at - 1]))
                         && (end >= line.Length || !IsNameish(line[end]));
 
-            if (clear && !Overlaps(at, end, taken))
+            if (clear && !Overlaps(at, end, taken) && !IsJustTheEverydayWord(line, at, name))
             {
                 return at;
             }
@@ -194,6 +218,42 @@ internal static class LowerThird
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// Whether a hit is the ordinary English word rather than the driver's
+    /// name - "will" in "Bellamy will have to settle for second" for a
+    /// driver announced as "Will".
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): case was ignored for every hit, so a
+    /// driver whose spoken name is also an everyday word - Will, Mark,
+    /// Chase, Max, Miles, Grant - went on the Big Screen band under every
+    /// line that used the word ("Hargrove sets the mark", "the chase is
+    /// on"). With "will" that was most recap lines, and each time a driver
+    /// the line was not about sat three feet high on the wall.
+    ///
+    /// The rule: a one-word name the club typed with a capital, found in
+    /// lower case, in a line that does use capitals elsewhere, is the word
+    /// and not the name. A line written all in capitals or all in lower
+    /// case still matches whatever the case, because there the case tells
+    /// us nothing - which keeps "HARGROVE takes the lead!" and "hargrove
+    /// takes the lead!" working. A capitalised "Will" at the start of a
+    /// sentence is still taken as the name; that is the rarer case and the
+    /// line gives no way to tell.
+    /// </summary>
+    internal static bool IsJustTheEverydayWord(string line, int at, string name)
+    {
+        if (name.Length == 0 || at < 0 || at >= line.Length)
+        {
+            return false;
+        }
+
+        var oneWord = !name.Any(char.IsWhiteSpace);
+
+        return oneWord
+               && char.IsUpper(name[0])
+               && char.IsLower(line[at])
+               && line.Any(char.IsUpper);
     }
 
     /// <summary>

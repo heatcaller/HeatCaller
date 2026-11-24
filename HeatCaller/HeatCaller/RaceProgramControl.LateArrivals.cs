@@ -46,9 +46,28 @@ public sealed partial class RaceProgramControl
             return;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): a late check-in still waiting for
+        // an answer, and still in none of his class's heats after the build,
+        // is left out of the known set. Every racing class used to be seeded
+        // with its whole roster, so a build for ANOTHER class (one this build
+        // never touched kept its heats) marked him known: the late-arrivals
+        // card went away unanswered and he was in no heat with nothing to
+        // say so. Asked here, after the build, so a driver it dealt in is
+        // not waiting any more, and one taken out on purpose was known
+        // already and stays known.
+        var stillWaiting = LateArrivalsTonight();
+
         foreach (var name in RacingClassNames())
         {
             _knownRoster[KnownKey(day, name)] = RosterFor(name).Select(p => p.Transponder).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        foreach (var arrival in stillWaiting)
+        {
+            if (_knownRoster.TryGetValue(KnownKey(day, arrival.ClassName), out var known))
+            {
+                known.Remove(arrival.Transponder);
+            }
         }
     }
 

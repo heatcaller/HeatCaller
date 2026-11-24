@@ -563,6 +563,23 @@ public sealed class HandicapControl : UserControl
         }
 
         RefreshGrid();
-        _lblStatus.Text = $"Applied {Plural.Of(form.Accepted.Count, "suggested handicap")}.";
+        _lblStatus.Text = SuggestionsAppliedWords(form.Accepted.Count, _store.ModeFor(raceClass.Name));
     }
+
+    /// <summary>
+    /// The status line after Apply Ticked in Suggest from History.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): suggestions are always time credits,
+    /// but the old line said "Applied 3 suggested handicaps." whatever the
+    /// class's mode. In a lap-credit class (or one with handicaps off) the
+    /// seconds change no result, so the director thought the class had been
+    /// handicapped when nothing had moved. The credits are still saved - the
+    /// mode can be changed later - but the line now says they do not count yet.
+    /// </summary>
+    internal static string SuggestionsAppliedWords(int count, HandicapMode mode) => mode switch
+    {
+        HandicapMode.TimeCredit => $"Applied {Plural.Of(count, "suggested handicap")}.",
+        HandicapMode.LapCredit => $"Saved {Plural.Of(count, "suggested time credit")}. This class counts lap credit, so they do not change its results.",
+        _ => $"Saved {Plural.Of(count, "suggested time credit")}. Handicaps are off for this class, so they do not change its results until Time credit is picked.",
+    };
 }

@@ -337,7 +337,17 @@ public sealed class QualifyingStandingsForm : Form
                 return;
             }
 
-            var when = entry.SourceSessionStartedUtc is { } started
+            // WHY (23 Nov 2026, bug hunt 24): a driver whose only result the
+            // marshal rule took away was told their figures "come from: result
+            // lost" and to open Lap Times and pick that session - there is no
+            // such session. Now it says they have no counted heat, and why.
+            if (NoCountedHeatWords(entry) is { } noHeat)
+            {
+                AppDialog.Show(this, noHeat, "No source heat", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var when =entry.SourceSessionStartedUtc is { } started
                 ? AppTime.DateAndTime(started.ToLocalTime())
                 : "(unknown time)";
 
@@ -395,6 +405,15 @@ public sealed class QualifyingStandingsForm : Form
         DialogFit.Keep(this, page, width: (wide ? 980 : 660) + (dropping ? 160 : 0) + (points ? 320 : 0),
             height: entries.Count > 0 ? 528 : 448);
     }
+
+    /// <summary>
+    /// The double-click detail for a driver left with no counted heat - their
+    /// only result taken away by the marshal rule - or null for anyone else.
+    /// </summary>
+    internal static string? NoCountedHeatWords(QualifyingCalculator.Entry entry) =>
+        !string.IsNullOrWhiteSpace(entry.Forfeit) && entry.BestLaps == 0 && entry.SourceSessionId is null
+            ? $"{entry.DriverName} has no counted heat. {entry.Forfeit}."
+            : null;
 
     /// <summary>
     /// The "check laps A to B" line of the double-click detail for a single

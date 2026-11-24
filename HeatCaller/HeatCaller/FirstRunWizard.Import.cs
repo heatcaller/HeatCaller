@@ -78,6 +78,12 @@ public sealed partial class FirstRunWizard
             if (!_raceClasses.All.Any(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
             {
                 _raceClasses.Upsert(new RaceClass { Name = name.Trim(), Format = _classLength.Format() });
+
+                // WHY (23 Nov 2026, bug hunt 24): remembered as made by this
+                // run, so a race length changed on the Classes step after the
+                // import reaches it too (SaveClasses) - it used to keep the
+                // length shown when the list came in.
+                _madeListedClasses.Add(name.Trim());
             }
 
             if (!_doneClasses.Contains(name, StringComparer.OrdinalIgnoreCase))

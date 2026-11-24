@@ -773,8 +773,7 @@ public sealed class GhostService : IDisposable
             .Where(s => !s.IsNotScored())
             .Where(s => trackLayoutName is null
                         || string.Equals(s.TrackLayoutName, trackLayoutName, StringComparison.OrdinalIgnoreCase))
-            .Where(s => fromUtc is not { } from || s.StartedAtUtc >= from)
-            .Where(s => toUtc is not { } to || s.StartedAtUtc <= to)
+            .Where(s => InNightRange(s.StartedAtUtc, fromUtc, toUtc))
             .Where(s => CutoffAllows(driverName, s))
             .SelectMany(s => s.Results)
             .Where(r => string.Equals(r.Transponder, transponder, StringComparison.OrdinalIgnoreCase) && r.FastLapMs > 0)
@@ -783,6 +782,27 @@ public sealed class GhostService : IDisposable
             .Min();
 
         return best > 0 ? (int)best : null;
+    }
+
+    /// <summary>
+    /// Whether a session falls inside a date-range ghost's picked days, each
+    /// session counted on its race night (6am to 6am, local). The range keeps
+    /// the calendar days picked - local midnight on the first, 23:59:59 on the
+    /// last, stored as UTC - so labels and the editor still show them.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the filter compared start times with
+    /// those clock times, so a race night was cut at midnight - laps set after
+    /// 12am on the last night of the range were left out, and the small hours
+    /// of the night before a range were wrongly taken in.
+    /// </summary>
+    internal static bool InNightRange(DateTime startedAtUtc, DateTime? fromUtc, DateTime? toUtc)
+    {
+        static DateTime LocalDay(DateTime utc) => DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime().Date;
+
+        var night = TonightAtTheTrack.NightOf(DateTime.SpecifyKind(startedAtUtc, DateTimeKind.Utc).ToLocalTime()).Date;
+
+        return (fromUtc is not { } from || night >= LocalDay(from))
+               && (toUtc is not { } to || night <= LocalDay(to));
     }
 
     /// <summary>

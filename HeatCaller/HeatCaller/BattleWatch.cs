@@ -309,8 +309,38 @@ public sealed class BattleWatch
     /// the same two cars circulating nose to tail for a whole heat are one
     /// story and not twenty.
     /// </summary>
-    public void Said(Battle battle) =>
-        _toldAbout[CommentaryFacts.Pair(battle.AheadId, battle.BehindId)] = _clock();
+    public void Said(Battle battle)
+    {
+        lock (_toldGate)
+        {
+            _toldAbout[CommentaryFacts.Pair(battle.AheadId, battle.BehindId)] = _clock();
+        }
+    }
+
+    /// <summary>
+    /// The line about this pair was thrown away before a word of it was
+    /// heard, so its cooldown is lifted and the fight can be called again.
+    /// Either order of the two ids.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): a battle watch binned unheard still
+    /// left the pair alone for two minutes, serving a cooldown for a line
+    /// nobody in the room heard. Locked, with the cooldown's other readers
+    /// and writers, because the line is dropped on the voice's thread while
+    /// the director picks on its own.
+    /// </remarks>
+    public void Unsaid(string aheadId, string behindId)
+    {
+        if (string.IsNullOrWhiteSpace(aheadId) || string.IsNullOrWhiteSpace(behindId))
+        {
+            return;
+        }
+
+        lock (_toldGate)
+        {
+            _toldAbout.Remove(CommentaryFacts.Pair(aheadId, behindId));
+        }
+    }
 
     /// <summary>
     /// A new race. Every fight is over and every cooldown with it - two
@@ -319,10 +349,22 @@ public sealed class BattleWatch
     public void Reset()
     {
         _streaks.Clear();
-        _toldAbout.Clear();
+
+        lock (_toldGate)
+        {
+            _toldAbout.Clear();
+        }
     }
 
-    private bool RecentlyTold(Streak streak, DateTime now) =>
-        _toldAbout.TryGetValue(CommentaryFacts.Pair(streak.AheadId, streak.BehindId), out var when)
-        && now - when < Cooldown;
+    private bool RecentlyTold(Streak streak, DateTime now)
+    {
+        lock (_toldGate)
+        {
+            return _toldAbout.TryGetValue(CommentaryFacts.Pair(streak.AheadId, streak.BehindId), out var when)
+                   && now - when < Cooldown;
+        }
+    }
+
+    /// <summary>Guards <see cref="_toldAbout"/> - see <see cref="Unsaid"/>.</summary>
+    private readonly object _toldGate = new();
 }

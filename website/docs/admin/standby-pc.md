@@ -17,7 +17,7 @@ Every 15 seconds the standby fetches a fresh copy of the club's race data from t
 - results and race history, championships and seasons
 - the race in progress, so after **Take Over** HeatCaller offers to carry on with it
 
-These stay as the standby has them: its settings (decoder port, voice, looks), its voice files, and its own keys and PINs. **Keys, tokens and PINs are never in the copy.** Music, photos and race audio aren't copied either.
+These stay as the standby has them: its settings (decoder port, voice, looks), its voice files, its music list, soundscapes, crowd, imaging and sound effects, and its own keys and PINs. **Keys, tokens and PINs are never in the copy.** Music, photos and race audio aren't copied either.
 
 Copies are kept as zip files in `Documents\HeatCaller Backups\Standby Copies`, the newest and the one before it. The standby's own data isn't touched until you press **Take Over**.
 

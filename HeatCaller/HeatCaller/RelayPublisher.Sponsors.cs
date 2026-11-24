@@ -13,7 +13,10 @@ public sealed partial class RelayPublisher
 
     private long _nextSponsorViewsTick;
 
-    private volatile IReadOnlyDictionary<string, IReadOnlyDictionary<string, (int Seen, int Taps)>>? _sponsorViews;
+    /// <summary>The counts as last read, and the relay and club they were read from.</summary>
+    private sealed record ReadSponsorViews(RelayTarget From, IReadOnlyDictionary<string, IReadOnlyDictionary<string, (int Seen, int Taps)>> Views);
+
+    private volatile ReadSponsorViews? _sponsorViews;
 
     /// <summary>
     /// Whether the club has sponsors on its page at all. Set by MainForm;
@@ -21,8 +24,24 @@ public sealed partial class RelayPublisher
     /// </summary>
     internal Func<bool>? HasSponsorsOnline { get; set; }
 
-    /// <summary>The relay's hourly counts as last read, or null before the first read.</summary>
-    internal IReadOnlyDictionary<string, IReadOnlyDictionary<string, (int Seen, int Taps)>>? SponsorViews => _sponsorViews;
+    /// <summary>
+    /// The relay's hourly counts as last read, or null before the first read
+    /// - and null once the relay address or club changes.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the counts were handed back whichever
+    /// relay and club they were read from, so after a move on the Club
+    /// Website page the sponsor report gave the old club's phone counts for
+    /// the new one - for good, when the new relay refused or had no sponsor
+    /// counts. Page counts had the same fix in bug hunt 22. Compared by
+    /// address and club only: a corrected token is still the same club's page.
+    /// </remarks>
+    internal IReadOnlyDictionary<string, IReadOnlyDictionary<string, (int Seen, int Taps)>>? SponsorViews =>
+        _sponsorViews is { } read && SameSponsorPage(read.From, _target) ? read.Views : null;
+
+    private static bool SameSponsorPage(RelayTarget a, RelayTarget b) =>
+        string.Equals(a.Root, b.Root, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(a.Club, b.Club, StringComparison.Ordinal);
 
     /// <summary>
     /// Once per pass, from the worker loop. Quiet on failure: the report
@@ -73,7 +92,7 @@ public sealed partial class RelayPublisher
 
             if (RelaySponsors.ParseViews(text) is { } views)
             {
-                _sponsorViews = views;
+                _sponsorViews = new ReadSponsorViews(target, views);
             }
         }
         catch (OperationCanceledException)

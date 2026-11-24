@@ -120,16 +120,22 @@ internal static class DriverNightExtras
             // takes its position with it.
             var placesAt = LapByLap.Positions(results)[results.IndexOf(row)];
             //
-            // 15 Nov 2026 (bug hunt 21): a driver credited with the start
+            // WHY (23 Nov 2026, bug hunt 24): a driver credited with the start
             // lap has one more start slot - a zero, then the dash from their
-            // crossing before the green - so StartSlots says how many to
-            // drop. Paired with positions first, which run in step with
-            // Skip(1), so the extra slot takes its position with it.
+            // crossing before the green. Since 15 Nov (bug hunt 21) the dash
+            // was dropped here too, but startMs still said "one start lap",
+            // so the page numbered their first flying lap (really lap 3) as
+            // lap 2: the list ended a lap short of the card's lap count, Pos
+            // and the lap chart ran one lap out of step with the public
+            // result (which keeps the dash as lap 2), and each lap's moment
+            // in the race video was early by the dash. Now the dash stays in
+            // the list as lap 2, as the public result sends it, and StartLaps
+            // says it is still the start, so the page can leave it out of
+            // best, pace and stats (see StartLapsOf).
             var lapTimes = row.LapTimesMs ?? new List<long>();
             var flying = lapTimes.Skip(1).ToList();
             var kept = flying
                 .Select((ms, i) => (Ms: ms, Pos: i < placesAt.Length ? placesAt[i] : 0))
-                .Skip(row.StartSlots(lapTimes) - 1)
                 .Where(lap => lap.Ms > 0)
                 .Take(MostLaps)
                 .ToList();
@@ -211,6 +217,7 @@ internal static class DriverNightExtras
                 LapsMs = laps.Count > 0 ? laps : null,
                 PosAt = !practice && laps.Count > 0 && kept.All(lap => lap.Pos > 0) ? kept.Select(lap => lap.Pos).ToList() : null,
                 StartMs = laps.Count > 0 && row.LapTimesMs is { Count: > 1 } ? row.LapTimesMs[0] : null,
+                StartLaps = laps.Count > 0 ? StartLapsOf(row) : null,
                 LengthS = session.TimeLimitSeconds is > 0 ? session.TimeLimitSeconds : null,
                 Pen = pen.Count > 0 ? pen.ToList() : null,
                 Out = practice ? null : OutOf(row),
@@ -525,11 +532,13 @@ internal static class DriverNightExtras
         return rows.Select((r, i) =>
         {
             var at = places?[IndexOfRow(results, r)];
-            // StartSlots (bug hunt 21): see the driver's own lap list above.
+            // WHY (23 Nov 2026, bug hunt 24): a credited start's dash stays in
+            // as lap 2, marked by StartLaps - see the driver's own lap list
+            // above. Dropped here too (bug hunt 21), their line in Compare
+            // with was drawn one lap to the left of everybody else's.
             var lapTimes = r.LapTimesMs ?? new List<long>();
             var flying = lapTimes.Skip(1)
                 .Select((ms, k) => (Ms: ms, Pos: at is not null && k < at.Length ? at[k] : 0))
-                .Skip(r.StartSlots(lapTimes) - 1)
                 .Where(lap => lap.Ms > 0)
                 .Take(MostLaps)
                 .ToList();
@@ -545,8 +554,31 @@ internal static class DriverNightExtras
                 // The start lap taken off above, as NightRace.StartMs: the
                 // phone draws these laps from lap 2, beside their own.
                 StartMs = flying.Count > 0 && r.LapTimesMs is { Count: > 1 } ? r.LapTimesMs[0] : null,
+                StartLaps = flying.Count > 0 ? StartLapsOf(r) : null,
             };
         }).ToList();
+    }
+
+    /// <summary>
+    /// The "startLaps" of a night race or field row: how many entries at the
+    /// front of lapsMs are still the start - 1 for a driver credited with the
+    /// start lap whose dash from the grid is there (StartSlots is 2 and the
+    /// dash has a time), null otherwise. The same meaning as the public
+    /// result row's startLaps (MainForm.StartLapsInLapsMs).
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the dash is kept in lapsMs now so the
+    /// laps are numbered as the result numbers them; this says it is not a
+    /// flying lap. A dash with no time is filtered out of lapsMs with the
+    /// other untimed slots, so it is not marked - that would mark a real lap.
+    /// </remarks>
+    internal static int? StartLapsOf(SessionResultEntry row)
+    {
+        var lapTimes = row.LapTimesMs;
+
+        return lapTimes is { Count: > 1 } && row.StartSlots(lapTimes) > 1 && lapTimes[1] > 0
+            ? row.StartSlots(lapTimes) - 1
+            : null;
     }
 
     /// <summary>
@@ -712,7 +744,7 @@ internal sealed record NightParts(
         || Cars is { Count: > 0 };
 }
 
-/// <summary>One race in `races[]`: {sid, label, at, pos, of, start, laps, bestMs, lapsMs, posAt, startMs, lenS, pen, out, car, rating}.</summary>
+/// <summary>One race in `races[]`: {sid, label, at, pos, of, start, laps, bestMs, lapsMs, posAt, startMs, startLaps, lenS, pen, out, car, rating}.</summary>
 internal sealed record NightRace
 {
     [JsonPropertyName("sid")]
@@ -752,7 +784,7 @@ internal sealed record NightRace
     [JsonPropertyName("bestMs")]
     public long BestMs { get; init; }
 
-    /// <summary>Each flying lap (the start lap left out), at most DriverNightExtras.MostLaps. The first thing dropped when a night is over the relay's size limit.</summary>
+    /// <summary>Each lap after the start slot (a credited start's dash included, marked by StartLaps), at most DriverNightExtras.MostLaps. The first thing dropped when a night is over the relay's size limit.</summary>
     [JsonPropertyName("lapsMs")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<long>? LapsMs { get; init; }
@@ -766,6 +798,17 @@ internal sealed record NightRace
     [JsonPropertyName("startMs")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? StartMs { get; init; }
+
+    /// <summary>
+    /// How many entries at the front of LapsMs are still the start, not
+    /// flying laps - 1 for a driver credited with the start lap, whose first
+    /// entry is the dash from the grid (lap 2, as the public result numbers
+    /// it). Left out for everybody else. See DriverNightExtras.StartLapsOf
+    /// (bug hunt 24).
+    /// </summary>
+    [JsonPropertyName("startLaps")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? StartLaps { get; init; }
 
     /// <summary>The race's time limit in seconds, for pace. Left out for a race without one.</summary>
     [JsonPropertyName("lenS")]
@@ -849,7 +892,7 @@ internal sealed record NightTopRow
     public int Laps { get; init; }
 }
 
-/// <summary>One driver in `races[].field`: {pos?, name, qual?, lapsMs?, posAt?, startMs?} - the public result row's shape.</summary>
+/// <summary>One driver in `races[].field`: {pos?, name, qual?, lapsMs?, posAt?, startMs?, startLaps?} - the public result row's shape.</summary>
 internal sealed record NightFieldRow
 {
     [JsonPropertyName("pos")]
@@ -875,6 +918,11 @@ internal sealed record NightFieldRow
     [JsonPropertyName("startMs")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public long? StartMs { get; init; }
+
+    /// <summary>As NightRace.StartLaps: 1 when the first entry of LapsMs is a credited start's dash, otherwise left out.</summary>
+    [JsonPropertyName("startLaps")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? StartLaps { get; init; }
 }
 
 /// <summary>

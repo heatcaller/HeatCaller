@@ -21,6 +21,24 @@ public static class HeatSheetRenderer
     private const int FirstRoundTop = Margin + 40 + 28 + 20;
 
     /// <summary>
+    /// The date line under the class name: the race night's date, plus the
+    /// page count when the class runs to more than one page.
+    /// </summary>
+    // WHY (23 Nov 2026, bug hunt 24): the line used DateTime.Now's calendar
+    // day, so a sheet reprinted at 00:20 on a Saturday meeting said Sunday and
+    // the next date, while the sheets printed before midnight said Saturday.
+    // A race night runs 6am to 6am, so the sheet is dated by the night.
+    internal static string HeadingLine(DateTime nowLocal, int pageNumber, int pageCount)
+    {
+        // The page count goes on the date line, so a loose second page on
+        // the pit table says which class it belongs to and that a first
+        // page exists somewhere.
+        var pagePart = pageCount > 1 ? $"  -  page {pageNumber} of {pageCount}" : "";
+        var night = TonightAtTheTrack.NightOf(nowLocal);
+        return $"Heat sheet  -  {night:dddd, MMM d yyyy}{pagePart}";
+    }
+
+    /// <summary>
     /// Renders a class's rounds onto as many pages as they need, one bitmap
     /// per page, in order. The caller owns the bitmaps and disposes them.
     ///
@@ -226,11 +244,8 @@ public static class HeatSheetRenderer
         g.DrawString(className, titleFont, black, Margin, y);
         y += 40;
 
-        // The page count goes on the date line, so a loose second page on
-        // the pit table says which class it belongs to and that a first
-        // page exists somewhere.
-        var pagePart = pageCount > 1 ? $"  -  page {pageNumber} of {pageCount}" : "";
-        g.DrawString($"Heat sheet  -  {DateTime.Now:dddd, MMM d yyyy}{pagePart}", footFont, grey, Margin, y);
+        // The date line, dated by the race night, with the page count.
+        g.DrawString(HeadingLine(DateTime.Now, pageNumber, pageCount), footFont, grey, Margin, y);
         y += 28;
         g.DrawLine(heavyPen, Margin, y, PageWidth - Margin, y);
         y += 20;

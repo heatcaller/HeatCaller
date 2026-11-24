@@ -1,9 +1,9 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { lchown, lstat, mkdir, readFile, readdir, rename, rm, stat } from "node:fs/promises";
 import { join, relative as relativePath } from "node:path";
 import { asClipMeta, CLIP_DIR, CLIP_ID, CLIP_KEEP_MS, type ClipMeta } from "./clips.js";
 import { CREW_SAMPLE_DIR, CREW_SAMPLE_KEY } from "./crewsamples.js";
-import type { Store } from "./store.js";
+import { FileStore, type Store } from "./store.js";
 import { isValidClubId } from "./tenancy.js";
 import { mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, streamFrom, YOUTUBE_ID } from "./video.js";
 import { writeFileAtomically } from "./voice.js";
@@ -74,6 +74,17 @@ export interface TakedownRecord {
   readonly takenDownAt: string;
   readonly restoredAt: string | null;
   readonly restoreReason: string | null;
+  /**
+   * For a track only: a sha256 (hex) of the picture the track carried when
+   * it was taken down, when one was published then.
+   *
+   * WHY (23 Nov 2026, bug hunt 24): a track was held down by its name alone,
+   * and the tracks document has no id, so renaming the layout on the laptop
+   * (even a letter's case) published the same noticed picture under a name
+   * no record matched - served again, while takedown-list still said it was
+   * down. The picture's own hash keeps it down under any name.
+   */
+  readonly imageHash?: string;
 }
 
 export interface TakedownFile {
@@ -87,6 +98,8 @@ export interface ActiveTakedowns {
   readonly logo: boolean;
   readonly sponsors: ReadonlySet<string>;
   readonly tracks: ReadonlySet<string>;
+  /** The hashes of taken-down track pictures (TakedownRecord.imageHash), held down whatever the track is called. */
+  readonly trackImages?: ReadonlySet<string>;
   readonly videos: ReadonlySet<string>;
   readonly clips: ReadonlySet<string>;
   readonly crewSamples: ReadonlySet<string>;
@@ -100,6 +113,7 @@ export const NO_TAKEDOWNS: ActiveTakedowns = Object.freeze({
   logo: false,
   sponsors: new Set<string>(),
   tracks: new Set<string>(),
+  trackImages: new Set<string>(),
   videos: new Set<string>(),
   clips: new Set<string>(),
   crewSamples: new Set<string>(),
@@ -168,6 +182,11 @@ export function normaliseRef(kind: TakedownKind, raw: string | undefined): { ok:
   }
 }
 
+/** The hash a track picture is held down by: sha256 of the image string exactly as published, in hex. */
+export function trackImageHash(image: string): string {
+  return createHash("sha256").update(image, "utf8").digest("hex");
+}
+
 export function isTakedownKind(value: string): value is TakedownKind {
   return (TAKEDOWN_KINDS as readonly string[]).includes(value);
 }
@@ -220,6 +239,7 @@ export function readTakedownBody(raw: unknown, club: string): TakedownFile {
       takenDownAt: r["takenDownAt"],
       restoredAt: typeof r["restoredAt"] === "string" ? r["restoredAt"] : null,
       restoreReason: typeof r["restoreReason"] === "string" ? oneLineOf(r["restoreReason"], TAKEDOWN_REASON_MAX) : null,
+      ...(kind === "track" && typeof r["imageHash"] === "string" && /^[0-9a-f]{64}$/.test(r["imageHash"]) ? { imageHash: r["imageHash"] } : {}),
     });
   }
 
@@ -240,6 +260,7 @@ export function activeOf(records: readonly TakedownRecord[]): ActiveTakedowns {
     logo: live.some((r) => r.kind === "logo"),
     sponsors: of("sponsor"),
     tracks: of("track"),
+    trackImages: new Set(live.filter((r) => r.kind === "track" && r.imageHash !== undefined).map((r) => r.imageHash as string)),
     videos: of("video"),
     clips: of("clip"),
     crewSamples: of("crewsample"),
@@ -311,11 +332,22 @@ export function withoutTakenDown(channel: string, body: unknown, active: ActiveT
   }
 
   if (channel === "tracks" && active.tracks.size > 0 && Array.isArray(doc["tracks"])) {
+    // WHY (23 Nov 2026, bug hunt 24): matched by the exact name only, so a
+    // layout renamed on the laptop - even "Tight Layout" to "Tight layout" -
+    // brought the noticed picture back. Now the name is compared without
+    // case, and a picture whose hash was recorded at takedown stays down
+    // under any name. Hashed only when such a hash exists.
+    const names = new Set([...active.tracks].map((n) => n.toLowerCase()));
+    const images = active.trackImages ?? new Set<string>();
+    const isDown = (track: Record<string, unknown>) =>
+      names.has(oneLineOf(String(track["name"] ?? ""), 200).toLowerCase())
+      || (images.size > 0 && typeof track["image"] === "string" && images.has(trackImageHash(track["image"])));
+
     return {
       ...doc,
       tracks: (doc["tracks"] as unknown[]).map((t) => {
         const track = plain(t);
-        if (track === undefined || !active.tracks.has(oneLineOf(String(track["name"] ?? ""), 200))) return t;
+        if (track === undefined || !isDown(track)) return t;
         const { image: _image, ...rest } = track;
         return rest;
       }),
@@ -639,7 +671,19 @@ export async function applyTakedown(options: {
       || (await Promise.all(filesOf(dataDir, club, kind, ref.ref).map((f) => exists(f.held)))).some(Boolean)
     : null;
 
+  // WHY (23 Nov 2026, bug hunt 24): a track is held down by its picture as
+  // well as its name, so a rename on the laptop cannot bring it back - see
+  // TakedownRecord.imageHash. The picture is read from what the club has
+  // published now; with none published, the name alone holds it.
+  const imageHash = kind === "track" ? await publishedTrackImageHash(dataDir, club, ref.ref) : undefined;
+
   if (existing !== undefined) {
+    if (imageHash !== undefined && existing.imageHash === undefined) {
+      // Taken down before pictures were recorded: running takedown again adds it.
+      const withHash: TakedownRecord = { ...existing, imageHash };
+      await writeTakedowns(dataDir, { ...file, takedowns: file.takedowns.map((r) => (r.id === existing.id ? withHash : r)) }, owner);
+    }
+
     return { ok: true, id: existing.id, club, kind, ref: ref.ref, notice: existing.notice, state: "active", takenDownAt: existing.takenDownAt, already: true, held };
   }
 
@@ -652,10 +696,26 @@ export async function applyTakedown(options: {
     takenDownAt: now.toISOString(),
     restoredAt: null,
     restoreReason: null,
+    ...(imageHash === undefined ? {} : { imageHash }),
   };
 
   await writeTakedowns(dataDir, { version: 1, club, takedowns: [...file.takedowns, record] }, owner);
   return { ok: true, id: record.id, club, kind, ref: ref.ref, notice, state: "active", takenDownAt: record.takenDownAt, already: false, held };
+}
+
+/** The hash of the picture the club's published track of this name carries now (name compared without case), or undefined. */
+async function publishedTrackImageHash(dataDir: string, club: string, name: string): Promise<string | undefined> {
+  const doc = plain((await new FileStore(dataDir).getSnapshot(club, "tracks").catch(() => undefined))?.body);
+  const list = Array.isArray(doc?.["tracks"]) ? (doc?.["tracks"] as unknown[]) : [];
+  const wanted = name.toLowerCase();
+
+  for (const t of list) {
+    const track = plain(t);
+    if (track === undefined || typeof track["image"] !== "string" || track["image"] === "") continue;
+    if (oneLineOf(String(track["name"] ?? ""), 200).toLowerCase() === wanted) return trackImageHash(track["image"]);
+  }
+
+  return undefined;
 }
 
 export type RestoreResult =

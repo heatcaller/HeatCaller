@@ -242,6 +242,12 @@ internal static class BroadcastImaging
 
     private static readonly LinkedList<string> ClipOrder = new();
 
+    /// <summary>
+    /// The opening bed picked when the jingle started, and its load running
+    /// on the thread pool - see PrimeOpeningBed. Null when none is waiting.
+    /// </summary>
+    private static (string Path, Task<ShowClip?> Loading)? _primedBed;
+
     private static readonly Random Shuffle = new();
 
     private static readonly JsonSerializerOptions Json = new()
@@ -1438,7 +1444,10 @@ internal static class BroadcastImaging
     /// <summary>The next piece for a point, loaded, with the file it came from - see <see cref="NextFile"/>.</summary>
     internal static (ShowClip Clip, string Path)? NextPiece(ImagingCue cue)
     {
-        var path = NextFile(cue);
+        // WHY (23 Nov 2026, bug hunt 24): the opening bed loaded ahead while
+        // the jingle ran to its post - see PrimeOpeningBed.
+        var path = cue == ImagingCue.OpeningBed ? TakePrimedBed() : null;
+        path ??= NextFile(cue);
 
         if (path is null)
         {
@@ -1465,6 +1474,18 @@ internal static class BroadcastImaging
     /// </summary>
     internal static ImagingPlay? Start(ImagingCue cue)
     {
+        // WHY (23 Nov 2026, bug hunt 24): On Air starts the opening bed on
+        // the jingle's post, from the window's thread, and a five-minute bed
+        // that was not held was decoded there and then - the window stopped
+        // answering, and the jingle's crossfade and the opening line that
+        // is meant to hit the post both landed late. The bed is now picked
+        // as the jingle starts and loaded on the thread pool while the
+        // jingle runs, so on the post it is already held.
+        if (cue == ImagingCue.TopOfRace && !Muted)
+        {
+            PrimeOpeningBed();
+        }
+
         if (Muted || NextPiece(cue) is not { } piece)
         {
             return null;
@@ -1472,6 +1493,108 @@ internal static class BroadcastImaging
 
         return StartPiece(cue, piece);
     }
+
+    /// <summary>
+    /// Picks the opening bed now, on the caller's thread (the pick reads the
+    /// soundscape, which belongs to the window), and loads it on the thread
+    /// pool. A bed already picked and still playable is kept, so an On Air
+    /// called off before its post does not use up another from the bag.
+    /// </summary>
+    private static void PrimeOpeningBed()
+    {
+        try
+        {
+            var candidates = Candidates(ImagingCue.OpeningBed, out _);
+
+            lock (Gate)
+            {
+                if (_primedBed is { } waiting && PrimedStillWanted(waiting.Path, candidates) is not null)
+                {
+                    return;
+                }
+
+                _primedBed = null;
+            }
+
+            if (NextFile(ImagingCue.OpeningBed) is not { } path)
+            {
+                return;
+            }
+
+            var loading = LoadInBackground(path);
+
+            lock (Gate)
+            {
+                _primedBed = (path, loading);
+            }
+        }
+        catch
+        {
+            // Never stops the jingle: without a bed picked ahead, the bed
+            // is picked and loaded on the post, as it was before.
+        }
+    }
+
+    /// <summary>
+    /// The opening bed picked ahead, once its load has finished - null when
+    /// none was picked or it can no longer play here, and the bed is then
+    /// picked the ordinary way. Taken once: the next On Air picks afresh.
+    /// </summary>
+    private static string? TakePrimedBed()
+    {
+        (string Path, Task<ShowClip?> Loading)? primed;
+
+        lock (Gate)
+        {
+            primed = _primedBed;
+            _primedBed = null;
+        }
+
+        if (primed is not { } taken
+            || PrimedStillWanted(taken.Path, Candidates(ImagingCue.OpeningBed, out _)) is not { } path)
+        {
+            return null;
+        }
+
+        try
+        {
+            // Normally long finished - the jingle ran to its post meanwhile.
+            // The load never reaches back to the window, so waiting here
+            // cannot hang it.
+            taken.Loading.Wait();
+        }
+        catch
+        {
+            // LoadInBackground never faults; Load below tries again anyway.
+        }
+
+        return path;
+    }
+
+    /// <summary>
+    /// The bed picked ahead, when it is still one the point could play -
+    /// the soundscape or its files may have changed since. Null otherwise.
+    /// </summary>
+    internal static string? PrimedStillWanted(string? primed, IReadOnlyList<string> candidates) =>
+        primed is not null && candidates.Contains(primed, StringComparer.OrdinalIgnoreCase) ? primed : null;
+
+    /// <summary>
+    /// Loads a file into the held pieces on the thread pool, so a long bed
+    /// is never decoded on the window's thread. Null when it would not load.
+    /// Never faults, and raises nothing.
+    /// </summary>
+    internal static Task<ShowClip?> LoadInBackground(string path) =>
+        Task.Run(() =>
+        {
+            try
+            {
+                return Load(path, out _);
+            }
+            catch
+            {
+                return null;
+            }
+        });
 
     /// <summary>Starts a piece already picked for a point - see <see cref="Start"/>.</summary>
     private static ImagingPlay? StartPiece(ImagingCue cue, (ShowClip Clip, string Path) piece) =>

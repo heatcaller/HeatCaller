@@ -409,7 +409,8 @@ public sealed class HandicapSuggestForm : Form
         // has - nothing to suggest, or a suggestion for every driver in the
         // class, the most there can be - so changing either number never
         // moves the buttons under it.
-        _lblSummary.Wordings = new[] { NothingToSuggest, SuggestedFor(Math.Max(2, _roster.Count)) };
+        var most = Math.Max(2, _roster.Count);
+        _lblSummary.Wordings = new[] { NothingToSuggest, SuggestedFor(most), SummaryWords(0, most), SummaryWords(most, most) };
 
         var btnApply = _btnApply;
         btnApply.Click += (_, _) =>
@@ -450,6 +451,21 @@ public sealed class HandicapSuggestForm : Form
         // list.
         var card = new Section("Suggestions");
         card.Add(lblIntro, gapBelow: UiLayout.RowGap);
+
+        // The class's mode, when its time credits will not count - see ModeNote.
+        if (ModeNote(_store.ModeFor(_className)) is { } note)
+        {
+            var lblMode = new Label
+            {
+                Text = note,
+                AutoSize = true,
+                ForeColor = _store.ModeFor(_className) == HandicapMode.None ? AppTheme.Warning : AppTheme.TextMuted,
+                Font = AppTheme.SmallFont,
+            };
+
+            card.Add(lblMode, gapBelow: UiLayout.RowGap);
+        }
+
         card.Add(numbers, gapBelow: UiLayout.RowGap);
         card.AddFill(_grid, () => _grid.ColumnHeadersHeight + LeastRows * _grid.RowTemplate.Height + 2);
         card.Add(_lblSummary, gapBelow: 0);
@@ -475,6 +491,22 @@ public sealed class HandicapSuggestForm : Form
     {
         _suggestions = _store.Suggest(_roster, _history, (int)_numSessions.Value, (int)_numLaps.Value, _className, _rounds);
 
+        // WHY (23 Nov 2026, bug hunt 24): the ticks the director has set are
+        // kept across a change to either number. The rows used to be cleared
+        // and every one re-added at its starting tick, so nudging "Use last"
+        // or "Typical race" re-ticked every driver who had been unticked (and
+        // unticked a locked driver ticked on purpose) - and Apply Ticked then
+        // gave a credit the director had turned down.
+        var previousTicks = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (DataGridViewRow row in _grid.Rows)
+        {
+            if (row.Tag is HandicapStore.Suggestion was)
+            {
+                previousTicks[was.Transponder] = row.Cells[0].Value is true;
+            }
+        }
+
         _grid.Rows.Clear();
 
         foreach (var suggestion in _suggestions)
@@ -484,7 +516,7 @@ public sealed class HandicapSuggestForm : Form
             var rowIndex = _grid.Rows.Add(
                 // Locked drivers start unticked, and the reason is visible
                 // in the row rather than them just silently not changing.
-                !locked,
+                HandicapSuggestTicks.StartTicked(previousTicks, suggestion.Transponder, locked),
                 locked ? $"{suggestion.DriverName}  (locked)" : suggestion.DriverName,
                 $"{suggestion.AverageBestLapSeconds:0.000}s",
                 suggestion.SessionsUsed,
@@ -499,12 +531,56 @@ public sealed class HandicapSuggestForm : Form
             }
         }
 
-        _lblSummary.Text = _suggestions.Count == 0
-            ? NothingToSuggest
-            : SuggestedFor(_suggestions.Count);
+        // WHY (23 Nov 2026, bug hunt 24): suggestions now come only from races
+        // on the newest layout, so a driver who has not raced it yet drops out
+        // of the list. The line under it used to say nothing, and the
+        // director was left to wonder where they had gone.
+        var all = HandicapStore.SessionsFor(_history, _rounds, _className).ToList();
+        var notOnLayout = NotOnNewestLayout(_roster, all, HandicapStore.OnNewestLayout(all).ToList());
+
+        _lblSummary.Text = SummaryWords(_suggestions.Count, notOnLayout);
 
         UpdateApply();
     }
+
+    /// <summary>
+    /// How many of the roster have a recorded best lap in the class's races,
+    /// but none on the newest layout - so Suggest left them out.
+    /// </summary>
+    internal static int NotOnNewestLayout(IEnumerable<DriverProfile> roster, IReadOnlyList<SessionRecord> all, IReadOnlyList<SessionRecord> onNewest)
+    {
+        static bool HasLap(IEnumerable<SessionRecord> sessions, string transponder) =>
+            sessions.Any(s => s.Results.Any(r =>
+                string.Equals(r.Transponder, transponder, StringComparison.OrdinalIgnoreCase) && r.FastLapMs > 0));
+
+        return roster.Count(driver => HasLap(all, driver.Transponder) && !HasLap(onNewest, driver.Transponder));
+    }
+
+    /// <summary>The line under the list: what the suggestions come to, and who was left out for not having raced the newest layout.</summary>
+    internal static string SummaryWords(int suggested, int notOnLayout)
+    {
+        var words = suggested == 0 ? NothingToSuggest : SuggestedFor(suggested);
+
+        return notOnLayout > 0
+            ? $"{words} {Plural.Of(notOnLayout, "driver")} {(notOnLayout == 1 ? "has" : "have")} not raced the newest layout yet, so {(notOnLayout == 1 ? "gets" : "get")} no suggestion."
+            : words;
+    }
+
+    /// <summary>
+    /// A plain note under the intro when the class does not count time
+    /// credits, or nothing when it does.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the window said nothing about the
+    /// class's mode, so on a lap-credit class, or one with handicaps off, the
+    /// director only learned after Apply Ticked that the suggestions would not
+    /// change its results.
+    /// </summary>
+    internal static string? ModeNote(HandicapMode mode) => mode switch
+    {
+        HandicapMode.TimeCredit => null,
+        HandicapMode.LapCredit => "This class uses LAP credit - suggested time credits are saved but will not change its results.",
+        _ => "Handicaps are OFF for this class - suggested time credits are saved but will not change its results until a mode is chosen in the Mode box on the Handicaps page.",
+    };
 
     /// <summary>
     /// Apply Ticked on while something is ticked, and off with nothing to
@@ -545,4 +621,17 @@ public sealed class HandicapSuggestForm : Form
             UiLayout.AtTextSize(UiLayout.NumericWidth),
             TextRenderer.MeasureText(new string('0', digits), number.Font).Width + SystemInformation.VerticalScrollBarWidth + 12 + UpDownButtonsSkin.Extra);
     }
+}
+
+/// <summary>
+/// Whether a driver's Apply box is ticked when Suggest Handicaps fills its
+/// list. WHY (23 Nov 2026, bug hunt 24): a driver already in the list keeps
+/// the tick the director gave them; only a driver new to the list starts
+/// ticked, or unticked when their handicap is locked. Changing either number
+/// used to throw every tick away.
+/// </summary>
+internal static class HandicapSuggestTicks
+{
+    public static bool StartTicked(IReadOnlyDictionary<string, bool> previous, string transponder, bool locked) =>
+        previous.TryGetValue(transponder, out var ticked) ? ticked : !locked;
 }

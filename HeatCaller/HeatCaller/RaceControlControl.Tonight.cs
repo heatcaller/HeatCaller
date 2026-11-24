@@ -234,20 +234,36 @@ public sealed partial class RaceControlControl
             return null;
         }
 
-        var pick = candidates.FirstOrDefault(c =>
-            !string.IsNullOrWhiteSpace(nextClass)
-            && string.Equals(c.Season.ClassName, nextClass.Trim(), StringComparison.OrdinalIgnoreCase));
-
-        if (pick.Season is null)
-        {
-            pick = candidates.OrderByDescending(c => c.Sessions.Max(s => s.StartedAtUtc)).First();
-        }
+        var pick = PickChampionship(candidates, nextClass);
 
         var table = SeasonStore.ComputeStandings(pick.Season, pick.Sessions, _profiles);
 
         return new ChampionshipTop(pick.Season.Name,
             table.Take(5).Select(e => (e.DriverName, e.TotalPoints)).ToList(),
             pick.Sessions.Count);
+    }
+
+    /// <summary>
+    /// Which championship the Big Screen card shows: of those for the next
+    /// race's class, the one raced in most recently; with none for that
+    /// class, the one raced in most recently of all. Candidates must not be
+    /// empty and each must hold at least one session.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): this took the first championship for
+    /// the class in name order (the seasons list is sorted by name), so with
+    /// "2025 Buggy Series" and "2026 Buggy Series" both holding races the
+    /// card showed last year's finished table instead of tonight's series.
+    /// </summary>
+    internal static (Season Season, List<SessionRecord> Sessions) PickChampionship(
+        IReadOnlyList<(Season Season, List<SessionRecord> Sessions)> candidates, string? nextClass)
+    {
+        var forClass = string.IsNullOrWhiteSpace(nextClass)
+            ? new List<(Season Season, List<SessionRecord> Sessions)>()
+            : candidates.Where(c => string.Equals(c.Season.ClassName?.Trim(), nextClass.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+
+        return (forClass.Count > 0 ? forClass : candidates)
+            .OrderByDescending(c => c.Sessions.Max(s => s.StartedAtUtc))
+            .First();
     }
 
     /// <summary>The Big Screen's between-races cards, as they stand now. UI thread.</summary>

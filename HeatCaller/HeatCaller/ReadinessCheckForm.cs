@@ -26,7 +26,9 @@ public sealed class ReadinessCheckForm : Form
     /// <summary>The list shows its headings and at least this many cars before the window scrolls instead.</summary>
     private const int LeastRows = 4;
 
-    private enum Verdict
+    // Internal rather than private (23 Nov 2026, bug hunt 24) so the rules in
+    // Build and Headline can be tested without opening the window.
+    internal enum Verdict
     {
         Ready,
         Weak,
@@ -34,7 +36,16 @@ public sealed class ReadinessCheckForm : Form
         Stranger,
     }
 
-    private sealed record Line(Verdict Verdict, string Driver, string Transponder, string Detail);
+    internal sealed record Line(Verdict Verdict, string Driver, string Transponder, string Detail);
+
+    /// <summary>The colour the verdict over the list is shown in.</summary>
+    internal enum HeadlineTone
+    {
+        Muted,
+        Success,
+        Warning,
+        Danger,
+    }
 
     /// <summary>How tall the window is inside its frame at the normal text size: the 520 it had, and room for the tiles.</summary>
     private const int DialogHeight = 520 + 70;
@@ -58,7 +69,11 @@ public sealed class ReadinessCheckForm : Form
 
         Text = "Pre-race check";
 
-        BuildHeadline(rosterSource);
+        // WHY (23 Nov 2026, bug hunt 24): the verdict needs to know when there
+        // was no list at all - see Headline.
+        var rosterEmpty = !roster.Any(t => !string.IsNullOrWhiteSpace(t));
+
+        BuildHeadline(rosterSource, rosterEmpty);
         BuildList();
 
         var btnClose = new Button { Text = "Close" };
@@ -72,7 +87,7 @@ public sealed class ReadinessCheckForm : Form
         {
             _lines.Clear();
             _lines.AddRange(Build(roster, watch, profiles, splitLoop));
-            BuildHeadline(rosterSource);
+            BuildHeadline(rosterSource, rosterEmpty);
             Fill();
             ShowTiles();
         };
@@ -169,7 +184,7 @@ public sealed class ReadinessCheckForm : Form
     /// car from the previous class still circulating, either of which will
     /// appear in the results as a driver nobody expected.
     /// </summary>
-    private static List<Line> Build(IEnumerable<string> roster, TransponderWatch watch, ProfileStore profiles, bool splitLoop)
+    internal static List<Line> Build(IEnumerable<string> roster, TransponderWatch watch, ProfileStore profiles, bool splitLoop)
     {
         // With a split loop, a car the line hears fine but that has no split
         // transponder races normally - it just gets no sector times. Said on
@@ -183,9 +198,36 @@ public sealed class ReadinessCheckForm : Form
         var lines = new List<Line>();
         var expected = new HashSet<string>(roster, StringComparer.OrdinalIgnoreCase);
 
+        // WHY (23 Nov 2026, bug hunt 24): the watch files every pass under the
+        // driver's MAIN transponder (TransponderWatch.AlternateTransponderOwner),
+        // but a grid can hold a driver's second car's transponder. The old code
+        // asked the watch for the id on the grid, never found it, and called a
+        // car circulating fine "not heard at all" - then listed the same car
+        // again as "on track but not in this race". Each id on the list is now
+        // looked up as the watch files it, and the stranger test uses those ids.
+        string HeardAs(string transponder) =>
+            profiles.PrimaryForAlternate(transponder) ?? transponder;
+
+        var expectedHeardAs = new HashSet<string>(expected.Select(HeardAs), StringComparer.OrdinalIgnoreCase);
+
+        // WHY (23 Nov 2026, bug hunt 24): with no list at all (no round picked
+        // and nobody on the board yet), every car warming up used to be called
+        // "on track but not in this race" - in the wrong heat - when there was
+        // simply nothing to check it against. They are shown as heard instead.
+        if (!expected.Any(t => !string.IsNullOrWhiteSpace(t)))
+        {
+            foreach (var heard in watch.Recent())
+            {
+                lines.Add(HeardLine(heard, heard.TransponderId));
+            }
+
+            return Sorted(lines);
+        }
+
         foreach (var transponder in expected.OrderBy(t => DriverNameFor(profiles, t), StringComparer.CurrentCultureIgnoreCase))
         {
-            var sighting = watch.Of(transponder);
+            // The id as given as well, for a watch that files under each id.
+            var sighting = watch.Of(HeardAs(transponder)) ?? watch.Of(transponder);
 
             if (sighting is null)
             {
@@ -195,6 +237,22 @@ public sealed class ReadinessCheckForm : Form
                 continue;
             }
 
+            lines.Add(HeardLine(sighting, transponder));
+        }
+
+        foreach (var sighting in watch.Recent().Where(s => !expected.Contains(s.TransponderId) && !expectedHeardAs.Contains(s.TransponderId)))
+        {
+            lines.Add(new Line(Verdict.Stranger, DriverNameFor(profiles, sighting.TransponderId), sighting.TransponderId,
+                $"On track but not in this race - {sighting.Passes} pass{(sighting.Passes == 1 ? string.Empty : "es")}. "
+                + "Either they are in the wrong heat, or this is a car from the last one still circulating."));
+        }
+
+        return Sorted(lines);
+
+        // A car that is being heard, shown under the id it is listed by: fine,
+        // or only just.
+        Line HeardLine(TransponderWatch.Sighting sighting, string transponder)
+        {
             var ago = sighting.Ago;
 
             var when = ago.TotalSeconds < 90
@@ -203,35 +261,27 @@ public sealed class ReadinessCheckForm : Form
 
             if (sighting.Weak)
             {
-                lines.Add(new Line(Verdict.Weak, DriverNameFor(profiles, transponder), transponder,
+                return new Line(Verdict.Weak, DriverNameFor(profiles, transponder), transponder,
                     $"Heard {when}, but only just - {sighting.Passes} pass{(sighting.Passes == 1 ? string.Empty : "es")}, "
                     + $"best {sighting.BestHits} hit{(sighting.BestHits == 1 ? string.Empty : "s")}. "
-                    + "Likely to be missed at racing speed. Check the battery and how it is mounted." + SplitNote(transponder)));
-
-                continue;
+                    + "Likely to be missed at racing speed. Check the battery and how it is mounted." + SplitNote(transponder));
             }
 
-            lines.Add(new Line(Verdict.Ready, DriverNameFor(profiles, transponder), transponder,
-                $"Heard {when}, {sighting.Passes} pass{(sighting.Passes == 1 ? string.Empty : "es")}{(sighting.SignalKnown ? $", signal {sighting.AverageStrength}." : ".")}" + SplitNote(transponder)));
+            return new Line(Verdict.Ready, DriverNameFor(profiles, transponder), transponder,
+                $"Heard {when}, {sighting.Passes} pass{(sighting.Passes == 1 ? string.Empty : "es")}{(sighting.SignalKnown ? $", signal {sighting.AverageStrength}." : ".")}" + SplitNote(transponder));
         }
 
-        foreach (var sighting in watch.Recent().Where(s => !expected.Contains(s.TransponderId)))
-        {
-            lines.Add(new Line(Verdict.Stranger, DriverNameFor(profiles, sighting.TransponderId), sighting.TransponderId,
-                $"On track but not in this race - {sighting.Passes} pass{(sighting.Passes == 1 ? string.Empty : "es")}. "
-                + "Either they are in the wrong heat, or this is a car from the last one still circulating."));
-        }
-
-        return lines
-            .OrderBy(l => l.Verdict switch
-            {
-                Verdict.Missing => 0,
-                Verdict.Weak => 1,
-                Verdict.Stranger => 2,
-                _ => 3,
-            })
-            .ThenBy(l => l.Driver, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
+        static List<Line> Sorted(List<Line> unsorted) =>
+            unsorted
+                .OrderBy(l => l.Verdict switch
+                {
+                    Verdict.Missing => 0,
+                    Verdict.Weak => 1,
+                    Verdict.Stranger => 2,
+                    _ => 3,
+                })
+                .ThenBy(l => l.Driver, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
     }
 
     /// <summary>
@@ -250,27 +300,52 @@ public sealed class ReadinessCheckForm : Form
             : profile.DriverName;
     }
 
-    private void BuildHeadline(string rosterSource)
+    private void BuildHeadline(string rosterSource, bool rosterEmpty)
     {
         _lblHeadline.Font = AppTheme.BodyFont;
 
-        var missing = _lines.Count(l => l.Verdict == Verdict.Missing);
-        var weak = _lines.Count(l => l.Verdict == Verdict.Weak);
-        var strangers = _lines.Count(l => l.Verdict == Verdict.Stranger);
-        var ready = _lines.Count(l => l.Verdict == Verdict.Ready);
+        var (text, tone) = Headline(_lines, rosterSource, rosterEmpty);
 
-        if (_lines.Count == 0)
+        _lblHeadline.Text = text;
+        _lblHeadline.ForeColor = tone switch
         {
-            _lblHeadline.Text = "Nothing to check - no roster, and nothing heard from the decoder in the last few minutes.";
-            _lblHeadline.ForeColor = AppTheme.TextMuted;
-            return;
+            HeadlineTone.Success => AppTheme.Success,
+            HeadlineTone.Warning => AppTheme.Warning,
+            HeadlineTone.Danger => AppTheme.Danger,
+            _ => AppTheme.TextMuted,
+        };
+    }
+
+    /// <summary>The verdict over the list, and the colour it is shown in - from the lines alone, so it can be tested without the window.</summary>
+    internal static (string Text, HeadlineTone Tone) Headline(IReadOnlyList<Line> lines, string rosterSource, bool rosterEmpty)
+    {
+        var missing = lines.Count(l => l.Verdict == Verdict.Missing);
+        var weak = lines.Count(l => l.Verdict == Verdict.Weak);
+        var strangers = lines.Count(l => l.Verdict == Verdict.Stranger);
+        var ready = lines.Count(l => l.Verdict == Verdict.Ready);
+
+        if (lines.Count == 0)
+        {
+            return ("Nothing to check - no roster, and nothing heard from the decoder in the last few minutes.", HeadlineTone.Muted);
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): with no list to check against, the
+        // old verdict said "N on track who should not be ... Put the cars that
+        // failed on the track", about cars that were simply warming up. It now
+        // says there is no list, and still warns about any car only just heard.
+        if (rosterEmpty)
+        {
+            var heard = $"No list to check against yet - pick a round to check who should be out there. "
+                        + $"{lines.Count} car{(lines.Count == 1 ? " is" : "s are")} being heard.";
+
+            return weak > 0
+                ? (heard + $" {weak} only just being heard - check the battery and how it is mounted.", HeadlineTone.Warning)
+                : (heard, HeadlineTone.Muted);
         }
 
         if (missing == 0 && weak == 0 && strangers == 0)
         {
-            _lblHeadline.Text = $"All {ready} clear. Every car on the {rosterSource} is being heard. Good to go.";
-            _lblHeadline.ForeColor = AppTheme.Success;
-            return;
+            return ($"All {ready} clear. Every car on the {rosterSource} is being heard. Good to go.", HeadlineTone.Success);
         }
 
         var parts = new List<string>();
@@ -290,10 +365,9 @@ public sealed class ReadinessCheckForm : Form
             parts.Add($"{strangers} on track who should not be");
         }
 
-        _lblHeadline.Text = $"{string.Join(", ", parts)}. Checked against the {rosterSource}. "
-                            + "Put the cars that failed on the track and press Check again.";
-
-        _lblHeadline.ForeColor = missing > 0 ? AppTheme.Danger : AppTheme.Warning;
+        return ($"{string.Join(", ", parts)}. Checked against the {rosterSource}. "
+                + "Put the cars that failed on the track and press Check again.",
+            missing > 0 ? HeadlineTone.Danger : HeadlineTone.Warning);
     }
 
     private void BuildList()

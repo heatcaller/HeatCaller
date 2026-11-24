@@ -958,7 +958,20 @@ public sealed partial class RaceControlSession
         // leader on laps. Practice has no limit-driven finish, so it never
         // has a last lap to call. Nor is it a black-flagged car's to start:
         // it is out of the race, and cannot put the checkered out (below).
+        //
+        // WHY (23 Nov 2026, bug hunt 24): nor once the checkered is out. Then
+        // nobody is starting a final lap - this crossing is the one that
+        // takes the flag, a few lines down - and the old check called "last
+        // lap" for a car as it finished (a race whose clock ran out with the
+        // leader two short of the lap limit, say).
+        //
+        // WHY (24 Nov 2026, bug hunt 24 review): only when this crossing
+        // really takes the flag - the same test as just below. "Not while
+        // finishing" also silenced a true last lap for a staggered-start car
+        // whose own window was still open, and for a pass that arrived
+        // before the checkered but was handled after it.
         if (isValid && !isGhost && !standing.IsBlackFlagged && !IsPracticeMode && !_lastLapAnnounced
+            && !(IsFinishing && FlagAppliesTo(lap.TransponderId) && CheckeredWasOutWhenThisPassArrived())
             && LapLimit.HasValue && standing.Laps == LapLimit.Value - 1)
         {
             _lastLapAnnounced = true;
@@ -997,7 +1010,15 @@ public sealed partial class RaceControlSession
                 return;
             }
 
-            Log($"Lap limit of {LapLimit.Value} reached by {lap.TransponderId}.");
+            // WHY (23 Nov 2026, bug hunt 24): said only by the car that
+            // brings the checkered out. The old code said it again for every
+            // lead-lap car crossing under the flag while others were still
+            // out. What follows is unchanged: with the flag already out,
+            // BeginFinishing does nothing and the flag was taken above.
+            if (!IsFinishing)
+            {
+                Log($"Lap limit of {LapLimit.Value} reached by {lap.TransponderId}.");
+            }
 
             if (FinishOnNextCrossing)
             {

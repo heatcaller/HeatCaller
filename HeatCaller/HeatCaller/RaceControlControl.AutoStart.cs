@@ -370,6 +370,18 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// The race just run, for Auto start's planned breaks and rest: the
+    /// round the finished race was filed under (looked up afresh, so an
+    /// edited grid is current), else the Round box's. Pure.
+    /// </summary>
+    /// <param name="filed">The round the last filed race was filed under, and that race's generation.</param>
+    internal static RoundDefinition? AutoStartLastRound(
+        (string? RoundId, int Generation)? filed, int generation, RoundDefinition? boxRound, Func<string, RoundDefinition?> lookup) =>
+        filed is { } f && f.Generation == generation && f.RoundId is { } id && lookup(id) is { } round
+            ? round
+            : boxRound;
+
+    /// <summary>
     /// Once a second, from the gap's tick, while the gap is open: counts
     /// down, holds for the floor and for cars, and starts the next race.
     /// </summary>
@@ -387,7 +399,12 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        var lastRound = _activeRound?.Invoke();
+        // WHY (23 Nov 2026, bug hunt 24): this read the race just run from
+        // the Round box, but filing the race marks its round recorded and the
+        // box falls back to freeform straight away - so it was always empty
+        // here, no planned break was ever added and nobody racing two races
+        // running got their rest. The round the race was filed under is used.
+        var lastRound = AutoStartLastRound(_gapFiled, _race.SessionGeneration, _activeRound?.Invoke(), id => _rounds?.Get(id));
         var justRan = RecentlyRan(next, lastRound);
         var resting = AutoStartClock.BackToBack(justRan, next.AssignedTransponders, _profiles.PrimaryForAlternate).Select(SpokenNameOf).ToList();
 

@@ -248,44 +248,9 @@ public sealed partial class RaceControlControl
 
         for (var lapIndex = 0; lapIndex < lapCount; lapIndex++)
         {
-            var lapMs = standing.LapTimesMs[lapIndex];
-
-            // The streak count recorded against this lap. Older sessions -
-            // and any lap added by hand - have no entry, so the marker is
-            // simply left off rather than guessed at.
-            var streak = lapIndex < standing.StreakAtLap.Count ? standing.StreakAtLap[lapIndex] : -1;
-            var previousStreak = lapIndex > 0 && lapIndex - 1 < standing.StreakAtLap.Count ? standing.StreakAtLap[lapIndex - 1] : -1;
-
-            var brokeARun = streak == 1 && previousStreak >= threshold;
-            var inARun = streak >= threshold;
-
-            var marker = brokeARun ? "\u25CC" : inARun ? "\u2605" : string.Empty;
-
-            // The first counted pass runs from the green to the line, so it
-            // is not a lap time and is labelled as what it is.
-            var isStartLap = lapIndex == 0;
-
-            entries.Add(isStartLap
-                ? $"start {lapMs / 1000.0:0.000}"
-                : $"L{lapIndex + 1} {lapMs / 1000.0:0.000}{marker}");
-
-            // Spelled out rather than done with a three-part numeric
-            // format: the "zero" section of one of those is read as format
-            // characters, and "best" contains an 'e', which would come back
-            // as scientific notation.
-            var deltaToBest = string.Empty;
-
-            if (best > 0 && !isStartLap)
-            {
-                var delta = (lapMs - best) / 1000.0;
-                deltaToBest = delta <= 0 ? ", their best" : $", +{delta:0.000} off their best";
-            }
-
-            detail.Add(isStartLap
-                ? $"Green flag to the line: {lapMs / 1000.0:0.000}s. Not a lap time, so it never counts as a best lap."
-                : $"Lap {lapIndex + 1}: {lapMs / 1000.0:0.000}s{deltaToBest}"
-                  + (streak >= 0 ? $" - clean run of {streak}{(inARun ? " (counting)" : string.Empty)}" : string.Empty)
-                  + (brokeARun ? " - this lap ended the previous run" : string.Empty));
+            var (entry, words) = LapStripEntry(standing, lapIndex, best, threshold);
+            entries.Add(entry);
+            detail.Add(words);
         }
 
         // At the recent end, which is the end that is always shown.
@@ -316,6 +281,72 @@ public sealed partial class RaceControlControl
         cells[0] = text;
 
         FinishLapDetailRow(standing, cells, Math.Clamp(height + 10, 26, MaxLapDetailHeight + 10));
+    }
+
+    /// <summary>
+    /// One lap of the lap strip: the short entry and the spelled-out detail.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): only the first entry was treated as
+    /// the start. A car past the line at the green is credited the start
+    /// lap with no time (RacerStanding.StartLapCredited), and its next pass
+    /// is its real start lap - the session never counts it as a best. The
+    /// strip read "start 0.000" and then "L2" with the dash as a lap time,
+    /// whose detail could say "their best" against the Best column. Now the
+    /// credit reads "credited" and the next pass is labelled the start.
+    /// </summary>
+    internal static (string Entry, string Detail) LapStripEntry(RacerStanding standing, int lapIndex, long best, int threshold)
+    {
+        var lapMs = standing.LapTimesMs[lapIndex];
+
+        // The streak count recorded against this lap. Older sessions -
+        // and any lap added by hand - have no entry, so the marker is
+        // simply left off rather than guessed at.
+        var streak = lapIndex < standing.StreakAtLap.Count ? standing.StreakAtLap[lapIndex] : -1;
+        var previousStreak = lapIndex > 0 && lapIndex - 1 < standing.StreakAtLap.Count ? standing.StreakAtLap[lapIndex - 1] : -1;
+
+        var brokeARun = streak == 1 && previousStreak >= threshold;
+        var inARun = streak >= threshold;
+
+        var marker = brokeARun ? "\u25CC" : inARun ? "\u2605" : string.Empty;
+
+        if (standing.StartLapCredited && lapIndex == 0)
+        {
+            return ("credited", "Past the line at the green, so the start lap was given with no time.");
+        }
+
+        if (standing.StartLapCredited && lapIndex == 1)
+        {
+            return ($"start {lapMs / 1000.0:0.000}",
+                $"From before the green to the line: {lapMs / 1000.0:0.000}s. Not a lap time, so it never counts as a best lap.");
+        }
+
+        // The first counted pass runs from the green to the line, so it
+        // is not a lap time and is labelled as what it is.
+        var isStartLap = lapIndex == 0;
+
+        var entry = isStartLap
+            ? $"start {lapMs / 1000.0:0.000}"
+            : $"L{lapIndex + 1} {lapMs / 1000.0:0.000}{marker}";
+
+        // Spelled out rather than done with a three-part numeric
+        // format: the "zero" section of one of those is read as format
+        // characters, and "best" contains an 'e', which would come back
+        // as scientific notation.
+        var deltaToBest = string.Empty;
+
+        if (best > 0 && !isStartLap)
+        {
+            var delta = (lapMs - best) / 1000.0;
+            deltaToBest = delta <= 0 ? ", their best" : $", +{delta:0.000} off their best";
+        }
+
+        var detail = isStartLap
+            ? $"Green flag to the line: {lapMs / 1000.0:0.000}s. Not a lap time, so it never counts as a best lap."
+            : $"Lap {lapIndex + 1}: {lapMs / 1000.0:0.000}s{deltaToBest}"
+              + (streak >= 0 ? $" - clean run of {streak}{(inARun ? " (counting)" : string.Empty)}" : string.Empty)
+              + (brokeARun ? " - this lap ended the previous run" : string.Empty);
+
+        return (entry, detail);
     }
 
     private const int MaxLapDetailHeight = 78;
@@ -476,17 +507,54 @@ public sealed partial class RaceControlControl
             return changed;
         });
 
+        // WHY (23 Nov 2026, bug hunt 24): the session takes back no more
+        // penalty time than the driver was given, but the Undo entry was
+        // named from the seconds typed - "8s credit" when 5 s came off - and
+        // a credit on a driver with no penalty did nothing without a word.
+        // The entry is now named from what changed, and a short credit says so.
+        var appliedPenaltyMs = edit is null ? 0 : edit.PenaltyAfter - edit.PenaltyBefore;
+
         if (edit is not null)
         {
-            var what = laps > 0 ? (laps == 1 ? "Add a lap" : $"Add {laps} laps")
-                : laps < 0 ? (laps == -1 ? "Remove a lap" : $"Remove {-laps} laps")
-                : penaltyMs >= 0 ? $"{penaltyMs / 1000.0:0.#}s penalty"
-                : $"{-penaltyMs / 1000.0:0.#}s credit";
+            var what = CorrectionWords(laps, penaltyMs != 0 ? appliedPenaltyMs : 0);
 
             CaptureStandingEditUndo($"{what} for {DriverNameFor(transponder)}", edit);
         }
 
+        if (CreditShortfallWords(penaltyMs, appliedPenaltyMs, DriverNameFor(transponder)) is { } shortfall)
+        {
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [race] {shortfall}");
+        }
+
         RenderLeaderboard();
+    }
+
+    /// <summary>
+    /// The Undo entry's words for a correction by hand: the laps when laps
+    /// were changed, else the penalty time actually given or taken back
+    /// (<paramref name="appliedPenaltyMs"/>, not the seconds typed). Pure.
+    /// </summary>
+    internal static string CorrectionWords(int laps, long appliedPenaltyMs) =>
+        laps > 0 ? (laps == 1 ? "Add a lap" : $"Add {laps} laps")
+        : laps < 0 ? (laps == -1 ? "Remove a lap" : $"Remove {-laps} laps")
+        : appliedPenaltyMs >= 0 ? $"{appliedPenaltyMs / 1000.0:0.#}s penalty"
+        : $"{-appliedPenaltyMs / 1000.0:0.#}s credit";
+
+    /// <summary>
+    /// A plain line when a credit of <paramref name="askedMs"/> took back
+    /// less than asked (<paramref name="appliedMs"/>) because the driver had
+    /// less penalty time than that to give back; null otherwise. Pure.
+    /// </summary>
+    internal static string? CreditShortfallWords(long askedMs, long appliedMs, string name)
+    {
+        if (askedMs >= 0 || appliedMs <= askedMs)
+        {
+            return null;
+        }
+
+        return appliedMs >= 0
+            ? $"{name} has no penalty time to take back - nothing was changed."
+            : $"Only {-appliedMs / 1000.0:0.#}s of penalty time to take back for {name} - that much was taken off.";
     }
 
     /// <summary>
@@ -2010,6 +2078,9 @@ public sealed partial class RaceControlControl
     /// </summary>
     internal sealed class TimePenaltyForm : Form
     {
+        /// <summary>The line under the box: a minus number only gives back penalty time already given (bug hunt 24). No longer than the old line, so the window still fits it.</summary>
+        internal const string TimePenaltyHint = "Added to the driver's race time. Less than 0 gives back penalty time.";
+
         /// <summary>
         /// How wide the window is inside its frame at the normal text size.
         /// Wider than the 300 it was made at: Apply and Cancel are standard
@@ -2057,7 +2128,10 @@ public sealed partial class RaceControlControl
             card.Add(row, gapBelow: UiLayout.HintGap);
             card.Add(new Label
             {
-                Text = "Added to the selected driver's race time. Less than 0 takes time off.",
+                // WHY (23 Nov 2026, bug hunt 24): it said a minus number "takes
+                // time off", but the session only takes back penalty time already
+                // given - a driver with none got nothing back.
+                Text = TimePenaltyHint,
                 AutoSize = true,
                 ForeColor = AppTheme.TextMuted,
                 Font = AppTheme.SmallFont,

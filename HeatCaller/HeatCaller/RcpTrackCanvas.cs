@@ -3137,6 +3137,16 @@ public sealed class RcpTrackCanvas : Control
     /// </summary>
     public void NudgeSelection(int cols, int rows)
     {
+        // WHY (23 Nov 2026, bug hunt 24): ignored while a move-drag is
+        // held, as Ctrl+A and paste already are (Bug Hunt 8, #81). An arrow
+        // settled the block on the spot it happened to be passing over,
+        // so the floor, rails and markings there vanished although the
+        // block was dropped somewhere else.
+        if (_movingSelection)
+        {
+            return;
+        }
+
         if (_selection.IsEmpty)
         {
             return;
@@ -3210,6 +3220,16 @@ public sealed class RcpTrackCanvas : Control
     /// <summary>Quarter turns clockwise, or anticlockwise for a negative count.</summary>
     public void TurnSelection(int quarters)
     {
+        // WHY (23 Nov 2026, bug hunt 24): ignored while a move-drag is
+        // held, as Ctrl+A and paste already are (Bug Hunt 8, #81). A ] or [
+        // settled the block on the spot it happened to be passing over,
+        // so the floor, rails and markings there vanished although the
+        // block was dropped somewhere else.
+        if (_movingSelection)
+        {
+            return;
+        }
+
         if (!PickedSomething())
         {
             return;
@@ -3254,6 +3274,16 @@ public sealed class RcpTrackCanvas : Control
 
     public void MirrorSelection(bool leftToRight)
     {
+        // WHY (23 Nov 2026, bug hunt 24): ignored while a move-drag is
+        // held, as Ctrl+A and paste already are (Bug Hunt 8, #81). A mirror
+        // settled the block on the spot it happened to be passing over,
+        // so the floor, rails and markings there vanished although the
+        // block was dropped somewhere else.
+        if (_movingSelection)
+        {
+            return;
+        }
+
         if (!PickedSomething())
         {
             return;

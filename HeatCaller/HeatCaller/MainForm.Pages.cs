@@ -380,6 +380,36 @@ public partial class MainForm
     }
 
     /// <summary>
+    /// The heat out on track, for the Program tab's and the race-day
+    /// deleter's "not from under the race" checks: the active round whenever
+    /// the race is not Idle, and also while it sits at Idle under the
+    /// warm-up flag (a heat started into its warm-up, or a warm-up opened by
+    /// hand for the round that is up next). Null otherwise. Pure.
+    /// </summary>
+    internal static string? RoundOnTrack(RaceState state, FlagState flag, string? activeRoundId) =>
+        state == RaceState.Idle && flag != FlagState.WarmUp ? null : activeRoundId;
+
+    /// <summary>Driver Hub's check-in count and Tonight tile, redrawn after a check-in made elsewhere. Set as the page is built.</summary>
+    private Action? _driverHubCheckInsRefresh;
+
+    /// <summary>
+    /// A driver was checked in or out from a phone or the race-day manager:
+    /// Driver Hub shows it at once if it is open. UI thread. Never throws -
+    /// the check-in itself is already made.
+    /// </summary>
+    private void RefreshDriverHubCheckIns()
+    {
+        try
+        {
+            _driverHubCheckInsRefresh?.Invoke();
+        }
+        catch
+        {
+            // The page catches up when it is next opened.
+        }
+    }
+
+    /// <summary>
     /// Driver Hub, with the stores its driver card and garage read.
     ///
     /// Split out of PopulateTabs on 22 Oct 2026 (ROADMAP, "Next, in order" 9),
@@ -405,6 +435,11 @@ public partial class MainForm
             SetupLog = _setupLog,
             ChassisTemplates = _chassisTemplates,
             TrackLayouts = _trackLayouts,
+
+            // WHY (23 Nov 2026, bug hunt 24): the card counts the setups
+            // linked to the driver's cars from the garage; without it, it
+            // counted setups by the driver's name only.
+            Cars = _cars,
         };
 
         // A driver's cars, transponders and setups on their own page - the
@@ -443,6 +478,11 @@ public partial class MainForm
         pageDriverProfiles.Controls.Add(driverProfiles);
         _navRefreshHooks["Driver Hub"] = driverProfiles.RefreshAll;
         _driverHubSetupsRefresh = driverProfiles.RefreshSetups;
+
+        // WHY (23 Nov 2026, bug hunt 24): the page read check-ins only when it
+        // was opened - kept so a phone or desk check-in redraws its count and
+        // Tonight tile while it is open. See RefreshDriverHubCheckIns.
+        _driverHubCheckInsRefresh = driverProfiles.RefreshCheckIns;
         driverProfiles.AttachUnknownTransponders(_unknownTransponders);
 
         // How "Hear It" and "Check Names..." on Driver Hub actually speak.
@@ -544,11 +584,16 @@ public partial class MainForm
         // The heat out on track, so undoing a build or a seeding does not
         // delete it from under the race. Anything but Idle counts - a
         // finished race is still waiting for its result to be saved.
-        raceProgram.RoundOnTrackId = () => _race.State == RaceState.Idle ? null : _activeRound?.Id;
+        // WHY (23 Nov 2026, bug hunt 24): a heat warming up under "Warm-up
+        // first" counts too. The race sits at Idle under the warm-up flag
+        // then, so it read as nothing on track, and Edit Drivers, Delete,
+        // Move Drivers, Run Together and bump-ups changed a heat whose cars
+        // were already out. See RoundOnTrack.
+        raceProgram.RoundOnTrackId = () => RoundOnTrack(_race.State, _race.Flag, _activeRound?.Id);
 
         // The same heat, so deleting its race day - from The Day or the
         // Calendar - does not take it from under the race.
-        RaceDayDeleter.RoundOnTrackId = () => _race.State == RaceState.Idle ? null : _activeRound?.Id;
+        RaceDayDeleter.RoundOnTrackId = () => RoundOnTrack(_race.State, _race.Flag, _activeRound?.Id);
 
         // Edit Result on the round menu: that round's race, in Race History.
         raceProgram.EditResultRequested += id =>
@@ -623,6 +668,10 @@ public partial class MainForm
         // 2026, see ScheduleExpected) - and the sheet redraws when it moves.
         daySchedule.NextStart = () => _raceControlControl?.NextStartForPlan;
         _raceControlControl.NextStartMoved += daySchedule.NextStartMoved;
+
+        // An abandoned heat's start stamp comes off the sheet, and Undo puts
+        // it back (23 Nov 2026, bug hunt 24) - see WireRaceAbandonedSchedule.
+        WireRaceAbandonedSchedule();
 
         // Who's Racing IS the merged roster: present, tech and inspect
         // per row. The Tech Log tab keeps the scrutineer's full record
@@ -1422,14 +1471,45 @@ public partial class MainForm
     /// </summary>
     private void ShowLatestRaceInHistory(bool edit)
     {
-        if (_raceHistoryControl is null || _sessionHistory.All.MaxBy(s => s.EndedAtUtc) is not { } latest)
+        if (_raceHistoryControl is null || _sessionHistory.All.Count == 0)
         {
             OnClientRawMessage($"{AppTime.LogStampNow()}  [results] No race in Race History to show yet.");
             return;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): this took the newest record in the
+        // whole history. When the race just run was not saved (no laps,
+        // ghosts only, or a demo not kept), that was the race BEFORE - and
+        // Edit Result opened on it, so a penalty meant for this race went
+        // on an earlier, already published result. Now only a record saved
+        // since this race went green counts.
+        if (RaceJustRunRecord(_sessionHistory.All, _race.RaceStartUtc) is not { } latest)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [results] The race just run was not saved to Race History, so there is no result to open.");
+            return;
+        }
+
         GoToPage("Race History");
         _raceHistoryControl.ShowSession(latest.Id, edit);
+    }
+
+    /// <summary>
+    /// The record saved for the race on Race Control's board: the newest one
+    /// that ended after that race went green. Null when there is no race on
+    /// the board, or it was not saved - an earlier race always ended before
+    /// this one's green, so it is never taken for it. See the bug hunt 24
+    /// note in ShowLatestRaceInHistory.
+    /// </summary>
+    internal static SessionRecord? RaceJustRunRecord(IEnumerable<SessionRecord> history, DateTime? raceStartUtc)
+    {
+        if (raceStartUtc is not { } green)
+        {
+            return null;
+        }
+
+        return history
+            .Where(s => s is not null && s.EndedAtUtc >= green)
+            .MaxBy(s => s.EndedAtUtc);
     }
 
     private void BuildTrackLayoutsAndRaceHistoryPages()
@@ -2449,6 +2529,9 @@ public partial class MainForm
         { Dock = DockStyle.Fill };
         _mixerControl = mixerControl;
 
+        // WHY (23 Nov 2026, bug hunt 24): the level check's repeat asks the race before it speaks, so it stops for a race even when session sound does not start on its own - see MixerControl.AuditionTick.
+        mixerControl.RaceStateNow = () => _race.State;
+
         // The Mixer's mute goes through the sidebar's, so it is saved and
         // the sidebar's unmute knows what it stopped - see SetAllSoundMuted.
         mixerControl.SetAllSoundMutedRequested = SetAllSoundMuted;
@@ -3056,7 +3139,17 @@ public partial class MainForm
         // logo) are kept for a week in case they're wanted back, then
         // cleared here. Off the UI thread since it walks folders on disk;
         // Prune never throws.
-        _ = Task.Run(UndoHoldingFolder.Prune);
+        //
+        // WHY (23 Nov 2026, bug hunt 24): the retired driver photos are swept
+        // here too. The sweep only ran when another photo was retired, so a
+        // photo a parent had taken down stayed in DriverPhotos\Retired for
+        // months on a laptop where no photo changed after it - not the week
+        // promised. PruneRetiredNow never throws either.
+        _ = Task.Run(() =>
+        {
+            UndoHoldingFolder.Prune();
+            DriverPhotos.PruneRetiredNow();
+        });
 
         _undo.UndoFailed += (description, ex) =>
             OnClientRawMessage($"{AppTime.LogStampNow()}  [undo] FAILED to undo '{description}': {ex.Message}");

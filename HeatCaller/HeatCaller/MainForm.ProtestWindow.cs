@@ -35,6 +35,8 @@ public partial class MainForm
     {
         try
         {
+            var scope = _raceEvents.ActiveRoundScope();
+
             if (record.IsNotScored()
                 || record.RoundId is not { Length: > 0 } roundId
                 || _rounds.Get(roundId) is not { Kind: RoundKind.Qualifier or RoundKind.Main } round
@@ -47,6 +49,7 @@ public partial class MainForm
             foreach (var className in MixedHeats.ClassesOf(round))
             {
                 if (_raceProgram.RoundProtestWindow(round, className, record) is not { } window
+                    || !ProtestWindowIsStillToSay(window.ClosesAtUtc, DateTime.UtcNow, scope is null || scope.Contains(round.Id))
                     || !_protestWindowsSaid.Add($"{day.Id}|{className}|{window.Key}"))
                 {
                     continue;
@@ -67,6 +70,22 @@ public partial class MainForm
             OnClientRawMessage($"[program] The protest window could not be worked out: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Whether a window a filed result opened is still one to tell the room
+    /// about: only while it is open, and only for a round of the race day
+    /// now open.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): a race deleted on Race History and
+    /// put back with Undo is filed again, and the window is worked out from
+    /// when the race ended. Nothing asked whether that window had already
+    /// closed, so after a restart (or with another race day open) the
+    /// announcer told the room "results are provisional for five minutes"
+    /// about a race that finished hours or a week ago.
+    /// </remarks>
+    internal static bool ProtestWindowIsStillToSay(DateTime closesAtUtc, DateTime nowUtc, bool roundIsTonights) =>
+        roundIsTonights && ProtestWindow.IsProvisional(closesAtUtc, nowUtc);
 
     /// <summary>Everybody in tonight's recorded qualifiers and mains of a class.</summary>
     private IEnumerable<string> DriversInClassRaces(string className)

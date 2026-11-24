@@ -539,6 +539,22 @@ public sealed class CommentaryDirector
     public Func<(IReadOnlyList<DriverForm> Grid, IReadOnlyList<HeadToHead> Rivalries)>? GridHistory { get; set; }
 
     /// <summary>
+    /// How many race nights the races behind <see cref="GridHistory"/> were
+    /// run on before tonight - wire it to CommentaryReaders.NightsOnFile.
+    /// Null until wired, and then the Grid history segment says its debuts
+    /// and first wins as it always did.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the between-race grid history top-up
+    /// built the same "first ever start" lines as the race intro from the same
+    /// young history, so on a club's first night with the app its long-time
+    /// members were announced as debutants. A property of its own rather than
+    /// a third member on GridHistory's tuple, so nothing that wires that one
+    /// has to change.
+    /// </remarks>
+    public Func<int?>? GridNightsOnFile { get; set; }
+
+    /// <summary>
     /// The shape of this grid's last few race NIGHTS in the class - a run
     /// of podium nights, perfect attendance, a clean run of finishes, a
     /// driver back after a while away. Wire this to
@@ -861,7 +877,38 @@ public sealed class CommentaryDirector
         // the pass's own facts where there is a pass, so this question
         // does not walk the stores again from a thread they do not belong
         // to - see NextAsync.
-        Budget.NothingNewToSay = (kind, cls) => Said.NothingLeftIn(CandidatesForPass(kind, cls));
+        // WHY (23 Nov 2026, bug hunt 24): the callback riding along is not
+        // the segment's own news, so it no longer counts as something new
+        // to say - an unspent callback beside spent facts let a segment
+        // with nothing of its own through to be written. See
+        // PackOwnFactsFirst.
+        Budget.NothingNewToSay = (kind, cls) =>
+            Said.NothingLeftIn(CandidatesForPass(kind, cls).Where(block => !Promises.IsPayOffKey(block.Key)));
+    }
+
+    /// <summary>
+    /// The facts a segment goes out with, its OWN facts first (23 Nov
+    /// 2026, bug hunt 24). A callback about an earlier call is colour
+    /// inside a segment that has something to say, never the whole of
+    /// one: when none of the segment's own facts are left the pack is
+    /// empty, and when the callback would be packed alone (the own facts
+    /// set aside as just talked about) the own facts are said instead, as
+    /// FactPack.Build promises - the callback waits for a segment with
+    /// room for it.
+    /// </summary>
+    internal static PackedFacts PackOwnFactsFirst(IReadOnlyList<FactBlock> blocks, SaidTonight? said, Func<string?, bool> isCallback)
+    {
+        var own = blocks.Where(block => block is not null && !isCallback(block.Key)).ToList();
+        var ownPack = FactPack.Build(own, said);
+
+        if (ownPack.Empty || own.Count == blocks.Count)
+        {
+            return ownPack;
+        }
+
+        var pack = FactPack.Build(blocks, said);
+
+        return pack.Empty || pack.Keys.All(key => isCallback(key)) ? ownPack : pack;
     }
 
     /// <summary>How much of tonight's programme has run. Called whenever the programme is refreshed.</summary>
@@ -1063,6 +1110,31 @@ public sealed class CommentaryDirector
     {
         Budget.GiveBackTurn(SegmentKind.BattleWatch, _className);
         Account.DroppedAfterWriting();
+    }
+
+    /// <summary>
+    /// <see cref="BattleUnheard()"/> for a fight whose two cars are known:
+    /// the turn back, and everything else the line spent when it was queued
+    /// - its fact, the pair's cooldown and the promise it filed.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): only the turn came back. The battle's
+    /// fact stayed spent, so the fight could not be called again that race;
+    /// the pair sat out a two-minute cooldown for a line nobody heard; and a
+    /// later callback said the fight "was called on air earlier tonight".
+    /// </remarks>
+    public void BattleUnheard(string aheadId, string behindId)
+    {
+        BattleUnheard();
+
+        if (string.IsNullOrWhiteSpace(aheadId) || string.IsNullOrWhiteSpace(behindId))
+        {
+            return;
+        }
+
+        Said.Forget($"battle:{_raceKey}:{CommentaryFacts.Pair(aheadId, behindId)}");
+        Battles.Unsaid(aheadId, behindId);
+        Promises.Withdraw(aheadId, behindId);
     }
 
     /// <summary>The flag is out. Nothing in-race is worth saying from here.</summary>
@@ -2256,6 +2328,23 @@ public sealed class CommentaryDirector
     /// </summary>
     internal static bool LapTimesMatterFor(SegmentKind kind) => kind != SegmentKind.PitLaneLive;
 
+    /// <summary>
+    /// Whether a segment asked for as a two-hander that came back in one
+    /// piece is asked for again in one voice (23 Nov 2026, bug hunt 24).
+    /// Not the pit lane: a throw to a co-host who then does not answer is
+    /// worse than no throw, and the one-voice write was a second relay
+    /// line for it.
+    /// </summary>
+    internal static bool OneVoiceWhenTheTwoHanderFails(SegmentKind kind) => kind != SegmentKind.PitLaneLive;
+
+    /// <summary>
+    /// What a class's qualifying report is keyed on: the night and the
+    /// class (23 Nov 2026, bug hunt 24), so two classes reported in one gap
+    /// each keep their own pole.
+    /// </summary>
+    internal static string QualifyingReportKey(string? dayKey, string? className) =>
+        $"{dayKey}:{className}";
+
     internal static bool InRace(SegmentKind kind) =>
         kind is SegmentKind.BattleWatch or SegmentKind.PaceNote or SegmentKind.Horizon or SegmentKind.RecordWatch
             or SegmentKind.PitLaneLive;
@@ -2311,7 +2400,16 @@ public sealed class CommentaryDirector
             blocks = blocks.Where(block => !awaitingKeys.Contains(block.Key)).ToList();
         }
 
-        var pack = FactPack.Build(blocks, Said);
+        // WHY (23 Nov 2026, bug hunt 24): Gather's "never on its own" guard
+        // counted the facts a segment was OFFERED, not the facts it had
+        // LEFT. A second Coming up next in the same gap still offered its
+        // spent upnext fact, so the callback rode along, FactPack dropped
+        // the spent fact, and the segment went out as nothing but "the
+        // fight between Carl and Dave was called on air earlier tonight"
+        // under the Coming up next name. The segment's own facts are now
+        // packed first: none left means nothing to say, and a pack that
+        // would be the callback alone says the segment's own facts instead.
+        var pack = PackOwnFactsFirst(blocks, Said, Promises.IsPayOffKey);
 
         if (pack.Empty)
         {
@@ -2791,6 +2889,19 @@ public sealed class CommentaryDirector
                     turns);
             }
 
+            // WHY (23 Nov 2026, bug hunt 24): the pit lane is a two-hander or
+            // nothing, but a throw that came back in one piece fell through
+            // to the one-voice write like every other kind - a second relay
+            // line, and the announcer alone reading the throw to pit lane
+            // and its answer. Dropped now, so the race's one pit lane slot
+            // is left for a later quiet stretch.
+            if (!OneVoiceWhenTheTwoHanderFails(kind))
+            {
+                Say($"[brain] {spec.Title} came back in one piece rather than two - dropped, a throw to pit lane is a two-hander or nothing.");
+
+                return null;
+            }
+
             Say($"[brain] {spec.Title} came back in one piece rather than two - saying it in one voice.");
         }
 
@@ -2955,7 +3066,8 @@ public sealed class CommentaryDirector
                 // CommentaryHistoryFacts.ForIntro's remarks.
                 return GridHistory?.Invoke() is { } history
                     ? CommentaryHistoryFacts.ForIntro(
-                        history.Grid, history.Rivalries, _raceKey, className, nightKey: _dayKey)
+                        history.Grid, history.Rivalries, _raceKey, className, nightKey: _dayKey,
+                        nightsOnFile: GridNightsOnFile?.Invoke())
                     : Array.Empty<FactBlock>();
             }
 
@@ -3085,8 +3197,16 @@ public sealed class CommentaryDirector
 
             case SegmentKind.QualifyingReport:
             {
+                // WHY (23 Nov 2026, bug hunt 24): keyed on the night and the
+                // class, as the mid-meeting standings are. This passed the
+                // race key - the last race to go green, or blank before a
+                // launch's first green - so when Stock's report was said and
+                // the Mod main was then picked in the same gap (or after two
+                // restarts), Mod's pole fact had the same key and was dropped
+                // as already said: Mod's report went out without its pole
+                // sitter, or not at all.
                 return Qualifying?.Invoke() is { } order
-                    ? CommentaryReportFacts.QualifyingReport(order, className ?? string.Empty, _raceKey)
+                    ? CommentaryReportFacts.QualifyingReport(order, className ?? string.Empty, QualifyingReportKey(_dayKey, className))
                     : Array.Empty<FactBlock>();
             }
 

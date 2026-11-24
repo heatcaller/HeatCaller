@@ -206,7 +206,11 @@ public sealed class GhostControl : UserControl
         btnAdd.Click += (_, _) => EditGhost(null);
 
         var btnEdit = new Button { Text = "Edit..." };
-        btnEdit.Click += (_, _) => EditGhost(Selected());
+        // WHY (23 Nov 2026, bug hunt 24): with nothing picked, Selected() is
+        // null, and EditGhost(null) is the Add path - so Edit... opened the
+        // Add Ghost Car window and Save put a new "Ghost" in the garage. Now
+        // it does nothing, as On / Off and Delete do with nothing picked.
+        btnEdit.Click += (_, _) => EditPicked();
 
         var btnToggle = new Button { Text = "On / Off" };
         btnToggle.Click += (_, _) => ToggleSelected();
@@ -298,6 +302,9 @@ public sealed class GhostControl : UserControl
         // first enabling the feature that needs it.
         _list.Enabled = true;
 
+        // WHY (23 Nov 2026, bug hunt 24): ticking "Enable ghost cars" redrew
+        // the tiles but not the line under the list, which kept its old count.
+        ShowStatus();
         ShowTiles();
     }
 
@@ -363,14 +370,57 @@ public sealed class GhostControl : UserControl
             _list.EndUpdate();
         }
 
-        var active = _store.Current.Ghosts.Count(g => g.Enabled);
-
-        _lblStatus.Text = _store.Current.Ghosts.Count == 0
-            ? "No ghosts yet - press Quick Rival for the fastest way to get one."
-            : $"{active} of {Plural.Of(_store.Current.Ghosts.Count, "ghost")} will run.";
-        _lblStatus.ForeColor = AppTheme.TextMuted;
-
+        ShowStatus();
         ShowTiles();
+    }
+
+    /// <summary>The line under the list, from the store as it stands.</summary>
+    private void ShowStatus()
+    {
+        _lblStatus.Text = StatusLine(
+            _store.Current.Ghosts.Count,
+            _store.Current.Ghosts.Count(g => g.Enabled),
+            _store.Current.Enabled);
+        _lblStatus.ForeColor = AppTheme.TextMuted;
+    }
+
+    /// <summary>
+    /// What the line under the list says: how many ghosts will run.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the line counted only each ghost's own
+    /// ON switch, so with "Enable ghost cars" unticked it still said "2 of 2
+    /// ghosts will run." while none would - and the "Will run" tile above it
+    /// said Off. With ghost racing off it now says none will run.
+    /// </summary>
+    internal static string StatusLine(int total, int on, bool racingOn)
+    {
+        if (total == 0)
+        {
+            return "No ghosts yet - press Quick Rival for the fastest way to get one.";
+        }
+
+        if (!racingOn)
+        {
+            return "Ghost racing is off - no ghosts will run. Tick \"Enable ghost cars\" to race them.";
+        }
+
+        return $"{on} of {Plural.Of(total, "ghost")} will run.";
+    }
+
+    /// <summary>
+    /// Edit...: opens the picked ghost, and false with nothing picked.
+    /// WHY (23 Nov 2026, bug hunt 24): the button handed a null pick on to
+    /// EditGhost, where null means Add.
+    /// </summary>
+    private bool EditPicked()
+    {
+        if (Selected() is not { } ghost)
+        {
+            return false;
+        }
+
+        EditGhost(ghost);
+        return true;
     }
 
     /// <summary>A ghost's card in the list - see GhostList.</summary>

@@ -171,7 +171,20 @@ public static class BackupService
     /// from before a change with one from after it. Locking the secrets
     /// with the backup password is deliberately slow, and happens here too.
     /// </summary>
-    internal static string CreateBackup(string? destinationFolder, bool automatic, BackupSecrets? secrets)
+    internal static string CreateBackup(string? destinationFolder, bool automatic, BackupSecrets? secrets) =>
+        CreateBackup(destinationFolder, automatic, secrets, LocalOnlyKeepCount);
+
+    /// <summary>
+    /// As above, with how many automatic backups the club keeps - so an
+    /// automatic backup kept off the cloud is pruned to the club's own keep,
+    /// not the Backups page's default.
+    ///
+    /// WHY (24 Nov 2026, bug hunt 24 review): the earlier fix pruned a
+    /// backup kept off the cloud to 14 whatever the club's keep was, and the
+    /// scheduled backup's own prune with the club's keep came after it - too
+    /// late. A club keeping 30 only ever had 14.
+    /// </summary>
+    internal static string CreateBackup(string? destinationFolder, bool automatic, BackupSecrets? secrets, int keepAutomatic)
     {
         // Counted for the whole of the backup, whichever thread it runs on,
         // so a restore can refuse to start while one is still being written
@@ -180,7 +193,7 @@ public static class BackupService
 
         try
         {
-            return CreateBackupCore(destinationFolder, automatic, secrets);
+            return CreateBackupCore(destinationFolder, automatic, secrets, keepAutomatic);
         }
         finally
         {
@@ -202,12 +215,27 @@ public static class BackupService
     /// </summary>
     public static bool IsBackupRunning => Volatile.Read(ref _backupsRunning) > 0;
 
-    private static string CreateBackupCore(string? destinationFolder, bool automatic, BackupSecrets? secrets)
+    private static string CreateBackupCore(string? destinationFolder, bool automatic, BackupSecrets? secrets, int keepAutomatic)
     {
         // Through the guard here as well as at every call site: this is the
         // one funnel every backup passes through, so a caller added later
         // cannot reintroduce the planted-destination bug by forgetting it.
-        var folder = SafeBackupFolder(destinationFolder);
+        var chosen = SafeBackupFolder(destinationFolder);
+
+        // WHY (23 Nov 2026, bug hunt 24): only a locked backup may go to
+        // the cloud (privacy plan 2.4), and a backup folder inside OneDrive,
+        // Google Drive or iCloud Drive is the cloud by another road. That
+        // was only checked at the moment a folder was picked on the Backups
+        // page. A folder picked before that check existed, a password taken
+        // off afterwards, or simply the default folder on a PC where
+        // OneDrive looks after Documents, all had every backup - every
+        // driver's details, children's too - written there as a plain zip
+        // and uploaded, with nothing on screen. Asked here, of the folder
+        // and the backup about to be made, because this is the one funnel
+        // every backup passes through. See FolderForBackup.
+        var locked = !string.IsNullOrEmpty(secrets?.Password);
+        var folder = FolderForBackup(chosen, locked, LocalOnlyBackupFolder, SyncRootOverride);
+        var keptOffTheCloud = !string.Equals(folder, chosen, StringComparison.OrdinalIgnoreCase);
         Directory.CreateDirectory(folder);
 
         // Only when no other backup is being written: one that is has its
@@ -254,7 +282,76 @@ public static class BackupService
 
         File.Move(tempPath, fullPath, overwrite: true);
 
+        // WHY (23 Nov 2026, bug hunt 24): the caller prunes the folder it
+        // asked for, which is not where this one went, so nothing would
+        // ever tidy the automatic backups kept here - a whole backup more
+        // every day until the disk filled. Fourteen is what the Backups
+        // page keeps unless told otherwise. Best effort, like all pruning.
+        // WHY (24 Nov 2026, bug hunt 24 review): with the club's keep when
+        // the caller gives it - see the CreateBackup overload that takes it.
+        if (keptOffTheCloud && automatic)
+        {
+            try
+            {
+                PruneOldBackups(folder, keepAutomatic);
+            }
+            catch
+            {
+                // The backup is made; tidying is tried again by the next one.
+            }
+        }
+
         return fullPath;
+    }
+
+    /// <summary>How many automatic backups are kept in <see cref="LocalOnlyBackupFolder"/> - the Backups page's own default.</summary>
+    private const int LocalOnlyKeepCount = 14;
+
+    /// <summary>
+    /// Where a backup with no password goes when the backup folder is inside
+    /// a cloud sync folder: a folder on this PC that no cloud app uploads,
+    /// beside the app's data folder (never inside it - backups are not
+    /// data). See <see cref="FolderForBackup"/>.
+    /// </summary>
+    internal static string LocalOnlyBackupFolder => Path.Combine(
+        Path.GetDirectoryName(Path.GetFullPath(DataDirectory).TrimEnd(Path.DirectorySeparatorChar))!,
+        "HeatCaller Backups (this PC only)");
+
+    /// <summary>
+    /// Where each cloud service's sync folder is, for a test that must not
+    /// depend on what is installed on the PC running it. Null in the app,
+    /// which asks CloudBackup.FindSyncRoot.
+    /// </summary>
+    internal static Func<CloudService, string?>? SyncRootOverride { get; set; }
+
+    /// <summary>
+    /// The folder a backup is really written to: <paramref name="folder"/>,
+    /// unless the backup is not locked with a backup password and that
+    /// folder is inside OneDrive, Google Drive or iCloud Drive - then
+    /// <paramref name="localFolder"/>, so the backup is still made but
+    /// stays on this PC. A pre-restore safety backup keeps its subfolder,
+    /// so it stays out of the ordinary list there too.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the rule "only locked backups go to
+    /// the cloud" was kept for the ticked cloud copies and when a folder
+    /// was picked, but not for the backup folder itself as it stands when
+    /// a backup is made - so unlocked backups were uploaded all the same.
+    /// Never skipped instead: no backup at all is worse.
+    /// </summary>
+    internal static string FolderForBackup(
+        string folder, bool locked, string localFolder, Func<CloudService, string?>? syncRoot = null)
+    {
+        if (locked || CloudBackup.ServiceHolding(folder, syncRoot) is null)
+        {
+            return folder;
+        }
+
+        var safetyName = Path.GetFileName(PreRestoreSafetyFolder(localFolder));
+        var lastPart = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+        return string.Equals(lastPart, safetyName, StringComparison.OrdinalIgnoreCase)
+            ? PreRestoreSafetyFolder(localFolder)
+            : localFolder;
     }
 
     /// <summary>
@@ -799,6 +896,22 @@ public static class BackupService
                 if (IsSaveInProgressFile(entry.Name)
                     || IsUndoHolding(Path.GetRelativePath(root, destination).Replace('\\', '/'))
                     || IsRestoreRecord(destination))
+                {
+                    continue;
+                }
+
+                // WHY (23 Nov 2026, bug hunt 24, F324): a file this PC keeps
+                // as it has it (Take Over's WarmStandby.MachineOwnFiles) was
+                // only kept when the copy did not carry one. A copy from an
+                // older timing PC still carries music.json, themes.json and
+                // the like, and WarmStandby.Validate now lets it through, so
+                // Take Over put the timing PC's music list over the
+                // standby's own. Left out here, before it is unpacked. Only
+                // files at the top of the data folder, where those live;
+                // null for an ordinary restore, which changes nothing.
+                if (keepAsTheyAre is not null
+                    && !Path.GetRelativePath(root, destination).Contains(Path.DirectorySeparatorChar)
+                    && keepAsTheyAre.Contains(Path.GetFileName(destination), StringComparer.OrdinalIgnoreCase))
                 {
                     continue;
                 }

@@ -113,6 +113,12 @@ public partial class MainForm
         // tonight's folder. See NightRecap.
         recording.PlayTonightsRecap = announcer.PlayTonightsRecapAsync;
 
+        // WHY (23 Nov 2026, bug hunt 24): whether the piece just played was
+        // really saved, asked of the announcer that made it - the page used
+        // to go by whether recording was on when it was pressed. Covers the
+        // recap, a driver's night and the season alike (each sets it).
+        recording.PieceWasSaved = () => announcer.LastPieceWasSaved;
+
         // The loaded audio is shared (ShowMusic), so this is really telling
         // the announcer screen to drop it - said explicitly rather than
         // relied on, because "the card clears a cache the announcer happens
@@ -886,6 +892,15 @@ public partial class MainForm
 
             return (CommentaryReaders.WithChampionship(form, stake), rivalries);
         };
+
+        // WHY (23 Nov 2026, bug hunt 24 #12): the Grid history segment called
+        // long-time drivers' races their "first ever start at this club" on a
+        // club's first nights with the app, reading the age of its own records
+        // as club history. It is now told how many race nights are on file for
+        // the class, and says no "first ever" until there are enough.
+        director.GridNightsOnFile = () => _rounds is null
+            ? null
+            : CommentaryReaders.NightsOnFile(_activeRound?.ClassName, _sessionHistory, _rounds);
 
         // AND THE SHAPE OF THEIR LAST FEW NIGHTS (11 Oct 2026) - the half
         // of a form guide the app did not have. A reader of its own and not

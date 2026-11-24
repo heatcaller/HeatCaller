@@ -316,16 +316,34 @@ public sealed partial class RaceControlControl
         var previous = _lapWindowsLastState;
         _lapWindowsLastState = state;
 
-        if (previous is not (RaceState.Idle or RaceState.Finished))
-        {
-            return;
-        }
-
-        if (state is RaceState.Staging or RaceState.Countdown
-            || (state == RaceState.Racing && _race.GreenStartedTheRace))
+        if (LapWindowsCloseFor(previous, state, _race.GreenStartedTheRace, _suppressFlagAnnouncements))
         {
             CloseLapWindows();
         }
+    }
+
+    /// <summary>
+    /// Whether the move from <paramref name="previous"/> to <paramref name="state"/>
+    /// is the next race being called, which closes every lap window. Pure.
+    /// </summary>
+    /// <param name="restoring">A snapshot being put back by an undo or a restore - not a new race.</param>
+    internal static bool LapWindowsCloseFor(RaceState previous, RaceState state, bool greenStartedTheRace, bool restoring)
+    {
+        if (previous is RaceState.Idle or RaceState.Finished)
+        {
+            return state is RaceState.Staging or RaceState.Countdown
+                   || (state == RaceState.Racing && greenStartedTheRace);
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): Stage or Countdown pressed over a
+        // running race (or a demo taken over) goes straight from Racing to
+        // Staging or Countdown, with no Idle between, so the abandoned race's
+        // lap windows stayed up over the next heat. Only an abandon makes
+        // that move - a caution never changes the state - so it is the next
+        // race being called too. Not while a snapshot is being put back.
+        return previous == RaceState.Racing
+               && state is (RaceState.Staging or RaceState.Countdown)
+               && !restoring;
     }
 
     /// <summary>

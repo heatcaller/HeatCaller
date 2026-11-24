@@ -279,6 +279,27 @@ public partial class MainForm
     /// an error dialog - another process can hold it, and a failed copy is
     /// not worth interrupting anyone over.
     /// </summary>
+    /// <summary>
+    /// How many lines a piece of the console's text holds, for "Copied 10
+    /// lines". The line break that ends the last line is not another line.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the count was the text split on line
+    /// breaks. The console always ends in one, so the empty piece after it
+    /// was counted and ten lines read "Copied 11 lines".
+    /// </remarks>
+    internal static int ConsoleLineCount(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0;
+        }
+
+        var breaks = text.Count(c => c == '\n');
+
+        return text.EndsWith('\n') ? breaks : breaks + 1;
+    }
+
     private void CopyToClipboard(string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -289,7 +310,7 @@ public partial class MainForm
         try
         {
             Clipboard.SetText(text);
-            OnClientRawMessage($"{AppTime.LogStampNow()}  [console] Copied {Plural.Of(text.Split('\n').Length, "line")}.");
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [console] Copied {Plural.Of(ConsoleLineCount(text), "line")}.");
         }
         catch
         {

@@ -719,6 +719,18 @@ is kept for a phone that has not yet collected it, up to ten minutes;
 so this is purely a margin for a slow poll or a dropped connection, not a
 deadline anything is meant to run up against.
 
+The `response` itself is the laptop's, carried as it sent it:
+`{id, ok, error, needsConfirm, message, confirmToken, data}` (the ones
+not set are `null`), plus an
+optional `notRun: true` (23 Nov 2026, bug hunt 24). `notRun` is present
+only when the request never ran - HeatCaller on the laptop was closing or
+still starting, or the request was withdrawn before it began (the laptop
+didn't answer in time, or the call was canceled) - and means for certain
+that nothing was changed, so the same request is safe to send again. It
+is left out of every other answer, a refusal included: an `ok:false`
+without it may have been looked at, so a page should show its `error`
+rather than resend.
+
 **Turning the manager off closes it at once**: `enabled:false` on the
 `manage` document refuses every `signin`, `request` and `response` from
 that moment, even for a pass a device obtained earlier. Race control is
@@ -1356,7 +1368,12 @@ Driver phone plan items 5 and 11.
   case, digits and hyphens, 3–32), set on Club Website. `/c/<alias>` and
   anything under it answers `302` to the club's own address, path and query
   kept. An alias that is another club's id is ignored, and when two clubs
-  claim one the first in the config keeps it. Looked up once a minute.
+  claim one the first in the config keeps it. Looked up once a minute, and
+  again whenever a club's site document is written (a publish, a takedown
+  change, Delete Everything Published), so a new short address works and an
+  old one stops as soon as the club's pages update (23 Nov 2026, bug hunt
+  24). While some club's site document will not read, the lookup is only
+  kept about five seconds.
 - **The name under the icon.** `shortName` (up to 12 characters) is the
   manifest's `short_name`; without it, the club's name cut to 12. The icon
   is the sun for every club, so this is what tells clubs apart.
@@ -1938,7 +1955,7 @@ before anything is cached. Restoring is then instant.
 |---|---|---|
 | `logo` | (none) | `logo.png` answers 404; the logo is out of `/snapshot/site`, the pages' header, `og:image` (the club's icon is used instead) and the `/clubs` directory |
 | `sponsor` | the sponsor's `id` | the whole sponsor is out of `/snapshot/sponsors` (so off every page that shows sponsors): name, line, link and picture, not only the picture - the notice is about the tile people see |
-| `track` | the track's `name`, exactly | that track's `image` is out of `/snapshot/tracks`; its name, records and laps stay |
+| `track` | the track's `name` as the Tracks page shows it (letter case does not matter) | that track's `image` is out of `/snapshot/tracks`; its name, records and laps stay. A sha256 of the picture published under that name is recorded with the takedown (`imageHash`), so the same picture stays out if the club renames the layout; a different picture is served. A takedown made before any picture was published holds by name only, and running `takedown` again on it records the picture once there is one (23 Nov 2026, bug hunt 24) |
 | `badge` | the achievement's `id` | its `art` is out of `/snapshot/badges`; the achievement stays |
 | `video` | YouTube id (or a YouTube address) | never offered by `video/race`, `video/live` (live and `last`), `video/night`, a family link or the "videos are up" alert - treated like a video YouTube says is dead |
 | `clip` | the 32 hex characters in `/c/<club>/clip/<id>.mp3` | the `.mp3` and `.json` are moved to the held folder; the address and the driver's night list lose it; a re-send of that id is answered 200 and thrown away |
@@ -2026,7 +2043,9 @@ is the active takedown already on it, or `null`.
 `takedown` applies one. `--notice` is required: a short reference the admin
 types ("DMCA 2026-014") and nothing else - no complainant's name, address
 or email is stored. The same target already down answers its existing
-takedown with `already: true` and records nothing new. A clip or sample
+takedown with `already: true` and records nothing new - except that a
+track takedown with no picture recorded yet takes the picture now published
+under that name. A clip or sample
 that is not there is still recorded (its address 404s all the same), with
 `held: false`. Appends a `takedown` entry to the shared audit log.
 

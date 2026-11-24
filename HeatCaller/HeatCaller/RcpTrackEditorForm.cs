@@ -403,6 +403,10 @@ public sealed class RcpTrackEditorForm : Form
         // Under the board and as wide as it, and as tall as the longest a
         // tool says there - so picking a tool never resizes the board.
         _lblStatus.ForeColor = AppTheme.TextMuted;
+        // WHY (23 Nov 2026, bug hunt 24): the status line says "Saved to"
+        // and "Opened" with a file's name, and a Label takes '&' as a
+        // shortcut-key marker - so "Pit & Paddock.png" lost its '&'.
+        _lblStatus.UseMnemonic = false;
         _lblStatus.Wordings = Enum.GetValues<RcpTool>().Select(tool => ToolHint(tool)).ToArray();
 
         var inspector = BuildInspector(new (string, Section[])[]
@@ -553,6 +557,15 @@ public sealed class RcpTrackEditorForm : Form
 
         _openTab = name;
 
+        // WHY (23 Nov 2026, bug hunt 24): opening a section with the column
+        // hidden (P) used to flip cards nobody could see - "?" lit up over
+        // nothing, and "Name needed" pointed at a name box that was not on
+        // screen. Opening one brings the column back; closing all leaves it.
+        if (name.Length > 0 && !_panelShown)
+        {
+            ShowPanel();
+        }
+
         foreach (var (tabName, header, cards) in _tabs)
         {
             var open = tabName == name;
@@ -654,6 +667,22 @@ public sealed class RcpTrackEditorForm : Form
 
         _board?.PerformLayout();
         _canvas.Focus();
+    }
+
+    /// <summary>
+    /// Brings the hidden column back without taking the focus to the board -
+    /// the "Name needed" step puts it in the name box straight after.
+    /// </summary>
+    private void ShowPanel()
+    {
+        _panelShown = true;
+
+        foreach (var part in _panelParts)
+        {
+            part.Visible = true;
+        }
+
+        _board?.PerformLayout();
     }
 
     /// <summary>The 3D button lit while the board shows the angled view.</summary>
@@ -794,9 +823,7 @@ public sealed class RcpTrackEditorForm : Form
 
         var shortOf = lines.Where(line => line.Short).ToList();
 
-        _lblOwned.Text = (shortOf.Count == 0
-                             ? $"The club has enough for this plan, in {sizeName} tiles."
-                             : $"The club is short of {Plural.Of(shortOf.Count, "piece")} for this plan, in {sizeName} tiles - in red below.")
+        _lblOwned.Text = StockShortSentence(shortOf, sizeName)
                          + (owned.Notes.Count > 0
                              ? $" The {string.Join(" and the ", owned.Notes)} {(owned.Notes.Count == 1 ? "has" : "have")} more straight rails than tiles to bolt them to, so the rest are counted as loose rails."
                              : string.Empty)
@@ -828,6 +855,33 @@ public sealed class RcpTrackEditorForm : Form
                     : $"{line.Used} used of {line.Owned}, {line.Left} left";
             value.ForeColor = line.Short ? AppTheme.Danger : line.Known ? AppTheme.TextDark : AppTheme.TextMuted;
         }
+    }
+
+    /// <summary>
+    /// The Parts section's first sentence - also the closed header's headline.
+    /// WHY (23 Nov 2026, bug hunt 24): it used to say "short of {n} pieces"
+    /// with n the number of red rows, so 20 rail tiles short read "short of
+    /// 1 piece". One short part now gives its real count, as the Track
+    /// Layouts card does; more than one says how many kinds of piece.
+    /// </summary>
+    internal static string StockShortSentence(IReadOnlyList<RcpStockLine> shortOf, string sizeName)
+    {
+        if (shortOf.Count == 0)
+        {
+            return $"The club has enough for this plan, in {sizeName} tiles.";
+        }
+
+        if (shortOf.Count == 1)
+        {
+            // "Tiles, all kinds" reads as plain "tiles" in a sentence.
+            var part = shortOf[0].Part;
+            var comma = part.IndexOf(',');
+            var named = (comma < 0 ? part : part[..comma]).ToLowerInvariant();
+
+            return $"The club is {-shortOf[0].Left} {named} short for this plan, in {sizeName} tiles - in red below.";
+        }
+
+        return $"The club is short of {shortOf.Count} kinds of piece for this plan, in {sizeName} tiles - in red below.";
     }
 
     /// <summary>
@@ -889,6 +943,10 @@ public sealed class RcpTrackEditorForm : Form
     private FieldRow BuildTopBar()
     {
         _lblTitle.AutoSize = true;
+        // WHY (23 Nov 2026, bug hunt 24): the top bar shows the typed track
+        // name, and a Label takes '&' as a shortcut-key marker - "Pit &
+        // Paddock" read "Pit  Paddock" while the Plan header beside it was right.
+        _lblTitle.UseMnemonic = false;
         _lblTitle.Font = AppTheme.BoldFont;
         _lblTitle.ForeColor = AppTheme.TextDark;
         _lblTitle.Anchor = AnchorStyles.Left;

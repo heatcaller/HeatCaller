@@ -1248,6 +1248,15 @@ public sealed class AppSettings
     public string SponsorMentionsNight { get; set; } = string.Empty;
 
     /// <summary>
+    /// Tonight's sponsor logo time and "presented by" graphic counts on the
+    /// stream (SponsorStream.Save), for SponsorMentionsNight's reason.
+    /// WHY (23 Nov 2026, bug hunt 24, F304): they lived in memory only, so a
+    /// restart mid-evening left the sponsor report with only the logo time
+    /// since. Keyed to the race night inside - see SponsorStream.Restore.
+    /// </summary>
+    public string SponsorStreamNight { get; set; } = string.Empty;
+
+    /// <summary>
     /// The continuity and honours lines the room has heard tonight, for
     /// CommentaryFactsNight's reason - without it a restart offered "That
     /// was Q2 Heat 1 for Stock." and every honours hand-over again. Keyed to

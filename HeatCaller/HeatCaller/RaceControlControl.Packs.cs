@@ -119,7 +119,15 @@ public sealed partial class RaceControlControl
 
         if (PackSessionFor(key) is { } session)
         {
-            BatteryActions.TagSession(store, _undo, session.Id, session.Label, key, name, packId, PackTagSource.RaceControl, intoCar: true);
+            // WHY (23 Nov 2026, bug hunt 24): TagSession now refuses a pack that
+            // was removed while the menu was open; the old status line then said
+            // "no pack recorded", which is not what happened.
+            if (!BatteryActions.TagSession(store, _undo, session.Id, session.Label, key, name, packId, PackTagSource.RaceControl, intoCar: true))
+            {
+                StatusMessage?.Invoke($"[packs] {name}: that pack was removed while the menu was open, so nothing was changed.");
+                return;
+            }
+
             StatusMessage?.Invoke(label is null
                 ? $"[packs] {name}: no pack recorded for {session.Label}."
                 : $"[packs] {name} ran {session.Label} on pack {label} - and it's the pack in the car from now on.");

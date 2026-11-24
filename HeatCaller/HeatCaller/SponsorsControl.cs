@@ -1042,6 +1042,25 @@ public sealed class SponsorsControl : UserControl
         }
 
         ShowTiles();
+
+        // WHY (23 Nov 2026, bug hunt 24): the "Picture for their read"
+        // drop-down offers this same folder's pictures, but was only filled
+        // when a sponsor was picked - so a picture just added with Add
+        // Image... was missing from it (and got uploaded a second time), and
+        // a slide just removed was still offered, leaving the read on the
+        // sponsor's name. Refilled here, under the fill guard so setting its
+        // selection back does not write to the sponsor.
+        var wasFilling = _fillingSponsor;
+        _fillingSponsor = true;
+
+        try
+        {
+            FillPictureChoices(_store.Sponsor(SelectedSponsorId)?.PictureFileName);
+        }
+        finally
+        {
+            _fillingSponsor = wasFilling;
+        }
     }
 
     private void RefreshPreview()

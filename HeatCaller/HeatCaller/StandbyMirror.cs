@@ -165,6 +165,10 @@ internal sealed class StandbyMirror : IDisposable
 
             using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false);
 
+            // When the answer arrived, on this PC's clock - what the copy's
+            // age is measured back from (see the WHY at takenAt below).
+            var receivedUtc = DateTime.UtcNow;
+
             if (!response.IsSuccessStatusCode)
             {
                 Fail((int)response.StatusCode switch
@@ -247,21 +251,26 @@ internal sealed class StandbyMirror : IDisposable
 
             File.Move(partial, LatestPath, overwrite: true);
 
-            var takenAt = response.Headers.TryGetValues(WarmStandby.TakenAtHeader, out var stamps)
-                          && DateTime.TryParse(stamps.FirstOrDefault(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var stamp)
+            // WHY (23 Nov 2026, bug hunt 24, F325): LastCopyUtc was the
+            // timing PC's own stamp, on its clock. A timing PC whose clock is
+            // behind this one's made every fresh copy read minutes or hours
+            // old here (and Take Over asked about a copy that old). Now the
+            // timing PC says how old the copy is by its own clock (the age
+            // header) and that is taken off the moment it arrived here; a
+            // timing PC on an older HeatCaller, with no age header, falls
+            // back to its stamp, never later than arrival - see
+            // WarmStandby.CopyTakenOnThisClock.
+            DateTime? stampUtc = response.Headers.TryGetValues(WarmStandby.TakenAtHeader, out var stamps)
+                                 && DateTime.TryParse(stamps.FirstOrDefault(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var stamp)
                 ? stamp.ToUniversalTime()
-                : DateTime.UtcNow;
+                : null;
+
+            var ageHeader = response.Headers.TryGetValues(WarmStandby.AgeHeader, out var ages) ? ages.FirstOrDefault() : null;
+            var takenAt = WarmStandby.CopyTakenOnThisClock(receivedUtc, ageHeader, stampUtc);
 
             var primary = response.Headers.TryGetValues(WarmStandby.PrimaryNameHeader, out var names)
                 ? names.FirstOrDefault()
                 : null;
-
-            // The timing PC's clock may be off from this one's; a copy can't
-            // be from the future as far as the age shown here goes.
-            if (takenAt > DateTime.UtcNow)
-            {
-                takenAt = DateTime.UtcNow;
-            }
 
             _status = _status with
             {

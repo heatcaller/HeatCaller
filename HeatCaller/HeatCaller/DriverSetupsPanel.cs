@@ -108,9 +108,10 @@ internal sealed class DriverSetupsPanel : UserControl
         var mine = profile is null
             ? new List<SetupEntry>()
             : _setups.All
-                .Where(e => (!string.IsNullOrEmpty(e.CarId) && carIds.Contains(e.CarId))
-                            || (name.Length > 0
-                                && string.Equals(e.DriverName?.Trim(), name, StringComparison.OrdinalIgnoreCase)))
+                // WHY (23 Nov 2026, bug hunt 24): the card counted setups by
+                // its own rule and this tab by an inline copy, and the two
+                // drifted apart; both use DriverStats.IsDriversSetup now.
+                .Where(e => DriverStats.IsDriversSetup(e, name, carIds))
                 .OrderByDescending(e => e.RecordedAtUtc)
                 .ToList();
 

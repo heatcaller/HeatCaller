@@ -272,8 +272,15 @@ public static class CommentaryShowFacts
             && night.ClosestFinishSeconds <= CloseFinishSeconds
             && closest.Length > 0)
         {
+            // WHY (23 Nov 2026, bug hunt 24): a win by a few thousandths
+            // was written to the hundredth, so a 4 ms margin went in as
+            // "by 0.00s" - a dead heat that did not happen, on the night the
+            // margin was the best number of the evening. The recap moved to
+            // thousandths on 1 Nov 2026 for the same reason. Under a
+            // hundredth it is now written to the thousandth; wider margins
+            // keep their hundredths.
             found.Add(new FactBlock($"signoff:{dayKey}:closest",
-                $"The closest finish all night was {closest}'s, by {CommentaryFacts.Invariant(night.ClosestFinishSeconds, "0.00")}s."));
+                $"The closest finish all night was {closest}'s, by {CommentaryFacts.Invariant(night.ClosestFinishSeconds, ClosestMarginFormat(night.ClosestFinishSeconds))}s."));
         }
 
         if (night.Debutants is { } debuts && debuts > 0)
@@ -403,6 +410,19 @@ public static class CommentaryShowFacts
             return null;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): the Tonight Open is said at the
+        // first On Air that gets it out, which can be after races have been
+        // filed tonight (On Air pressed late, or the first one called off).
+        // This used to ask "Can anybody stop that run tonight?" even when
+        // somebody already had, in front of a room that watched it. The
+        // question is now only asked while it is still open: not beaten,
+        // the night not over, and every race they started won (the same
+        // agreement ThreadSoFar asks for). The rest of the open still goes.
+        if (!StillAnOpenQuestion(story))
+        {
+            return null;
+        }
+
         return new FactBlock(
             Stage(story, dayKey, "open"),
             $"{name} has won the last race of the night at each of the club's last {Spell(story.DaysWon)} race days."
@@ -426,8 +446,9 @@ public static class CommentaryShowFacts
     ///   broadcast than the version that held.
     ///
     /// What it will never do is ask "can anybody stop him" after somebody
-    /// has, because that sentence only exists in <see cref="ThreadAhead"/>
-    /// and the cold open happens once.
+    /// has, because that sentence only exists in <see cref="ThreadAhead"/>,
+    /// which refuses it once anybody has (bug hunt 24 - the open can be said
+    /// late, after races have run).
     ///
     /// AND IT CAN SAY NOTHING. Before the subject has been out, and on the
     /// odd night where they were in a race nobody won, there is no honest
@@ -554,6 +575,23 @@ public static class CommentaryShowFacts
     /// club's whole history for a night that was never going to say
     /// anything.
     /// </summary>
+    /// <summary>
+    /// True while "can anybody stop that run tonight" is still a real
+    /// question: nobody has beaten the subject tonight, the night is not
+    /// over, and they won every race they started (bug hunt 24).
+    /// </summary>
+    internal static bool StillAnOpenQuestion(NightThread story) =>
+        story.BeatenBy is null
+        && !story.NightOver
+        && story.WonTonight == story.StartedTonight;
+
+    /// <summary>
+    /// The format for the sign-off's closest margin: thousandths under a
+    /// hundredth, so a 4 ms win is not written "0.00" (bug hunt 24).
+    /// </summary>
+    internal static string ClosestMarginFormat(double seconds) =>
+        seconds < 0.01 ? "0.000" : "0.00";
+
     private static bool NoThread(NightThread story) =>
         string.IsNullOrWhiteSpace(story.SubjectId)
         || story.DaysWon < LeastDaysWon

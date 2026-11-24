@@ -597,6 +597,18 @@ public sealed class PaceAnalysisControl : UserControl
             return string.Empty;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): a disqualified driver keeps their lap
+        // times but is scored with zero laps, so the old code told them they
+        // were "18 laps down" on the winner, and told the winner of a field
+        // whose only rival was disqualified that they "won it by 18 laps".
+        // Neither happened. A DQ now says so, and is never the runner-up a
+        // winning margin is measured against. DQ rows still count in "P5 of 5"
+        // so the place matches the results page.
+        if (IsDisqualified(entry))
+        {
+            return "Disqualified.";
+        }
+
         var fields = MixedHeats.ScoringFields(session.Results, null);
         var own = fields.FirstOrDefault(f => f.Any(r => ReferenceEquals(r, entry))) ?? session.Results;
         var field = own.Where(r => r.Position > 0 && !GhostService.IsGhost(r.Transponder)).OrderBy(r => r.Position).ToList();
@@ -614,7 +626,7 @@ public sealed class PaceAnalysisControl : UserControl
         if (rank == 1)
         {
             var won = className is null ? "Won it" : $"Won {className}";
-            var second = field.Count > 1 ? field[1] : null;
+            var second = field.Skip(1).FirstOrDefault(r => !IsDisqualified(r));
 
             if (second is null)
             {
@@ -643,6 +655,9 @@ public sealed class PaceAnalysisControl : UserControl
             ? $"{place}, {(entry.ElapsedMs - winner.ElapsedMs) / 1000.0:0.0} s behind {NameOf(winner)}."
             : $"{place}.";
     }
+
+    private static bool IsDisqualified(SessionResultEntry entry) =>
+        ResultEditor.NormaliseOutcome(entry.Outcome) == ResultEditor.Dq;
 
     private static string NameOf(SessionResultEntry entry) =>
         string.IsNullOrWhiteSpace(entry.DriverName) ? entry.Transponder : entry.DriverName;

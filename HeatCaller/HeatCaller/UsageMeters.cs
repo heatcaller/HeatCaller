@@ -1027,12 +1027,20 @@ internal sealed class UsageMeters
 
         if (expired)
         {
-            return new Meter(kind, false, 0, entry.Allowance, entry.TopUp, entry.ResetsUtc, entry.AsOfUtc, 0,
-                "Last month's figure - waiting for this month's from the relay.");
+            return new Meter(kind, false, 0, entry.Allowance, entry.TopUp, entry.ResetsUtc, entry.AsOfUtc, 0, ExpiredNote(kind));
         }
 
         return new Meter(kind, entry.Known, entry.Used, entry.Allowance, entry.TopUp, entry.ResetsUtc, entry.AsOfUtc, tonight, entry.Note);
     }
+
+    // WHY (23 Nov 2026, bug hunt 24): the note for a figure kept past its
+    // reset always said it was waiting "from the relay". For the club's own
+    // ElevenLabs key the figure comes from ElevenLabs itself, so a club with
+    // no relay at all read that it was waiting on one until the next refresh.
+    /// <summary>What an expired meter says while this month's figure is awaited, naming where that figure comes from.</summary>
+    internal static string ExpiredNote(MeterKind kind) => kind == MeterKind.ElevenLabsKey
+        ? "Last month's figure - waiting for this month's from ElevenLabs."
+        : "Last month's figure - waiting for this month's from the relay.";
 
     /// <summary>
     /// Which month a figure belongs to, as "yyyy-MM": the month before the

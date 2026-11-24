@@ -173,7 +173,8 @@ public sealed class OverlayStudioTests
             var (anchor, x, y) = OverlayEditorForm.UsualPlace(kind);
             Assert.NotEqual(OverlayAnchor.Default, anchor);
             Assert.InRange(x, 0, 10);
-            Assert.InRange(y, 0, 10);
+            // 24 Nov 2026, Asher approved: the championship box's usual place is under the pylon (Down 28), bug hunt 24 #218.
+            Assert.InRange(y, 0, 30);
             Assert.NotEqual((OverlayDuring)0, OverlayEditorForm.NaturalParts(kind));
         }
     }

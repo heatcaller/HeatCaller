@@ -148,15 +148,21 @@ public sealed class ResultsExportForm : Form
     private void UpdateShape() => _lblShape.Text = ShapeOf(Format);
 
     /// <summary>A format's shape, in words. Every one of them is measured for the room under the format box (see _lblShape).</summary>
-    private static string ShapeOf(ResultsExporter.Format format) => format switch
+    // WHY (23 Nov 2026, bug hunt 24): the Results CSV words stopped at
+    // LapsCountedByHand, though the file has had a ClassPosition column after
+    // it since 13 Nov 2026, and the Lap CSV words never said the file gains
+    // S1Seconds, S2Seconds... when laps were run with a split loop. A club
+    // lining the file up with a spreadsheet from this list found columns it
+    // was not told about. Internal so a test can hold it to the real header.
+    internal static string ShapeOf(ResultsExporter.Format format) => format switch
     {
         ResultsExporter.Format.ResultsCsv =>
             "Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Track, Position, Driver, "
-            + "Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds, Status, LapsCountedByHand",
+            + "Transponder, Car, Laps, TotalTimeSeconds, BestLapSeconds, Status, LapsCountedByHand, ClassPosition",
 
         ResultsExporter.Format.LapCsv =>
             "Columns: SessionDate, SessionTime, SessionLabel, Round, Class, Driver, Transponder, "
-            + "LapNumber, LapSeconds, CumulativeSeconds",
+            + "LapNumber, LapSeconds, CumulativeSeconds, then S1Seconds, S2Seconds and so on when laps have sector times",
 
         _ => "Nested JSON: one object per session, each containing its results, and each result containing "
              + "its full list of lap times in seconds.",

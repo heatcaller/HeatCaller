@@ -228,8 +228,12 @@ public sealed class StreamDecoderClient : IDisposable
                 capture.Add("sent: ", protocol.Greeting);
             }
 
+            // WHY (23 Nov 2026, bug hunt 24): the capture sentence is said only
+            // when the capture really started. The old message always said every
+            // byte was captured, even at the 20 MB day cap or when the file could
+            // not be opened, so the console claimed a capture that wasn't there.
             if (!PublishIfCurrent(generation, DecoderConnectionState.Connected,
-                    $"Connected to the {DecoderConnection.ShortName(options.Decoder)} decoder on {options.Describe()}. Every byte it sends is also captured to {capture.FileName}."))
+                    ConnectedMessage(options.Decoder, options.Describe(), capture.IsCapturing ? capture.FileName : null)))
             {
                 return;
             }
@@ -360,6 +364,11 @@ public sealed class StreamDecoderClient : IDisposable
         StatusChanged?.Invoke(state, message);
         Log($"[status] {message}");
     }
+
+    /// <summary>The Connected status line; the capture sentence only when a capture file is being written.</summary>
+    internal static string ConnectedMessage(int decoder, string where, string? captureFile) =>
+        $"Connected to the {DecoderConnection.ShortName(decoder)} decoder on {where}."
+        + (captureFile is null ? string.Empty : $" Every byte it sends is also captured to {captureFile}.");
 
     private void Log(string line) => RawMessage?.Invoke($"{AppTime.LogStampNow()}  {line}");
 
@@ -614,6 +623,9 @@ public sealed class StreamDecoderClient : IDisposable
 
         public string FileName => Path.GetFileName(_path);
 
+        /// <summary>Whether Start opened the day's file and is writing to it.</summary>
+        public bool IsCapturing => _pending is not null;
+
         public void Start(string where)
         {
             StreamWriter? writer = null;
@@ -627,10 +639,16 @@ public sealed class StreamDecoderClient : IDisposable
                 var stream = new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
                 writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-                if (stream.Length >= MaxBytesPerDay)
+                // WHY (23 Nov 2026, bug hunt 24): the size is read before the
+                // writer is closed, as the I-Lap capture does. The old code read
+                // stream.Length after Dispose, which throws on a closed file; the
+                // catch below swallowed it, so this line was never shown.
+                var already = stream.Length;
+
+                if (already >= MaxBytesPerDay)
                 {
                     writer.Dispose();
-                    _log($"[decoder] Today's raw capture is already {stream.Length / (1024 * 1024)} MB - not capturing more today.");
+                    _log($"[decoder] Today's raw capture is already {already / (1024 * 1024)} MB - not capturing more today.");
                     return;
                 }
 

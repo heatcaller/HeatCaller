@@ -464,6 +464,45 @@ public static partial class CommentaryReaders
     }
 
     /// <summary>
+    /// How many race nights (6am to 6am) the races <see cref="GridHistory"/>
+    /// counts were run on BEFORE tonight - the number RaceForm.NightsOnFile
+    /// carries, so a "first ever start" or "first ever win here" is only said
+    /// on a history old enough to know (CommentaryHistoryFacts.KnowsFirsts).
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): GridHistory's zeroes were read as
+    /// debuts and first wins on a club's first night or two with the app,
+    /// when nearly everyone has a zero - and only the reader can know how
+    /// many nights those zeroes cover. Counted over the same races GridHistory
+    /// counts (the class's, when a class is given), by the night each race
+    /// STARTED on, as CommentaryReaders.NightDone and NewDrivers.RacedBefore
+    /// count them.
+    ///
+    /// Owner decision noted: this counts the CLASS's nights, because the
+    /// counts behind "first ever Box Stock start" are the class's. Counting
+    /// the club's whole history instead would let a brand-new class at an
+    /// established club announce its first real debuts on its first night.
+    /// </remarks>
+    /// <param name="nowLocal">Now, in local time, for which night is tonight. Defaults to now.</param>
+    /// <param name="exceptSessionId">The race being recapped, already filed - see GridHistory's remarks.</param>
+    public static int NightsOnFile(
+        string? className,
+        SessionHistoryStore history,
+        RoundDefinitionStore rounds,
+        DateTime? nowLocal = null,
+        string? exceptSessionId = null)
+    {
+        var tonight = TonightAtTheTrack.NightOf(nowLocal ?? DateTime.Now);
+
+        return RacesIn(className, history, rounds, exceptSessionId)
+            .Where(record => record.Results.Count > 0)
+            .Select(record => TonightAtTheTrack.NightOf(record.StartedAtUtc.ToLocalTime()))
+            .Where(night => night < tonight)
+            .Distinct()
+            .Count();
+    }
+
+    /// <summary>
     /// Every race the club has run in a class, newest first.
     ///
     /// Practice is left out - a practice session has no result anybody
@@ -634,6 +673,25 @@ public static partial class CommentaryReaders
         }
 
         return ranIn.Length == 0 || string.Equals(ranIn, wanted, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The class a row of a saved race was run in (23 Nov 2026, bug hunt
+    /// 24): its own stamp, else the race's first stamped class (the reading
+    /// <see cref="RanIn"/> takes), else <paramref name="fallback"/> - the
+    /// round's class, which is the answer for every race but a shared
+    /// heat's.
+    /// </summary>
+    private static string ClassRanIn(SessionRecord race, SessionResultEntry entry, string fallback)
+    {
+        var ranIn = Typed(entry.ClassName);
+
+        if (ranIn.Length == 0)
+        {
+            ranIn = Typed(race.Results.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.ClassName))?.ClassName);
+        }
+
+        return ranIn.Length > 0 ? ranIn : Typed(fallback);
     }
 
     /// <summary>
@@ -982,8 +1040,16 @@ public static partial class CommentaryReaders
     /// </list>
     ///
     /// With NO rounds left the season is over and the table is the answer:
-    /// only a driver level with the leader is still "in it", because level
-    /// is not beaten.
+    /// a clear leader has won it and everyone else is out. Level at the top
+    /// with nothing left to run is "not known" (null): the title is not
+    /// still to be won, it is down to the tie-break.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the level drivers were marked alive
+    /// and everybody else out, so after the season's last round ended level
+    /// the announcer said "2 drivers can still win the championship" about a
+    /// title with no racing left in it. Null leaves every row alive, which
+    /// ChampionshipCheck says nothing about, and its "level at the top" line
+    /// still goes out.
     /// </summary>
     private static HashSet<string>? WhoCanStillWin(
         Season season,
@@ -1049,6 +1115,14 @@ public static partial class CommentaryReaders
         }
 
         var leader = after[0];
+
+        // Season over and level at the top: settled by the tie-break, not
+        // still to be won. See the summary.
+        if (left == 0 && after.Skip(1).Any(rival => rival.TotalPoints >= leader.TotalPoints))
+        {
+            return null;
+        }
+
         var stillIn = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { leader.DriverName };
 
         foreach (var rival in after.Skip(1))
@@ -1152,6 +1226,13 @@ public static partial class CommentaryReaders
             var leaderPoints = before[0].TotalPoints;
             var rows = new List<ChampionshipStanding>();
 
+            // WHY (23 Nov 2026, bug hunt 24): the intro only sees this grid's
+            // drivers, so a leader here level on points with somebody who is
+            // not racing was told "leads the championship". The whole table
+            // knows it is level; each row on the top total says so, for
+            // StakesLines to read.
+            var levelAtTop = before.Count > 1 && before[1].TotalPoints == before[0].TotalPoints;
+
             for (var i = 0; i < before.Count && rows.Count < Math.Max(1, most); i++)
             {
                 if (!onThisGrid.Contains(before[i].DriverName))
@@ -1177,7 +1258,8 @@ public static partial class CommentaryReaders
                     DroppedRounds: before[i].DroppedRounds,
                     DroppedPoints: Math.Max(0, before[i].RawPoints - before[i].TotalPoints),
                     CarriedIn: before[i].CarriedIn,
-                    Dnfs: before[i].Dnfs));
+                    Dnfs: before[i].Dnfs,
+                    LevelAtTopBefore: levelAtTop && before[i].TotalPoints == leaderPoints));
             }
 
             // A table nobody in this race is in is not what this race is
@@ -1813,6 +1895,20 @@ public static partial class CommentaryReaders
             // only refusal in this method that was a bug first.
             if (RoundsCountedSoFar(counted, events, round) is not { } roundsCounted
                 || roundsCounted < CommentaryStakesFacts.LeastRoundsCounted)
+            {
+                continue;
+            }
+
+            // WHY (23 Nov 2026, bug hunt 24): RoundsCountedSoFar only refuses
+            // a day that already has a counted race FILED on it. With a
+            // B-main staged and the A-main still to run, nothing is filed
+            // yet, so tonight was priced as ONE race - but a driver who wins
+            // the B-main and bumps up scores in both, and the intro could
+            // say "nobody left can reach him" while a driver on that very
+            // grid still could. Another round tonight that the season would
+            // count makes tonight two races, so this refuses, the same check
+            // WhoCanStillWin makes after the flag.
+            if (AnotherCountingRoundThatDay(season, round, rounds, events))
             {
                 continue;
             }
@@ -3947,6 +4043,13 @@ public static partial class CommentaryReaders
             var classes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var anyWithoutClass = false;
 
+            // WHY (23 Nov 2026, bug hunt 24): the class this driver ran THIS
+            // race in, from their own row. A shared heat is handed in under
+            // its main class, so a Mod driver in a Stock + Mod heat was read
+            // as racing Stock and the recap said "that was Sam's first Stock
+            // race - every one of their starts before was in Mod".
+            var ranTonight = wanted.Length > 0 ? ClassRanIn(race, entry, wanted) : wanted;
+
             foreach (var past in before)
             {
                 if (Placing(past, transponder) is null)
@@ -3957,6 +4060,16 @@ public static partial class CommentaryReaders
                 starts++;
 
                 var cls = past.RoundId is { } id && classOf.TryGetValue(id, out var named) ? named : string.Empty;
+
+                // WHY (23 Nov 2026, bug hunt 24): a past shared heat is named
+                // by the class the driver's own row is stamped with, not the
+                // heat's main class - a Mod regular's shared heats were all
+                // counted as Stock starts.
+                if (cls.Length > 0
+                    && past.Results.FirstOrDefault(row => string.Equals(row.Transponder, transponder, StringComparison.OrdinalIgnoreCase)) is { } pastRow)
+                {
+                    cls = ClassRanIn(past, pastRow, cls);
+                }
 
                 if (cls.Length == 0)
                 {
@@ -3975,8 +4088,8 @@ public static partial class CommentaryReaders
                 ? classes.First()
                 : null;
 
-            var firstInClass = wanted.Length > 0 && !classes.Contains(wanted)
-                ? wanted
+            var firstInClass = ranTonight.Length > 0 && !classes.Contains(ranTonight)
+                ? ranTonight
                 : null;
 
             // Theirs for this race day: their own, or one lent to them for
@@ -3989,10 +4102,10 @@ public static partial class CommentaryReaders
             // Narrowed to the class when any of them are in it - the same
             // narrowing MechanicBrief does, and for the same reason: a
             // driver with a stock car and a mod car ran one of them.
-            if (wanted.Length > 0)
+            if (ranTonight.Length > 0)
             {
                 var inClass = theirs
-                    .Where(car => string.Equals(Typed(car.ClassName), wanted, StringComparison.OrdinalIgnoreCase))
+                    .Where(car => string.Equals(Typed(car.ClassName), ranTonight, StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
                 if (inClass.Count > 0)
@@ -4376,7 +4489,13 @@ public static partial class CommentaryReaders
 
         foreach (var race in races)
         {
-            if (Placing(race, subject) is not { } position)
+            // WHY (23 Nov 2026, bug hunt 24): within the subject's own class.
+            // A shared heat is scored a class at a time (see GridHistory), so
+            // a Stock driver who won Stock behind a Mod car on the road won
+            // it. Read overall, the thread said a Mod driver "has already
+            // beaten them tonight" while the room had just heard them called
+            // the Stock winner.
+            if (Placing(race, subject, withinClass: true) is not { } position)
             {
                 continue;
             }
@@ -4397,8 +4516,12 @@ public static partial class CommentaryReaders
             // calling them unbeaten in it. Nor is the subject beaten by
             // themselves: stored first but a DNF or a DQ (Placing's zero)
             // is a race they did not win, and nobody beat them in it.
+            //
+            // WHY (23 Nov 2026, bug hunt 24): the winner of the subject's own
+            // class, not the overall winner - in a shared heat that was a car
+            // of the other class, named as having beaten them.
             if (beatenBy is null
-                && WonBy(race) is { } ahead
+                && ClassWinner(race, subject) is { } ahead
                 && !string.Equals(Typed(ahead.Transponder), subject, StringComparison.OrdinalIgnoreCase))
             {
                 beatenBy = Typed(ahead.DriverName);
@@ -4637,6 +4760,36 @@ public static partial class CommentaryReaders
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether the race day <paramref name="round"/> is on holds another
+    /// round the season's rule would count (23 Nov 2026, bug hunt 24) - a
+    /// B-main and an A-main, or a later leg, which make the day worth more
+    /// than the one race the title proofs price it at. False when the round
+    /// is on no race day: the callers refuse that case on their own.
+    /// </summary>
+    private static bool AnotherCountingRoundThatDay(
+        Season season,
+        RoundDefinition? round,
+        RoundDefinitionStore? rounds,
+        RaceEventStore? events)
+    {
+        if (round is null || rounds is null || events is null || events.EventForRound(round.Id) is not { } day)
+        {
+            return false;
+        }
+
+        foreach (var otherId in day.RoundIds)
+        {
+            if (!string.Equals(otherId, round.Id, StringComparison.Ordinal)
+                && EventSpine.RuleAccepts(season, ProbeFor(otherId), rounds, events))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>A race not yet run, as a season's rule sees it - only its round matters.</summary>
@@ -5075,6 +5228,40 @@ public static partial class CommentaryReaders
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Who won <paramref name="transponder"/>'s own class in a race (23 Nov
+    /// 2026, bug hunt 24). For a race with no class stamped on its rows -
+    /// every race but a shared heat's - this is <see cref="WonBy"/> exactly.
+    /// In a shared heat it is the best-placed real finisher scored in the
+    /// same class as the driver, the way the heat was scored; null when the
+    /// driver has no row or nobody in their class finished.
+    /// </summary>
+    private static SessionResultEntry? ClassWinner(SessionRecord race, string transponder)
+    {
+        if (race.Results.All(row => string.IsNullOrWhiteSpace(row.ClassName)))
+        {
+            return WonBy(race);
+        }
+
+        var own = race.Results.FirstOrDefault(row =>
+            string.Equals(row.Transponder, transponder, StringComparison.OrdinalIgnoreCase));
+
+        if (own is null)
+        {
+            return WonBy(race);
+        }
+
+        return race.Results
+            .Where(row => row.Position > 0
+                          && row.Laps > 0
+                          && !string.IsNullOrWhiteSpace(row.Transponder)
+                          && !GhostService.IsGhost(row.Transponder)
+                          && ResultEditor.NormaliseOutcome(row.Outcome) is not (ResultEditor.Dnf or ResultEditor.Dq)
+                          && SameClassField(race, row, own))
+            .OrderBy(row => row.Position)
+            .FirstOrDefault();
     }
 
     /// <summary>
