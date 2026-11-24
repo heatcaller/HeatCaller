@@ -79,21 +79,56 @@ internal static class StartNextHold
 /// handled) clears it, so a hold whose let-go never reached the button - a
 /// dialog took the mouse - cannot swallow the next real click.
 /// </summary>
+///
+/// LET GO EARLY, NOTHING HAPPENS (23 Nov 2026, Asher: "when clicking and
+/// holding the start button on race day if you release it prior to it
+/// starting as a demo it should go back to it's unpressed state and not the
+/// popup window"). A press let go before the demo started used to count as
+/// a click, however long it had been held, so it started the race for real
+/// and the start's popup came up under the director's hand. Now only a
+/// press let go within <see cref="ClickAtMost"/> is a click. One held longer
+/// and let go before the demo is a hold called off: nothing happens and the
+/// button comes back up. Space and Enter press no mouse, so they are always
+/// a click.
+/// </summary>
 internal sealed class HeldClickFilter
 {
-    private bool _held;
+    /// <summary>The longest a press can be held and still be a click - a click is well under this, and the hold's bar is a third of the way along by then.</summary>
+    internal static readonly TimeSpan ClickAtMost = TimeSpan.FromMilliseconds(300);
 
-    /// <summary>A fresh press, or the last one is over: the next click is a click.</summary>
-    public void Pressed() => _held = false;
+    private readonly Func<long> _now;
+    private bool _held;
+    private long? _downAt;
+
+    public HeldClickFilter(Func<long>? now = null) => _now = now ?? (() => Environment.TickCount64);
+
+    /// <summary>The last press is over: the next click is a click, whatever happened to that one.</summary>
+    public void Pressed()
+    {
+        _held = false;
+        _downAt = null;
+    }
+
+    /// <summary>The mouse is pressed on the button while its hold is on offer: from now, holding is timed.</summary>
+    public void Down()
+    {
+        _held = false;
+        _downAt = _now();
+    }
 
     /// <summary>The hold on this press has done its job.</summary>
     public void Held() => _held = true;
 
-    /// <summary>True when the click should do the button's own job; false for the let-go of a completed hold.</summary>
+    /// <summary>
+    /// True when the click should do the button's own job; false for the
+    /// let-go of a completed hold, and for a hold let go before it was done
+    /// that was held for longer than a click.
+    /// </summary>
     public bool ClickActs()
     {
-        var acts = !_held;
+        var acts = !_held && !(_downAt is { } down && _now() - down >= (long)ClickAtMost.TotalMilliseconds);
         _held = false;
+        _downAt = null;
         return acts;
     }
 }

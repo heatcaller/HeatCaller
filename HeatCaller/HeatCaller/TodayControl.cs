@@ -362,7 +362,18 @@ public sealed class TodayControl : UserControl
         {
             if (e.Button == MouseButtons.Left)
             {
-                _heldClicks.Pressed();
+                // Timed only while the hold is on offer: on any other step
+                // the button is a plain button, and a long press is still a
+                // click. Held past a click and let go early, nothing happens
+                // (23 Nov 2026) - see HeldClickFilter.
+                if (DemoRound() is not null)
+                {
+                    _heldClicks.Down();
+                }
+                else
+                {
+                    _heldClicks.Pressed();
+                }
             }
         };
 
