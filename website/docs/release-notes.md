@@ -4,6 +4,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Practice's columns and Dock Inbox work as on Race Control (24 November).** Right-click the **This session** table on **Practice** to choose its columns, from the same drop-down of ticks and arrows Race Control's leaderboard has; the **Choose Columns** button is gone. Beside **Expand** under the table is the same **Dock Inbox** button as on Race Control. And **Expand** and **Restore** on Practice no longer show Windows' white scroll bar for a moment as the cards fold. See [Practice settings](race-control/practice-and-ghosts.md#practice-settings). Update HeatCaller on the race PC; nothing changes on the relay.
 - **ElevenLabs is retiring its Default voices on 31 December 2026, so HeatCaller has a new cast.**
   - **Voice → Cast** flags any seat on a retiring voice ("ElevenLabs retires Charlie on 31 December. Switch to Darian?") with **Play**, **Switch** and **Pick another**. From 1 January a seat still on one switches to HeatCaller's voice for it by itself, and drivers' crew voices move to ElevenLabs' own replacement.
   - HeatCaller's voice for each seat is Finley (announcer), Alicia (co-host), Wyatt (Technical Lead), Darian (Team Principal), Elowen (achievements reader) and Baxter (recap host). They're on every ElevenLabs voice list, marked "Suggested by HeatCaller", and **Use HeatCaller's cast** puts all six in at once. They are only defaults: pick any voice for a seat, and a driver's crew voice still overrides it.

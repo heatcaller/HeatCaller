@@ -39,11 +39,14 @@ Beside the cards, under the clock and **Open Big Screen**, four tiles sum up the
 | **Start automatically when a car crosses the gate** | Starts practice when a car crosses the line and nothing else is running. It never interrupts a race, a countdown or a practice session that's already going. The crossing that starts it counts as that car's first pass, so that car doesn't lose a lap. When HeatCaller opens with an unfinished race to offer back, it waits until you've answered that question. It also waits while the split loop's **Line Up** window is open. | Off |
 | **Race ghost cars** | In the **Ghost cars** card, beside **Setup**. Adds the ticked ghosts to the session. This is the same switch as **Enable ghost cars** on the **Ghost Cars** page. **Manage** opens that page. | Off |
 | **Track:** | The track layout the session is saved against. It's remembered between sessions. | (none) |
-| **Choose Columns** | Under the **This session** table. Picks the columns for the table. See [Running a race](running-a-race.md#columns) for what each column shows. | See below |
 | **Practice length:** | A lap target (based on the driver with the most laps) and a time target. Practice stops by itself when either is reached. **0** means no limit. | 0 / 0 |
 | **Rolling average over:** | How many recent laps the **Rolling Avg** column averages (2 to 50). This isn't remembered between sessions. | 5 |
 
 The **This session** table is sorted by best lap, fastest first, and its columns share its width. By default it shows **Driver**, **Laps**, **Last Lap**, **vs Best**, **Best Lap**, **Rolling Avg**, **Std Dev**, **Streak**, **Best Streak**, **Streak Pace**, **Trend** and **PBs**.
+
+Right-click the table to choose its columns and their order. It's the same list as on **Race Control** (see [Columns](running-a-race.md#columns)): tick or untick a column, move it with the ▲ ▼ arrows, and the table changes as you go. Right-click a column heading and the list starts on that column. **Restore default columns** puts back the columns above, and **More column options...** opens the full picker, which also says what each column shows. **Undo** takes back everything you changed while the list was open, in one step.
+
+Under the table are **Expand**, which folds the cards away so the table gets the room, and a small button with a picture of a window on it, **Dock Inbox**. It's the same button as on **Race Control**: it puts the Inbox in a panel down the right of the main window, opening it if it's closed, and pressed again makes it a window of its own (see [Docking it in the main window](inbox.md#docking-it-in-the-main-window)).
 
 Practice uses the minimum lap time from the race format that's currently in force on **Race Control**. It always uses a standard start, even if that format has a staggered or qualifying start. Its clean runs use the practice streak threshold, which is set separately from races on **Sounds → Effects**.
 

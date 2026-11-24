@@ -87,6 +87,37 @@ public sealed partial class PracticeModeControl
 
         var to = _settings.PracticeExpanded ? 0d : 1d;
 
+        // WHY (24 Nov 2026, Asher: "when restoring the screen on practice I
+        // see native scroll bars flash during the animation"): working the
+        // paths out lays the page out at the start, at the end and at the
+        // start again, and at the end the page needed more than its height
+        // for a moment - its scrolling panel turned Windows' own scroll bar
+        // on, drawn on screen before the slim bar covered it. All of it is
+        // done with painting held, and drawn once - see ShowWithoutFlash.
+        ShowWithoutFlash.Hold(this, () => StartFold(from, to));
+
+        _foldFrom = from;
+        _foldTo = to;
+        _foldClock.Reset();
+
+        // Sixty-odd frames a second rather than Windows' usual 64 ticks
+        // with gaps - see Beside.FrameMs.
+        _finerFoldTimer = TimeBeginPeriod(1) == 0;
+        _foldTimer = new System.Windows.Forms.Timer { Interval = 10 };
+        _foldTimer.Tick += (_, _) => FoldFrame();
+        _foldTimer.Start();
+
+        ShowExpandCaption();
+    }
+
+    /// <summary>SlideFolded's setting up, with painting held: the pictures in, and each moving part's way worked out.</summary>
+    private void StartFold(double from, double to)
+    {
+        if (_body is null || _cardsFold is null || _sessionHolder is null)
+        {
+            return;
+        }
+
         // A fold still running is stopped where it is, laid out for real.
         FinishFold(from);
 
@@ -135,19 +166,6 @@ public sealed partial class PracticeModeControl
             panel.SuspendLayout();
             _heldLayouts.Add(panel);
         }
-
-        _foldFrom = from;
-        _foldTo = to;
-        _foldClock.Reset();
-
-        // Sixty-odd frames a second rather than Windows' usual 64 ticks
-        // with gaps - see Beside.FrameMs.
-        _finerFoldTimer = TimeBeginPeriod(1) == 0;
-        _foldTimer = new System.Windows.Forms.Timer { Interval = 10 };
-        _foldTimer.Tick += (_, _) => FoldFrame();
-        _foldTimer.Start();
-
-        ShowExpandCaption();
     }
 
     /// <summary>The folds at <paramref name="open"/>, and the page laid out for it.</summary>
@@ -194,7 +212,9 @@ public sealed partial class PracticeModeControl
 
         if (t >= 1)
         {
-            FinishFold(_foldTo);
+            // The real controls back in place of their pictures, laid out
+            // once, with painting held for the same reason as at the start.
+            ShowWithoutFlash.Hold(this, () => FinishFold(_foldTo));
         }
     }
 

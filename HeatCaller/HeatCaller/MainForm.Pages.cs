@@ -1877,6 +1877,11 @@ public partial class MainForm
         practice.AutoStartConditionsChanged += RefreshPracticeAutoStartPlan;
         _practiceControl = practice;
         pagePractice.Controls.Add(practice);
+
+        // Dock Inbox on Practice (24 Nov 2026, asked for by Asher), beside
+        // Expand as on Race Control, and the same choice it saves.
+        practice.DockInboxRequested += DockInboxFromRaceControl;
+        ShowInboxDockedOnRaceControl();
         _navRefreshHooks["Practice"] = practice.RefreshAll;
 
         var demoMode = new DemoModeControl(_race, _announcer, _profiles, _trackLayouts, _settings, _rounds, _raceEvents, _ghostStore) { Dock = DockStyle.Fill };
