@@ -86,6 +86,88 @@ public sealed class PracticeColumnsAndDockTests
         Assert.Equal(seen.stepsBefore, seen.stepsAfterIdle);
     }
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool EnumThreadWindows(uint threadId, EnumWindowsProc proc, IntPtr lParam);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    /// <summary>The columns list, if one is open: a drop-down holding a ColumnChecklist.</summary>
+    private static ToolStripDropDown? OpenColumnsList()
+    {
+        ToolStripDropDown? found = null;
+
+        EnumThreadWindows(GetCurrentThreadId(), (hwnd, _) =>
+        {
+            if (Control.FromHandle(hwnd) is ToolStripDropDown { Visible: true } drop
+                && drop.Items.OfType<ToolStripControlHost>().Any(h => h.Control.Controls.OfType<ColumnChecklist>().Any()))
+            {
+                found = drop;
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
+        return found;
+    }
+
+    /// <summary>
+    /// The button is gone, so the right-click is the only way in: a real one
+    /// - sent to the table's window, as the mouse would - opens the list, on
+    /// a heading and on the table's empty body alike (24 Nov 2026).
+    /// </summary>
+    [Fact]
+    public void A_right_click_on_a_heading_or_the_empty_table_opens_the_columns_list()
+    {
+        var seen = StaThread.Run(() =>
+        {
+            using var data = new TempAppData();
+            Settings();
+
+            var window = new MainForm { LayoutCheckMode = true, StartPosition = FormStartPosition.Manual, Location = new Point(-20000, -20000) };
+
+            try
+            {
+                window.Show();
+                window.ClientSize = new Size(1280, 800);
+                typeof(MainForm).GetMethod("GoToPage", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { "Practice" });
+                StaThread.Settle();
+
+                var page = Field<PracticeModeControl>(window, "_practiceControl");
+                var grid = Field<DataGridView>(page, "_grid");
+                var results = new List<bool>();
+
+                foreach (var at in new[] { new Point(grid.Columns[0].Width + 10, grid.ColumnHeadersHeight / 2), new Point(grid.Width / 2, grid.Height / 2) })
+                {
+                    var lParam = (IntPtr)((at.Y << 16) | (at.X & 0xFFFF));
+                    SendMessage(grid.Handle, 0x0204, (IntPtr)0x0002, lParam);
+                    SendMessage(grid.Handle, 0x0205, IntPtr.Zero, lParam);
+                    StaThread.Settle();
+
+                    var list = OpenColumnsList();
+                    results.Add(list is not null);
+                    list?.Close();
+                    StaThread.Settle();
+                }
+
+                return results;
+            }
+            finally
+            {
+                window.Close();
+                window.Dispose();
+                StaThread.Settle();
+            }
+        }, TimeSpan.FromMinutes(2), () => "right-clicking Practice's table");
+
+        Assert.Equal(new[] { true, true }, seen);
+    }
+
     [Fact]
     public void The_Choose_Columns_button_is_gone_and_Dock_Inbox_stands_beside_Expand_and_docks_it()
     {

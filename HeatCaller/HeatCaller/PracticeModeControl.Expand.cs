@@ -134,6 +134,12 @@ public sealed partial class PracticeModeControl
 
         LayOutAt(from);
 
+        // Every slim bar over its native one before the pictures are taken
+        // (24 Nov 2026): a list in a fold coming back from hidden has just
+        // been laid out, and a picture of it taken with Windows' own bar
+        // showing would have shown that bar for the whole fold.
+        ThinScrollBar.SyncNow();
+
         foreach (var fold in Folds)
         {
             fold.HoldPicture();
