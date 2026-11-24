@@ -964,8 +964,14 @@ public sealed partial class RaceControlSession
         // takes the flag, a few lines down - and the old check called "last
         // lap" for a car as it finished (a race whose clock ran out with the
         // leader two short of the lap limit, say).
+        //
+        // WHY (24 Nov 2026, bug hunt 24 review): only when this crossing
+        // really takes the flag - the same test as just below. "Not while
+        // finishing" also silenced a true last lap for a staggered-start car
+        // whose own window was still open, and for a pass that arrived
+        // before the checkered but was handled after it.
         if (isValid && !isGhost && !standing.IsBlackFlagged && !IsPracticeMode && !_lastLapAnnounced
-            && !IsFinishing
+            && !(IsFinishing && FlagAppliesTo(lap.TransponderId) && CheckeredWasOutWhenThisPassArrived())
             && LapLimit.HasValue && standing.Laps == LapLimit.Value - 1)
         {
             _lastLapAnnounced = true;

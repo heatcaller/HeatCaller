@@ -81,6 +81,13 @@ public partial class MainForm
         if (_relayPublisher.Status.Configured)
         {
             var names = RelayForgetNames(outcome.Names, shown);
+
+            // WHY (24 Nov 2026, bug hunt 24 review): the relay keeps follower
+            // sign-ups by the name shown, so sending "Sam P" for Sam Parker
+            // also wiped the followers of Sam Pemberton, still racing, who
+            // the pages show as "Sam P" too. See SparingOtherDrivers.
+            names = SparingOtherDrivers(names, outcome.Names,
+                _profiles.All.Where(p => !ReferenceEquals(p, profile)).SelectMany(p => new[] { p.DriverName, p.AnnouncerName }));
             _settings.RelayForgetsOwed.Add(new RelayForgetOwed { Badges = outcome.Badges.ToList(), Names = names });
         }
 
@@ -125,6 +132,32 @@ public partial class MainForm
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(Math.Max(0, most))
             .ToList();
+    }
+
+    /// <summary>
+    /// <paramref name="names"/> without the shortened forms another current
+    /// driver can be published as: "Sam P" stays out when Sam Pemberton is
+    /// still on the books, because the club's pages can show him by exactly
+    /// that (PublicPrivacy.PublicFormsOf, which is how the pages shorten) and
+    /// the relay would forget his followers along with Sam Parker's. The
+    /// forgotten driver's own full names, and their initials, are always kept.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Nov 2026, bug hunt 24 review): RelayForgetNames sent every
+    /// shortened form, whoever else it belonged to.
+    /// </remarks>
+    internal static List<string> SparingOtherDrivers(
+        IEnumerable<string> names, IEnumerable<string> forgottenFullNames, IEnumerable<string?> otherDrivers)
+    {
+        var own = new HashSet<string>(
+            forgottenFullNames.Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n.Trim()),
+            StringComparer.OrdinalIgnoreCase);
+        var ownForms = new HashSet<string>(own.SelectMany(n => PublicPrivacy.PublicFormsOf(n)), StringComparer.OrdinalIgnoreCase);
+        var taken = new HashSet<string>(otherDrivers.SelectMany(n => PublicPrivacy.PublicFormsOf(n)), StringComparer.OrdinalIgnoreCase);
+
+        // Only a shortened form of their own name is left out - never their
+        // full name, nor the initials they were shown by.
+        return names.Where(n => own.Contains(n) || !ownForms.Contains(n) || !taken.Contains(n)).ToList();
     }
 
     /// <summary>The export page for a driver.</summary>

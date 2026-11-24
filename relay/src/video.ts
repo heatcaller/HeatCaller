@@ -199,8 +199,25 @@ export const VIDEO_RECHECK_BACKOFF_MS: readonly number[] = [2, 5, 15, 60].map((m
 /** How soon a video is asked about again when YouTube gave no answer (bug hunt 24). */
 export const VIDEO_NO_ANSWER_RETRY_MS = 2 * 60 * 1000;
 
-/** One video's checks: when first and last asked, YouTube's last word, and refusals in a row. */
-type Checked = { firstMs: number; lastMs: number; dead: boolean; asking: boolean; refused: number };
+/**
+ * How soon a video is asked about again after its first, second, third and
+ * fourth no-answer in a row; after that, the day it used to wait.
+ *
+ * WHY (24 Nov 2026, bug hunt 24 review): every no-answer was retried two
+ * minutes on, for good - a video YouTube kept refusing to answer about (a
+ * 429 that lasts, an outage) was asked about every two minutes all night,
+ * which is what keeps a 429 going. Now the wait grows, and a real answer
+ * starts it again.
+ */
+export const VIDEO_NO_ANSWER_BACKOFF_MS: readonly number[] = [VIDEO_NO_ANSWER_RETRY_MS, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000];
+
+/** The wait after this many no-answers in a row (1 = the first). */
+function noAnswerWait(inARow: number): number {
+  return VIDEO_NO_ANSWER_BACKOFF_MS[Math.max(0, inARow - 1)] ?? DAY_MS;
+}
+
+/** One video's checks: when first and last asked, YouTube's last word, refusals in a row, and no-answers in a row (not kept across restarts). */
+type Checked = { firstMs: number; lastMs: number; dead: boolean; asking: boolean; refused: number; noAnswers?: number };
 
 /** How long after its last ask a video is due again. */
 function waitFor(v: Checked): number {
@@ -320,16 +337,22 @@ export class VideoCheck {
       if (status === 200) {
         v.dead = false;
         v.refused = 0;
+        v.noAnswers = 0;
       } else if (status === 401 || status === 403 || status === 404) {
         v.dead = true;
         v.refused = Math.min(v.refused + 1, VIDEO_RECHECK_BACKOFF_MS.length + 1);
+        v.noAnswers = 0;
       } else {
         // WHY (23 Nov 2026, bug hunt 24): no answer (a timeout, a 429 or 5xx)
         // used to count as the day's check, so a new video YouTube didn't
         // answer about was not asked again for 24 hours - a private or removed
         // one kept its Watch link all night. Now it is due again in a couple
         // of minutes; whether it is dead is still left as it was.
-        v.lastMs = now - waitFor(v) + VIDEO_NO_ANSWER_RETRY_MS;
+        // WHY (24 Nov 2026, bug hunt 24 review): by a wait that grows with
+        // each no-answer in a row (VIDEO_NO_ANSWER_BACKOFF_MS), up to the
+        // old day, not two minutes every time.
+        v.noAnswers = Math.min((v.noAnswers ?? 0) + 1, VIDEO_NO_ANSWER_BACKOFF_MS.length + 1);
+        v.lastMs = now - waitFor(v) + noAnswerWait(v.noAnswers);
       }
     }));
 

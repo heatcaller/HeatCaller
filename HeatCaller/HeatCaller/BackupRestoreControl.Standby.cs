@@ -135,7 +135,10 @@ public sealed partial class BackupRestoreControl
             // address in the box beside it, is the club saying this is the
             // timing PC to copy - so an address from a restored backup is
             // taken on (RestoredSettings), as Enter in the box does.
-            if (_chkStandbyMode.Checked)
+            // WHY (24 Nov 2026, bug hunt 24 review): only a real tick. Make
+            // This a Standby Again ticks the box itself, and that took on a
+            // restored timing-PC address without anyone looking at it.
+            if (TickConfirmsRestoredAddress(_chkStandbyMode.Checked, tickedByHand: !_tickingStandbyInCode))
             {
                 RestoredSettings.Confirm(RestoredSettings.Part.Standby);
             }
@@ -534,9 +537,29 @@ public sealed partial class BackupRestoreControl
         }
 
         // Ticked here, which saves the setting and has the host start the
-        // mirror - and Start reads the marker afresh, now gone.
-        _chkStandbyMode.Checked = true;
+        // mirror - and Start reads the marker afresh, now gone. Marked as
+        // ticked in code, so it does not take on a restored address.
+        _tickingStandbyInCode = true;
+        try
+        {
+            _chkStandbyMode.Checked = true;
+        }
+        finally
+        {
+            _tickingStandbyInCode = false;
+        }
+
         StandbySettingsChanged?.Invoke();
         RefreshStandby();
     }
+
+    /// <summary>True while the standby box is being ticked by the app itself, not by someone at the PC.</summary>
+    private bool _tickingStandbyInCode;
+
+    /// <summary>
+    /// Whether ticking the standby box takes on a timing-PC address that
+    /// came with a restored backup: only a tick someone made by hand, with
+    /// the address in the box beside it. See RestoredSettings.Part.Standby.
+    /// </summary>
+    internal static bool TickConfirmsRestoredAddress(bool ticked, bool tickedByHand) => ticked && tickedByHand;
 }

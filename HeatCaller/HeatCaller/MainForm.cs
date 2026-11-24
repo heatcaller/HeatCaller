@@ -3320,7 +3320,10 @@ public partial class MainForm : Form
 
         Task.Run(() =>
             {
-                var path = BackupService.CreateBackup(folder, true, secrets);
+                // WHY (24 Nov 2026, bug hunt 24 review): the club's keep is
+                // passed in, because a backup kept off the cloud was pruned
+                // to 14 inside CreateBackup before the prune below ran.
+                var path = BackupService.CreateBackup(folder, true, secrets, keep);
 
                 // WHY (23 Nov 2026, bug hunt 24): pruned where the backup
                 // really went, with the club's own keep. An unlocked backup

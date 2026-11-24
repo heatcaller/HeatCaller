@@ -95,7 +95,7 @@ import type { UsageLog } from "./usagelog.js";
 import { APP_USAGE_MAX_BODY, APP_USAGE_REPORTS_PER_DAY, cleanAppUsage, type AppUsageLog } from "./appusage.js";
 import { BROADCAST_TTL_SECONDS, FOLLOW_CHANNEL, followIdOf, followNameFrom, myNightUrl, PUSH_CHANNEL, pushKindsFrom, pushLabelFrom, pushSubFrom, serviceWorkerFor, type PushService } from "./push.js";
 import { PAGES_BUILD } from "./pagebuild.js";
-import { isJuniorName, NO_PRIVACY_RULES, namesAJunior, PRIVACY_CHANNEL, privacyNameKey, privacyRulesFrom, resultTakenDown, ROBOTS_TXT, UNKNOWN_PRIVACY_RULES, yearTakenDown, type PrivacyRules } from "./privacy.js";
+import { isJuniorName, NO_PRIVACY_RULES, namesAJunior, PRIVACY_CHANNEL, privacyNameKey, privacyRulesFrom, resultSweptAway, resultTakenDown, ROBOTS_TXT, UNKNOWN_PRIVACY_RULES, yearTakenDown, type PrivacyRules } from "./privacy.js";
 import { NIGHTS_FEED, nextNightIcs, nightsFeedWith, nightsIcs } from "./ics.js";
 import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, STREAM_OPEN_PIECE_MAX_MS, streamFrom, streamNightId, VIDEO_CHECK_FOR_MS, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
@@ -5949,8 +5949,13 @@ export class Relay {
         // through each year's index, so a result no index named (one left
         // behind by the read failure above, before it was fixed) stayed
         // public for good. Every result is now checked by its own date.
+        //
+        // WHY (24 Nov 2026, bug hunt 24 review): by resultSweptAway, not
+        // resultTakenDown - a result with no "year" (an older laptop's) was
+        // judged by its UTC start, so a New Year's morning race east of UTC
+        // was deleted for good although its own year was kept.
         for (const result of await this.store.listItems(club, "results")) {
-          if (!resultTakenDown(rules, result.doc.body)) continue;
+          if (!resultSweptAway(rules, result.doc.body)) continue;
           await this.store.deleteItem(club, "results", result.id).catch(() => undefined);
           sessions++;
         }

@@ -87,6 +87,24 @@ internal static class DriverForget
     }
 
     /// <summary>
+    /// True for a name a Forget gave someone's results: "Removed driver", or
+    /// "Removed driver 2" and on (see NextPlaceholder). Any case.
+    /// </summary>
+    internal static bool IsPlaceholderName(string? name)
+    {
+        var cleaned = Clean(name);
+
+        if (string.Equals(cleaned, Placeholder, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return cleaned.StartsWith(Placeholder + " ", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(cleaned[(Placeholder.Length + 1)..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)
+            && n >= 2;
+    }
+
+    /// <summary>
     /// The placeholder this driver's results take: "Removed driver" if no
     /// result, carried points or rivalry has it yet, otherwise the first
     /// "Removed driver N" (from 2) nothing has.
@@ -607,6 +625,10 @@ internal static class DriverForget
     /// otherNames is every other profile's driver name (cleaned, compared
     /// without case), or null when that is not known - then the transponder
     /// alone decides, as it used to.
+    ///
+    /// Either way, a row on their transponder under an earlier Forget's
+    /// placeholder ("Removed driver", "Removed driver 2") is never theirs
+    /// (24 Nov 2026, bug hunt 24 review): it is another forgotten person's.
     /// </summary>
     internal static bool IsTheirResult(
         string? transponder,
@@ -627,6 +649,17 @@ internal static class DriverForget
 
         if (theirTransponders.Contains(id, StringComparer.OrdinalIgnoreCase))
         {
+            // WHY (24 Nov 2026, bug hunt 24 review): a row already under an
+            // earlier Forget's placeholder ("Removed driver 2") is that other,
+            // forgotten person's - nobody on file has the name, so the rule
+            // below called it theirs. A second Forget then merged the two
+            // under one placeholder, and the export listed the other person's
+            // races as this driver's.
+            if (IsPlaceholderName(rowName) && !theirNames.Any(n => SameName(rowName, n)))
+            {
+                return false;
+            }
+
             var someoneElses = otherNames is not null
                 && rowName.Length > 0
                 && !theirNames.Any(n => SameName(rowName, n))

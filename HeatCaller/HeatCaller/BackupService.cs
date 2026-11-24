@@ -171,7 +171,20 @@ public static class BackupService
     /// from before a change with one from after it. Locking the secrets
     /// with the backup password is deliberately slow, and happens here too.
     /// </summary>
-    internal static string CreateBackup(string? destinationFolder, bool automatic, BackupSecrets? secrets)
+    internal static string CreateBackup(string? destinationFolder, bool automatic, BackupSecrets? secrets) =>
+        CreateBackup(destinationFolder, automatic, secrets, LocalOnlyKeepCount);
+
+    /// <summary>
+    /// As above, with how many automatic backups the club keeps - so an
+    /// automatic backup kept off the cloud is pruned to the club's own keep,
+    /// not the Backups page's default.
+    ///
+    /// WHY (24 Nov 2026, bug hunt 24 review): the earlier fix pruned a
+    /// backup kept off the cloud to 14 whatever the club's keep was, and the
+    /// scheduled backup's own prune with the club's keep came after it - too
+    /// late. A club keeping 30 only ever had 14.
+    /// </summary>
+    internal static string CreateBackup(string? destinationFolder, bool automatic, BackupSecrets? secrets, int keepAutomatic)
     {
         // Counted for the whole of the backup, whichever thread it runs on,
         // so a restore can refuse to start while one is still being written
@@ -180,7 +193,7 @@ public static class BackupService
 
         try
         {
-            return CreateBackupCore(destinationFolder, automatic, secrets);
+            return CreateBackupCore(destinationFolder, automatic, secrets, keepAutomatic);
         }
         finally
         {
@@ -202,7 +215,7 @@ public static class BackupService
     /// </summary>
     public static bool IsBackupRunning => Volatile.Read(ref _backupsRunning) > 0;
 
-    private static string CreateBackupCore(string? destinationFolder, bool automatic, BackupSecrets? secrets)
+    private static string CreateBackupCore(string? destinationFolder, bool automatic, BackupSecrets? secrets, int keepAutomatic)
     {
         // Through the guard here as well as at every call site: this is the
         // one funnel every backup passes through, so a caller added later
@@ -274,11 +287,13 @@ public static class BackupService
         // ever tidy the automatic backups kept here - a whole backup more
         // every day until the disk filled. Fourteen is what the Backups
         // page keeps unless told otherwise. Best effort, like all pruning.
+        // WHY (24 Nov 2026, bug hunt 24 review): with the club's keep when
+        // the caller gives it - see the CreateBackup overload that takes it.
         if (keptOffTheCloud && automatic)
         {
             try
             {
-                PruneOldBackups(folder, LocalOnlyKeepCount);
+                PruneOldBackups(folder, keepAutomatic);
             }
             catch
             {

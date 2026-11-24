@@ -154,6 +154,32 @@ export function yearTakenDown(rules: PrivacyRules, year: string): boolean {
 
 /** Whether a result document (with its startedUtc) is from a year older than the rules keep. */
 export function resultTakenDown(rules: PrivacyRules, body: unknown): boolean {
+  return resultOlderThanKept(rules, body, 0);
+}
+
+/**
+ * The furthest east of UTC a club can be: UTC+14 (Kiribati). A result's
+ * local start is never more than this after its UTC start.
+ */
+const MOST_AHEAD_OF_UTC_MS = 14 * 60 * 60 * 1000;
+
+/**
+ * Whether the sweep that takes down old years may delete this stored result.
+ *
+ * WHY (24 Nov 2026, bug hunt 24 review): the sweep used resultTakenDown, and
+ * a result from an older laptop has no "year" - so it was judged by the UTC
+ * year of its start. A New Year's morning race east of UTC (its UTC start
+ * still 31 Dec) was deleted although its own year was kept. Deleting is for
+ * good, so a result with no "year" is judged here by the latest local year
+ * it can have been raced in: its UTC start plus 14 hours. A result with a
+ * "year" is judged by that, exactly as resultTakenDown does.
+ */
+export function resultSweptAway(rules: PrivacyRules, body: unknown): boolean {
+  return resultOlderThanKept(rules, body, MOST_AHEAD_OF_UTC_MS);
+}
+
+/** resultTakenDown, with a result that has no "year" judged by its UTC start moved on by aheadMs. */
+function resultOlderThanKept(rules: PrivacyRules, body: unknown, aheadMs: number): boolean {
   if (rules.unknown || rules.fromYear === 0 || typeof body !== "object" || body === null) {
     return false;
   }
@@ -182,7 +208,7 @@ export function resultTakenDown(rules: PrivacyRules, body: unknown): boolean {
     return false;
   }
 
-  return new Date(at).getUTCFullYear() < rules.fromYear;
+  return new Date(at + aheadMs).getUTCFullYear() < rules.fromYear;
 }
 
 /**
