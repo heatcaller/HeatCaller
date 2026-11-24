@@ -145,6 +145,16 @@ public sealed class SoundEffectsProfile
     // each.
     public int MaxEffectsPerLap { get; set; } = 3;
 
+    /// <summary>
+    /// Whether sound effects may play over each other - two cars on a Good
+    /// lap both heard as they cross, rather than one and then the other.
+    /// See SoundOverlap. On by default, and for every file written before it
+    /// existed (24 Nov 2026, asked for by Asher, who wanted a switch "for
+    /// now"). Off: every effect waits for the one before, as it always did.
+    /// This PC's, like Volume: applying a soundscape leaves it as it is.
+    /// </summary>
+    public bool EffectsOverlap { get; set; } = true;
+
     /// <summary>Which kinds are subject to per-lap weighting/limiting - the rest are one-time lifecycle sounds that always play.</summary>
     public static readonly HashSet<SoundEffectKind> PerLapKinds = new()
     {

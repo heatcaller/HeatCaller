@@ -174,19 +174,39 @@ public sealed partial class AnnouncementService
         var volume = (float)sounds.Volume;
         var queuedAtUtc = DateTime.UtcNow;
 
+        // Decided as it is queued, from the Sound Effects page's switch - see
+        // SoundOverlap.
+        var atOnce = SoundOverlap.PlaysAtOnce(kind, sounds.EffectsOverlap);
+
         // "finished" rides with the queued item rather than being set here,
         // so it is signalled however the sound leaves the queue - see
         // QueuedSound.
-        EnqueueSoundWork(kind, finished, async () =>
+        EnqueueSoundWork(kind, finished, atOnce, async () =>
         {
             // Registered from the moment this sound becomes the current one,
             // before it waits for the speaker, so a flag or a mute landing
             // during that wait stops it too.
             using var cancel = new CancellationTokenSource();
-            BeginPlayingSound(kind, cancel);
+            var stagger = BeginPlayingSound(kind, cancel, atOnce);
 
             try
             {
+                // A second of the same sound in the same instant - two cars
+                // on a Good lap - starts a hair after the first, so the room
+                // hears two chimes rather than one loud one. See
+                // SoundOverlap.SameSoundStagger.
+                if (stagger > TimeSpan.Zero)
+                {
+                    try
+                    {
+                        await Task.Delay(stagger, cancel.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Cut while it waited; dropped just below.
+                    }
+                }
+
                 // A lap chime no longer waits for the voice (10 Nov 2026,
                 // voice speed plan, phase 1). It took the same lock as the
                 // spoken lines, so a chime that began while a call was being
@@ -251,6 +271,19 @@ public sealed partial class AnnouncementService
                         return;
                     }
 
+                    // Quieter for each other sound it joins (24 Nov 2026) -
+                    // see SoundOverlap.StackGain. Asked now, as it starts,
+                    // since that is when the others are or aren't playing.
+                    // Only ever below 1 when sounds overlap: with the switch
+                    // off they never play at once.
+                    var stackGain = SoundOverlap.StackGain(OtherSoundsPlaying(cancel));
+
+                    if (stackGain < 1f)
+                    {
+                        playAt *= stackGain;
+                        StatusMessage?.Invoke($"[sound] {label} joins {Plural.Of(OtherSoundsPlaying(cancel), "other sound")}, at {playAt:0.00}.");
+                    }
+
                     // The club's own file, else the effect's sound pack, else
                     // the generated tone - see SoundPacks.ResolveFile.
                     var file = SoundPacks.ResolveFile(config, kind);
@@ -290,60 +323,98 @@ public sealed partial class AnnouncementService
         });
     }
 
-    /// <summary>Marks a sound as the one playing, so it can be cut off.</summary>
-    private void BeginPlayingSound(SoundEffectKind kind, CancellationTokenSource cancel)
+    /// <summary>
+    /// Adds a sound to the ones playing, so it can be cut off. Returns how
+    /// long to hold it first so it starts SoundOverlap.SameSoundStagger after
+    /// the last of its kind - only for a sound that plays at once with
+    /// others; one in the line already follows the one before.
+    /// </summary>
+    private TimeSpan BeginPlayingSound(SoundEffectKind kind, CancellationTokenSource cancel, bool atOnce = false)
     {
         lock (_playingSoundLock)
         {
-            _playingSoundCancel = cancel;
-            _playingSoundKind = kind;
+            _playingSounds.Add(new PlayingSound(kind, cancel));
+
+            if (!atOnce)
+            {
+                return TimeSpan.Zero;
+            }
+
+            var now = DateTime.UtcNow;
+            var stagger = SoundOverlap.StaggerFor(_lastSoundStartUtc.TryGetValue(kind, out var last) ? last : null, now);
+
+            // Booked now, so a third of the same sound in the same instant
+            // goes after the second rather than beside it.
+            _lastSoundStartUtc[kind] = now + stagger;
+
+            return stagger;
         }
     }
 
     /// <summary>
-    /// Clears the playing sound. Done before its token is disposed, and under
-    /// the same lock StopPlayingSound cancels under, so a stop can never
-    /// reach a disposed token.
+    /// Takes a sound off the ones playing. Done before its token is disposed,
+    /// and under the same lock StopPlayingSound cancels under, so a stop can
+    /// never reach a disposed token.
     /// </summary>
     private void EndPlayingSound(CancellationTokenSource cancel)
     {
         lock (_playingSoundLock)
         {
-            if (ReferenceEquals(_playingSoundCancel, cancel))
+            _playingSounds.RemoveAll(playing => ReferenceEquals(playing.Cancel, cancel));
+        }
+    }
+
+    /// <summary>How many sounds are playing besides this one - for SoundOverlap.StackGain.</summary>
+    private int OtherSoundsPlaying(CancellationTokenSource self)
+    {
+        lock (_playingSoundLock)
+        {
+            return _playingSounds.Count(playing => !ReferenceEquals(playing.Cancel, self) && !playing.Cancel.IsCancellationRequested);
+        }
+    }
+
+    /// <summary>How many sound effects are playing (or waiting for the speaker) right now. For the tests.</summary>
+    internal int SoundsPlayingForTests
+    {
+        get
+        {
+            lock (_playingSoundLock)
             {
-                _playingSoundCancel = null;
+                return _playingSounds.Count;
             }
         }
     }
 
     /// <summary>
-    /// Cuts off the sound effect playing (or waiting for the speaker) right
-    /// now. Returns true if there was one to cut.
+    /// Cuts off the sound effects playing (or waiting for the speaker) right
+    /// now - every one that matches, since several can play at once (24 Nov
+    /// 2026). Returns true if there was one to cut.
     /// </summary>
-    /// <param name="except">Leave it playing if it is this kind - a call's own lead-in sound.</param>
-    /// <param name="only">Cut it only if it is this kind.</param>
+    /// <param name="except">Leave a sound of this kind playing - a call's own lead-in sound.</param>
+    /// <param name="only">Cut only the sounds of this kind.</param>
     private bool StopPlayingSound(SoundEffectKind? except = null, SoundEffectKind? only = null)
     {
         lock (_playingSoundLock)
         {
-            var cancel = _playingSoundCancel;
+            var cut = false;
 
-            if (cancel is null || cancel.IsCancellationRequested)
+            foreach (var playing in _playingSounds)
             {
-                return false;
+                if (playing.Cancel.IsCancellationRequested
+                    || (except is { } spared && playing.Kind == spared)
+                    || (only is { } wanted && playing.Kind != wanted))
+                {
+                    continue;
+                }
+
+                // Cancelling stops the output (ToneGenerator's registration).
+                // Its PlaybackStopped handler only completes a task, so nothing
+                // calls back into code that takes this lock.
+                playing.Cancel.Cancel();
+                cut = true;
             }
 
-            if ((except is { } spared && _playingSoundKind == spared)
-                || (only is { } wanted && _playingSoundKind != wanted))
-            {
-                return false;
-            }
-
-            // Cancelling stops the output (ToneGenerator's registration).
-            // Its PlaybackStopped handler only completes a task, so nothing
-            // calls back into code that takes this lock.
-            cancel.Cancel();
-            return true;
+            return cut;
         }
     }
 
@@ -354,7 +425,11 @@ public sealed partial class AnnouncementService
     /// </summary>
     private int RemoveQueuedSounds(Predicate<QueuedSound> match)
     {
+        // Both lanes (24 Nov 2026): a flag clearing the lap chimes, or a
+        // countdown clearing the decks, means the ones waiting to play at
+        // once too.
         var removed = _soundQueue.FindAll(match);
+        removed.AddRange(_momentQueue.FindAll(match));
 
         if (removed.Count == 0)
         {
@@ -362,6 +437,7 @@ public sealed partial class AnnouncementService
         }
 
         _soundQueue.RemoveAll(match);
+        _momentQueue.RemoveAll(match);
 
         foreach (var item in removed)
         {
@@ -493,26 +569,38 @@ public sealed partial class AnnouncementService
     private static bool IsStaleSound(SoundEffectKind kind, DateTime queuedAtUtc) =>
         IsPerLapSound(kind) && DateTime.UtcNow - queuedAtUtc > PerLapSoundMaxAge;
 
-    private void EnqueueSoundWork(SoundEffectKind kind, TaskCompletionSource? finished, Func<Task> work)
+    /// <param name="atOnce">
+    /// Into the moment lane, to play beside others as it fires (24 Nov 2026,
+    /// see SoundOverlap); false for the one-at-a-time line.
+    /// </param>
+    private void EnqueueSoundWork(SoundEffectKind kind, TaskCompletionSource? finished, bool atOnce, Func<Task> work)
     {
         var dropped = 0;
 
         lock (_soundQueueLock)
         {
+            var lane = atOnce ? _momentQueue : _soundQueue;
+
             if (IsPerLapSound(kind))
             {
                 // Make room by dropping the OLDEST waiting lap chimes, never
-                // a start/finish sound.
-                while (_soundQueue.Count(item => IsPerLapSound(item.Kind)) >= MaxQueuedPerLapSounds)
+                // a start/finish sound. In the moment lane a sound with a free
+                // place to play in is not waiting, only not yet picked up -
+                // a burst of four from one moment lands here before the loop
+                // takes any, and counting them all dropped the first chime
+                // of the four. So the free places are added to the limit.
+                var limit = MaxQueuedPerLapSounds + (atOnce ? _momentSlots.CurrentCount : 0);
+
+                while (lane.Count(item => IsPerLapSound(item.Kind)) >= limit)
                 {
-                    var oldest = _soundQueue.FindIndex(item => IsPerLapSound(item.Kind));
-                    _soundQueue[oldest].Finished?.TrySetResult();
-                    _soundQueue.RemoveAt(oldest);
+                    var oldest = lane.FindIndex(item => IsPerLapSound(item.Kind));
+                    lane[oldest].Finished?.TrySetResult();
+                    lane.RemoveAt(oldest);
                     dropped++;
                 }
             }
 
-            _soundQueue.Add(new QueuedSound(kind, DateTime.UtcNow, async () =>
+            lane.Add(new QueuedSound(kind, DateTime.UtcNow, async () =>
             {
                 try
                 {
@@ -535,65 +623,125 @@ public sealed partial class AnnouncementService
             StatusMessage?.Invoke($"[sound] Dropped {Plural.Of(dropped, "waiting lap chime")} - they were piling up faster than they could play.");
         }
 
-        _soundQueueSignal.Release();
+        (atOnce ? _momentQueueSignal : _soundQueueSignal).Release();
     }
 
-    /// <summary>Independent sound-effect playback loop - see the class-level remarks on why this is separate from voice.</summary>
+    /// <summary>
+    /// Takes the next sound off a lane, or null - dropping it instead, and
+    /// signalling it finished, when the announcer has been muted since it
+    /// was queued or it is a lap chime too late to mean anything.
+    /// </summary>
+    private QueuedSound? TakeNextSound(List<QueuedSound> lane)
+    {
+        QueuedSound? item = null;
+        lock (_soundQueueLock)
+        {
+            if (lane.Count > 0)
+            {
+                item = lane[0];
+                lane.RemoveAt(0);
+            }
+        }
+
+        if (item is null)
+        {
+            return null;
+        }
+
+        // Mute can land between an item being queued and it being
+        // played, so check again here rather than trusting the
+        // enqueue-time guard alone. Signalled as finished, so a call
+        // waiting on this sound isn't left to wait out its timeout.
+        if (Muted)
+        {
+            item.Finished?.TrySetResult();
+            return null;
+        }
+
+        // A lap chime that has been waiting behind the voice for more
+        // than a few seconds belongs to a lap that is long gone.
+        if (IsStaleSound(item.Kind, item.QueuedAtUtc))
+        {
+            StatusMessage?.Invoke($"[sound] Dropped a late {item.Kind} sound - it waited too long to still match its lap.");
+            item.Finished?.TrySetResult();
+            return null;
+        }
+
+        return item;
+    }
+
+    /// <summary>Plays one sound, counted as in flight while it does - see IsAudioPending.</summary>
+    private async Task PlayQueuedAsync(QueuedSound item)
+    {
+        Interlocked.Increment(ref _soundInFlight);
+        try
+        {
+            await item.Work();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke($"[sound queue] Unexpected playback error: {ex.Message}");
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _soundInFlight);
+        }
+    }
+
+    /// <summary>
+    /// Independent sound-effect playback loop - see the class-level remarks
+    /// on why this is separate from voice. One at a time: the race sequence
+    /// sounds always, and every sound when the Sound Effects page's overlap
+    /// switch is off.
+    /// </summary>
     private async Task RunSoundQueueLoopAsync()
     {
         while (true)
         {
             await _soundQueueSignal.WaitAsync();
 
-            QueuedSound? item = null;
-            lock (_soundQueueLock)
+            if (TakeNextSound(_soundQueue) is { } item)
             {
-                if (_soundQueue.Count > 0)
-                {
-                    item = _soundQueue[0];
-                    _soundQueue.RemoveAt(0);
-                }
+                await PlayQueuedAsync(item);
             }
+        }
+    }
+
+    /// <summary>
+    /// The moment lane's loop (24 Nov 2026, asked for by Asher): starts each
+    /// sound as it comes and does not wait for it to end, so two cars on a
+    /// Good lap are both heard as they cross. Up to SoundOverlap.MaxAtOnce
+    /// play together; the next waits here for one of them to end, and is
+    /// dropped as late by TakeNextSound if that takes too long.
+    /// </summary>
+    private async Task RunMomentQueueLoopAsync()
+    {
+        while (true)
+        {
+            await _momentQueueSignal.WaitAsync();
+            await _momentSlots.WaitAsync();
+
+            var item = TakeNextSound(_momentQueue);
 
             if (item is null)
             {
+                _momentSlots.Release();
                 continue;
             }
 
-            // Mute can land between an item being queued and it being
-            // played, so check again here rather than trusting the
-            // enqueue-time guard alone. Signalled as finished, so a call
-            // waiting on this sound isn't left to wait out its timeout.
-            if (Muted)
-            {
-                item.Finished?.TrySetResult();
-                continue;
-            }
+            _ = PlayMomentAsync(item);
+        }
+    }
 
-            // A lap chime that has been waiting behind the voice for more
-            // than a few seconds belongs to a lap that is long gone.
-            if (IsStaleSound(item.Kind, item.QueuedAtUtc))
-            {
-                StatusMessage?.Invoke($"[sound] Dropped a late {item.Kind} sound - it waited too long to still match its lap.");
-                item.Finished?.TrySetResult();
-                continue;
-            }
-
-            var work = item.Work;
-
-            Interlocked.Increment(ref _soundInFlight);
-            try
-            {
-                await work();
-            }
-            catch (Exception ex)
-            {
-                StatusMessage?.Invoke($"[sound queue] Unexpected playback error: {ex.Message}");
-            }
-            finally
-            {
-                Interlocked.Decrement(ref _soundInFlight);
-            }
+    private async Task PlayMomentAsync(QueuedSound item)
+    {
+        try
+        {
+            await PlayQueuedAsync(item);
+        }
+        finally
+        {
+            _momentSlots.Release();
         }
     }
 }
