@@ -121,6 +121,9 @@ public sealed class SoundEffectsControl : UserControl
     private readonly System.Windows.Forms.Timer _saveDebounce = new() { Interval = 400 };
 
     private readonly NumericUpDown _numMaxPerLap = new();
+
+    /// <summary>Whether sound effects play over each other - see SoundEffectsProfile.EffectsOverlap (24 Nov 2026).</summary>
+    private readonly ThemedCheckBox _chkOverlap = new() { AutoSize = true, Text = "Let sound effects play over each other" };
     private readonly Label _lblStatus = new();
 
     private readonly SoundEffectsStore _store;
@@ -295,6 +298,7 @@ public sealed class SoundEffectsControl : UserControl
         BuildLayout(current);
 
         _numMaxPerLap.ValueChanged += (_, _) => QueueSave();
+        _chkOverlap.CheckedChanged += (_, _) => QueueSave();
 
         _saveDebounce.Tick += (_, _) => SaveNow();
 
@@ -543,6 +547,12 @@ public sealed class SoundEffectsControl : UserControl
 
         maxPerLap.Add(lblMaxPerLap, _numMaxPerLap, NumberBoxWidth);
 
+        _chkOverlap.Checked = current.EffectsOverlap;
+
+        var overlap = new FieldRow();
+
+        overlap.Add(null, _chkOverlap);
+
         // --- The status line ---
         //
         // At the foot of the page, wrapping rather than cut short.
@@ -583,7 +593,9 @@ public sealed class SoundEffectsControl : UserControl
         var perLapCard = new Section("Per lap");
 
         perLapCard.Add(SoundsPagePieces.Hint(_textSize, "When several per-lap sounds fire on the same lap, the heaviest win up to this many."), gapBelow: UiLayout.HintGap);
-        perLapCard.Add(maxPerLap, gapBelow: 0);
+        perLapCard.Add(maxPerLap, gapBelow: UiLayout.RowGap);
+        perLapCard.Add(SoundsPagePieces.Hint(_textSize, "On: when several cars earn a sound at once, each one plays as it happens. Off: they play one after another. The start, finish and flag sounds always play in order."), gapBelow: UiLayout.HintGap);
+        perLapCard.Add(overlap, gapBelow: 0);
 
         var page = new FillPage();
 
@@ -1774,6 +1786,7 @@ public sealed class SoundEffectsControl : UserControl
             }
 
             _numMaxPerLap.Value = Math.Clamp(profile.MaxEffectsPerLap, 1, 5);
+            _chkOverlap.Checked = profile.EffectsOverlap;
         }
         finally
         {
@@ -1797,6 +1810,7 @@ public sealed class SoundEffectsControl : UserControl
             StreakThresholdInPractice = _store.Current.StreakThresholdInPractice,
             Volume = _store.Current.Volume,
             MaxEffectsPerLap = (int)_numMaxPerLap.Value,
+            EffectsOverlap = _chkOverlap.Checked,
         };
 
         foreach (var (kind, row) in _rows)

@@ -100,13 +100,32 @@ public sealed partial class AnnouncementService
     /// it off. Voice lines could always be stopped; sounds held the speaker
     /// for their whole length, so a long custom start or finish file kept a
     /// yellow waiting for seconds.
+    ///
+    /// WHY (24 Nov 2026, simultaneous sounds): a list, not one slot. With
+    /// sounds playing over each other a single slot held only the newest,
+    /// so a mute or a yellow would have cut that one and left the rest
+    /// playing to the end.
     /// </summary>
-    private CancellationTokenSource? _playingSoundCancel;
-    private SoundEffectKind _playingSoundKind;
+    private readonly List<PlayingSound> _playingSounds = new();
     private readonly object _playingSoundLock = new();
+
+    private sealed record PlayingSound(SoundEffectKind Kind, CancellationTokenSource Cancel);
+
+    /// <summary>When the last sound of each kind started (or is due to), for SoundOverlap.SameSoundStagger. Under _playingSoundLock.</summary>
+    private readonly Dictionary<SoundEffectKind, DateTime> _lastSoundStartUtc = new();
 
     private readonly List<QueuedSound> _soundQueue = new();
     private readonly object _soundQueueLock = new();
+
+    /// <summary>
+    /// The moment lane (24 Nov 2026): sounds that play as they fire, beside
+    /// each other - see SoundOverlap. Under _soundQueueLock, like _soundQueue,
+    /// which is now the race sequence's line (and every sound's, with the
+    /// switch off).
+    /// </summary>
+    private readonly List<QueuedSound> _momentQueue = new();
+    private readonly SemaphoreSlim _momentQueueSignal = new(0);
+    private readonly SemaphoreSlim _momentSlots = new(SoundOverlap.MaxAtOnce, SoundOverlap.MaxAtOnce);
 
     /// <summary>
     /// How old a lap chime may be and still be worth playing.
@@ -572,7 +591,7 @@ public sealed partial class AnnouncementService
             {
                 // A lap chime too old to play will be thrown away when its
                 // turn comes, so it is not worth making a start wait for.
-                if (_soundQueue.Any(item => !IsStaleSound(item.Kind, item.QueuedAtUtc)))
+                if (_soundQueue.Concat(_momentQueue).Any(item => !IsStaleSound(item.Kind, item.QueuedAtUtc)))
                 {
                     return true;
                 }
@@ -1930,6 +1949,7 @@ public sealed partial class AnnouncementService
         // picked up until that handler has returned.
         _ = SuperviseQueueLoop("voice", RunVoiceQueueLoopAsync);
         _ = SuperviseQueueLoop("sound", RunSoundQueueLoopAsync);
+        _ = SuperviseQueueLoop("moment sound", RunMomentQueueLoopAsync);
     }
 
     /// <summary>
