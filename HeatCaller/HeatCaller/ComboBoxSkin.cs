@@ -229,8 +229,74 @@ internal sealed class ComboBoxSkin : NativeWindow
     /// </summary>
     private bool Skinnable => !_combo.IsDisposed && _combo.IsHandleCreated;
 
+    private const int WM_KEYDOWN = 0x0100;
+    private const int WM_SYSKEYDOWN = 0x0104;
+    private const int WM_LBUTTONDOWN = 0x0201;
+    private const int WM_LBUTTONDBLCLK = 0x0203;
+    private const int CB_SHOWDROPDOWN = 0x014F;
+    private const int CB_GETDROPPEDSTATE = 0x0157;
+    private const int VK_F4 = 0x73;
+    private const int VK_UP = 0x26;
+    private const int VK_DOWN = 0x28;
+
+    /// <summary>
+    /// A long list opens in the app's own drop-down rather than Windows' (24
+    /// Nov 2026, Asher: "make sure you can't see them" - Windows' list wore
+    /// its bright white scroll bar): every way of opening it - a press, F4,
+    /// Alt+Up or Down, DroppedDown - is answered here, and DroppedDown reads
+    /// true while it is open. See ComboListPopup.
+    /// </summary>
+    private bool OpensItsOwnList(ref Message m)
+    {
+        switch (m.Msg)
+        {
+            case CB_GETDROPPEDSTATE when ComboListPopup.IsOpen(_combo):
+                m.Result = (IntPtr)1;
+                return true;
+
+            case CB_SHOWDROPDOWN when m.WParam == IntPtr.Zero && ComboListPopup.IsOpen(_combo):
+                ComboListPopup.Close(_combo);
+                m.Result = (IntPtr)1;
+                return true;
+        }
+
+        if (!ComboListPopup.Wanted(_combo))
+        {
+            return false;
+        }
+
+        switch (m.Msg)
+        {
+            case WM_LBUTTONDOWN or WM_LBUTTONDBLCLK:
+                if (_combo.CanFocus && !_combo.Focused)
+                {
+                    _combo.Focus();
+                }
+
+                ComboListPopup.Toggle(_combo);
+                return true;
+
+            case CB_SHOWDROPDOWN when m.WParam != IntPtr.Zero:
+                ComboListPopup.Open(_combo);
+                m.Result = (IntPtr)1;
+                return true;
+
+            case WM_KEYDOWN when (int)m.WParam == VK_F4:
+            case WM_SYSKEYDOWN when (int)m.WParam is VK_DOWN or VK_UP:
+                ComboListPopup.Toggle(_combo);
+                return true;
+        }
+
+        return false;
+    }
+
     protected override void WndProc(ref Message m)
     {
+        if (Skinnable && OpensItsOwnList(ref m))
+        {
+            return;
+        }
+
         switch (m.Msg)
         {
             case WM_ERASEBKGND when Skinnable:
