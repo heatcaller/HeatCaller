@@ -243,7 +243,10 @@ describe("Your details on Me, kept up to date", () => {
     assert.match(page.get("yd").textContent, /they\/them/);
   });
 
-  it("takes the pack box back when the live card goes", async () => {
+  // WHY (23 Nov 2026, Asher: "remove the pack section on the your details
+  // card"): Your details no longer takes the pack box back when the live
+  // card goes - the pack is only ever on the live card.
+  it("keeps the pack out of Your details when the live card goes", async () => {
     const live = { at: "2026-10-22T19:00:00Z", next: { race: "Q3 Heat 1", away: 2, slot: 4, words: "2 races before yours" }, cars: [] };
     const relay = { full: { ok: true, night, me: me(), asksOpen: true, live } as unknown, poll: { ok: true, live } as unknown };
     const page = await open(relay);
@@ -256,7 +259,8 @@ describe("Your details on Me, kept up to date", () => {
     await page.advance(21000);
 
     assert.doesNotMatch(page.get("lv").textContent, /Your battery pack/);
-    assert.match(page.get("yd").textContent, /Your battery pack/, "Your details has it again");
+    assert.doesNotMatch(page.get("yd").textContent, /Your battery pack/, "Your details never has it");
+    assert.match(page.get("yd").textContent, /Change my details/);
 
     // And gives it back when the laptop returns.
     relay.poll = { ok: true, live };

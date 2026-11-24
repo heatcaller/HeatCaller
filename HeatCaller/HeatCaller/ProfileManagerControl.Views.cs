@@ -65,19 +65,19 @@ public sealed partial class ProfileManagerControl
     private const string HubView = "Hub";
     private const string GarageView = "Garage";
 
-    /// <summary>The setting's value for the table view (7 Nov 2026).</summary>
-    private const string TableView = "Table";
-
     /// <summary>
-    /// The page's three views (7 Nov 2026, the Driver Hub rework): Card -
-    /// the roster beside one driver's card; Table - every driver in a
-    /// sortable table, the one picked in a drawer beside it; and Garage.
-    /// Card and Table took the place of the one Drivers view.
+    /// The page's views: Card - the roster beside one driver's card - and
+    /// Garage.
+    ///
+    /// WHY (23 Nov 2026, Asher: "remove the table tab from the driver
+    /// hub"): a third, Table - every driver in a sortable table with a
+    /// drawer beside it (7 Nov 2026) - went. It was the Card view's roster
+    /// again, a third button on the switch, and a whole page to keep in
+    /// step. A "Table" saved from before opens on Card.
     /// </summary>
     private enum DriverView
     {
         Card,
-        Table,
         Garage,
     }
 
@@ -150,8 +150,6 @@ public sealed partial class ProfileManagerControl
     /// <summary>Whether the Garage view is the one asked for - kept apart from Visible, which reads false while the page itself is hidden.</summary>
     private bool _garageViewWanted => _view == DriverView.Garage;
 
-    private Button? _btnTableView;
-
     /// <summary>Whether the painted card shows the driver's record (Stats tab, or no tabs at all).</summary>
     private bool ShowsStats => _garageSources is null || _cardTab == CardTab.Stats;
 
@@ -173,22 +171,18 @@ public sealed partial class ProfileManagerControl
     }
 
     /// <summary>
-    /// The row across the top of the page: the Card | Table | Garage switch
-    /// in the upper left (7 Nov 2026 - Card and Table took the place of
-    /// Drivers).
+    /// The row across the top of the page: the Card | Garage switch in the
+    /// upper left (Table went on 23 Nov 2026 - see DriverView).
     /// </summary>
     private ButtonBar BuildTopRow()
     {
         _btnHub = new Button { Text = "Card" };
         _btnHub.Click += (_, _) => SelectView(DriverView.Card);
 
-        _btnTableView = new Button { Text = TableView };
-        _btnTableView.Click += (_, _) => SelectView(DriverView.Table);
-
         _btnGarageView = new Button { Text = GarageView };
         _btnGarageView.Click += (_, _) => SelectView(DriverView.Garage);
 
-        return new ButtonBar(tight: true).With(_btnHub, _btnTableView, _btnGarageView);
+        return new ButtonBar(tight: true).With(_btnHub, _btnGarageView);
     }
 
     private (Font Font, int Count, int Width)? _garageDriverWidth;
@@ -438,31 +432,28 @@ public sealed partial class ProfileManagerControl
 
     // ----------------------------------------------------------- the views
 
-    /// <summary>The three views, one showing: the roster beside the driver's card, every driver in a table, or the Garage view.</summary>
+    /// <summary>The two views, one showing: the roster beside the driver's card, or the Garage view.</summary>
     private Panel BuildViews(Beside band, Control? bottomBar)
     {
         _band = band;
         _bottomBar = bottomBar;
         _driversView = band;
         _garageView = BuildGarageView();
-        _tableView = BuildTableView();
 
         var views = new Panel { Tag = AppTheme.KeepBackColor };
 
         _driversView.Dock = DockStyle.Fill;
         _garageView.Dock = DockStyle.Fill;
-        _tableView.Dock = DockStyle.Fill;
 
         views.Controls.Add(_driversView);
-        views.Controls.Add(_tableView);
         views.Controls.Add(_garageView);
 
-        // The view used last - the Card view on a new install, and for the
-        // "Hub" saved before Card and Table were two.
+        // The view used last - the Card view on a new install, for the
+        // "Hub" saved before Card and Table were two, and for a "Table"
+        // saved before Table went (23 Nov 2026).
         _view = _settings?.DriversPageView switch
         {
             { } saved when string.Equals(saved, GarageView, StringComparison.OrdinalIgnoreCase) => DriverView.Garage,
-            { } saved when string.Equals(saved, TableView, StringComparison.OrdinalIgnoreCase) => DriverView.Table,
             _ => DriverView.Card,
         };
 
@@ -481,7 +472,6 @@ public sealed partial class ProfileManagerControl
     /// <summary>The least height the views can do with at this width: the roster and card's, or a garage wall's.</summary>
     private int ViewsLeastHeight(int width) => _view switch
     {
-        DriverView.Table when _tableBand is not null => _tableBand.LeastHeight(width),
         DriverView.Card when _band is not null => _band.LeastHeight(width),
         _ => UiLayout.AtTextSize(300),
     };
@@ -634,25 +624,15 @@ public sealed partial class ProfileManagerControl
         _driversView.Visible = _view == DriverView.Card;
         _garageView.Visible = _view == DriverView.Garage;
 
-        if (_tableView is not null)
-        {
-            _tableView.Visible = _view == DriverView.Table;
-        }
-
         if (_bottomBar is not null)
         {
             _bottomBar.Visible = _view == DriverView.Card;
         }
 
-        if (_view == DriverView.Table)
-        {
-            RefreshTable();
-        }
-
         StyleSegments();
     }
 
-    /// <summary>Card, Table or Garage, remembered for next time.</summary>
+    /// <summary>Card or Garage, remembered for next time.</summary>
     private void SelectView(DriverView view)
     {
         if (_driversView is null || _garageView is null)
@@ -663,8 +643,8 @@ public sealed partial class ProfileManagerControl
         _view = view;
         ApplyView();
 
-        // Card and Table are about one driver: coming back to the Garage
-        // view from either shows theirs.
+        // The Card view is about one driver: coming back to the Garage
+        // view from it shows theirs.
         if (view != DriverView.Garage)
         {
             _garageGroup = null;
@@ -675,7 +655,6 @@ public sealed partial class ProfileManagerControl
             var name = view switch
             {
                 DriverView.Garage => GarageView,
-                DriverView.Table => TableView,
                 _ => HubView,
             };
 
@@ -701,11 +680,6 @@ public sealed partial class ProfileManagerControl
             AppTheme.StyleButton(_btnGarageView, Lit(_view == DriverView.Garage));
         }
 
-        if (_btnTableView is not null)
-        {
-            AppTheme.StyleButton(_btnTableView, Lit(_view == DriverView.Table));
-        }
-
         AppTheme.StyleButton(_btnCardEdit, AppTheme.ButtonKind.Secondary);
         AppTheme.StyleButton(_btnCardPhoto, AppTheme.ButtonKind.Secondary);
 
@@ -725,9 +699,6 @@ public sealed partial class ProfileManagerControl
         {
             return;
         }
-
-        // The table's drawer is the driver shown, in brief.
-        RefreshDrawer();
 
         if (_garageViewWanted)
         {

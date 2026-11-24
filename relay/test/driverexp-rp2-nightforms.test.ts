@@ -170,9 +170,9 @@ describe("Your details: when it shows", () => {
     const page = await open(relay({ full: { ok: true, night: night(), me: me(), asksOpen: true } }));
     const card = page.get("yd");
 
-    // The pack stays on the card; the form is in the sheet.
-    assert.match(card.textContent, /Red 2S #3/);
-    assert.equal(field(card, /^The pack in your car now/).value, PACK_A);
+    // No pack on the card since 23 Nov 2026 (Asher: "remove the pack
+    // section on the your details card"); the form is in the sheet.
+    assert.doesNotMatch(card.textContent, /Red 2S #3|Your battery pack/);
 
     const yd = form(page);
     assert.match(yd.textContent, /NameSam Parkerdesk only/);
@@ -396,9 +396,9 @@ describe("every refusal from driver/ask, in plain words", () => {
 
 describe("the pack and the race query", () => {
   it("the pack select sends kind pack with the pick, and a no-change pick sends nothing", async () => {
-    const page = await open(relay({ full: { ok: true, night: night(), me: me(), asksOpen: true } }));
-    // The pack is on the card itself, not in the sheet.
-    const yd = page.get("yd");
+    // The pack is on the live card only since 23 Nov 2026, not in Your details.
+    const page = await open(relay({ full: { ok: true, night: night(), me: me(), asksOpen: true, live: {} }, poll: () => ({ ok: true, live: {} }) }));
+    const yd = page.get("lv");
 
     await press(page, yd, /^Save$/);
     assert.equal(asks(page).length, 0);
@@ -472,7 +472,8 @@ describe("request status on the live card", () => {
 describe("what never leaves the page the wrong way", () => {
   it("the code is never in an address - every call is a fixed POST path with it in the body", async () => {
     const page = await open(relay({
-      full: { ok: true, night: night(), me: me({ pin: true }), asksOpen: true },
+      full: { ok: true, night: night(), me: me({ pin: true }), asksOpen: true, live: {} },
+      poll: () => ({ ok: true, live: {} }),
       list: { status: 200, body: { ok: true, mode: "racer", driver: { id: CODE }, pass: PASS } },
     }));
     const yd = form(page);
@@ -480,9 +481,9 @@ describe("what never leaves the page the wrong way", () => {
     await press(page, yd, /^Sign in$/);
     type(field(yd, /^Announcer name/), "Rocket");
     await press(page, yd, /^Send (to the desk|\d+ changes?)$/);
-    // The pack is on the card, not in the sheet.
-    field(page.get("yd"), /^The pack in your car now/).value = PACK_B;
-    await press(page, page.get("yd"), /^Save$/);
+    // The pack is on the live card, not in Your details.
+    field(page.get("lv"), /^The pack in your car now/).value = PACK_B;
+    await press(page, page.get("lv"), /^Save$/);
     await press(page, page.get("nx"), /Something wrong/);
     type(field(page.get("nx"), /^What looks wrong/), "Wrong.");
     await press(page, page.get("nx"), /^Send (to the desk|\d+ changes?)$/);
