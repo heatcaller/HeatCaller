@@ -43,7 +43,7 @@ The announcer's voice itself is picked on **Voice → Cast**, on the **Announcer
 
 **Name:** is at the top of the same card, above the voice: it's said in the On Air openings and the Tonight Open, and left blank the announcer is never named.
 
-![Voice, Cast tab: the Voices card with Load Voices, the Announcer card with its Name, an ElevenLabs voice and the Kokoro voice under If ElevenLabs runs out, and the Recap host card](../assets/images/voice-cast.png)
+![Voice, Cast tab: the Voices card with Load Voices and Use HeatCaller's cast, the Announcer card with its Name, Finley as the ElevenLabs voice and a Kokoro voice under If ElevenLabs runs out, and the Recap host card on Will with the line "ElevenLabs retires Will on 31 December. Switch to Baxter?" and Play, Switch and Pick another under it](../assets/images/voice-cast.png)
 
 ![Voice tab, Speak with card: ElevenLabs chosen at 77% used, the HeatCaller voice not included for this club yet, and the Kokoro voice ready on this PC and standing by](../assets/images/voice-voice.png)
 
