@@ -807,6 +807,11 @@ public partial class MainForm : Form
         SecretRecovery.RememberStartupState(_settings, _voiceStore);
         BackupService.SecretsProvider = () => BackupSecrets.Capture(_settings, _voiceStore);
 
+        // From 1 January 2027 a seat or crew voice still on one of
+        // ElevenLabs' retired Default voices moves to its replacement - see
+        // SwitchRetiredVoices. After the secrets are remembered, since it saves.
+        SwitchRetiredVoices(DateOnly.FromDateTime(DateTime.Now));
+
         // An update the club answered "After tonight" to goes in HERE. This
         // start IS the next start it was waiting for, and it is the safest
         // moment there is: nothing is open, no race is running, nobody is

@@ -220,15 +220,16 @@ It reads only what the live board already has: the laps, and the gap to the car 
 
 #### The HeatCaller lap voice
 
-When the relay has the lap voice's clips, the laps are read out in one ElevenLabs voice, **Daniel** (a steady broadcaster), the same for every club whatever announcer a club picked in its Cast tab. The phone joins short recorded clips together: "Lap seven, nine forty-two, best lap, P two, four tenths back". Gaps are said the way the announcer calls a gap during a lap call: "half a second back", "a second and a half back", "a lap back". The time is said in full, the way the announcer says it and the screen shows it, with nothing rounded: 6.935 is "six nine thirty-five". The clips cover lap times from 3.000 to 19.999 seconds, laps 1 to 200, places 1 to 30, gaps up to 30 seconds or 9 laps, and up to 2 seconds under or off a target lap.
+When the relay has the lap voice's clips, the laps are read out in one ElevenLabs voice, **Finley** (an articulate anchor), the same for every club whatever announcer a club picked in its Cast tab. The phone joins short recorded clips together: "Lap seven, nine forty-two, best lap, P two, four tenths back". Gaps are said the way the announcer calls a gap during a lap call: "half a second back", "a second and a half back", "a lap back". The time is said in full, the way the announcer says it and the screen shows it, with nothing rounded: 6.935 is "six nine thirty-five". The clips cover lap times from 3.000 to 19.999 seconds, laps 1 to 200, places 1 to 30, gaps up to 30 seconds or 9 laps, and up to 2 seconds under or off a target lap.
 
 - If a lap needs a clip there isn't one for (a 2.40 lap, P31), or a clip doesn't arrive within a second, the phone's own voice says the whole line instead. You never hear half of each.
 - "Leader behind" is a clip of its own, added on 11 November. Until the relay's clips are made again to include it, a call with "Leader behind" in it is said in the phone's voice.
 - If you leave the page and come back (another app, the home screen, a locked screen), the voice starts again by itself. You don't need to tap, and you won't hear the phone's voice in its place.
 - The clips are recorded once, so a race night costs nothing, however many drivers listen. Nothing about any driver is sent to ElevenLabs.
+- Until 24 November the voice was Daniel. ElevenLabs stops offering Daniel on 31 December, so the clips are made again in Finley's voice. A relay whose clips haven't been made again yet still plays Daniel's.
 - A relay without the clips reads every lap in the phone's own voice, as before.
 
-The relay owner makes the clips once with `lap-voice-render.cmd` in the relay folder, on their own ElevenLabs key (about 46,000 characters, roughly $1.83 on ElevenLabs' Flash pricing, on a paid plan), then redeploys the relay. See [The lap voice](../admin/relay-hosting.md#the-lap-voice) and the relay's README.
+The relay owner makes the clips once with `lap-voice-render.cmd` in the relay folder, on their own ElevenLabs key (about 46,000 characters, roughly $1.83 at ElevenLabs' v4 Turbo price, on a paid plan), then redeploys the relay. See [The lap voice](../admin/relay-hosting.md#the-lap-voice) and the relay's README.
 
 On a driver's own night, the same voice reads out their own laps with no one to pick, and their target lap too. See [Right now](#right-now).
 

@@ -210,6 +210,16 @@ public sealed partial class AnnouncementService
         string text, VoiceProfile profile, float gain, string announcingLogPrefix, bool honourMute, bool forListeners,
         SpeechTail tail, SpeechLead lead, Action? spoken, Func<string?>? whyNotNow, VoiceLineTiming? timing)
     {
+        // WHY (24 Nov 2026, Asher: the Default voices retire on 31 Dec 2026):
+        // a voice ElevenLabs no longer has made every streamed line say
+        // "Couldn't stream ... rendering it whole" before the stand-in took
+        // it. It is said once by ElevenLabsClient; the line goes the whole
+        // way, quietly, where Kokoro stands in for it.
+        if (profile.EffectiveEngine == VoiceEngine.ElevenLabs && ElevenLabsClient.IsVoiceGone(profile))
+        {
+            return false;
+        }
+
         var limit = LimitFor(text);
         using var timeout = new CancellationTokenSource(limit);
 

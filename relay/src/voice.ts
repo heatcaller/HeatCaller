@@ -2206,31 +2206,139 @@ export async function migrateVoiceFolder(
   }
 }
 
+/** A history item id as ElevenLabs gives one: anything else in the header is not ours to send back. */
+const HISTORY_ITEM_ID = /^[A-Za-z0-9_-]{1,128}$/;
+
 /**
  * Whether ElevenLabs is asked not to keep the lines it speaks (15 Nov 2026,
  * children's privacy, plan 2.3). The lines name drivers, juniors among them,
  * so every request carries ElevenLabs' own `enable_logging=false` - its
  * zero-retention mode - unless RELAY_VOICE_NO_LOGGING says not to.
  *
- * WHY A FALLBACK. ElevenLabs has offered zero retention to some plans only
- * (historically enterprise), and a plan without it may turn the request down.
- * A race call matters more than the flag, so a refusal is asked again once
- * without it; if that goes through, this key is remembered as one that
- * can't have it and the rest of this run asks without, said once in the log.
- * A request that fails both ways was failing for another reason, and
- * nothing is remembered.
+ * WHY A FALLBACK. ElevenLabs offers zero retention to enterprise plans only.
+ * This was written expecting another plan to turn the request down, so a
+ * refusal is asked again once without it; if that goes through, this key is
+ * remembered as one that can't have it and the rest of this run asks
+ * without, said once in the log. A request that fails both ways was failing
+ * for another reason, and nothing is remembered.
+ *
+ * WHY (24 Nov 2026, Asher: delete each line from ElevenLabs' history): tried
+ * on a real non-enterprise key, the flag is NOT turned down - it is accepted
+ * with a 200 and quietly ignored, and the line is kept in the key's history
+ * like any other. So the fallback above never runs, and asking alone kept
+ * nothing out of the history: every line with a driver's name in it stayed
+ * there. Every speech answer (whole, stream, with-timestamps) carries a
+ * `history-item-id` header, flag or no flag, so now each line is also
+ * deleted by that exact id once it is in hand (forget) - only ever the id
+ * from our own answer, never a list of the history matched against
+ * anything. The fallback is kept for a plan that does refuse the flag.
  *
  * One of these per key: index.ts shares it between the renderer and the
  * streamer, so a refusal found by one is known to the other.
  */
 export class ElevenLabsLogging {
   private refused = false;
+  /** The key turned a delete down (401/403): it hasn't the Speech history permission. */
+  private historyRefused = false;
+  /** A delete failed for another reason; said once, and the next ones are still tried. */
+  private deleteFailedSaid = false;
+  private readonly pending = new Set<Promise<void>>();
 
   constructor(
     /** Off only when RELAY_VOICE_NO_LOGGING is "0", "false", "off" or "no". */
     readonly askNotToKeep = true,
     private readonly log: (line: string) => void = () => {},
+    /** How long one delete may take. It never holds a line up either way. */
+    private readonly deleteTimeoutMs = 10_000,
   ) {}
+
+  /** Whether a spoken line is taken out of the key's history: while asked not to keep, and until the key is found unable to. */
+  get deleting(): boolean {
+    return this.askNotToKeep && !this.historyRefused;
+  }
+
+  /**
+   * Deletes one line from the key's ElevenLabs history, by the
+   * `history-item-id` its own answer carried. Sent and not waited for:
+   * nothing here can delay a line or fail it. A 404 is a line already gone.
+   */
+  forget(apiKey: string, historyItemId: string | null | undefined): void {
+    if (!this.deleting) {
+      return;
+    }
+
+    const id = (historyItemId ?? "").trim();
+
+    if (!HISTORY_ITEM_ID.test(id)) {
+      return;
+    }
+
+    const sent: Promise<void> = this.sendDelete(apiKey, id)
+      .catch(() => {})
+      .then(() => {
+        this.pending.delete(sent);
+      });
+    this.pending.add(sent);
+  }
+
+  /** Waits for every delete sent so far - for a command that exits when it is done, and for tests. */
+  async settled(): Promise<void> {
+    while (this.pending.size > 0) {
+      await Promise.allSettled([...this.pending]);
+    }
+  }
+
+  private async sendDelete(apiKey: string, id: string): Promise<void> {
+    let response: Response;
+
+    try {
+      response = await fetch(`https://api.elevenlabs.io/v1/history/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { "xi-api-key": apiKey },
+        signal: AbortSignal.timeout(this.deleteTimeoutMs),
+      });
+    } catch (error) {
+      this.noteDeleteFailed(String(error));
+      return;
+    }
+
+    // Let go unread: a refusal's body can carry the account's details.
+    await response.body?.cancel().catch(() => {});
+
+    if (response.ok || response.status === 404) {
+      return;
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      // The same key has just spoken the line, so a refusal here is the
+      // permission, not the key.
+      this.noteHistoryRefused(response.status);
+      return;
+    }
+
+    this.noteDeleteFailed(String(response.status));
+  }
+
+  private noteHistoryRefused(status: number): void {
+    if (this.historyRefused) {
+      return;
+    }
+
+    this.historyRefused = true;
+    this.log(
+      `[voice] This ElevenLabs key can't remove lines from its history (${status}); give it the Speech history ` +
+        `permission. Lines stay in the key's ElevenLabs history until this is restarted with a key that can.`,
+    );
+  }
+
+  private noteDeleteFailed(why: string): void {
+    if (this.deleteFailedSaid) {
+      return;
+    }
+
+    this.deleteFailedSaid = true;
+    this.log(`[voice] A line couldn't be removed from the ElevenLabs history (${why.slice(0, 120)}); later lines are still tried.`);
+  }
 
   /** Whether the next request carries enable_logging=false. */
   get asking(): boolean {
@@ -2265,7 +2373,9 @@ export function withNoLogging(url: string, ask: boolean): string {
 /**
  * One POST to ElevenLabs, with the no-logging flag while it is wanted - and,
  * when a request with it is turned down as a bad request (400, 403, 422), the
- * same request once more without it. See ElevenLabsLogging.
+ * same request once more without it. See ElevenLabsLogging: on the plans
+ * tried so far the flag is accepted and ignored, so the retry is for a plan
+ * that does refuse it.
  */
 async function postToElevenLabs(url: string, init: RequestInit, logging: ElevenLabsLogging): Promise<Response> {
   const asked = logging.asking;
@@ -2339,7 +2449,29 @@ export function elevenLabsStreamer(apiKey: string, timeoutMs = 30_000, logging =
         throw new VoiceUpstreamError(response.status, `ElevenLabs answered ${response.status}: ${body.slice(0, 200)}`);
       }
 
-      return response.body as unknown as AsyncIterable<Uint8Array>;
+      // WHY (24 Nov 2026, Asher: delete each line from ElevenLabs' history):
+      // the line is taken out of the history once the stream ends or is
+      // stopped. Both ways, once: a reader that never starts (VoiceService's
+      // cancel) never runs the wrapper's finally, but it does abort signal.
+      const historyItemId = response.headers.get("history-item-id");
+      let forgotten = false;
+      const forget = (): void => {
+        if (forgotten) return;
+        forgotten = true;
+        signal.removeEventListener("abort", forget);
+        logging.forget(apiKey, historyItemId);
+      };
+      signal.addEventListener("abort", forget, { once: true });
+
+      const body = response.body as unknown as AsyncIterable<Uint8Array>;
+
+      return (async function* (): AsyncGenerator<Uint8Array> {
+        try {
+          yield* body;
+        } finally {
+          forget();
+        }
+      })();
     } finally {
       clearTimeout(timer);
     }
@@ -2386,7 +2518,17 @@ export function elevenLabsRenderer(apiKey: string, timeoutMs = 30_000, logging =
         throw new VoiceUpstreamError(response.status, `ElevenLabs answered ${response.status}: ${body.slice(0, 200)}`);
       }
 
-      const bytes = Buffer.from(await response.arrayBuffer());
+      let bytes: Buffer;
+
+      try {
+        bytes = Buffer.from(await response.arrayBuffer());
+      } finally {
+        // WHY (24 Nov 2026, Asher: delete each line from ElevenLabs' history):
+        // asking not to keep it was accepted and ignored, so the line is
+        // deleted by the id its answer carries - once the bytes are in hand,
+        // or failed, and before any check below can throw it away.
+        logging.forget(apiKey, response.headers.get("history-item-id"));
+      }
 
       if (bytes.length > MAX_AUDIO_BYTES) {
         throw new VoiceUpstreamError(response.status, `ElevenLabs answered with ${bytes.length} bytes.`);

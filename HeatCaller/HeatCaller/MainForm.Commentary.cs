@@ -83,6 +83,13 @@ public partial class MainForm
         cast.SpeakAsRecapHost = voice => _announcer.SpeakTest(RecapHostTestLine, _voiceStore.Current.Speed, voice);
         cast.SpeakAsCoHost = voice => _announcer.SpeakTest(CoHostTestLine, _voiceStore.Current.Speed, voice);
 
+        // ElevenLabs' retired Default voices (24 Nov 2026, Asher): each seat's
+        // Play, Switch and "Use HeatCaller's cast". Read when pressed - a
+        // soundscape builds the Voice tab anew (RebuildVoiceAndSoundTabs).
+        cast.PlayElevenLabsVoice = (id, name, line) => _voiceSettingsControl.PlayElevenLabsVoiceAsync(id, name, line);
+        cast.ElevenLabsVoiceGone = id => ElevenLabsClient.GoneWhy(_voiceStore.Current.ApiKey, id);
+        cast.UseAnnouncerElevenLabsVoice = (id, name) => _voiceSettingsControl.SelectAnnouncerElevenLabsVoice(id, name);
+
         // A Kokoro voice on the cast beside another engine (25 Oct 2026):
         // Kokoro is loaded now, in the background, as it is when it is the
         // engine or the stand-in - or the first line in that voice would

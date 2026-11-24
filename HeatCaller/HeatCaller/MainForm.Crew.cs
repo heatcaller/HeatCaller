@@ -55,6 +55,57 @@ public sealed partial class MainForm
         onAccount is not { } keys || listedFor != DriverCrew.EngineOf(pick) || keys.Contains(DriverCrew.KeyOf(pick));
 
     /// <summary>
+    /// An ElevenLabs account's voices with HeatCaller's six after them
+    /// (24 Nov 2026, Asher), those the account already has left out - so a
+    /// driver can pick one without the club saving it on elevenlabs.io first.
+    /// No sample: the phone has nothing to play for a voice the account
+    /// hasn't saved.
+    /// </summary>
+    internal static IReadOnlyList<CrewVoiceOption> CrewVoicesWithSuggested(IEnumerable<CrewVoiceOption> account)
+    {
+        var list = account.ToList();
+        var word = DriverCrew.EngineWord(VoiceEngine.ElevenLabs);
+
+        foreach (var (_, voice) in RetiredVoices.Suggested)
+        {
+            if (!list.Any(v => string.Equals(v.Pick.Id, voice.Id, StringComparison.Ordinal)))
+            {
+                list.Add(new CrewVoiceOption(new CrewVoicePick { Engine = word, Id = voice.Id, Name = voice.Name }, string.Empty));
+            }
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// The keys a driver's pick is checked against (CrewVoiceStillOffered):
+    /// every voice listed and, on ElevenLabs, every Library voice HeatCaller
+    /// suggests or moves a retired voice to (RetiredVoices.Offered).
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Nov 2026): a crew pick moved off a retired voice on 1 January
+    /// - Jessica to Jade, say - is a Library voice the account never saved,
+    /// so it was not on the account's list and read as "no longer on the
+    /// engine's list": the driver lost their voice to the club's.
+    /// </remarks>
+    internal static HashSet<string> CrewKeysStillThere(IEnumerable<CrewVoiceOption> listed, VoiceEngine engine)
+    {
+        var keys = listed.Select(v => DriverCrew.KeyOf(v.Pick)).ToHashSet(StringComparer.Ordinal);
+
+        if (engine == VoiceEngine.ElevenLabs)
+        {
+            var word = DriverCrew.EngineWord(engine);
+
+            foreach (var id in RetiredVoices.Offered)
+            {
+                keys.Add(DriverCrew.KeyOf(new CrewVoicePick { Engine = word, Id = id }));
+            }
+        }
+
+        return keys;
+    }
+
+    /// <summary>
     /// The keys still to check picks against after a listing for
     /// <paramref name="engine"/> failed: those of the last good listing when
     /// it was for the same engine, and none (not known) when it was for
@@ -209,7 +260,7 @@ public sealed partial class MainForm
             var reserved = DriverCrew.Reserved(_settings, _announcer.AnnouncerCrewKey(engine), engine);
 
             _crewForPhone = new DriverLive.CrewForPhone(engine, DriverCrew.Pickable(all, hidden, reserved));
-            _crewOnAccount = all.Select(v => DriverCrew.KeyOf(v.Pick)).ToHashSet(StringComparer.Ordinal);
+            _crewOnAccount = CrewKeysStillThere(all, engine);
             _crewListedFor = engine;
             _crewListFailed = false;
             _crewListedUtc = DateTime.UtcNow;
@@ -235,6 +286,54 @@ public sealed partial class MainForm
         finally
         {
             _crewListing = false;
+        }
+    }
+
+    /// <summary>
+    /// ElevenLabs' Default voices stop on 31 December 2026 (24 Nov 2026,
+    /// Asher). From the next day, as the settings load: each seat still on
+    /// one moves to HeatCaller's voice for it, and each driver's crew voice
+    /// on one to ElevenLabs' named replacement (RetiredVoices). Saved, and
+    /// said once in the console - the next start finds nothing to move.
+    /// </summary>
+    /// <remarks>
+    /// WHY: without it, every line in a retired voice failed from 1 January
+    /// and Kokoro said it, until somebody noticed and picked again. Saved
+    /// lines are kept by voice id, so a moved seat's lines are rendered
+    /// afresh in the new voice; none of the old voice's play beside them.
+    /// </remarks>
+    private void SwitchRetiredVoices(DateOnly today)
+    {
+        try
+        {
+            var moves = RetiredVoices.SwitchSeats(_settings, _voiceStore.Current, today);
+
+            if (moves.Count > 0)
+            {
+                _settings.Save();
+                _voiceStore.Save(_voiceStore.Current);
+
+                foreach (var move in moves)
+                {
+                    OnClientRawMessage($"{AppTime.LogStampNow()}  {RetiredVoices.Words(move)}");
+                }
+            }
+
+            var crew = RetiredVoices.SwitchCrew(_profiles.All, today);
+
+            if (crew.Count > 0)
+            {
+                _profiles.UpsertMany(crew);
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [crew] ElevenLabs retired its Default voices on {RetiredVoices.LastDayWords}: "
+                    + $"{Plural.Of(crew.Count, "driver's crew voice", "drivers' crew voices")} moved to ElevenLabs' replacement "
+                    + "(or back to the club's voice where there is none).");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Never in the way of the app opening: the lines in a retired voice
+            // still go to the stand-in, and the Cast tab still says so.
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [voice] Couldn't move the retired ElevenLabs voices - {ex.Message}.");
         }
     }
 
@@ -297,9 +396,8 @@ public sealed partial class MainForm
 
                 var voices = await new ElevenLabsClient().GetVoicesAsync(key);
 
-                return voices
-                    .Select(v => new CrewVoiceOption(new CrewVoicePick { Engine = word, Id = v.VoiceId, Name = v.Name }, v.PreviewUrl))
-                    .ToList();
+                return CrewVoicesWithSuggested(voices
+                    .Select(v => new CrewVoiceOption(new CrewVoicePick { Engine = word, Id = v.VoiceId, Name = v.Name }, v.PreviewUrl)));
             }
         }
     }

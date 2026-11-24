@@ -37,7 +37,16 @@ public sealed class ElevenLabsClient
     /// </summary>
     internal static HttpClient SubscriptionHttp { get; set; } = new() { Timeout = TimeSpan.FromSeconds(10) };
 
-    public sealed record VoiceInfo(string VoiceId, string Name, string PreviewUrl = "");
+    /// <param name="Label">
+    /// What a list shows for it when not just its name - "Suggested by
+    /// HeatCaller: Finley - Articulate Anchor" (24 Nov 2026). The name is
+    /// still what is saved.
+    /// </param>
+    public sealed record VoiceInfo(string VoiceId, string Name, string PreviewUrl = "", string Label = "")
+    {
+        /// <summary>What a list shows: the label when there is one, else the name.</summary>
+        public string Shown => string.IsNullOrEmpty(Label) ? Name : Label;
+    }
 
     /// <summary>Where the key's own ElevenLabs plan stands this month, in characters.</summary>
     public sealed record Subscription(long CharacterCount, long CharacterLimit, DateTime? ResetsUtc);
@@ -190,6 +199,13 @@ public sealed class ElevenLabsClient
     private static async Task<HttpResponseMessage> SendSpeechAsync(
         VoiceProfile profile, Func<bool, HttpRequestMessage> build, HttpCompletionOption completion, CancellationToken ct)
     {
+        // A voice ElevenLabs said it no longer has, or won't let this key
+        // use, isn't asked again this session - see NoteGoneVoice.
+        if (GoneVoiceFor(profile) is { } gone)
+        {
+            throw gone;
+        }
+
         var asked = AsksNotToLog(profile.ApiKey);
         int refused;
 
@@ -197,7 +213,29 @@ public sealed class ElevenLabsClient
         {
             var response = await Http.SendAsync(first, completion, ct);
 
-            if (response.IsSuccessStatusCode || !asked || !FlagMayBeRefused((int)response.StatusCode))
+            if (response.IsSuccessStatusCode)
+            {
+                return response;
+            }
+
+            // WHY (24 Nov 2026, Asher: ElevenLabs retires its Default voices
+            // on 31 Dec 2026): a voice that isn't there any more came back as
+            // 400 or 404 "voice_not_found", and a 400 was taken for the plan
+            // turning the no-logging flag down - so every line made two
+            // failing requests before Kokoro stood in, and said nothing that
+            // named the voice. Now it is read for what it is, said once, and
+            // that voice (only that one) isn't asked again this session.
+            // Buffered first, so the caller can still read the body.
+            await response.Content.LoadIntoBufferAsync().ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+            if (VoiceRefusalOf((int)response.StatusCode, body) is { } why)
+            {
+                response.Dispose();
+                throw NoteGoneVoice(profile, why, (int)response.StatusCode, body);
+            }
+
+            if (!asked || !FlagMayBeRefused((int)response.StatusCode))
             {
                 return response;
             }
@@ -229,6 +267,303 @@ public sealed class ElevenLabsClient
     /// <summary>The answers a plan without zero retention could give the flag.</summary>
     private static bool FlagMayBeRefused(int status) => status is 400 or 403 or 422;
 
+    // ------------------------------------------------------------------
+    //  A voice that can't speak on this key (24 Nov 2026)
+    // ------------------------------------------------------------------
+
+    /// <summary>Why ElevenLabs won't speak in one voice for this key.</summary>
+    internal enum VoiceRefusal
+    {
+        /// <summary>The voice isn't there any more - retired, or deleted from the account (voice_not_found).</summary>
+        NotFound,
+
+        /// <summary>A Library voice on a free plan, which can't use them through the API.</summary>
+        NeedsPaidPlan,
+    }
+
+    /// <summary>
+    /// What a refused speech request says about the VOICE, or null when it
+    /// says nothing about it (a bad key, the quota, the no-logging flag).
+    /// Read from ElevenLabs' own status word in the body: "voice_not_found"
+    /// on a 400 or 404, and "free_users_not_allowed" (or its message about
+    /// Library voices) for a free plan.
+    /// </summary>
+    /// <remarks>
+    /// The voice_not_found body is a real answer (24 Nov 2026): 404
+    /// {"detail":{"type":"not_found","code":"voice_not_found",...,"status":"voice_not_found"}}.
+    /// The free-plan wording has not been seen from ElevenLabs on this PC yet,
+    /// so it is matched loosely - its status word, or "library voice" with
+    /// "free" in the message - and on any refusal status, since it can come
+    /// as a 401 or 402, which would otherwise be read as the key turned down.
+    /// </remarks>
+    internal static VoiceRefusal? VoiceRefusalOf(int status, string? body)
+    {
+        var text = body ?? string.Empty;
+
+        if (status is 400 or 404 && text.Contains("voice_not_found", StringComparison.OrdinalIgnoreCase))
+        {
+            return VoiceRefusal.NotFound;
+        }
+
+        if (status is >= 400 and < 500
+            && (text.Contains("free_users_not_allowed", StringComparison.OrdinalIgnoreCase)
+                || (text.Contains("library voice", StringComparison.OrdinalIgnoreCase) && text.Contains("free", StringComparison.OrdinalIgnoreCase))))
+        {
+            return VoiceRefusal.NeedsPaidPlan;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// A speech request ElevenLabs turned down because of the voice itself.
+    /// Its message keeps the shape every other refusal has ("... failed (404):
+    /// body") so the console's reasons still read it; <see cref="Plain"/> is
+    /// the sentence for people.
+    /// </summary>
+    internal sealed class VoiceGoneException(string voiceId, string voiceName, VoiceRefusal why, string message)
+        : InvalidOperationException(message)
+    {
+        public string VoiceId { get; } = voiceId;
+
+        public string VoiceName { get; } = voiceName;
+
+        public VoiceRefusal Why { get; } = why;
+
+        /// <summary>What to tell the club, in one sentence or two.</summary>
+        public string Plain => PlainWords(VoiceName, Why);
+    }
+
+    /// <summary>
+    /// The words for a voice that can't speak: "ElevenLabs no longer has the
+    /// voice Charlie. Pick another on Voice > Cast." - or, for a Library voice
+    /// on a free plan, that it needs a paid plan.
+    /// </summary>
+    internal static string PlainWords(string voiceName, VoiceRefusal why) => why == VoiceRefusal.NeedsPaidPlan
+        ? $"Library voices need a paid ElevenLabs plan, so {voiceName} can't speak on this key. Pick another on Voice > Cast, or move the key's account to a paid plan."
+        : $"ElevenLabs no longer has the voice {voiceName}. Pick another on Voice > Cast.";
+
+    /// <summary>The voices refused this session, by key hash and voice id, with their name and why. Held in memory only, so a restart asks again.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Name, VoiceRefusal Why)> GoneVoices = new(StringComparer.Ordinal);
+
+    /// <summary>Raised (from any thread) when a voice is first refused, so the Voice tab can say so.</summary>
+    internal static event Action? GoneVoicesChanged;
+
+    private static string GoneKey(string? apiKey, string? voiceId) => KeyHash(apiKey) + ":" + (voiceId ?? string.Empty).Trim();
+
+    /// <summary>The name a voice is said by: its saved name, the retired voice's name, or its id.</summary>
+    private static string NameOf(VoiceProfile profile) =>
+        !string.IsNullOrWhiteSpace(profile.VoiceName) ? profile.VoiceName.Trim()
+        : RetiredVoices.Find(profile.VoiceId)?.Name ?? profile.VoiceId;
+
+    /// <summary>Whether this profile's voice was refused earlier this session - its lines go straight to the stand-in.</summary>
+    internal static bool IsVoiceGone(VoiceProfile profile) => IsVoiceGone(profile.ApiKey, profile.VoiceId);
+
+    /// <summary>The same, by key and voice id - for the pickers.</summary>
+    internal static bool IsVoiceGone(string? apiKey, string? voiceId) => GoneWhy(apiKey, voiceId) is not null;
+
+    /// <summary>Why this voice was refused for this key this session, or null when it wasn't.</summary>
+    internal static VoiceRefusal? GoneWhy(string? apiKey, string? voiceId) =>
+        !string.IsNullOrWhiteSpace(voiceId) && GoneVoices.TryGetValue(GoneKey(apiKey, voiceId), out var gone) ? gone.Why : null;
+
+    /// <summary>The refusal to throw for this profile's voice without asking, or null when it hasn't been refused.</summary>
+    private static VoiceGoneException? GoneVoiceFor(VoiceProfile profile) =>
+        !string.IsNullOrWhiteSpace(profile.VoiceId) && GoneVoices.TryGetValue(GoneKey(profile.ApiKey, profile.VoiceId), out var gone)
+            ? new VoiceGoneException(profile.VoiceId, gone.Name, gone.Why,
+                $"ElevenLabs speech request failed ({(gone.Why == VoiceRefusal.NotFound ? 404 : 402)}): {PlainWords(gone.Name, gone.Why)}")
+            : null;
+
+    /// <summary>The voices refused this session, as the Voice tab says them - one sentence each.</summary>
+    internal static IReadOnlyList<string> GoneVoiceWords() =>
+        GoneVoices.Values.Select(v => PlainWords(v.Name, v.Why)).Distinct(StringComparer.Ordinal).ToList();
+
+    /// <summary>Forgets every refused voice. For tests.</summary>
+    internal static void ForgetGoneVoices() => GoneVoices.Clear();
+
+    /// <summary>
+    /// Remembers a voice refused for this key, says so once in the console,
+    /// and hands back the exception to throw.
+    /// </summary>
+    private static VoiceGoneException NoteGoneVoice(VoiceProfile profile, VoiceRefusal why, int status, string body)
+    {
+        var name = NameOf(profile);
+
+        if (GoneVoices.TryAdd(GoneKey(profile.ApiKey, profile.VoiceId), (name, why)))
+        {
+            try
+            {
+                Notice?.Invoke($"[voice] {PlainWords(name, why)} Until HeatCaller restarts that voice isn't asked again: "
+                    + "the free Kokoro voice says its lines if it is standing in.");
+            }
+            catch
+            {
+                // Saying so is a nicety.
+            }
+
+            try
+            {
+                GoneVoicesChanged?.Invoke();
+            }
+            catch
+            {
+                // As above.
+            }
+        }
+
+        return new VoiceGoneException(profile.VoiceId, name, why, $"ElevenLabs speech request failed ({status}): {body}");
+    }
+
+    // ------------------------------------------------------------------
+    //  Each line taken out of the account's history (24 Nov 2026)
+    // ------------------------------------------------------------------
+
+    /// <summary>The header every speech answer names its history item in.</summary>
+    internal const string HistoryItemHeader = "history-item-id";
+
+    /// <summary>The keys that may not delete from their history (no Speech history permission), by hash - asked once a session.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> KeysWithoutHistoryDelete = new(StringComparer.Ordinal);
+
+    /// <summary>The deletes still under way, so a test can wait for them.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Task, byte> PendingDeletes = new();
+
+    /// <summary>Waits for every delete under way. For tests.</summary>
+    internal static async Task HistoryDeletesSettledAsync()
+    {
+        while (!PendingDeletes.IsEmpty)
+        {
+            await Task.WhenAll(PendingDeletes.Keys.ToArray()).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Forgets every key's missing permission. For tests.</summary>
+    internal static void ForgetHistoryRefusals() => KeysWithoutHistoryDelete.Clear();
+
+    /// <summary>Whether a refused delete says the key lacks the Speech history permission.</summary>
+    internal static bool MissingHistoryPermission(int status, string? body) =>
+        // ElevenLabs' real answer (24 Nov 2026): 401 {"detail":{"type":"authentication_error",
+        // "message":"The API key you used is missing the permission speech_history_write ...",
+        // "status":"missing_permissions"}}.
+        status is 401 or 403
+        && ((body ?? string.Empty).Contains("missing_permissions", StringComparison.OrdinalIgnoreCase)
+            || (body ?? string.Empty).Contains("speech_history", StringComparison.OrdinalIgnoreCase)
+            || (body ?? string.Empty).Contains("permission", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Takes the line this answer made out of the account's history, in the
+    /// background - never on the way to speaking it. Only while "Ask
+    /// ElevenLabs not to keep our lines" is ticked, only by the exact id
+    /// ElevenLabs gave in this answer's history-item-id header (never by
+    /// listing the history or matching words), and not for a key already
+    /// found without the permission.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Nov 2026, Asher, plan step H): enable_logging=false was taken
+    /// with a 200 and quietly ignored on a non-enterprise key, so every line
+    /// - drivers' names in it - stayed in the club's ElevenLabs history. Every
+    /// answer names its history item, with or without the flag, so the line
+    /// is deleted by that id once its audio is in hand. A 404 is already gone.
+    /// </remarks>
+    private static void ForgetLineLater(string? apiKey, HttpResponseMessage response)
+    {
+        try
+        {
+            if (!AskNotToKeepLines()
+                || string.IsNullOrWhiteSpace(apiKey)
+                || !response.Headers.TryGetValues(HistoryItemHeader, out var values)
+                || values.FirstOrDefault()?.Trim() is not { Length: > 0 } itemId
+                || KeysWithoutHistoryDelete.ContainsKey(KeyHash(apiKey)))
+            {
+                return;
+            }
+
+            // The client as it is now, so a delete goes where its line went.
+            var http = Http;
+            var task = Task.Run(() => DeleteHistoryItemAsync(http, apiKey, itemId));
+            PendingDeletes.TryAdd(task, 0);
+            _ = task.ContinueWith(done => PendingDeletes.TryRemove(done, out _), TaskScheduler.Default);
+        }
+        catch
+        {
+            // Never in the way of a line.
+        }
+    }
+
+    /// <summary>DELETE v1/history/{id}. Never throws; a key without the permission is remembered and said once.</summary>
+    private static async Task DeleteHistoryItemAsync(HttpClient http, string apiKey, string itemId)
+    {
+        try
+        {
+            using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var request = new HttpRequestMessage(HttpMethod.Delete, $"https://api.elevenlabs.io/v1/history/{Uri.EscapeDataString(itemId)}");
+            request.Headers.Add("xi-api-key", apiKey);
+
+            using var response = await http.SendAsync(request, limit.Token).ConfigureAwait(false);
+            var status = (int)response.StatusCode;
+
+            if (response.IsSuccessStatusCode || status == 404)
+            {
+                return;
+            }
+
+            if (status is 401 or 403)
+            {
+                var body = await response.Content.ReadAsStringAsync(limit.Token).ConfigureAwait(false);
+
+                if (KeysWithoutHistoryDelete.TryAdd(KeyHash(apiKey), 0) && MissingHistoryPermission(status, body))
+                {
+                    Notice?.Invoke("[voice] " + NoHistoryPermissionWords);
+                }
+            }
+        }
+        catch
+        {
+            // Off the speaking path: a delete that didn't go through is tried
+            // for the next line, and the line itself was already heard.
+        }
+    }
+
+    /// <summary>Said once a session for a key that can't delete from its history.</summary>
+    internal const string NoHistoryPermissionWords =
+        "This ElevenLabs key can't remove lines from its history. Give it the Speech history permission on elevenlabs.io.";
+
+    /// <summary>
+    /// A streamed answer that takes its line out of the history once it is
+    /// given back - played to the end, or stopped part way - since only then
+    /// is the line finished on ElevenLabs' side.
+    /// </summary>
+    private sealed class ForgetWhenDone : HttpResponseMessage
+    {
+        private readonly HttpResponseMessage _inner;
+        private Action? _done;
+
+        public ForgetWhenDone(HttpResponseMessage inner, Action done)
+            : base(inner.StatusCode)
+        {
+            _inner = inner;
+            _done = done;
+            Version = inner.Version;
+            ReasonPhrase = inner.ReasonPhrase;
+            RequestMessage = inner.RequestMessage;
+            Content = inner.Content;
+
+            foreach (var header in inner.Headers)
+            {
+                Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                Interlocked.Exchange(ref _done, null)?.Invoke();
+                _inner.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+    }
+
     public async Task<byte[]> SynthesizeAsync(VoiceProfile profile, string text, CancellationToken ct = default)
     {
         using var response = await SendSpeechAsync(
@@ -239,7 +574,12 @@ public sealed class ElevenLabsClient
             throw new InvalidOperationException($"ElevenLabs speech request failed ({(int)response.StatusCode}): {body}");
         }
 
-        return await response.Content.ReadAsByteArrayAsync(ct);
+        var audio = await response.Content.ReadAsByteArrayAsync(ct);
+
+        // The audio is in hand: the line comes out of the history (plan step H).
+        ForgetLineLater(profile.ApiKey, response);
+
+        return audio;
     }
 
     /// <summary>
@@ -261,6 +601,16 @@ public sealed class ElevenLabsClient
                 var body = await response.Content.ReadAsStringAsync(ct);
                 throw new InvalidOperationException($"ElevenLabs speech request failed ({(int)response.StatusCode}): {body}");
             }
+        }
+
+        // Out of the history once the stream is given back - played, or
+        // stopped part way (plan step H, 24 Nov 2026). Only when there is an
+        // item to take out, so an answer without one is handed on as it came.
+        if (AskNotToKeepLines() && response.Headers.Contains(HistoryItemHeader))
+        {
+            var apiKey = profile.ApiKey;
+            var answered = response;
+            return new ForgetWhenDone(answered, () => ForgetLineLater(apiKey, answered));
         }
 
         return response;
@@ -398,12 +748,29 @@ public sealed class ElevenLabsClient
             return request;
         }
 
-        using var response = await SendSpeechAsync(profile, Build, HttpCompletionOption.ResponseContentRead, ct);
+        HttpResponseMessage answered;
+
+        try
+        {
+            answered = await SendSpeechAsync(profile, Build, HttpCompletionOption.ResponseContentRead, ct);
+        }
+        catch (VoiceGoneException)
+        {
+            // Said once and remembered by SendSpeechAsync. No timings, as for
+            // any refusal: the lines go one at a time, and those go straight
+            // to the stand-in (24 Nov 2026).
+            return null;
+        }
+
+        using var response = answered;
 
         if (!response.IsSuccessStatusCode)
         {
             return null;
         }
+
+        // Made, so it is in the history whatever its shape: out it comes (plan step H).
+        ForgetLineLater(profile.ApiKey, response);
 
         try
         {

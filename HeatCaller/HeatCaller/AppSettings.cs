@@ -2458,6 +2458,11 @@ public sealed class AppSettings
     /// default. A plan that won't take it is asked again without it - see
     /// ElevenLabsClient.SendSpeechAsync. The HeatCaller voice's own key is the
     /// relay's, and the relay asks the same (RELAY_VOICE_NO_LOGGING).
+    ///
+    /// Since 24 Nov 2026 (Asher, plan step H) it also deletes each line from
+    /// the account's history once spoken, by the history-item-id of its own
+    /// answer - the flag alone was quietly ignored on most plans. See
+    /// ElevenLabsClient.ForgetLineLater.
     /// </summary>
     public bool ElevenLabsNoLogging { get; set; } = true;
 
