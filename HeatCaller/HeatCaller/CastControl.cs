@@ -242,6 +242,42 @@ public sealed class CastControl : UserControl
     /// <summary>The same for the co-host, with a line of the kind they answer the announcer with. Set by the host.</summary>
     internal Action<SecondVoice>? SpeakAsCoHost { get; set; }
 
+    // --- ElevenLabs' retired Default voices (24 Nov 2026, Asher) - see RetiredVoices ---
+
+    /// <summary>
+    /// Plays a line in one ElevenLabs voice, by id and name, the way the
+    /// announcer's Test Voice does - ElevenLabs only, never the stand-in, so
+    /// what is heard is the voice offered. Answers null once played, or what
+    /// went wrong in a sentence. Set by the host (VoiceSettingsControl.PlayElevenLabsVoiceAsync).
+    /// </summary>
+    internal Func<string, string, string, Task<string?>>? PlayElevenLabsVoice { get; set; }
+
+    /// <summary>Why ElevenLabs refused this voice id for the key in use this session, or null (ElevenLabsClient.GoneWhy). Set by the host.</summary>
+    internal Func<string, ElevenLabsClient.VoiceRefusal?>? ElevenLabsVoiceGone { get; set; }
+
+    /// <summary>Puts the announcer on an ElevenLabs voice, by id and name, as a pick in their list would. Set by the host.</summary>
+    internal Action<string, string>? UseAnnouncerElevenLabsVoice { get; set; }
+
+    /// <summary>The local date, for whether the retired voices have gone yet. Settable for tests.</summary>
+    internal Func<DateOnly> Today { get; set; } = () => DateOnly.FromDateTime(DateTime.Now);
+
+    /// <summary>
+    /// The line under a seat's voice when that voice is going (or gone):
+    /// what is happening, and Play, Switch and Pick another.
+    /// </summary>
+    private sealed record SeatNotice(
+        RetiredVoices.Seat Seat, Label Words, FlowLayoutPanel Buttons, Button Play, Button Switch, Button Pick,
+        ComboBox Picker, Func<SecondVoice> Voice, Action<RetiredVoices.Voice> SwitchTo);
+
+    /// <summary>One notice per seat on this page, set up in BuildLayout.</summary>
+    private SeatNotice[] _notices = Array.Empty<SeatNotice>();
+
+    /// <summary>"Use HeatCaller's cast", beside Load Voices.</summary>
+    private readonly Button _btnUseHeatCallersCast = new();
+
+    /// <summary>The button's caption, kept in one place for the docs and tests.</summary>
+    internal const string UseHeatCallersCastCaption = "Use HeatCaller's cast";
+
     public CastControl(AppSettings settings)
     {
         _settings = settings;
@@ -297,6 +333,9 @@ public sealed class CastControl : UserControl
         // picked from Kokoro's own list, with Kokoro the engine, is who
         // stands in once the engine is back on ElevenLabs.
         FillStandIns();
+
+        // A voice turned down since, or the 1st of January come (24 Nov 2026).
+        RefreshSeatNotices();
 
         // The AI Commentary tab's "Throw to pit lane" is this switch too
         // (18 Oct 2026), so it is read again in case it was changed there.
@@ -407,6 +446,33 @@ public sealed class CastControl : UserControl
             return holder;
         }
 
+        // The line under a seat's voice while that voice is one ElevenLabs
+        // retires, or one it has turned down this session (24 Nov 2026) -
+        // hidden until then. See RefreshSeatNotices.
+        SeatNotice Notice(FieldGrid grid, RetiredVoices.Seat seat, ComboBox picker, Func<SecondVoice> voice, Action<RetiredVoices.Voice> switchTo)
+        {
+            // A field, not a hint: AddHint draws the row above in to a hint's
+            // gap, which would close every Voice row up while this is hidden.
+            var words = grid.AddField(_textSize.Wear(new Label { AutoSize = true }, () => AppTheme.SmallFont));
+            var play = new Button { Text = "Play" };
+            var change = new Button { Text = "Switch" };
+            var pick = new Button { Text = "Pick another" };
+            var buttons = grid.AddField(Line(play, change, pick));
+            var notice = new SeatNotice(seat, words, buttons, play, change, pick, picker, voice, switchTo);
+
+            play.Click += async (_, _) => await PlayReplacementAsync(notice);
+            change.Click += (_, _) => SwitchSeat(notice);
+            pick.Click += (_, _) =>
+            {
+                picker.Focus();
+                picker.DroppedDown = true;
+            };
+
+            words.Visible = false;
+            buttons.Visible = false;
+            return notice;
+        }
+
         var lblIntro = new Label
         {
             Text = "Everyone on the show with a name and a voice. Apart from the announcer's race calls, they are only "
@@ -431,13 +497,22 @@ public sealed class CastControl : UserControl
 
         var loadGrid = new FieldGrid();
 
-        loadGrid.AddRow("Voices:", Line(Steady(_btnLoadVoices, LoadVoicesCaption), _lblVoiceSource));
+        // HEATCALLER'S CAST IN ONE PRESS (24 Nov 2026, Asher): the six voices
+        // HeatCaller picked, one per seat, ElevenLabs Library voices a club
+        // need not save on elevenlabs.io first. Asks first - it replaces every
+        // ElevenLabs pick on the page.
+        _btnUseHeatCallersCast.Text = UseHeatCallersCastCaption;
+        _btnUseHeatCallersCast.Click += (_, _) => UseHeatCallersCast();
+
+        loadGrid.AddRow("Voices:", Line(Steady(_btnLoadVoices, LoadVoicesCaption), _btnUseHeatCallersCast, _lblVoiceSource));
         loadGrid.AddHint(
             "Fills every voice list on this tab, the announcer's included, from the engine chosen on the Voice tab. Each engine keeps its own picks; "
             + "with none picked, the announcer's own voice speaks. The Kokoro voices on this PC are on every list too, "
             + "whatever the engine: pick one and that speaker talks in Kokoro's free voice even beside an ElevenLabs "
             + "or HeatCaller announcer. Under each voice is the Kokoro voice they switch to if ElevenLabs runs out - "
-            + "and while it is out no saved ElevenLabs line plays, so the night stays in one set of voices.");
+            + "and while it is out no saved ElevenLabs line plays, so the night stays in one set of voices. "
+            + "The ElevenLabs lists also offer HeatCaller's own voice for each seat, marked \"" + RetiredVoices.SuggestedMark + "\"; "
+            + UseHeatCallersCastCaption + " puts all six in at once.");
 
         var voices = new Section("Voices");
 
@@ -517,6 +592,8 @@ public sealed class CastControl : UserControl
         recapHostGrid.AddRow("Name:", _txtRecapHostName);
         recapHostGrid.AddHint("Said when the recap opens and at its sign-off. Blank and the host is never named.");
         recapHostGrid.AddRow("Voice:", Line(_cmbRecapHostVoice, _btnTestRecapHost));
+        var recapHostNotice = Notice(recapHostGrid, RetiredVoices.Seat.RecapHost, _cmbRecapHostVoice, () => _settings.RecapHostVoice,
+            v => (_settings.RecapHostElevenLabsVoiceId, _settings.RecapHostElevenLabsVoiceName, _settings.RecapHostKokoroAlways) = (v.Id, v.Name, false));
         recapHostGrid.AddRow(StandInCaption, Line(_cmbRecapHostStandIn, _btnTestRecapHostStandIn));
 
         Switch(recapHostGrid, _chkBroadcastVoice,
@@ -623,6 +700,8 @@ public sealed class CastControl : UserControl
         coHostGrid.AddRow("Name:", _txtCoHostName);
         coHostGrid.AddHint("Blank and they are talked to but never named - the model never makes one up.");
         coHostGrid.AddRow("Voice:", Line(_cmbCoHostVoice, _btnTestCoHost));
+        var coHostNotice = Notice(coHostGrid, RetiredVoices.Seat.CoHost, _cmbCoHostVoice, () => _settings.CoHostVoice,
+            v => (_settings.CoHostElevenLabsVoiceId, _settings.CoHostElevenLabsVoiceName, _settings.CoHostKokoroAlways) = (v.Id, v.Name, false));
         coHostGrid.AddRow(StandInCaption, Line(_cmbCoHostStandIn, _btnTestCoHostStandIn));
 
         Switch(coHostGrid, _chkCoHost);
@@ -685,6 +764,8 @@ public sealed class CastControl : UserControl
         mechanicGrid.AddRow("Name:", _txtMechanicName);
         mechanicGrid.AddHint("Blank for \"the team's technical lead\" - the model never makes a name up.");
         mechanicGrid.AddRow("Voice:", Line(_cmbMechanicVoice, _btnTestMechanic));
+        var mechanicNotice = Notice(mechanicGrid, RetiredVoices.Seat.TechnicalLead, _cmbMechanicVoice, () => _settings.MechanicVoice,
+            v => (_settings.MechanicElevenLabsVoiceId, _settings.MechanicElevenLabsVoiceName, _settings.MechanicKokoroAlways) = (v.Id, v.Name, false));
         mechanicGrid.AddRow(StandInCaption, Line(_cmbMechanicStandIn, _btnTestMechanicStandIn));
 
         Switch(mechanicGrid, _chkInterview);
@@ -754,6 +835,8 @@ public sealed class CastControl : UserControl
         principalGrid.AddRow("Name:", _txtPrincipalName);
         principalGrid.AddHint("Blank for \"the team principal\" - the model never makes a name up.");
         principalGrid.AddRow("Voice:", Line(_cmbPrincipalVoice, _btnTestPrincipal));
+        var principalNotice = Notice(principalGrid, RetiredVoices.Seat.TeamPrincipal, _cmbPrincipalVoice, () => _settings.PrincipalVoice,
+            v => (_settings.PrincipalElevenLabsVoiceId, _settings.PrincipalElevenLabsVoiceName, _settings.PrincipalKokoroAlways) = (v.Id, v.Name, false));
         principalGrid.AddRow(StandInCaption, Line(_cmbPrincipalStandIn, _btnTestPrincipalStandIn));
 
         Switch(principalGrid, _chkPrincipalBefore,
@@ -857,6 +940,8 @@ public sealed class CastControl : UserControl
         honoursGrid.AddRow("Name:", _txtHonoursName);
         honoursGrid.AddHint("Blank and they are thrown to but never named - no name is made up.");
         honoursGrid.AddRow("Voice:", Line(_cmbHonoursVoice, _btnTestHonours));
+        var honoursNotice = Notice(honoursGrid, RetiredVoices.Seat.Achievements, _cmbHonoursVoice, () => _settings.HonoursVoice,
+            v => (_settings.HonoursElevenLabsVoiceId, _settings.HonoursElevenLabsVoiceName, _settings.HonoursKokoroAlways) = (v.Id, v.Name, false));
         honoursGrid.AddRow(StandInCaption, Line(_cmbHonoursStandIn, _btnTestHonoursStandIn));
 
         Switch(honoursGrid, _chkBadgeHonours,
@@ -924,6 +1009,12 @@ public sealed class CastControl : UserControl
         }
 
         FillStandIns();
+
+        _notices = new[] { recapHostNotice, coHostNotice, mechanicNotice, principalNotice, honoursNotice };
+
+        // A voice turned down while this page is open is said under it too.
+        ElevenLabsClient.GoneVoicesChanged += OnGoneVoicesChanged;
+        Disposed += (_, _) => ElevenLabsClient.GoneVoicesChanged -= OnGoneVoicesChanged;
 
         Controls.Add(page);
 
@@ -1337,6 +1428,16 @@ public sealed class CastControl : UserControl
 
         var choices = (loaded ?? Array.Empty<VoiceChoice>()).ToList();
 
+        // HeatCaller's own voice for each seat (24 Nov 2026, Asher), marked,
+        // on every ElevenLabs list whether or not Load Voices was pressed:
+        // ElevenLabs Library voices, which the account's own list doesn't
+        // have unless the club saved them. One the account has is shown as
+        // its own and not twice.
+        if (shown == VoiceEngine.ElevenLabs)
+        {
+            choices.AddRange(SuggestedChoices(choices));
+        }
+
         // And every other engine's lists end with them (25 Oct 2026), so any
         // of the cast can be given a Kokoro voice whatever the announcer uses.
         _kokoroOffered = KokoroOffered(shown);
@@ -1408,7 +1509,17 @@ public sealed class CastControl : UserControl
         _honoursVoiceWidth = null;
         _recapHostVoiceWidth = null;
         SizeFields();
+        RefreshSeatNotices();
     }
+
+    /// <summary>
+    /// HeatCaller's six voices as ElevenLabs list entries, marked "Suggested
+    /// by HeatCaller", less any already among <paramref name="listed"/>.
+    /// </summary>
+    internal static IEnumerable<VoiceChoice> SuggestedChoices(IReadOnlyCollection<VoiceChoice> listed) =>
+        RetiredVoices.Suggested
+            .Where(s => !listed.Any(c => !c.IsKokoro && string.Equals(c.Id, s.Voice.Id, StringComparison.Ordinal)))
+            .Select(s => new VoiceChoice(s.Voice.Id, s.Voice.Name, string.Empty, RetiredVoices.SuggestedLabel(s.Voice)));
 
     // ==================== If ElevenLabs runs out ====================
 
@@ -1774,6 +1885,181 @@ public sealed class CastControl : UserControl
         }
 
         _settings.Save();
+    }
+
+    // ==================== Retired and refused voices (24 Nov 2026) ====================
+
+    /// <summary>ElevenLabsClient said a voice was turned down - from any thread.</summary>
+    private void OnGoneVoicesChanged()
+    {
+        if (IsDisposed || !IsHandleCreated)
+        {
+            return;
+        }
+
+        try
+        {
+            BeginInvoke(RefreshSeatNotices);
+        }
+        catch (InvalidOperationException)
+        {
+            // The handle went between the check and the post.
+        }
+    }
+
+    /// <summary>
+    /// What a seat's notice says, and which of its buttons show: the
+    /// retirement line with Play, Switch and Pick another while the seat is
+    /// on one of ElevenLabs' Default voices; the plain "no longer has the
+    /// voice" line with Pick another when ElevenLabs turned the voice down
+    /// this session; nothing otherwise. Only while the lists show
+    /// ElevenLabs - another engine's pick has nothing to do with it.
+    /// </summary>
+    internal static (string? Words, bool Offer) SeatNoticeFor(
+        VoiceEngine shown, SecondVoice voice, RetiredVoices.Seat seat, DateOnly today, Func<string, ElevenLabsClient.VoiceRefusal?>? gone)
+    {
+        if (shown != VoiceEngine.ElevenLabs || voice.SpeaksKokoroWith(shown) || string.IsNullOrWhiteSpace(voice.ElevenLabsVoiceId))
+        {
+            return (null, false);
+        }
+
+        if (RetiredVoices.SeatNotice(voice.ElevenLabsVoiceId, seat, today) is { } retiring)
+        {
+            return (retiring, true);
+        }
+
+        if (gone?.Invoke(voice.ElevenLabsVoiceId) is { } why)
+        {
+            var name = string.IsNullOrWhiteSpace(voice.ElevenLabsVoiceName) ? voice.ElevenLabsVoiceId : voice.ElevenLabsVoiceName;
+            return (ElevenLabsClient.PlainWords(name, why).Replace(" on Voice > Cast", string.Empty, StringComparison.Ordinal), false);
+        }
+
+        return (null, false);
+    }
+
+    /// <summary>Each seat's notice set out again - see SeatNoticeFor.</summary>
+    private void RefreshSeatNotices()
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        var today = Today();
+
+        foreach (var notice in _notices)
+        {
+            var (words, offer) = SeatNoticeFor(_voiceListEngine, notice.Voice(), notice.Seat, today, ElevenLabsVoiceGone);
+
+            notice.Words.Text = words ?? string.Empty;
+            notice.Words.ForeColor = AppTheme.Warning;
+            notice.Words.Visible = words is not null;
+            notice.Buttons.Visible = words is not null;
+            notice.Play.Visible = offer;
+            notice.Switch.Visible = offer;
+            notice.Play.Enabled = offer && PlayElevenLabsVoice is not null;
+        }
+
+        _btnUseHeatCallersCast.Enabled = _voiceListEngine == VoiceEngine.ElevenLabs;
+    }
+
+    /// <summary>Plays the line the seat would move to in its replacement voice - ElevenLabs only (PlayElevenLabsVoice).</summary>
+    private async Task PlayReplacementAsync(SeatNotice notice)
+    {
+        if (PlayElevenLabsVoice is not { } play)
+        {
+            return;
+        }
+
+        var to = RetiredVoices.SeatDefault(notice.Seat);
+        notice.Play.Enabled = false;
+        notice.Words.Text = $"Playing {to.ShortName}...";
+
+        string? problem;
+
+        try
+        {
+            problem = await play(to.Id, to.Name, $"This is {to.ShortName}, the {RetiredVoices.SeatWords(notice.Seat)} for tonight's racing.");
+        }
+        catch (Exception ex)
+        {
+            problem = ex.Message;
+        }
+
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        RefreshSeatNotices();
+
+        if (problem is not null)
+        {
+            notice.Words.Text = problem;
+        }
+    }
+
+    /// <summary>Moves a seat to its HeatCaller voice, saved, and sets the lists out again.</summary>
+    private void SwitchSeat(SeatNotice notice)
+    {
+        notice.SwitchTo(RetiredVoices.SeatDefault(notice.Seat));
+        _settings.Save();
+        FillVoices(_voiceListEngine);
+        RefreshEnabledState();
+
+        // The reserved voices drivers can't pick follow the cast (DriverCrew.Reserved).
+        CrewChanged?.Invoke();
+    }
+
+    /// <summary>The question "Use HeatCaller's cast" asks first.</summary>
+    internal static string HeatCallersCastQuestion() =>
+        "Give every seat HeatCaller's own ElevenLabs voice?\n\n"
+        + string.Join("\n", RetiredVoices.Suggested.Select(s => $"{Capitalised(RetiredVoices.SeatWords(s.Seat))}: {s.Voice.Name}"))
+        + "\n\nThis replaces the ElevenLabs voice picked for each of them. They are ElevenLabs Library voices: "
+        + "they need a paid ElevenLabs plan, and nothing has to be saved on elevenlabs.io first.";
+
+    private static string Capitalised(string words) => words.Length == 0 ? words : char.ToUpperInvariant(words[0]) + words[1..];
+
+    /// <summary>
+    /// Puts HeatCaller's six voices in every seat's ElevenLabs pick: the five
+    /// on this page in <paramref name="settings"/>, each speaking in it
+    /// (no Kokoro voice for every engine), and the announcer's id and name
+    /// for the host to put in their own list.
+    /// </summary>
+    internal static RetiredVoices.Voice ApplyHeatCallersCast(AppSettings settings)
+    {
+        (settings.CoHostElevenLabsVoiceId, settings.CoHostElevenLabsVoiceName) = Pair(RetiredVoices.Seat.CoHost);
+        (settings.MechanicElevenLabsVoiceId, settings.MechanicElevenLabsVoiceName) = Pair(RetiredVoices.Seat.TechnicalLead);
+        (settings.PrincipalElevenLabsVoiceId, settings.PrincipalElevenLabsVoiceName) = Pair(RetiredVoices.Seat.TeamPrincipal);
+        (settings.HonoursElevenLabsVoiceId, settings.HonoursElevenLabsVoiceName) = Pair(RetiredVoices.Seat.Achievements);
+        (settings.RecapHostElevenLabsVoiceId, settings.RecapHostElevenLabsVoiceName) = Pair(RetiredVoices.Seat.RecapHost);
+
+        settings.CoHostKokoroAlways = false;
+        settings.MechanicKokoroAlways = false;
+        settings.PrincipalKokoroAlways = false;
+        settings.HonoursKokoroAlways = false;
+        settings.RecapHostKokoroAlways = false;
+
+        return RetiredVoices.SeatDefault(RetiredVoices.Seat.Announcer);
+
+        static (string, string) Pair(RetiredVoices.Seat seat) => (RetiredVoices.SeatDefault(seat).Id, RetiredVoices.SeatDefault(seat).Name);
+    }
+
+    /// <summary>"Use HeatCaller's cast": asked first, No the default, then every seat filled.</summary>
+    private void UseHeatCallersCast()
+    {
+        if (AppDialog.Show(this, HeatCallersCastQuestion(), UseHeatCallersCastCaption, MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        var announcer = ApplyHeatCallersCast(_settings);
+        _settings.Save();
+        UseAnnouncerElevenLabsVoice?.Invoke(announcer.Id, announcer.Name);
+        FillVoices(_voiceListEngine);
+        RefreshEnabledState();
+        CrewChanged?.Invoke();
     }
 
     /// <summary>

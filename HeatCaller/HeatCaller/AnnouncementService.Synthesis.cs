@@ -495,6 +495,14 @@ public sealed partial class AnnouncementService
             return await RenderWithStandInAsync(profile, asWritten);
         }
 
+        // A voice ElevenLabs turned down for good this session (24 Nov 2026,
+        // see the VoiceGoneException catch below): straight to the stand-in,
+        // with no slot waited for and no background try in that voice.
+        if (ElevenLabsClient.IsVoiceGone(profile))
+        {
+            return await RenderWithStandInAsync(profile, asWritten);
+        }
+
         // Resting after a lost connection, or a key ElevenLabs turned down:
         // this line doesn't wait on the network at all. Once a rest period,
         // one line is also tried through ElevenLabs in the background, to
@@ -519,6 +527,16 @@ public sealed partial class AnnouncementService
             // Nobody will hear it (RenderCancel): not a lost connection, so
             // ElevenLabs is not rested and nothing stands in.
             throw;
+        }
+        catch (ElevenLabsClient.VoiceGoneException)
+        {
+            // WHY (24 Nov 2026, Asher: the Default voices retire on 31 Dec
+            // 2026): a voice ElevenLabs no longer has was a 404 every line,
+            // said as "couldn't speak a line (404 - ...)". ElevenLabsClient
+            // has said it plainly once and rests that voice only - the next
+            // line in it is not even asked for - so Kokoro takes it quietly
+            // here, and the other voices on the show carry on in ElevenLabs.
+            return await RenderWithStandInAsync(profile, asWritten);
         }
         catch (Exception ex) when (IsConnectionFailure(ex))
         {
@@ -1260,6 +1278,14 @@ public sealed partial class AnnouncementService
             return NotConfiguredReason(profile);
         }
 
+        // A voice ElevenLabs turned down for good this session (24 Nov 2026):
+        // Kokoro stands in for it, so a take it made stays good, and the
+        // Mixer says why.
+        if (ElevenLabsClient.IsVoiceGone(profile))
+        {
+            return $"ElevenLabs can't speak in the voice {(string.IsNullOrWhiteSpace(profile.VoiceName) ? profile.VoiceId : profile.VoiceName)}";
+        }
+
         if (_voiceQuotaExceeded)
         {
             return "the ElevenLabs quota is used up";
@@ -1335,8 +1361,18 @@ public sealed partial class AnnouncementService
     /// take is better than silence. The quota coming back - the next answer
     /// from ElevenLabs, NoteElevenLabsAnswered - ends it by itself.
     /// </summary>
+    /// <remarks>
+    /// WHY (24 Nov 2026, Asher: ElevenLabs retires its Default voices on 31
+    /// Dec 2026): and a voice ElevenLabs no longer has (or won't let this key
+    /// use) counts the same as the quota, for the same reason - its saved
+    /// lines played on in the old voice between Kokoro's new ones, a night in
+    /// two voices for one speaker. See ElevenLabsClient.IsVoiceGone.
+    /// </remarks>
     private bool ElevenLabsSavedLinesPassedOver(VoiceProfile profile) =>
-        PassesOverSavedElevenLabs(profile, ElevenLabsAllowanceUsedUp(profile), KokoroSpeech.IsAvailable);
+        PassesOverSavedElevenLabs(
+            profile,
+            ElevenLabsAllowanceUsedUp(profile) || (profile.EffectiveEngine == VoiceEngine.ElevenLabs && ElevenLabsClient.IsVoiceGone(profile)),
+            KokoroSpeech.IsAvailable);
 
     /// <summary>
     /// Whether the ElevenLabs meter on the usage chip says the club's own

@@ -11,7 +11,7 @@ Everything to do with the announcer speaking is on the **Voice** page (called **
 | Tab | What's on it |
 |---|---|
 | **Voice** | Which voice speaks, [race calls on or off](#race-calls-on-or-off), your own ElevenLabs connection, the voice's tuning, and the lines saved on the laptop. Covered from [Choose the voice](#choose-the-voice) down to [Saved voice lines](#saved-voice-lines). (Called **Voice Settings** before 17 October.) |
-| **Cast** | **Load Voices** at the top, which fills every voice list on the tab, then the announcer's voice with **Test Voice**, and everyone else on the show below it. See [Choose the voice](#choose-the-voice) for the announcer, and [Commentary](commentary.md#technical-lead-and-team-principal) for the rest. |
+| **Cast** | **Load Voices** at the top, which fills every voice list on the tab, and **Use HeatCaller's cast** beside it (see [HeatCaller's suggested voices](#heatcallers-suggested-voices)), then the announcer's voice with **Test Voice**, and everyone else on the show below it. See [Choose the voice](#choose-the-voice) for the announcer, and [Commentary](commentary.md#technical-lead-and-team-principal) for the rest. |
 | **Race Calls** | One row for each moment the announcer can call: whether it's on for races and for practice, and the lines it picks from (called **Announcements** before 17 October). See [Announcements](#announcements). Under the rows, the **How often** card sets how many calls a lap gets, the gap between them and what counts as a streak; see [How often](#how-often). Its last section, **Rivalries**, holds lines for two particular drivers swapping places; see [Rivalries](#rivalries). |
 | **AI Commentary** | Race intros, recaps and talking points, written through your club's relay or by the small model built into HeatCaller. It has [its own page](commentary.md). |
 
@@ -314,6 +314,58 @@ The key and the model are on the **ElevenLabs connection** card on **Voice → V
 There's no Save button. Every change on this tab saves as you make it, and the line at the bottom of the tab shows "Saved automatically at" and the time. Races use the new settings straight away.
 
 <!-- screenshot: Voice tab, ElevenLabs connection card with API key hidden, voice and model selected -->
+
+### HeatCaller's suggested voices
+
+Every ElevenLabs voice list on **Voice → Cast** — **ElevenLabs voice:** on the **Announcer** card and each speaker's **Voice:** — also offers six voices HeatCaller picked, one for each seat, marked "Suggested by HeatCaller", for example "Suggested by HeatCaller: Finley - Articulate Anchor". They're on the lists before you press **Load Voices**, and you don't need to save them to your ElevenLabs account first. A suggested voice your account already has is listed once, as your own.
+
+| Seat | HeatCaller's voice |
+|---|---|
+| Announcer | Finley - Articulate Anchor |
+| Co-host | Alicia - Polished Global Anchor |
+| Technical Lead | Wyatt - Seasoned Mentor |
+| Team Principal | Darian - Warm Grounded Storyteller |
+| Achievements reader | Elowen - Upbeat Modern Narrator |
+| Recap host | Baxter - Dry Calm Aussie |
+
+To put all six in at once, press **Use HeatCaller's cast** beside **Load Voices** on the **Voices** card. It lists the six and asks first, because it replaces the ElevenLabs voice picked for every seat; **No** is the default. A speaker who had a Kokoro voice picked for every engine goes back to speaking in the ElevenLabs voice. The button is grayed out unless the lists show ElevenLabs voices.
+
+If no announcer voice has been picked yet, **Load Voices** picks Finley rather than the first voice on your account.
+
+These are ElevenLabs Library voices, and ElevenLabs' free plan can't use Library voices through a key. On a free plan, a line in one is said by the Kokoro stand-in, and the page and the console say: "Library voices need a paid ElevenLabs plan, so *the voice* can't speak on this key. Pick another on Voice > Cast, or move the key's account to a paid plan." <!-- TODO: confirm the exact refusal ElevenLabs gives a free-plan key for a Library voice; HeatCaller matches "free_users_not_allowed". -->
+
+Drivers who pick their own crew are offered the six too (less the announcer's and co-hosts' voices, which drivers are never offered). See [Commentary](commentary.md#technical-lead-and-team-principal).
+
+### ElevenLabs' retired voices
+
+ElevenLabs retires its 19 Default voices (Daniel, Charlie, Alice, Bill, Jessica, Will, Liam, Harry, George, Roger, Sarah, Laura, Callum, River, Matilda, Eric, Chris, Brian and Lily) on 31 December 2026; they stop working after that. HeatCaller knows them by their ElevenLabs id, so a voice of your own that happens to be called Charlie isn't affected.
+
+While a seat on **Voice → Cast** is on one of them, a line under its voice says so, for example "ElevenLabs retires Charlie on 31 December. Switch to Darian?", with three buttons:
+
+| Button | What it does |
+|---|---|
+| **Play** | Says a short line in the voice it would switch to, through ElevenLabs and your key, the way **Test Voice** does. Kokoro never says it for ElevenLabs, so what you hear is the voice on offer. |
+| **Switch** | Puts the seat on HeatCaller's voice for it (see the table above) and saves. |
+| **Pick another** | Opens the seat's voice list, so you can choose any other voice. |
+
+The announcer's line is under **ElevenLabs voice:** on the **Announcer** card, and each of the rest of the cast has theirs under **Voice:**. The lines only show while the lists show ElevenLabs voices.
+
+**From 1 January 2027** (by the laptop's own date), a seat still on a retired voice switches to HeatCaller's voice for it by itself as HeatCaller starts, and the console says so once for each, for example "[voice] ElevenLabs retired Charlie on 31 December, so the Team Principal now speaks as Darian (Darian - Warm Grounded Storyteller). Pick another on Voice > Cast." A driver's own crew voice on a retired voice moves to ElevenLabs' own replacement for it (Jessica to Jade - Upbeat and Natural, for example), and the console says how many moved. Callum has no replacement ElevenLabs can speak, so a driver's crew voice on Callum goes back to the club's voice for that role.
+
+Saved lines are kept for each voice, so a seat that switches has its lines made afresh in the new voice. None of the old voice's saved lines plays beside them.
+
+### When ElevenLabs no longer has a voice
+
+If ElevenLabs answers that it doesn't have a voice any more — retired, or deleted from your account — HeatCaller stops asking for that voice until it's restarted. Its lines go straight to the Kokoro stand-in (when it's ticked), its saved lines are held back so the night stays in one voice, and every other voice on the show carries on in ElevenLabs. It's said once in the console and on **Voice → Voice** under **Speak with**: "ElevenLabs no longer has the voice Charlie. Pick another on Voice > Cast." On **Voice → Cast**, the seat on that voice shows "ElevenLabs no longer has the voice Charlie. Pick another." with **Pick another**.
+
+### Don't keep our lines
+
+**Ask ElevenLabs not to keep our lines, and remove each from its history**, under the ElevenLabs choice on **Voice → Voice**, is ticked by default. With it ticked:
+
+- Each line asks ElevenLabs not to keep it. Some ElevenLabs plans don't offer that; the line is then sent without it, and the console says so once.
+- Once a line has been spoken (or, for a streamed line, once it has finished or been cut off), HeatCaller deletes it from your ElevenLabs account's history. It deletes only the line it has just made, never anything else in the history, and never on the way to speaking a line, so a call is never held up for it.
+
+Deleting needs the key to have the **Speech history** permission. Without it the console says once: "This ElevenLabs key can't remove lines from its history. Give it the Speech history permission on elevenlabs.io." Lines are still spoken; they just stay in the history until you give the key that permission (it's asked again after a restart). ElevenLabs may keep backups of deleted lines for up to 30 days.
 
 ### Where the key is kept
 
@@ -677,6 +729,7 @@ With ElevenLabs chosen and **If ElevenLabs can't speak a line - no key, no inter
 | ElevenLabs refuses a line because the quota is used up | ElevenLabs is still asked first for each line (the refusal is quick), Kokoro says the line, and saved ElevenLabs lines are held back as above. This covers a meter that's a few minutes behind, or a key that can't read its plan. The console says "[voice] ElevenLabs quota exceeded - the free Kokoro voice is standing in until it's back, each of the cast in their own Kokoro voice. ..." ElevenLabs, and its saved lines, take over again by themselves the moment a request succeeds, for example after you top up or your monthly allowance resets. |
 | No internet, or a request that times out | ElevenLabs "rests": lines go straight to Kokoro with no wait, and ElevenLabs is tried again in the background about once a minute until it answers. The console then says "[voice] ElevenLabs is reachable again - it speaks from the next line, and the Kokoro voice stands down." |
 | ElevenLabs turns the API key down, for example a wrong or revoked key | ElevenLabs rests in the same way, and the console says "[voice] ElevenLabs turned the API key down (...) - the free Kokoro voice is standing in. ..." It's tried again in the background about once a minute, and straight away once you change the key on **Voice → Voice**. |
+| ElevenLabs no longer has the voice (retired, or deleted from your account), or it's a Library voice on a free plan | That voice isn't asked for again until HeatCaller restarts: its lines go straight to Kokoro and its saved lines are held back, while the other voices carry on in ElevenLabs. Said once. See [When ElevenLabs no longer has a voice](#when-elevenlabs-no-longer-has-a-voice). |
 | Any other refusal, such as too many requests or a server error | Kokoro says that line, and ElevenLabs is asked again for the next one. The reason is written to the console once, not for every line. |
 | A line waited 30 seconds for its turn, because HeatCaller already had its two requests going to ElevenLabs | The same as any other refusal. That's this laptop's own queue, not ElevenLabs being out of reach, so ElevenLabs doesn't rest for it. |
 
@@ -790,6 +843,10 @@ Rivalries are also given to the commentary model (the relay's, or the one built 
 | The whole night is in the Kokoro voice, including lines that used to be in the HeatCaller voice | The month's allowance is used up. Saved lines are passed over too, on purpose, so the night is one voice. | Wait for the allowance to start again — the console line says when. Nothing is lost. Or switch to your own ElevenLabs key. See [When the HeatCaller voice can't speak a line](#when-the-heatcaller-voice-cant-speak-a-line). |
 | "Couldn't load the ElevenLabs voices - there's no ElevenLabs API key on the Voice tab." when pressing **Load Voices** on **Voice → Cast** | The **API Key:** box on **Voice → Voice** is empty. | Paste your key. |
 | "Enter an API key on the Voice tab, and pick a voice, first." when pressing **Test Voice** beside **ElevenLabs voice:** | The **API Key:** box on **Voice → Voice** is empty, or no voice is picked in **ElevenLabs voice:**. | Paste your key, then press **Load Voices** and pick a voice. |
+| "ElevenLabs no longer has the voice *name*. Pick another on Voice > Cast." | ElevenLabs has retired the voice, or it was deleted from your account. | Pick another voice for that seat on **Voice → Cast**, or press **Use HeatCaller's cast**. See [ElevenLabs' retired voices](#elevenlabs-retired-voices). |
+| "Library voices need a paid ElevenLabs plan, ..." | A suggested voice was picked on a free ElevenLabs plan. | Pick a voice saved on your own account, or move to a paid plan and restart HeatCaller. |
+| "ElevenLabs retires *name* on 31 December. Switch to *name*?" under a voice on **Voice → Cast** | That seat is on one of ElevenLabs' Default voices. | Press **Play** to hear the replacement, then **Switch**, or **Pick another**. |
+| "This ElevenLabs key can't remove lines from its history. Give it the Speech history permission on elevenlabs.io." | The key hasn't the **Speech history** permission, so spoken lines stay in your ElevenLabs history. | Give the key that permission on elevenlabs.io and restart HeatCaller. See [Don't keep our lines](#dont-keep-our-lines). |
 | "Failed to load voices:" followed by a message | ElevenLabs refused the key, or there's no internet. | Check the key and the connection. |
 | "Test failed:" followed by a code and message | ElevenLabs rejected the request. The message says why. | Common causes: wrong key, quota used up, or an **Output format:** your plan doesn't allow. Clear **Output format:** first. |
 | Lines appear on screen but nothing is spoken | Muted; Kokoro chosen on a PC that hasn't got its voice file, or where it won't load; ElevenLabs chosen with no key, no voice or no quota left and no stand-in (the box is unticked, or Kokoro can't speak); or the HeatCaller voice chosen with no voice picked on a PC where Kokoro can't stand in. | Check **Sounds → Mixer**: it shows "NO VOICE:" and the reason. For anything to do with Kokoro, press **Download** under the Kokoro choice on **Voice → Voice**. See [When nothing can speak](#when-nothing-can-speak). |

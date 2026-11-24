@@ -845,6 +845,52 @@ public sealed partial class VoiceSettingsControl : UserControl
         _announcerVoiceGrid.AddHint(_lblTestStatus);
         _elevenLabsVoiceRow.AddRange(new Control[] { elevenLabsCaption, elevenLabsLine, _lblTestStatus });
 
+        // The announcer's line for a voice ElevenLabs retires, or has turned
+        // down (24 Nov 2026, Asher), with Play, Switch and Pick another - the
+        // same line each seat on the Cast tab has. Hidden until then, and
+        // kept out of the row above so showing the row doesn't show it.
+        // A field, not a hint: AddHint draws the line above in to a hint's
+        // gap, which would close the test line up while this is hidden.
+        _lblAnnouncerNotice.AutoSize = true;
+        _textSize.Wear(_lblAnnouncerNotice, () => AppTheme.SmallFont);
+        _announcerVoiceGrid.AddField(_lblAnnouncerNotice);
+        _announcerNoticeButtons = _announcerVoiceGrid.AddField(
+            FieldGrid.Inline(_btnAnnouncerNoticePlay, _btnAnnouncerNoticeSwitch, _btnAnnouncerNoticePick));
+        _lblAnnouncerNotice.Visible = false;
+        _announcerNoticeButtons.Visible = false;
+
+        var finley = RetiredVoices.SeatDefault(RetiredVoices.Seat.Announcer);
+
+        _btnAnnouncerNoticePlay.Click += async (_, _) =>
+        {
+            _btnAnnouncerNoticePlay.Enabled = false;
+            _lblAnnouncerNotice.Text = $"Playing {finley.ShortName}...";
+            var problem = await PlayElevenLabsVoiceAsync(finley.Id, finley.Name, $"This is {finley.ShortName}, the announcer for tonight's racing.");
+
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            _btnAnnouncerNoticePlay.Enabled = true;
+            RefreshAnnouncerNotice();
+
+            if (problem is not null)
+            {
+                _lblAnnouncerNotice.Text = problem;
+            }
+        };
+        _btnAnnouncerNoticeSwitch.Click += (_, _) => SelectAnnouncerElevenLabsVoice(finley.Id, finley.Name);
+        _btnAnnouncerNoticePick.Click += (_, _) =>
+        {
+            _cmbVoice.Focus();
+            _cmbVoice.DroppedDown = true;
+        };
+        _cmbVoice.SelectedIndexChanged += (_, _) => RefreshAnnouncerNotice();
+
+        ElevenLabsClient.GoneVoicesChanged += OnGoneVoicesChanged;
+        Disposed += (_, _) => ElevenLabsClient.GoneVoicesChanged -= OnGoneVoicesChanged;
+
         // Kokoro: the voice and Test Voice, and what the test said. Its
         // Download, and whether it is ready, stay on the Voice tab.
         _lblKokoroTestStatus.AutoSize = true;
@@ -933,12 +979,18 @@ public sealed partial class VoiceSettingsControl : UserControl
             {
                 label.Text = caption;
             }
+
+            _elevenLabsRowShown = elevenLabs;
+            RefreshAnnouncerNotice();
         }
         finally
         {
             _announcerVoiceGrid.ResumeLayout(true);
         }
     }
+
+    /// <summary>Whether the announcer's ElevenLabs row is set to show - see ShowAnnouncerVoiceRows. Its notice shows with it.</summary>
+    private bool _elevenLabsRowShown;
 
     /// <summary>
     /// The fields' sizes at the text size in use. The pickers are as wide as
@@ -1449,7 +1501,11 @@ public sealed partial class VoiceSettingsControl : UserControl
         // enable_logging=false with every line spoken on the club's key; a
         // plan that won't take it is asked again without it, so nothing goes
         // quiet - see ElevenLabsClient.SendSpeechAsync.
-        _chkElevenLabsNoLogging.Text = "Ask ElevenLabs not to keep our lines";
+        // WHY (24 Nov 2026, Asher, plan step H): the flag alone was taken and
+        // quietly ignored on most plans, so lines stayed in the account's
+        // history. Each line is now deleted from it once spoken too
+        // (ElevenLabsClient.ForgetLineLater), and the caption says so.
+        _chkElevenLabsNoLogging.Text = "Ask ElevenLabs not to keep our lines, and remove each from its history";
         _chkElevenLabsNoLogging.AutoSize = true;
         _chkElevenLabsNoLogging.Checked = _appSettings.ElevenLabsNoLogging;
         _chkElevenLabsNoLogging.CheckedChanged += (_, _) =>
@@ -1466,8 +1522,10 @@ public sealed partial class VoiceSettingsControl : UserControl
         var noLoggingTip = new ToolTip();
         AppTheme.StyleToolTip(noLoggingTip);
         noLoggingTip.SetToolTip(_chkElevenLabsNoLogging,
-            "Asks ElevenLabs to delete each line once it's spoken (its zero-retention mode). Some ElevenLabs plans "
-            + "don't offer it - then lines are sent without it, and the console says so once.");
+            "Asks ElevenLabs not to keep each line (its zero-retention mode), and removes each line from the account's "
+            + "history once it has been spoken. Some ElevenLabs plans don't offer zero retention - then lines are sent "
+            + "without it, and the console says so once. Removing lines needs the key to have the Speech history "
+            + "permission. ElevenLabs may keep backups for up to 30 days.");
 
         // OFFLINE VOICES FOR JUNIORS (15 Nov 2026, children's privacy, plan
         // 2.3). Off by default: Kokoro sounds plainer than the cloud voices.
@@ -3188,6 +3246,16 @@ public sealed partial class VoiceSettingsControl : UserControl
                     : $"Speaking with {chosen}. A line it can't speak is skipped - tick the box above to have the free Kokoro voice say it instead.";
 
                 _lblSpeakingStatus.ForeColor = standsBy && !kokoroReady ? AppTheme.Warning : AppTheme.TextMuted;
+
+                // A voice ElevenLabs turned down this session (24 Nov 2026,
+                // Asher): said here, in place of the usual line, so the club
+                // reads it without the console. One voice is enough to say;
+                // the console said each.
+                if (!heatCallerChosen && ElevenLabsClient.GoneVoiceWords() is { Count: > 0 } gone)
+                {
+                    _lblSpeakingStatus.Text = gone[0] + (gone.Count > 1 ? $" (And {Plural.Of(gone.Count - 1, "other voice")} - see the console.)" : string.Empty);
+                    _lblSpeakingStatus.ForeColor = AppTheme.Warning;
+                }
             }
         }
 
@@ -3516,12 +3584,21 @@ public sealed partial class VoiceSettingsControl : UserControl
 
         // --- Voice ---
         _cmbVoice.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cmbVoice.DisplayMember = nameof(ElevenLabsClient.VoiceInfo.Name);
+        _cmbVoice.DisplayMember = nameof(ElevenLabsClient.VoiceInfo.Shown);
 
         if (!string.IsNullOrWhiteSpace(current.VoiceId))
         {
             _cmbVoice.Items.Add(new ElevenLabsClient.VoiceInfo(current.VoiceId, string.IsNullOrWhiteSpace(current.VoiceName) ? current.VoiceId : current.VoiceName));
             _cmbVoice.SelectedIndex = 0;
+        }
+
+        // HeatCaller's six on the list from the start (24 Nov 2026, Asher):
+        // they need no Load Voices, being looked up by id. Selecting nothing
+        // here - a club with no voice saved picks one, or gets Finley when
+        // Load Voices fills the list (LoadAnnouncerElevenLabsVoicesAsync).
+        foreach (var suggested in SuggestedVoiceInfos(_cmbVoice.Items.Cast<ElevenLabsClient.VoiceInfo>()))
+        {
+            _cmbVoice.Items.Add(suggested);
         }
 
         // --- Model ---
@@ -4451,6 +4528,14 @@ public sealed partial class VoiceSettingsControl : UserControl
                     _cmbVoice.Items.Add(v);
                 }
 
+                // HeatCaller's six after the account's own (24 Nov 2026),
+                // before the "not in this account" check below - a voice
+                // saved from them is on the list, not missing from it.
+                foreach (var suggested in SuggestedVoiceInfos(voices))
+                {
+                    _cmbVoice.Items.Add(suggested);
+                }
+
                 if (previouslySelected is not null)
                 {
                     var found = false;
@@ -4487,7 +4572,11 @@ public sealed partial class VoiceSettingsControl : UserControl
                 }
                 else if (_cmbVoice.Items.Count > 0)
                 {
-                    _cmbVoice.SelectedIndex = 0;
+                    // WHY (24 Nov 2026, Asher): HeatCaller's announcer voice
+                    // when nothing is saved, not whichever voice the account
+                    // lists first - often one of the Default voices
+                    // ElevenLabs retires on 31 December.
+                    _cmbVoice.SelectedIndex = Math.Max(0, IndexOfVoice(RetiredVoices.SeatDefault(RetiredVoices.Seat.Announcer).Id));
                 }
             }
             finally
@@ -4520,6 +4609,176 @@ public sealed partial class VoiceSettingsControl : UserControl
             {
                 _lblTestStatus.Text = $"Failed to load voices: {ex.Message}";
             }
+        }
+    }
+
+    // ==================== ElevenLabs' retired voices (24 Nov 2026, Asher) ====================
+
+    /// <summary>
+    /// HeatCaller's six voices as entries for the announcer's ElevenLabs list,
+    /// marked "Suggested by HeatCaller", less any already on it.
+    /// </summary>
+    internal static IEnumerable<ElevenLabsClient.VoiceInfo> SuggestedVoiceInfos(IEnumerable<ElevenLabsClient.VoiceInfo> listed)
+    {
+        var have = listed.Select(v => v.VoiceId).ToHashSet(StringComparer.Ordinal);
+
+        return RetiredVoices.Suggested
+            .Where(s => !have.Contains(s.Voice.Id))
+            .Select(s => new ElevenLabsClient.VoiceInfo(s.Voice.Id, s.Voice.Name, string.Empty, RetiredVoices.SuggestedLabel(s.Voice)))
+            .ToList();
+    }
+
+    /// <summary>Where a voice id is on the announcer's ElevenLabs list, or -1.</summary>
+    private int IndexOfVoice(string id)
+    {
+        for (var i = 0; i < _cmbVoice.Items.Count; i++)
+        {
+            if (_cmbVoice.Items[i] is ElevenLabsClient.VoiceInfo v && string.Equals(v.VoiceId, id, StringComparison.Ordinal))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Puts the announcer on an ElevenLabs voice by id and name - added to the
+    /// list when it isn't there - and saves it, the ElevenLabs boxes being
+    /// typed kept as saved. For Switch and "Use HeatCaller's cast".
+    /// </summary>
+    internal void SelectAnnouncerElevenLabsVoice(string id, string name)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        var reloading = _loadingSettings;
+        _loadingSettings = true;
+
+        try
+        {
+            var at = IndexOfVoice(id);
+
+            if (at < 0)
+            {
+                at = _cmbVoice.Items.Add(new ElevenLabsClient.VoiceInfo(id, name));
+            }
+
+            _cmbVoice.SelectedIndex = at;
+        }
+        finally
+        {
+            _loadingSettings = reloading;
+        }
+
+        RefitPickers();
+        AutoSave(keepTypedElevenLabsBoxes: true);
+        RefreshAnnouncerNotice();
+    }
+
+    /// <summary>
+    /// Says a line in one ElevenLabs voice through the key and tuning on this
+    /// page, ElevenLabs only - the stand-in never says it, so what is heard is
+    /// the voice offered. Null once played, else what went wrong, plainly.
+    /// For the Cast tab's Play.
+    /// </summary>
+    internal async Task<string?> PlayElevenLabsVoiceAsync(string id, string name, string line)
+    {
+        var profile = BuildProfileFromControls();
+
+        if (string.IsNullOrWhiteSpace(profile.ApiKey))
+        {
+            return "Enter an ElevenLabs API key on the Voice tab first.";
+        }
+
+        profile.VoiceId = id;
+        profile.VoiceName = name;
+
+        try
+        {
+            var audio = await AnnouncementService.SynthesizeThroughGateAsync(_elevenLabs, profile, line, reuseSaved: false);
+
+            if (Gone)
+            {
+                return null;
+            }
+
+            await PlayTestAudioAsync(audio, profile.Volume);
+            return null;
+        }
+        catch (ElevenLabsClient.VoiceGoneException gone)
+        {
+            return gone.Plain;
+        }
+        catch (Exception ex)
+        {
+            return $"Couldn't play it: {SummariseApiError(ex.Message)}";
+        }
+    }
+
+    /// <summary>The announcer's retired-voice line, its words and buttons - see RefreshAnnouncerNotice.</summary>
+    private readonly Label _lblAnnouncerNotice = new();
+    private readonly Button _btnAnnouncerNoticePlay = new() { Text = "Play" };
+    private readonly Button _btnAnnouncerNoticeSwitch = new() { Text = "Switch" };
+    private readonly Button _btnAnnouncerNoticePick = new() { Text = "Pick another" };
+    private FlowLayoutPanel? _announcerNoticeButtons;
+
+    /// <summary>The local date, for whether the retired voices have gone yet. Settable for tests.</summary>
+    internal Func<DateOnly> Today { get; set; } = () => DateOnly.FromDateTime(DateTime.Now);
+
+    /// <summary>
+    /// The announcer's notice under their ElevenLabs voice, set out again:
+    /// the retirement line with Play, Switch and Pick another, or the plain
+    /// "no longer has the voice" line with Pick another, or nothing. Only
+    /// while the ElevenLabs row shows.
+    /// </summary>
+    private void RefreshAnnouncerNotice()
+    {
+        if (IsDisposed || _announcerNoticeButtons is null)
+        {
+            return;
+        }
+
+        var picked = _cmbVoice.SelectedItem as ElevenLabsClient.VoiceInfo;
+        var voice = new SecondVoice(picked?.VoiceId ?? string.Empty, picked?.Name ?? string.Empty, string.Empty, string.Empty, string.Empty);
+        var apiKey = _txtApiKey.Text.Trim();
+        var shown = _rdoHeatCaller.Checked ? VoiceEngine.HeatCaller : VoiceEngine.ElevenLabs;
+
+        var (words, offer) = CastControl.SeatNoticeFor(
+            shown, voice, RetiredVoices.Seat.Announcer, Today(), id => ElevenLabsClient.GoneWhy(apiKey, id));
+
+        _lblAnnouncerNotice.Text = words ?? string.Empty;
+        _lblAnnouncerNotice.ForeColor = AppTheme.Warning;
+        _lblAnnouncerNotice.Visible = words is not null && _elevenLabsRowShown;
+        _announcerNoticeButtons.Visible = _lblAnnouncerNotice.Visible;
+        _btnAnnouncerNoticePlay.Visible = offer;
+        _btnAnnouncerNoticeSwitch.Visible = offer;
+    }
+
+    /// <summary>ElevenLabsClient turned a voice down - from any thread.</summary>
+    private void OnGoneVoicesChanged()
+    {
+        if (Gone)
+        {
+            return;
+        }
+
+        try
+        {
+            BeginInvoke(() =>
+            {
+                if (!Gone)
+                {
+                    RefreshAnnouncerNotice();
+                    UpdateEngineControls();
+                }
+            });
+        }
+        catch (InvalidOperationException)
+        {
+            // The handle went between the check and the post.
         }
     }
 

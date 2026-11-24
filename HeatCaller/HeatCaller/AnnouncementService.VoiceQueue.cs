@@ -983,6 +983,16 @@ public sealed partial class AnnouncementService
             return "the ElevenLabs quota is exhausted";
         }
 
+        // WHY (24 Nov 2026, Asher: the Default voices retire on 31 Dec 2026):
+        // a voice ElevenLabs no longer has, with nothing standing in, lost
+        // every line while the Mixer said nothing was wrong.
+        if (ElevenLabsClient.GoneWhy(profile.ApiKey, profile.VoiceId) is { } why)
+        {
+            return why == ElevenLabsClient.VoiceRefusal.NeedsPaidPlan
+                ? $"the voice {profile.VoiceName} needs a paid ElevenLabs plan"
+                : $"ElevenLabs no longer has the voice {profile.VoiceName}";
+        }
+
         return null;
     }
 
