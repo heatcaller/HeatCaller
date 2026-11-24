@@ -89,6 +89,21 @@ public partial class MainForm
             return;
         }
 
+        // WHY (24 Nov 2026, scroll bar flash lookback): the dock taking its
+        // room, or giving it back, lays the whole window out again on
+        // screen - Race Control narrower, the inbox at the dock's width -
+        // and each turned Windows' own white scroll bar on for a frame
+        // before the slim bars covered it. Held through the move, and drawn
+        // once - see ShowWithoutFlash.
+        ShowWithoutFlash.Hold(this, () => MoveInbox(form, docked));
+
+        form.ShowDocked(docked);
+        ShowInboxDockedOnRaceControl();
+    }
+
+    /// <summary>The move itself, for HostInbox.</summary>
+    private void MoveInbox(DeskInboxForm form, bool docked)
+    {
         if (docked)
         {
             if (!form.TopLevel && form.Parent == _inboxDock)
@@ -121,9 +136,6 @@ public partial class MainForm
                 form.Show(this);
             }
         }
-
-        form.ShowDocked(docked);
-        ShowInboxDockedOnRaceControl();
     }
 
     /// <summary>

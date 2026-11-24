@@ -181,6 +181,16 @@ internal sealed class ThinScrollBar : Control
         target.ParentChanged += TargetReparented;
         target.Disposed += TargetDisposed;
 
+        // WHY (24 Nov 2026, plan in plans/native-scrollbar-flash.md): the
+        // native bar turning on shrinks the control's client area without
+        // moving or resizing it, and a control's first window is made with
+        // its bar already worked out - neither raised anything this heard,
+        // so the bar caught up on the 150 ms timer, after Windows had drawn
+        // its own white one. Heard now, and only refreshed: never
+        // Reposition from here, which can run inside a layout.
+        target.ClientSizeChanged += TargetScrollMayHaveChanged;
+        target.HandleCreated += TargetScrollMayHaveChanged;
+
         Reparent();
     }
 
@@ -1159,6 +1169,8 @@ internal sealed class ThinScrollBar : Control
 
     private void TargetMoved(object? sender, EventArgs e) => Reposition();
 
+    private void TargetScrollMayHaveChanged(object? sender, EventArgs e) => Refresh(fromTimer: false);
+
     private void TargetReparented(object? sender, EventArgs e) => Reparent();
 
     private void TargetDisposed(object? sender, EventArgs e) => Dispose();
@@ -1178,6 +1190,8 @@ internal sealed class ThinScrollBar : Control
             _target.VisibleChanged -= TargetMoved;
             _target.ParentChanged -= TargetReparented;
             _target.Disposed -= TargetDisposed;
+            _target.ClientSizeChanged -= TargetScrollMayHaveChanged;
+            _target.HandleCreated -= TargetScrollMayHaveChanged;
             UnwatchBetween();
 
             Parent?.Controls.Remove(this);

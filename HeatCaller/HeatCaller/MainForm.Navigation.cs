@@ -833,6 +833,12 @@ public partial class MainForm
                 LayoutFreeze.Thaw(item.Page, childrenFirst: true);
             }
 
+            // Every slim bar over its native one before the page is drawn
+            // (24 Nov 2026): left to their timer, a list the page's first
+            // layout had just made scroll showed Windows' white bar for a
+            // frame. See ShowWithoutFlash.
+            ThinScrollBar.SyncNow();
+
             // In a finally: a panel left with its painting switched off
             // never draws again, and the app would sit showing whatever
             // page happened to be up when something threw.
