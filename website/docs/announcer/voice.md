@@ -354,6 +354,8 @@ The announcer's line is under **ElevenLabs voice:** on the **Announcer** card, a
 
 Saved lines are kept for each voice, so a seat that switches has its lines made afresh in the new voice. None of the old voice's saved lines plays beside them.
 
+A soundscape you saved yourself keeps the ElevenLabs voice it was saved with. From 1 January, applying one saved with a retired voice gives the announcer Finley instead; before then it brings its own voice, and the line on **Voice → Cast** offers the switch.
+
 ### When ElevenLabs no longer has a voice
 
 If ElevenLabs answers that it doesn't have a voice any more — retired, or deleted from your account — HeatCaller stops asking for that voice until it's restarted. Its lines go straight to the Kokoro stand-in (when it's ticked), its saved lines are held back so the night stays in one voice, and every other voice on the show carries on in ElevenLabs. It's said once in the console and on **Voice → Voice** under **Speak with**: "ElevenLabs no longer has the voice Charlie. Pick another on Voice > Cast." On **Voice → Cast**, the seat on that voice shows "ElevenLabs no longer has the voice Charlie. Pick another." with **Pick another**.

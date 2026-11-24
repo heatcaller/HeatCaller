@@ -2,6 +2,19 @@
 
 ElevenLabs is retiring all 19 of its Default voices: "All our Default voices will expire on December 31, 2026, and they will no longer be accessible after this date" ([help centre](https://elevenlabs.io/docs/help-center/product/voices/my-voices/what-are-default-voices)). Asher asked for a plan to move every voice HeatCaller uses onto new ones, keeping the set small. Asher picked the six voices by ear on 24 Nov 2026 (section 4); the build is under way.
 
+## Status (24 Nov 2026)
+
+| Step | State |
+|---|---|
+| A. Audition | Done: Asher picked the six (section 4). |
+| B. Retirement switch | Merged (#318). Soundscapes saved with a retired voice bring Finley from 1 January (lookback, #320). |
+| C. Dead voice | Merged (#318). |
+| D. Suggested voices, **Use HeatCaller's cast** | Merged (#318). |
+| E. Lap clips and the relay | Merged (#318, #319); all 2,745 clips made in Finley; relay v181 live, its log says "2745 of 2745 clips in the Finley voice". The HeatCaller voice is still off (no `RELAY_VOICE_KEY`), Asher's call. |
+| F. Videos | Ten (02-04, 06-12) re-voiced in Finley and rendered again; 01 and 05 being re-recorded with the app speaking in Finley. Old masters kept as `-daniel.mp4`. The harness and the tutorial-video skill speak with Finley. |
+| G. Docs and release notes | Merged (#318). The Cast screenshot in the user guide (`voice-cast.png`) still shows the old tab. |
+| H. History delete | Merged (#318). Real answers seen: the `history-item-id` header on every endpoint, 401 `missing_permissions` without Speech history. A successful delete hasn't been seen yet (the dev key lacks the permission). |
+
 ## 1. What HeatCaller uses today
 
 | Where | Voice | How it is set | What happens on 1 Jan 2027 |

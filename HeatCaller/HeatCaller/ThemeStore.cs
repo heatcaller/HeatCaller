@@ -638,6 +638,9 @@ public sealed class ThemeStore
     /// whether it speaks with ElevenLabs or the Windows voice. Venues apply a
     /// preferred theme through here too, so the same rule holds for them.
     /// </summary>
+    /// <summary>Today's date for the retired-voice rule in Apply. Settable so a test can be on either side of 31 Dec 2026; the app never sets it.</summary>
+    internal static Func<DateOnly> Today { get; set; } = () => DateOnly.FromDateTime(DateTime.Now);
+
     public static void Apply(
         Theme theme,
         VoiceSettingsStore voiceStore,
@@ -664,6 +667,20 @@ public sealed class ThemeStore
             voiceCopy.VoiceId = current.VoiceId;
             voiceCopy.VoiceName = current.VoiceName;
             voiceCopy.ModelId = current.ModelId;
+        }
+
+        // WHY (24 Nov 2026, Asher: ElevenLabs retires its Default voices on
+        // 31 Dec 2026): a custom soundscape saved with a Default voice still
+        // carries it, so applying it after that date put a voice ElevenLabs
+        // no longer has back on the announcer, undoing the switch the app
+        // made to HeatCaller's announcer voice when settings loaded. From
+        // 1 January it brings HeatCaller's announcer voice instead. Before
+        // then the soundscape's own voice is kept, and Voice > Cast offers
+        // the switch as it does for any seat on a retiring voice.
+        if (RetiredVoices.AreGone(Today()) && RetiredVoices.ForSeat(voiceCopy.VoiceId, RetiredVoices.Seat.Announcer) is { } replacement)
+        {
+            voiceCopy.VoiceId = replacement.Id;
+            voiceCopy.VoiceName = replacement.Name;
         }
 
         // This PC's playback, and its account's output format, stay as they

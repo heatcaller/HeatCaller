@@ -70,7 +70,7 @@ The first assessment is the DPIA (website/legal-drafts/dpia.md).
 - Backups of relay data have the same retention. Checked 16 Nov 2026: Fly takes a daily snapshot of the relay's encrypted volume (relay_data) and keeps 5. Anything deleted on the relay is therefore gone from every Fly copy within about 5 days, and the retention schedule and Forget should say "within 5 days" for those copies. The other copy is backup.cmd's relay-data.tgz on the operator's PC, which is not encrypted (counsel brief 4.3). Keep it no longer than the newest backup needs, in an encrypted folder.
 
 **Vendors.**
-- ElevenLabs: each request asks not to log or keep the line where the account allows it (zero retention is enterprise only); training on our content is turned off on HeatCaller's accounts (Data use, 24 Nov 2026), and checked at each annual review; Offline voices for juniors keeps lines naming juniors on the club's computer.
+- ElevenLabs: each request asks not to log or keep the line where the account allows it (zero retention is enterprise only), and each line is then deleted from the account's history by its own id (since 24 Nov 2026; the key needs the Speech history permission); training on our content is turned off on HeatCaller's accounts (Data use, 24 Nov 2026), and checked at each annual review; Offline voices for juniors keeps lines naming juniors on the club's computer.
 - Anthropic: the commercial API only. Its terms say inputs are not used for training.
 - Each vendor's data terms are read before use and re-read at each annual review; written answers are filed in website/legal-drafts (vendor-letters.md).
 
