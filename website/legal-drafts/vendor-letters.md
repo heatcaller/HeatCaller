@@ -29,6 +29,8 @@ Read on 24 Nov 2026: the Terms of Use (non-EEA version, last updated 9 Oct 2026)
 
 ### The letter (shortened 24 Nov 2026 to what the terms leave open)
 
+**Sent 24 Nov 2026:** Asher asked through ElevenLabs' contact form for someone to get in touch. Use the four questions below on that call or in the reply.
+
 **To:** ElevenLabs sales, through the "Contact sales" form on elevenlabs.io (no public sales address was found on 24 Nov 2026). Questions 3 and 4 are about data, so a copy can go to the data protection officer, dpo@elevenlabs.io.
 **Subject:** Reseller and children's-data questions for a race-announcing product
 

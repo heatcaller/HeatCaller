@@ -78,7 +78,7 @@ The release is marked as a pre-release, so the app's update check never treats i
 
 What to expect, from the vendors' own documentation (16 Nov 2026):
 
-- **ElevenLabs:** Zero Retention Mode is for enterprise customers only (confirmed in the API reference, 24 Nov 2026). Training on our content is on by default until we opt out. All Default voices (Daniel among them) stop working on 31 Dec 2026.
+- **ElevenLabs:** contact requested 24 Nov 2026 through its contact form; take the letter's four questions to that conversation. Zero Retention Mode is for enterprise customers only (confirmed in the API reference, 24 Nov 2026). Training on our content is on by default until we opt out. All Default voices (Daniel among them) stop working on 31 Dec 2026.
 - **Anthropic:** zero data retention is granted by sales, for one organization at a time. Requested 24 Nov 2026 through Anthropic's "Contact us" form (not sales); if it is passed back to sales, ask again at anthropic.com/contact-sales.
 
 ## 6. New York LLC publication (Limited Liability Company Law §206) - UNDER WAY
