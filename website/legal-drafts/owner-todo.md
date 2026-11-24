@@ -73,12 +73,12 @@ The release is marked as a pre-release, so the app's update check never treats i
 
 1. Read both letters and change anything that isn't how you would put it.
 2. Send each one through the company's "Contact sales" form, or by email if you have a contact. Send them from your HeatCaller address.
-3. Before sending the ElevenLabs one, open its DPA (reported at elevenlabs.io/dpa). It may already answer the caching, location and logging questions.
+3. Done 24 Nov 2026: ElevenLabs' terms, DPA and docs were read, and the ElevenLabs letter is cut to the four questions they leave open (the table in vendor-letters.md has the rest). **Before sending it, opt out of training** (elevenlabs.io, Terms and Privacy settings, Data use), because the letter says you have.
 4. When answers come back, paste each under **Answer filed** with the date and who it was from. If an answer changes anything, the Terms Part 2 and section 7 of driver-crew-children.md need a matching edit; Claude can do that from the filed answer.
 
 What to expect, from the vendors' own documentation (16 Nov 2026):
 
-- **ElevenLabs:** Zero Retention Mode is for enterprise customers only, which probably means an enterprise plan.
+- **ElevenLabs:** Zero Retention Mode is for enterprise customers only (confirmed in the API reference, 24 Nov 2026). Training on our content is on by default until we opt out. All Default voices (Daniel among them) stop working on 31 Dec 2026.
 - **Anthropic:** zero data retention is granted by sales, for one organization at a time.
 
 ## 6. New York LLC publication (Limited Liability Company Law §206) - UNDER WAY
