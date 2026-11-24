@@ -92,6 +92,58 @@ public sealed class DeskInboxDockTests : IDisposable
     }
 
     /// <summary>
+    /// Redocking a maximised inbox (23 Nov 2026, Asher: "when redocking a
+    /// floating inbox it doesn't go to the proper format"): it went into the
+    /// dock still maximised, kept its full-screen size - 1516 wide in a 520
+    /// dock - and with it the wide three-column layout, cut off at the right.
+    /// Put back to normal on the way in, it fills the dock and stacks.
+    /// </summary>
+    [Theory]
+    [InlineData(FormWindowState.Maximized)]
+    [InlineData(FormWindowState.Minimized)]
+    [InlineData(FormWindowState.Normal)]
+    public void A_floating_inbox_docked_from_any_window_state_fills_the_dock_and_stacks(FormWindowState state)
+    {
+        var seen = StaThread.Run(() =>
+        {
+            using var host = new Form { StartPosition = FormStartPosition.Manual, Location = new System.Drawing.Point(0, 0), Size = new System.Drawing.Size(1600, 1000) };
+            var dock = new Panel { Dock = DockStyle.Right, Width = 520 };
+            host.Controls.Add(dock);
+            host.Show();
+
+            using var inbox = new DeskInboxForm(null, ProfileStore.Load(), null, null, null, null, null, null, new AppSettings(), null, null, null);
+            var body = (InboxBody)typeof(DeskInboxForm).GetField("_body", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(inbox)!;
+
+            void Pump()
+            {
+                for (var i = 0; i < 20; i++)
+                {
+                    Application.DoEvents();
+                }
+            }
+
+            // Floating, wide, then in the window state under test.
+            inbox.StartPosition = FormStartPosition.Manual;
+            inbox.Size = new System.Drawing.Size(1300, 900);
+            inbox.Show(host);
+            Pump();
+            inbox.WindowState = state;
+            Pump();
+
+            MainForm.PutInDock(inbox, dock);
+            inbox.Show();
+            Pump();
+
+            return (State: inbox.WindowState, FormWidth: inbox.Width, BodyWidth: body.Width, body.Wide);
+        }, TimeSpan.FromSeconds(60), () => "redocking the inbox from " + state);
+
+        Assert.Equal(FormWindowState.Normal, seen.State);
+        Assert.Equal(520, seen.FormWidth);
+        Assert.Equal(520, seen.BodyWidth);
+        Assert.False(seen.Wide, "docked in 520 pixels it stacks, not three columns");
+    }
+
+    /// <summary>
     /// Back to the list, docked, flashed Windows' white scroll bars down the
     /// picked item and the whole inbox for a frame (21 Nov 2026, Asher's
     /// recording): the page was left needing more than its height until a
