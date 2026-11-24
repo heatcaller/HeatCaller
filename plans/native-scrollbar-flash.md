@@ -2,7 +2,7 @@
 
 From 23 Nov 2026, asked for by Asher: "theres a lot of times i see a native scroll bar when first clicking onto a screen. this is apparent in driver hub under the card tab and clicking through the tabs for the driver. when you click off and click back you don't see it. only the first time it loads. i want you to explore and plan how to fix this app wide."
 
-Plan only. Nothing here is built yet.
+Built on 24 Nov 2026: A and B from section 4, and the sweep test. What was built, and what was missed, is in section 6.
 
 ## 1. What was measured
 
@@ -102,3 +102,32 @@ The warm-up would also give Driver Hub's card panels and the `SegmentTabs` views
 - A native bar counts as shown when the window style has `WS_VSCROLL` or `WS_HSCROLL`, or, for a `DataGridView`, when its child `VScrollBar` or `HScrollBar` is visible. It counts as covered when a `ThinScrollBar` for that control and direction is visible in the host the bar parks in (the parent, passing over table and flow panels; see `ThinScrollBar.HostFor`).
 - Without the warm-up (`LayoutCheckMode` skips it), Race Day and Championship flash too. Run the test with the warm-up, as the real app does, or it will report cases a user never sees.
 - `WM_SETREDRAW` off works by hiding the window from painting, so children under it are not drawn either. That is why A covers grids' own child scroll bars too.
+
+## 6. Lookback (24 Nov 2026)
+
+Built on `claude/native-scrollbar-flash`. The full app suite passed, 9212 of 9212, including the window layout sweep.
+
+### What was built, step by step
+
+| Step | Built? | Where |
+|---|---|---|
+| 1. A shared helper | Yes | `ShowWithoutFlash.Hold` (and `Begin`/`End` for a change made elsewhere), in its own file. It holds painting, makes the change, lays out, runs `ThinScrollBar.SyncNow`, then draws once with frames and children. It does nothing extra with no window, or when a parent is already held. It also re-hides a container the change hid, because turning painting back on would otherwise show it. |
+| 2. Use it | Yes, and in more places | Driver Hub's `SelectCardTab` and `SelectView`; `LayoutFreeze.LetGoWhenShown`; Race Day → Setup's strip; `MainForm.ShowPage` (the `SyncNow`). Also, from the `Visible` search: Championship's Standings/Races/Points/Carried views and the first-run wizard's steps. |
+| 3. B in `ThinScrollBar` | Yes | Refreshes on the target's `ClientSizeChanged` and `HandleCreated`, through `Refresh` only, never `Reposition`. Both are taken off again in `Dispose`. |
+| 4. The sweep test | Yes | `NativeScrollBarFlashTests`. It builds the window, runs the real warm-up, and visits every page, every tab of every tab control, the Setup strip and Driver Hub's card tabs, once each. It fails with each uncovered paint and the call path it was painted from. `HC_FLASH_DATA` runs it on a copy of a real data folder. `ShowWithoutFlashTests` checks the helper always gives painting back. |
+| 5. Suite and release notes | Yes | Release note added. |
+
+### What the plan got wrong, or missed
+
+- **Holding painting on a tab control does nothing.** Windows' own tab control answers "hold painting" itself and goes on drawing. Checked directly: after the message, the tab control and everything in it still counted as visible, where a plain panel did not. So tab changes are held on the tab control's parent.
+- **Holding a tab as it is shown is too late** when the warm-up never reached it. The warm-up stops early on a busy PC. Then the tab's windows are made as it is picked, and a grid draws its sideways bar during that, before the tab is shown. So every themed tab control is now held from `Selecting` until the change has settled (`ShowWithoutFlash.HoldTabChanges`, from `AppTheme.StyleTabControl`). The hold in `LetGoWhenShown` stays, for a tab shown because its page was.
+- **There were more cases than the plan listed.** On test data the sweep also found Race Day → Who's Racing's roster, Race Analytics → Pace, and Sounds → Music and Lap Beeps. On Asher's data, when the warm-up stopped early, it also found Championship → Calendar and Race Analytics → Lap Times and Head to Head. All are clean now.
+- **The failures depended on timing.** On Asher's data the same build passed one run and failed the next, depending on how far the warm-up got. The fix was checked with five clean runs in a row on Asher's data and three on test data.
+
+### Not done, or not checked
+
+- **Not looked at by eye.** Every check was the paint hook on an off-screen window. Nobody has opened the real app to look for it yet.
+- **Not reached by the sweep:** Championship's view chips and the first-run wizard (both wrapped, but not swept), other windows (Inbox, Mission Control, Big Screen, dialogs), and a list that grows a scroll bar mid-race. B narrows that last one, but nothing tests it.
+- **Not checked whether the test data alone catches the tab control case.** That case was only seen on Asher's data. If `HoldTabChanges` were taken out, the seeded sweep might still pass; `ShowWithoutFlashTests` checks the hold itself, but not a real page.
+- **Not measured: A and B on their own.** They went in together, so whether B alone would have been enough anywhere isn't known.
+- **`NoRedraw.End`, used by page switching, still redraws with a plain `Refresh`, not with frames.** The sweep found no case it causes, so it was left as it was.
