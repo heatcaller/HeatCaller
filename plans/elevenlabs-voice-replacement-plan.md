@@ -11,7 +11,7 @@ ElevenLabs is retiring all 19 of its Default voices: "All our Default voices wil
 | C. Dead voice | Merged (#318). |
 | D. Suggested voices, **Use HeatCaller's cast** | Merged (#318). |
 | E. Lap clips and the relay | Merged (#318, #319); all 2,745 clips made in Finley; relay v181 live, its log says "2745 of 2745 clips in the Finley voice". The HeatCaller voice is still off (no `RELAY_VOICE_KEY`), Asher's call. |
-| F. Videos | Ten (02-04, 06-12) re-voiced in Finley and rendered again; 01 and 05 being re-recorded with the app speaking in Finley. Old masters kept as `-daniel.mp4`. The harness and the tutorial-video skill speak with Finley. |
+| F. Videos | Done: all 12 re-voiced in Finley and rendered again (masters, social cuts, captions, chapters, descriptions, 720p previews). 01 and 05 re-recorded with the app itself speaking in Finley; 05 is a new take of its race (6:53, was 7:14). Old masters kept as `-daniel.mp4`. The harness and the tutorial-video skill speak with Finley. Not yet heard by Asher. |
 | G. Docs and release notes | Merged (#318). The Cast screenshot in the user guide (`voice-cast.png`) still shows the old tab. |
 | H. History delete | Merged (#318). Real answers seen: the `history-item-id` header on every endpoint, 401 `missing_permissions` without Speech history. A successful delete hasn't been seen yet (the dev key lacks the permission). |
 
