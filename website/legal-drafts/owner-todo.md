@@ -81,12 +81,14 @@ What to expect, from the vendors' own documentation (16 Nov 2026):
 - **ElevenLabs:** contact requested 24 Nov 2026 through its contact form; take the letter's four questions to that conversation. Zero Retention Mode is for enterprise customers only (confirmed in the API reference, 24 Nov 2026). Training on our content is on by default until we opt out. All Default voices (Daniel among them) stop working on 31 Dec 2026.
 - **Anthropic:** zero data retention is granted by sales, for one organization at a time. Requested 24 Nov 2026 through Anthropic's "Contact us" form (not sales); if it is passed back to sales, ask again at anthropic.com/contact-sales.
 
-## 6. New York LLC publication (Limited Liability Company Law §206) - UNDER WAY
+## 6. New York LLC publication (Limited Liability Company Law §206) - AFFIDAVITS MAILED 24 Nov 2026
 
 New York's record for HeatCaller LLC (DOS ID 8031449, checked 23 Nov 2026) shows only the Articles of Organization, filed 26 September 2026. A new New York LLC must publish a notice of its formation once a week for six weeks in two newspapers the county clerk names, then file a Certificate of Publication with the Department of State, within 120 days of formation: by about **24 January 2027**. An LLC that misses it has its authority to do business suspended until it files.
 
 1. The publication notice is ready to go (Asher, 23 Nov 2026). Six weekly runs need to start by mid-December to finish in time.
 2. When the newspapers send their affidavits of publication, file them with the Certificate of Publication (form DOS-1708) and the fee.
 3. Check the entity record afterwards: the filing history should list the certificate.
+
+**24 Nov 2026:** Asher mailed the affidavits of publication to the Department of State. Left: once the state has processed them, check the entity record (DOS ID 8031449) lists a Certificate of Publication; if it doesn't by early January, call the Division of Corporations. Keep copies of both affidavits and the mailing receipt with the company records.
 
 Also on the record: the first **biennial statement is due 30 September 2028**.

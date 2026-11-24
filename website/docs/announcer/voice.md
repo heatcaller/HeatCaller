@@ -43,7 +43,7 @@ The announcer's voice itself is picked on **Voice → Cast**, on the **Announcer
 
 **Name:** is at the top of the same card, above the voice: it's said in the On Air openings and the Tonight Open, and left blank the announcer is never named.
 
-![Voice, Cast tab: the Voices card with Load Voices, the Announcer card with its Name, an ElevenLabs voice and the Kokoro voice under If ElevenLabs runs out, and the Recap host card](../assets/images/voice-cast.png)
+![Voice, Cast tab: the Voices card with Load Voices and Use HeatCaller's cast, the Announcer card with its Name, Finley as the ElevenLabs voice and a Kokoro voice under If ElevenLabs runs out, and the Recap host card on Will with the line "ElevenLabs retires Will on 31 December. Switch to Baxter?" and Play, Switch and Pick another under it](../assets/images/voice-cast.png)
 
 ![Voice tab, Speak with card: ElevenLabs chosen at 77% used, the HeatCaller voice not included for this club yet, and the Kokoro voice ready on this PC and standing by](../assets/images/voice-voice.png)
 
@@ -353,6 +353,8 @@ The announcer's line is under **ElevenLabs voice:** on the **Announcer** card, a
 **From 1 January 2027** (by the laptop's own date), a seat still on a retired voice switches to HeatCaller's voice for it by itself as HeatCaller starts, and the console says so once for each, for example "[voice] ElevenLabs retired Charlie on 31 December, so the Team Principal now speaks as Darian (Darian - Warm Grounded Storyteller). Pick another on Voice > Cast." A driver's own crew voice on a retired voice moves to ElevenLabs' own replacement for it (Jessica to Jade - Upbeat and Natural, for example), and the console says how many moved. Callum has no replacement ElevenLabs can speak, so a driver's crew voice on Callum goes back to the club's voice for that role.
 
 Saved lines are kept for each voice, so a seat that switches has its lines made afresh in the new voice. None of the old voice's saved lines plays beside them.
+
+A soundscape you saved yourself keeps the ElevenLabs voice it was saved with. From 1 January, applying one saved with a retired voice gives the announcer Finley instead; before then it brings its own voice, and the line on **Voice → Cast** offers the switch.
 
 ### When ElevenLabs no longer has a voice
 
