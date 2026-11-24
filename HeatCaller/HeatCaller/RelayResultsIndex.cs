@@ -216,11 +216,12 @@ internal static class RelayResultsIndex
         var shown = RelayPublisher.DisplayNames(
             everyName,
             abbreviate,
-            privacy.TransponderForEach(
+            TransponderForEachName(
                 everyName,
                 mine.SelectMany(s => s.Results.Select(r => (
                     (string?)RelayDocuments.PublicNameOrUnnamed(r.DriverName, r.Transponder),
-                    (string?)r.Transponder)))),
+                    (string?)r.Transponder))).ToList(),
+                privacy),
             privacy);
 
         // Each driver gets a number that means nothing outside this
@@ -366,6 +367,61 @@ internal static class RelayResultsIndex
             sessions,
             days,
         });
+    }
+
+    /// <summary>
+    /// The transponder each of the year's names is judged by in Build:
+    /// PublicPrivacy.TransponderForEach's choice, except that a name with
+    /// any row on a junior's transponder is judged by that one, unless the
+    /// choice is already one shown by initials.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the year's index pairs each name with
+    /// ONE transponder, and TransponderForEach took the first row's unless a
+    /// later one was initials-only - it had no such preference for a junior.
+    /// So when a junior's earliest row of the year was on an extra
+    /// transponder that has since gone to an adult, the whole year's index
+    /// judged her by the adult's transponder and published her full name in
+    /// the driver list, the winners and the link-preview podium, while each
+    /// result page shortened her. Now any junior row for the name wins, so
+    /// the choice errs to the private side for juniors as it already did for
+    /// initials.
+    /// </remarks>
+    internal static IReadOnlyList<string?> TransponderForEachName(
+        IReadOnlyList<string> names,
+        IReadOnlyList<(string? Name, string? Transponder)> rows,
+        PublicPrivacy privacy)
+    {
+        var chosen = privacy.TransponderForEach(names, rows).ToArray();
+
+        if (!privacy.AnyJuniors)
+        {
+            return chosen;
+        }
+
+        var juniorIdFor = new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
+
+        foreach (var (rowName, rowTransponder) in rows)
+        {
+            var key = (rowName ?? string.Empty).Trim();
+            var id = (rowTransponder ?? string.Empty).Trim();
+
+            if (key.Length > 0 && id.Length > 0 && !juniorIdFor.ContainsKey(key) && privacy.JuniorForTransponder(id))
+            {
+                juniorIdFor[key] = id;
+            }
+        }
+
+        for (var i = 0; i < names.Count && i < chosen.Length; i++)
+        {
+            if (!privacy.InitialsForTransponder(chosen[i])
+                && juniorIdFor.TryGetValue((names[i] ?? string.Empty).Trim(), out var juniorId))
+            {
+                chosen[i] = juniorId;
+            }
+        }
+
+        return chosen;
     }
 
     /// <summary>

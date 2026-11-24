@@ -42,7 +42,15 @@ public static class QualifyingCalculator
         // so without this the best-consecutive-laps projection ranked a
         // penalised driver as if nothing had been given. Optional so a
         // caller that has no penalty to hand still compiles and means zero.
-        long PenaltyMs = 0);
+        long PenaltyMs = 0,
+        // WHY (23 Nov 2026, bug hunt 24): the standing's StartLapCredited -
+        // this car was read just before the green and credited with the
+        // start lap, so its laps begin [0, rest of the start, ...] and the
+        // second entry is not a flying lap either. Without it the running
+        // heat's best-consecutive window slid over that short dash and the
+        // projection put the car on pole off a run nobody drove. Optional
+        // and last, so a caller with nothing to say still means "no".
+        bool StartLapCredited = false);
 
     /// <summary>
     /// The running heat, folded in as though it had just been recorded.
@@ -199,17 +207,37 @@ public static class QualifyingCalculator
     /// The window's reported start lap is renumbered so it still refers to
     /// the lap the driver would count as their first.
     /// </summary>
-    public static (long TotalMs, int StartLap) BestFlyingWindow(IReadOnlyList<long> laps, int n)
+    public static (long TotalMs, int StartLap) BestFlyingWindow(IReadOnlyList<long> laps, int n) =>
+        BestFlyingWindow(laps, n, 1);
+
+    /// <summary>
+    /// The same, for a list whose first <paramref name="startSlots"/> entries
+    /// are the start and not flying laps - SessionResultEntry.StartSlots:
+    /// one, or two for a driver credited with the start lap.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a car read just before the green on a
+    /// standard start is credited with the start lap, and its laps are saved
+    /// as [0, rest of the start, lap, lap, ...]. The old code dropped only
+    /// the first entry, so the window slid over the rest of the start - a
+    /// few seconds' dash, not a lap - and picked it every time:
+    /// [0, 5.5, 12.1, 11.9, 11.85] scored 29.5s for best-of-3 instead of the
+    /// real 35.85s, which put that driver on TQ and at the front of the
+    /// A-main. It is the fault described above, left open for the two-entry
+    /// start. The start lap is still numbered by its place in the list.
+    /// </summary>
+    public static (long TotalMs, int StartLap) BestFlyingWindow(IReadOnlyList<long> laps, int n, int startSlots)
     {
-        if (laps.Count <= 1)
+        var skip = Math.Max(1, startSlots);
+
+        if (laps.Count <= skip)
         {
             return (0, 0);
         }
 
-        var flying = laps.Skip(1).ToList();
+        var flying = laps.Skip(skip).ToList();
         var (total, start) = BestConsecutiveWindow(flying, n);
 
-        return total == 0 ? (0, 0) : (total, start + 1);
+        return total == 0 ? (0, 0) : (total, start + skip);
     }
 
     /// <summary>
@@ -370,7 +398,10 @@ public static class QualifyingCalculator
                     continue;
                 }
 
-                var (windowMs, startLap) = BestFlyingWindow(result.LapTimesMs, lapCount);
+                // WHY (23 Nov 2026, bug hunt 24): the result's own count of
+                // start entries, so the dash after a credited start lap is
+                // left out of the window - see BestFlyingWindow.
+                var (windowMs, startLap) = BestFlyingWindow(result.LapTimesMs, lapCount, result.StartSlots(result.LapTimesMs));
 
                 // Penalties from the result editor count here too. They
                 // only ever reached Laps and ElapsedMs - which the
@@ -432,7 +463,11 @@ public static class QualifyingCalculator
                     continue;
                 }
 
-                var (windowMs, startLap) = BestFlyingWindow(result.LapTimesMs, lapCount);
+                // WHY (23 Nov 2026, bug hunt 24): as for a saved heat, by the
+                // same rule as SessionResultEntry.StartSlots - a credited
+                // start lap makes the first two entries the start.
+                var liveStartSlots = result.StartLapCredited && result.LapTimesMs.Count > 1 && result.LapTimesMs[0] == 0 ? 2 : 1;
+                var (windowMs, startLap) = BestFlyingWindow(result.LapTimesMs, lapCount, liveStartSlots);
 
                 // WHY (20 Oct 2026): penalties given during the running heat
                 // count on the window too, as they do on a saved heat. They
@@ -492,7 +527,7 @@ public static class QualifyingCalculator
             // rather than vanishing from the finals altogether.
             if (heats.Count == 0)
             {
-                heats.Add(new HeatScore("#forfeit", "result lost", null, best.StartedAtUtc, 0, 0, 0, 0, 0));
+                heats.Add(new HeatScore(ForfeitRoundKey, "result lost", null, best.StartedAtUtc, 0, 0, 0, 0, 0));
             }
         }
 
@@ -510,6 +545,9 @@ public static class QualifyingCalculator
 
         return Rank(entries, method);
     }
+
+    /// <summary>The round key of the stand-in heat for a driver whose only result the marshal rule took away.</summary>
+    private const string ForfeitRoundKey = "#forfeit";
 
     /// <summary>A driver's heats best first under the class's rule - the order BuildEntry counts them in.</summary>
     private static List<HeatScore> OrderBest(List<HeatScore> heats, QualifyingMethod method) =>
@@ -1096,7 +1134,13 @@ public static class QualifyingCalculator
             counted.Count == 1 ? counted[0].ConsecutiveStartLap : 0,
             label,
             counted.Count == 1 ? counted[0].SessionId : null,
-            counted.Count == 1 ? counted[0].StartedAtUtc : null,
+            // WHY (23 Nov 2026, bug hunt 24): the stand-in for a driver whose
+            // only heat the marshal rule took away ("result lost") is not a
+            // session, so it has no start time. It used to carry the LOST
+            // heat's time, and the standings printed "result lost (7:42 PM)"
+            // and sent the director to Lap Times for that session - where the
+            // driver shows the full laps the rule had just removed.
+            counted.Count == 1 && counted[0].RoundKey != ForfeitRoundKey ? counted[0].StartedAtUtc : null,
             counted.Count,
             droppedSummary,
             counted.Count(h => h.ConsecutiveMs > 0),

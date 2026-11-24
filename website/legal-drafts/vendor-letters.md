@@ -4,25 +4,46 @@
 
 ## 1. ElevenLabs
 
-**To:** ElevenLabs sales, through the "Contact sales" form on elevenlabs.io, or your account manager if you have one. (Checked 16 Nov 2026: ElevenLabs' docs say Zero Retention Mode is for enterprise customers only and is arranged through sales, so question 6 is the one that decides the plan. A DPA is reported to be at elevenlabs.io/dpa; open it before sending, because it may answer 2, 5 and 6.)
-**Subject:** Reseller, caching and children's-data questions for a race-announcing product
+### What ElevenLabs' published terms already answer (checked 24 Nov 2026)
+
+Read on 24 Nov 2026: the Terms of Use (non-EEA version, last updated 9 Oct 2026), the ElevenAPI Terms (9 Oct 2026), the Prohibited Use Policy (9 Oct 2026), the Privacy Policy (9 Oct 2026), the DPA (8 Apr 2026), the API reference for text to speech, the Zero Retention Mode page, the pricing pages and the help centre. Section numbers are ElevenLabs' own.
+
+| Letter question | What the terms say | Settled? |
+|---|---|---|
+| 1. Reselling | Paid plans "may use the Services for commercial purposes" (Terms 1(c)), and output may be used outside the Services (4(a)). Starter and up carry a commercial licence; commercial use on the free plan is banned. The Prohibited Use Policy section 12 bans "operating a client, wrapper, or proxy" that gives others access "outside the terms that apply", and making the Services or output available to end users "on terms more permissive" than ElevenLabs'. There is no general ban on reselling text-to-speech output (the explicit resale bans are for the Music API and Sound Effects). | Mostly. Clubs get audio, not API access, so we look fine, but ask for a written yes. Our Terms must be no more permissive than theirs. |
+| 2. Caching and reuse | "you retain all rights in and to your Output" (4(c)(ii)). Nothing limits keeping or replaying audio, including after cancelling: we are told to export what we want before access ends (14). Output "may not be unique across users" (10). | Yes. Keeping and replaying our own renders is allowed. |
+| 3. Which voices | Voice Library owners can withdraw a voice with 30 days' to 2 years' notice (none set means immediately); the API shows `disable_at_unix` on a voice. Some voices are paid-only. **All Default voices expire on 31 December 2026**, and only accounts made before March 2026 have them. Commercial use of library voices through the API isn't spelled out (the Voice Library terms page is gone, a 404). | Partly. Check whether any voice we use is a Default voice (Daniel, the lap-clip voice, is one), and ask about library voices. |
+| 4. End-user terms | No flow-down: no rule that clubs accept ElevenLabs' terms. We are responsible for our own application and its users (ElevenAPI 2.3) and must review output before use (4(k)). | Yes, with the "no more permissive" rule from question 1. |
+| 5. Children's names | Account holders must be 18 or over (1(a)). The Privacy Policy bans voice data "from or about anyone under the age of 18"; text naming a child isn't mentioned. The Prohibited Use Policy bans apps "directed at individuals under 18" without written approval, and content that uses "the likeness of... a specific real minor". **Training is on by default** for all content, with an opt-out in the account's Data use settings (4(i)) that covers only use after opting out. Data is stored in the US (Privacy 5); regional servers exist (US, EU, India, Singapore), but residency is at ElevenLabs' discretion (DPA 13.1). Self-serve content may be deleted after 180 days of inactivity, but ElevenLabs needn't (DPA 9.2.2). | Partly. Training opted out on 24 Nov 2026 (both HeatCaller accounts). Ask whether naming junior drivers in race calls is all right under the minors rules. |
+| 6. No logging | "Zero retention mode may only be used by enterprise customers." (API reference.) Tested 24 Nov 2026 on the dev key: the flag is accepted (200) and quietly ignored, and every call still returns a `history-item-id`, so our lines are kept. Any account can delete generations from history through the API at any time; backups hold deleted items for up to 30 days, and debugging and moderation logs may keep some. | Yes: enterprise only. On our plan, deleting each line from history after it is rendered is the nearest we can get. |
+| 7. Content about children | As question 5. | Partly, as 5. |
+| 8. Cloned voices | The uploader must own the voice or be "authorized to share" it (4(b)) and warrants the rights (4(g)). ElevenLabs may ask the uploader to record themselves to prove it. A club cloning its own announcer holds the consent itself, on its own account. | Yes. |
+| 9. Attribution | No attribution or credit rule on any page read. | Yes: none required. |
+| 10. Limits | Requests at once, by plan (Flash models / all other models): Starter 6/3, Creator 10/5, Pro 20/10, Scale 30/15, Business 30/15, more on enterprise. Characters a month (API pricing): Starter 75,000, Creator 275,000, Pro 1,238,000, Scale 3,738,000, Business 12,375,000 (more on Flash). | Yes. |
+| DPA | Applies to a business on a self-serve plan through accepting the Terms on its behalf (Terms 2), with no separate signature. ElevenLabs is the processor, including a CCPA service provider (DPA 2.1, 12). COPPA and children aren't mentioned. Sub-processors are listed at compliance.elevenlabs.io, with 30 days' notice of changes and a right to object (6.1, 6.3). We must give notice and get consent for ElevenLabs' processing (2.2). | Yes. |
+
+**To do now, without waiting for an answer:**
+
+1. ~~Opt out of training~~ Done 24 Nov 2026: Asher turned off Data use (Terms and Privacy settings) on the HeatCaller account and his development account. Uses before that date aren't affected (Terms 4(i)). Clubs on their own keys should do the same.
+2. Check the voices: any Default voice stops working on 31 Dec 2026. The lap clips are already rendered, so they keep playing, but any new line in a Default voice, and any new clip, will fail. Pick replacements from the Voice Library.
+
+### The letter (shortened 24 Nov 2026 to what the terms leave open)
+
+**Sent 24 Nov 2026:** Asher asked through ElevenLabs' contact form for someone to get in touch. Use the four questions below on that call or in the reply.
+
+**To:** ElevenLabs sales, through the "Contact sales" form on elevenlabs.io (no public sales address was found on 24 Nov 2026). Questions 3 and 4 are about data, so a copy can go to the data protection officer, dpo@elevenlabs.io.
+**Subject:** Reseller and children's-data questions for a race-announcing product
 
 Hello,
 
-I run HeatCaller LLC, a New York company that makes HeatCaller, race timing and announcing software for RC (radio-controlled car) racing clubs. One of its options is "the HeatCaller voice": our server calls your API with our own key and plays the speech to the club's PA and stream. We'd like to confirm a few things in writing before we start charging clubs for it.
+I run HeatCaller LLC, a New York company that makes HeatCaller, race timing and announcing software for RC (radio-controlled car) racing clubs. One of its options is "the HeatCaller voice": our server calls your API with our own key, on a paid plan, and plays the speech to the club's PA and stream. Clubs never get access to the API or our key; they hear the audio. We have read your Terms of Use, ElevenAPI Terms, Prohibited Use Policy and DPA, and would like to confirm four things in writing before we start charging clubs for it.
 
-1. **Reselling.** Do your business or OEM terms allow us to provide speech to clubs through our own service in this way, and which plan do we need?
-2. **Caching and reuse.** May we keep the audio we render and replay it - shared between clubs for a line with no name in it, and kept for one club only for a line with a driver's name - and for how long?
-3. **Which voices.** Which library voices may be used this way, commercially, through a reseller? Do any voice owners' terms differ?
-4. **End-user terms.** What terms must the clubs (our end users) agree to, and do you need them passed on word for word? We'd like to link them from our terms.
-5. **Children's names.** Many drivers are children. The lines we send can contain a child's first name and initial (for example "Mia K takes the lead"). What are your retention, processing location and training terms for API input text and output audio? Is any of it used to train or improve your models, and can we opt out?
-6. **No logging.** We send `enable_logging=false` with each request, to ask you not to keep the text or audio. Is that honoured on our plan, or only on enterprise plans? If only on enterprise, what would it take to have it on ours?
-7. **Content from or about children.** Do your terms or usage policy restrict sending text that is about, or written by, children under 13 (or under 18)?
-8. **Cloned voices.** If a club clones its own announcer's voice on its own account, what consent do you require, and who holds it?
-9. **Attribution.** Do you require us to name ElevenLabs in the app or on clubs' pages?
-10. **Limits.** What rate and concurrency limits apply for a service with several clubs racing on the same evening?
+1. **Providing audio to clubs.** Is this use allowed on a self-serve plan under Prohibited Use Policy section 12, or do we need an enterprise or reseller agreement? We replay audio we have rendered (shared between clubs for a line with no name in it, kept for one club only for a line with a driver's name); please confirm that is fine too.
+2. **Voice Library voices.** May Voice Library voices be used through the API, commercially, in a service like ours? Is there anything beyond the owner's notice period that we need to handle?
+3. **Junior drivers.** Many drivers are children. The lines we send can contain a child's first name and initial (for example "Mia K takes the lead"), entered by adult club staff; no child uses our product or yours. Our product is for clubs, not directed at children. Is announcing a junior's name in a race call allowed under your Prohibited Use Policy's rules on minors (the "specific real minor" likeness rule in particular)? We have opted out of training.
+4. **Retention.** Zero Retention Mode is enterprise only. On our plan, if we delete each generation from history through the API straight after it is rendered, what is still kept (debugging or moderation logs, backups), and for how long? What would an enterprise plan with Zero Retention Mode cost for a service of our size (a few clubs racing on the same evening, well under a million characters a month to start)?
 
-A data processing agreement, if you have a standard one, would answer several of these. Thank you - happy to set up a call if that's easier.
+Thank you - happy to set up a call if that's easier.
 
 Best regards,
 Asher Kent
@@ -31,9 +52,13 @@ support@heatcaller.com
 
 **Answer filed:** _(date, from, summary)_
 
+The first version of this letter (15 Nov 2026, ten questions) is in git history; the table above covers the rest.
+
 ## 2. Anthropic
 
-**To:** Anthropic sales, through the "Contact sales" form on anthropic.com. (Checked 16 Nov 2026: Anthropic's API docs say zero data retention is not self-serve; sales reviews it and turns it on for one organization at a time, so ask for it by name in question 1. If sales doesn't answer questions 4-6, send them to the privacy contact in Anthropic's privacy policy.)
+**Sent 24 Nov 2026:** Asher asked Anthropic for zero data retention through its general "Contact us" form, not the sales form. If no answer comes, or the reply says it has to go through sales, ask again at anthropic.com/contact-sales. The other questions below are still to send.
+
+**To:** Anthropic sales, through the form at anthropic.com/contact-sales (no public sales address was found on 24 Nov 2026). (Checked 16 Nov 2026: Anthropic's API docs say zero data retention is not self-serve; sales reviews it and turns it on for one organization at a time, so ask for it by name in question 1. If sales doesn't answer questions 4-6, send them to the privacy contact in Anthropic's privacy policy.)
 **Subject:** Data retention, training and minors for an API product used by youth sports clubs
 
 Hello,

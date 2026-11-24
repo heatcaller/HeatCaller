@@ -74,7 +74,11 @@ public sealed partial class RaceDayService
         var filter = context.Text("className")?.Trim() ?? string.Empty;
         var day = _host.Program.TodaysRounds();
         var next = day.FirstOrDefault(r => !r.IsRecorded);
-        var step = _host.Program.NextStep();
+        // WHY (23 Nov 2026, bug hunt 24): the same masking today.summary
+        // uses. program.list sends the same next-step headline and detail,
+        // and sent them as the desk wrote them - a late car nobody had named
+        // went through the relay under its whole transponder.
+        var step = NextStepFor(_host.Program.NextStep(), context.Channel);
 
         var byClass = day
             .GroupBy(r => r.ClassName, StringComparer.OrdinalIgnoreCase)
@@ -270,7 +274,14 @@ public sealed partial class RaceDayService
 
         if (!context.Confirmed)
         {
-            return OpResult.Ask(plan.Message);
+            // WHY (23 Nov 2026, bug hunt 24): the desk's question went to the
+            // phone as it was, and it lists each driver under their main by
+            // name - or, for a car nobody has named, by its whole transponder
+            // ("3. 7654321 - 14 laps"). Through the relay that put the full
+            // number on the internet, which the app otherwise never does (see
+            // ShowTransponder). The grid lines are now named as the channel
+            // may see them; the Wi-Fi still gets the desk's words.
+            return OpResult.Ask(SeedQuestionForPhone(plan.Message, className, context.Channel));
         }
 
         var done = _host.Program.SeedMainsFor(className, PhoneUndo);
@@ -278,6 +289,77 @@ public sealed partial class RaceDayService
         return done.Ok
             ? OpResult.Done(done.Message, done.Message)
             : OpResult.Refuse(done.Message);
+    }
+
+    /// <summary>
+    /// The seed-mains question for the phone: the desk's, with every name on
+    /// a grid line ("   3. 7654321 - 14 laps ...", "   1. 7654321") that is
+    /// only a transponder written as this channel may see it. The cars it
+    /// may be are the class's qualifiers, everyone in today's heats, and the
+    /// Invitational's seed order; anyone on file is found by any of his ids.
+    /// </summary>
+    private string SeedQuestionForPhone(string question, string className, RaceDayChannel channel)
+    {
+        if (channel == RaceDayChannel.WiFi)
+        {
+            return question;
+        }
+
+        var raceClass = _host.Classes.All.FirstOrDefault(c => string.Equals(c.Name, className, StringComparison.OrdinalIgnoreCase));
+
+        var known = QualifyingCalculator
+            .Compute(raceClass?.Name ?? className, _host.Rounds, _host.History, _host.Profiles, raceClass, _host.Program.QualifyingRoundsCounted())
+            .Select(e => e.Transponder)
+            .Concat(_host.Program.TodaysRounds().SelectMany(r => r.AssignedTransponders))
+            .Concat(raceClass?.InvitationalSeed ?? new List<string>());
+
+        return MaskSeedingQuestionForPhone(question, _host.Profiles, known, channel);
+    }
+
+    /// <summary>
+    /// The pure part of SeedQuestionForPhone. Only a grid line's name is
+    /// looked at - the text between "N. " and " - " (or the line's end, or
+    /// its bump-up mark) - so a lap count or a time that happens to match a
+    /// short transponder is never touched. A name is replaced only when it
+    /// is one of a driver's transponders (then he is ShownNameOf) or one of
+    /// <paramref name="knownIds"/> (then ShowTransponder).
+    /// </summary>
+    internal static string MaskSeedingQuestionForPhone(string question, ProfileStore profiles, IEnumerable<string> knownIds, RaceDayChannel channel)
+    {
+        if (channel == RaceDayChannel.WiFi || string.IsNullOrEmpty(question))
+        {
+            return question;
+        }
+
+        var known = knownIds
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Select(t => t.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var lines = question.Split("\r\n");
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(lines[i], @"^(\s+\d+\.\s)(.+?)(\s-\s.*|\s\s\[bump-up place\])?$");
+
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            var name = match.Groups[2].Value.Trim();
+
+            string? shown = profiles.Get(name) is { } profile && profile.AllTransponderIds.Contains(name, StringComparer.OrdinalIgnoreCase)
+                ? ShownNameOf(profile, channel)
+                : known.Contains(name) ? ShowTransponder(name, channel) : null;
+
+            if (shown is not null)
+            {
+                lines[i] = match.Groups[1].Value + shown + match.Groups[3].Value;
+            }
+        }
+
+        return string.Join("\r\n", lines);
     }
 
     /// <summary>
@@ -436,6 +518,29 @@ public sealed partial class RaceDayService
             }
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): once the heats are posted, the desk's
+        // Move Drivers Between Heats asks first (ChangePostedHeatsOk) - drivers
+        // have looked up their heat. The phone moved or took a driver out of
+        // a posted heat without a word. It now asks the same, and folds in
+        // the "no drivers left" warning when that applies too, as one
+        // confirmation answers both. Putting a driver in from nowhere (no
+        // fromRoundId) is still not asked: like Add a Late Entry, it moves
+        // nobody else.
+        if (from is not null && !context.Confirmed && HeatPosting.Posted(_host.Events.Active) && _host.Events.Active is { } postedDay)
+        {
+            var name = ShownNameOfTransponder(transponder, context.Channel);
+            var what = to is null
+                ? $"This takes {name} out of {from.RoundLabel}."
+                : $"This moves {name} from {from.RoundLabel} to {to.RoundLabel}.";
+
+            if (from.AssignedTransponders.All(t => string.Equals(t, transponder, StringComparison.OrdinalIgnoreCase)))
+            {
+                what += $" {from.RoundLabel} will have no drivers left.";
+            }
+
+            return OpResult.Ask(PostedMoveQuestionForPhone(postedDay, what));
+        }
+
         var changes = new List<HeatBalanceForm.RosterChange>();
 
         if (from is not null)
@@ -481,6 +586,15 @@ public sealed partial class RaceDayService
             $"{Said(NameOfTransponder(transponder))} ({className})",
             $"{Said(ShownNameOfTransponder(transponder, context.Channel))}.");
     }
+
+    /// <summary>
+    /// The phone's question before it moves a driver in posted heats:
+    /// HeatPosting.ChangeQuestion's words, less its last line, which sends
+    /// the director to a right-click on the laptop's program.
+    /// </summary>
+    internal static string PostedMoveQuestionForPhone(RaceEvent day, string what) =>
+        $"The heats were posted at {AppTime.TimeOfDay((day.HeatsPostedUtc ?? DateTime.UtcNow).ToLocalTime())}, so drivers and marshals may already have looked theirs up.\r\n\r\n"
+        + $"{what} Go ahead anyway?";
 
     /// <summary>
     /// The heat entry behind a driver id: the entry itself, or an entry that
@@ -538,6 +652,20 @@ public sealed partial class RaceDayService
             new { changed = true });
     }
 
+    /// <summary>
+    /// What the phone asks before it deletes a round. WHY (23 Nov 2026, bug
+    /// hunt 24): it asked "This does not delete any recorded session
+    /// history" of every round, run or not - the words the desk stopped
+    /// using for a run round because they read as "nothing is lost", when
+    /// its result drops out of the race day and the championship. A round
+    /// that has run now gets the desk's RecordedDeleteQuestion; one that
+    /// hasn't keeps the plain question.
+    /// </summary>
+    internal static string DeleteRoundQuestionForPhone(RoundDefinition round) =>
+        round.IsRecorded
+            ? RaceProgramControl.RecordedDeleteQuestion(new[] { round })
+            : $"Delete round \"{round.RoundLabel}\" ({round.ClassName}) from the program?\r\n\r\nThis does not delete any recorded session history.";
+
     private OpResult ProgramDeleteRound(OpContext context)
     {
         var round = RequireTodaysRound(context, "roundId");
@@ -549,7 +677,7 @@ public sealed partial class RaceDayService
 
         if (!context.Confirmed)
         {
-            return OpResult.Ask($"Delete round \"{round.RoundLabel}\" ({round.ClassName}) from the program?\r\n\r\nThis does not delete any recorded session history.");
+            return OpResult.Ask(DeleteRoundQuestionForPhone(round));
         }
 
         var done = _host.Program.DeleteRounds(new[] { round }, PhoneUndo);

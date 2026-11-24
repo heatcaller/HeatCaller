@@ -171,10 +171,30 @@ public static class CommentaryStakesFacts
             return new FactBlock($"stakes:{key}", $"{left} {already}", FactTheme.Driver(stakes.LeaderId));
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): the leader used to be taken out by
+        // NAME, every match at once - so a second contender said by the same
+        // name as the leader (two profiles both announced as "Sam") vanished
+        // too. "Sam, Sam, Bill" became "only Sam and Bill can win it", and
+        // with LeadBy 0 the room was told Bill was level when the level
+        // driver was the other Sam. Now only ONE entry - the leader's own -
+        // is removed, and a list that still names somebody twice says
+        // nothing, because "Sam and Sam" cannot tell the room who is meant.
         var others = stakes.StillInIt
             .Select(CommentaryFacts.Clean)
-            .Where(name => name.Length > 0 && !string.Equals(name, leader, StringComparison.CurrentCultureIgnoreCase))
+            .Where(name => name.Length > 0)
             .ToList();
+
+        var leaderAt = others.FindIndex(name => string.Equals(name, leader, StringComparison.CurrentCultureIgnoreCase));
+
+        if (leaderAt >= 0)
+        {
+            others.RemoveAt(leaderAt);
+        }
+
+        if (others.Prepend(leader).Distinct(StringComparer.CurrentCultureIgnoreCase).Count() != others.Count + 1)
+        {
+            return null;
+        }
 
         // Nobody else in it and the leader catchable is a contradiction the
         // reader cannot produce - but "by construction" is not a check, and
@@ -196,8 +216,13 @@ public static class CommentaryStakesFacts
             ? $"{leader} and {others[0]} are level on {stakes.LeaderPoints} points."
             : $"{leader} leads on {stakes.LeaderPoints} points, by {stakes.LeadBy}.";
 
+        // WHY (23 Nov 2026, bug hunt 24): no day word. This block is also
+        // handed to NightBefore.FactsFor for a preview written the evening
+        // before, where the old "It is between Bill and Sam today" named the
+        // wrong day on the club's public page. Without it the sentence is
+        // true in the race intro and in the preview alike.
         var onlyThese = stakes.RoundsLeft == 1
-            ? $"It is between {who} today, and nobody else can take it."
+            ? $"It is between {who}, and nobody else can take it."
             : $"Only {who} can still win it.";
 
         return new FactBlock($"stakes:{key}", $"{left} {onlyThese} {margin}", FactTheme.Driver(stakes.LeaderId));

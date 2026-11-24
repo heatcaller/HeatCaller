@@ -163,7 +163,19 @@ public sealed class SoundEffectsStore
         }
     }
 
-    public void Save(SoundEffectsProfile profile)
+    /// <summary>
+    /// Keeps <paramref name="profile"/> as the current sounds and writes it to
+    /// the file. True when it reached the file; false when it was only kept in
+    /// memory (writes held after an unreadable load, writes frozen for a
+    /// restore, or the write itself failed).
+    /// </summary>
+    // WHY (23 Nov 2026, bug hunt 24): Save was void and threw away the answer
+    // SafeFile.WriteAllText gives, so a write that failed (disk full, the file
+    // read-only or held by a sync tool, writes frozen for a restore) looked
+    // exactly like one that worked - the Sound Effects page said "Saved" and
+    // the sounds were back as they were at the next start. Same pattern as
+    // VoiceSettingsStore.Save, which already returns its result.
+    public bool Save(SoundEffectsProfile profile)
     {
         Current = profile;
 
@@ -172,11 +184,11 @@ public sealed class SoundEffectsStore
         // the change still plays this session. The console has already said why.
         if (LoadedUnreadable)
         {
-            return;
+            return false;
         }
 
         var json = JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true });
-        SafeFile.WriteAllText(FilePath, json);
+        return SafeFile.WriteAllText(FilePath, json);
     }
 
     /// <summary>

@@ -213,7 +213,7 @@ The model takes a few seconds to load into memory the first time it's used. Heat
 
 ## Settings
 
-The top of the **Voice → AI Commentary** tab sums it up in four tiles: **AI commentary** (On or Off), **Written by** (**Relay, then this PC**, **Club relay**, **This PC** or **Nothing**), **Model on this PC** (**Ready** or **Not here**) and **Writing tone** (the tone's name). Under them, the **On air** card holds the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
+The top of the **Voice → AI Commentary** tab sums it up in four tiles: **AI commentary** (On or Off), **Written by** (**Relay, then this PC**, **Club relay**, **This PC** or **Nothing**), **Model on this PC** (**Ready**, or in amber **Too slow**, **Can't run** or **Not here**) and **Writing tone** (the tone's name). When the model on this PC has switched itself off or isn't installed, and the relay isn't writing either, the line under the relay box says, in amber, that nothing will be written. Under them, the **On air** card holds the master switch, **Enable AI commentary** (off until you tick it). Everything else on the page is grayed out while it's off.
 
 The settings are on cards down the tab: **Who writes it** first, then **How it's written**, since it covers every line, then the rest in the order the night happens: **Before the start**, **Through the night**, **After the flag**, **Recap show** and **Between races**. On a wide window, **Who writes it** and **How it's written** sit side by side, and so do **After the flag** and **Recap show**.
 
@@ -1162,6 +1162,8 @@ What counts as racing is the program, not the check-in sheet: a driver ticked in
 | "Two rounds left and four points covering the top three." | An **Announcer's note** on a championship one of tonight's races counts towards, read out as typed. When a night counts towards more than one, the first one on the **Championship** page is used. |
 | "3 drivers raced here for the first time tonight." | At least **4** earlier race nights on file. In a club's first month every driver's first filed race is this week, so without that bar a club racing for fifteen years would be told nineteen drivers were new. It goes by filed results, not by when somebody typed a profile in. |
 
+The same bar of **4** earlier race nights on file holds for the other firsts the announcer could claim: a race intro saying a driver is making their first ever start at this club, and a recap calling a win or a podium their first ever here. Before then, those lines are left out. Wins counted on file, runs of form and rivalries are still said.
+
 "Tonight" is the race night, 6 a.m. to 6 a.m., so a club night that runs its mains past midnight is one night. The sign-off counts every race the club ran tonight whether it was filed against one of tonight's rounds or not, because it's about what happened rather than what was planned. An evening with nothing filed gets no sign-off at all.
 
 ## Club notes: the things the timing can't know
@@ -1311,7 +1313,7 @@ In the race intro, when a season has enough left to decide:
 
 > "There are two rounds of the Winter Series left, this one included. Only Bill Hargrove and Sam Teague can still win it. Bill leads on 148 points, by 12."
 
-> "This is the last round of the Winter Series. It is between Bill Hargrove and Sam Teague today, and nobody else can take it."
+> "This is the last round of the Winter Series. It is between Bill Hargrove and Sam Teague, and nobody else can take it."
 
 > "Bill Hargrove has already won the Winter Series on 148 points. Nobody left can reach that, even winning all two remaining rounds."
 
@@ -1433,7 +1435,7 @@ The console says which one it's on as the round changes, and a refusal says whic
 7:28:10 PM  [brain] Battle watch held back: 4 lines in the last ten minutes already - this is a heat, which allows 4
 ```
 
-The money side was already paced this way: the night's share of the month is released against how much of the program has run, so the mains always arrived with the most to spend. What was still flat was the airtime, and a ceiling that never moves is what made every race of an evening sound alike.
+The money side was already paced this way: the night's share of the month is released against how much of the program has run, so the mains always arrived with the most to spend. A night with no rounds on its program (freeform races only) has its whole share of lines available from the start, so the battle watch and the other segments keep going all evening instead of going quiet after the first few races. Build the heats later in the night and what is left is still saved for the mains. What was still flat was the airtime, and a ceiling that never moves is what made every race of an evening sound alike.
 
 ### How chatty
 

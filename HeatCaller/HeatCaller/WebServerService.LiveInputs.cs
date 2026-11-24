@@ -52,7 +52,11 @@ public sealed partial class WebServerService
         var next = _schedule?.NextUp;
         if (next is not null)
         {
-            onDeck = string.Join("  •  ", new[] { next.ScheduledTime, next.ClassName, next.Description }
+            // WHY (23 Nov 2026, bug hunt 24, #155): the raw stored time went
+            // out, and Fill In the Times stores "HH:mm" whatever the clock
+            // setting, so a 12-hour club's on deck read "19:40". Shown the
+            // way the timetable shows it.
+            onDeck = string.Join("  •  ", new[] { DayScheduleControl.ShownTime(next.ScheduledTime), next.ClassName, next.Description }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
         }
 

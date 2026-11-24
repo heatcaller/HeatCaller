@@ -105,7 +105,18 @@ export function privacyRulesFrom(body: unknown): PrivacyRules {
 
 /** Whether a published name is one of a junior's. Every name is, while the rules are unknown. */
 export function isJuniorName(rules: PrivacyRules, name: string): boolean {
-  return rules.unknown || rules.juniors.has(privacyNameKey(name));
+  if (rules.unknown) return true;
+  const key = privacyNameKey(name);
+  if (rules.juniors.has(key)) return true;
+
+  // WHY (23 Nov 2026, bug hunt 24): a junior shown by initials who shares
+  // them with another driver is published numbered - "M.K. 2". The old check
+  // looked only the whole name up, so a numbered sibling past the forms the
+  // laptop lists could be followed by name. A trailing " <number>" is now
+  // dropped and the name looked up again: matching too much costs a follower
+  // alert, never a child's name.
+  const unnumbered = key.replace(/ \d+$/, "");
+  return unnumbered !== key && unnumbered.length > 0 && rules.juniors.has(unnumbered);
 }
 
 /** Whether a document (any JSON) names a junior anywhere in it, as whole words. */
@@ -117,7 +128,13 @@ export function namesAJunior(rules: PrivacyRules, value: unknown): boolean {
   let text: string;
 
   try {
-    text = typeof value === "string" ? value : JSON.stringify(value);
+    // WHY (23 Nov 2026, bug hunt 24): JSON.stringify writes a line break as
+    // a backslash and the letter "n" (a tab as backslash "t", and so on), so
+    // a name typed straight after a line break - "Racing is off.\nMia Kent" -
+    // followed a letter, the whole-word check refused it, and the page was
+    // left open to search engines. Every escape is now read as a space, in
+    // one pass left to right, so an escaped backslash stays one escape.
+    text = typeof value === "string" ? value : (JSON.stringify(value) ?? "").replace(/\\(?:u[0-9a-fA-F]{4}|[\s\S])/g, " ");
   } catch {
     return false;
   }
@@ -137,8 +154,50 @@ export function yearTakenDown(rules: PrivacyRules, year: string): boolean {
 
 /** Whether a result document (with its startedUtc) is from a year older than the rules keep. */
 export function resultTakenDown(rules: PrivacyRules, body: unknown): boolean {
+  return resultOlderThanKept(rules, body, 0);
+}
+
+/**
+ * The furthest east of UTC a club can be: UTC+14 (Kiribati). A result's
+ * local start is never more than this after its UTC start.
+ */
+const MOST_AHEAD_OF_UTC_MS = 14 * 60 * 60 * 1000;
+
+/**
+ * Whether the sweep that takes down old years may delete this stored result.
+ *
+ * WHY (24 Nov 2026, bug hunt 24 review): the sweep used resultTakenDown, and
+ * a result from an older laptop has no "year" - so it was judged by the UTC
+ * year of its start. A New Year's morning race east of UTC (its UTC start
+ * still 31 Dec) was deleted although its own year was kept. Deleting is for
+ * good, so a result with no "year" is judged here by the latest local year
+ * it can have been raced in: its UTC start plus 14 hours. A result with a
+ * "year" is judged by that, exactly as resultTakenDown does.
+ */
+export function resultSweptAway(rules: PrivacyRules, body: unknown): boolean {
+  return resultOlderThanKept(rules, body, MOST_AHEAD_OF_UTC_MS);
+}
+
+/** resultTakenDown, with a result that has no "year" judged by its UTC start moved on by aheadMs. */
+function resultOlderThanKept(rules: PrivacyRules, body: unknown, aheadMs: number): boolean {
   if (rules.unknown || rules.fromYear === 0 || typeof body !== "object" || body === null) {
     return false;
+  }
+
+  // WHY (23 Nov 2026, bug hunt 24): the laptop files a result under its
+  // local 6am-to-6am race night and the index years are taken down by that
+  // year, but this judged a result by the UTC year of its start - so around
+  // New Year a result was kept after its year was unpublished, or refused
+  // while its year was still kept. A result now carries its own "year"
+  // ("2024"); only one from an older laptop, without it, falls back to UTC.
+  const filed = (body as Record<string, unknown>)["year"];
+  const filedYear = typeof filed === "string" && /^\d{4}$/.test(filed)
+    ? Number(filed)
+    : typeof filed === "number" && Number.isInteger(filed) && filed >= 1000 && filed <= 9999 ? filed : NaN;
+
+  if (Number.isFinite(filedYear)) {
+    // A year before 1990 is a session with no real start: unknown, not old.
+    return filedYear >= 1990 && filedYear < rules.fromYear;
   }
 
   const started = (body as Record<string, unknown>)["startedUtc"];
@@ -149,7 +208,7 @@ export function resultTakenDown(rules: PrivacyRules, body: unknown): boolean {
     return false;
   }
 
-  return new Date(at).getUTCFullYear() < rules.fromYear;
+  return new Date(at + aheadMs).getUTCFullYear() < rules.fromYear;
 }
 
 /**

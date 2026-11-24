@@ -179,6 +179,18 @@ public sealed class HeatBalanceForm : Form
     private readonly string? _onTrackRoundId;
 
     /// <summary>
+    /// The heat out on track NOW, asked again at Save, or null when the
+    /// caller gives no way to ask.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): which heats are locked is worked out
+    /// once, when the window opens. With Auto start on, the next heat can go
+    /// on track while the window is still open - and Save used to rewrite
+    /// that heat's drivers under the running race. Save now asks again (see
+    /// DescribeStaleSave).
+    /// </summary>
+    private readonly Func<string?>? _onTrackNow;
+
+    /// <summary>
     /// Each driver's recent best lap in the class, by transponder, for Group
     /// by pace and Spread by pace (HeatSeeding). Null when the caller has no
     /// history to give - the two buttons are then not shown.
@@ -224,9 +236,11 @@ public sealed class HeatBalanceForm : Form
         bool roundsAreOneRaceDay = false,
         string? onTrackRoundId = null,
         IReadOnlyDictionary<string, long>? pace = null,
-        Func<IReadOnlyList<RosterChange>, string?>? restCheck = null)
+        Func<IReadOnlyList<RosterChange>, string?>? restCheck = null,
+        Func<string?>? onTrackNow = null)
     {
         _restCheck = restCheck;
+        _onTrackNow = onTrackNow;
         _accent = accent;
         _pace = pace;
         _profiles = profiles;
@@ -250,7 +264,10 @@ public sealed class HeatBalanceForm : Form
         _cardPad = UiLayout.AtTextSize(CardPad);
         _badgeGap = UiLayout.AtTextSize(8);
 
-        BuildUniverse(rounds, classRoster, profiles);
+        foreach (var (transponder, name) in UniverseOf(rounds, classRoster, profiles))
+        {
+            _universe[transponder] = name;
+        }
 
         // The running-order pill: as tall as a line of the small face with a
         // little room, and as wide as the widest number a heat can come to.
@@ -407,35 +424,90 @@ public sealed class HeatBalanceForm : Form
     //  Building
     // ------------------------------------------------------------------
 
-    private void BuildUniverse(
+    /// <summary>
+    /// Everyone the form shows, by main transponder, to the name to show:
+    /// the class roster, and anyone else already in one of its heats.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a driver seated in a heat under his
+    /// second car's transponder used to be added a second time under that
+    /// id - two "Max Power"s, one listed as not in a heat while he stood in
+    /// Q1 Heat 1, the Drivers tile counting him twice, and nothing to stop
+    /// him being dragged into Q1 Heat 2 as well. A heat's id is now filed
+    /// under its owner's main transponder, as the phone's move does.
+    /// </summary>
+    internal static Dictionary<string, string> UniverseOf(
         IReadOnlyList<RoundDefinition> rounds,
         IReadOnlyList<DriverProfile> classRoster,
-        ProfileStore profiles)
+        ProfileStore? profiles)
     {
+        var universe = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var driver in classRoster)
         {
-            _universe[driver.Transponder] = string.IsNullOrWhiteSpace(driver.DriverName)
+            universe[driver.Transponder] = string.IsNullOrWhiteSpace(driver.DriverName)
                 ? "(unnamed)"
                 : driver.DriverName;
         }
 
         foreach (var transponder in rounds.SelectMany(r => r.AssignedTransponders))
         {
-            if (_universe.ContainsKey(transponder))
+            var main = MainOf(profiles, transponder);
+
+            if (universe.ContainsKey(main))
             {
                 continue;
             }
 
-            var profile = profiles.Get(transponder);
+            var profile = profiles?.Get(transponder);
 
-            _universe[transponder] = string.IsNullOrWhiteSpace(profile?.DriverName)
+            universe[main] = string.IsNullOrWhiteSpace(profile?.DriverName)
                 ? transponder
                 : profile!.DriverName;
         }
+
+        return universe;
     }
 
+    /// <summary>
+    /// The driver's main transponder when <paramref name="transponder"/> is
+    /// one of his others, else the id as given - so a driver seated under
+    /// his second car's transponder is the same person as on the roster.
+    /// </summary>
+    internal static string MainOf(ProfileStore? profiles, string transponder) =>
+        profiles?.PrimaryForAlternate(transponder) ?? transponder;
+
+    private string MainOf(string transponder) => MainOf(_profiles, transponder);
+
+    /// <summary>
+    /// The ids in <paramref name="seated"/> and their owners' main ones, for
+    /// "is this driver in a heat?" asked by main transponder (bug hunt 24).
+    /// </summary>
+    internal static HashSet<string> SeatedIds(IEnumerable<string> seated, Func<string, string> mainOf)
+    {
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var transponder in seated)
+        {
+            ids.Add(transponder);
+            ids.Add(mainOf(transponder));
+        }
+
+        return ids;
+    }
+
+    /// <summary>
+    /// The heats with every driver as his main transponder, for the move
+    /// rules (bug hunt 24) - what the phone's move hands DescribeMoveBlocker.
+    /// </summary>
+    internal static List<HeatState> ByMainTransponder(IEnumerable<HeatState> heats, Func<string, string> mainOf) =>
+        heats.Select(h => h with { Drivers = h.Drivers.Select(mainOf).ToList() }).ToList();
+
+    // A seated alternate is filed in the universe under his main id (see
+    // UniverseOf), so the name is looked up there too (bug hunt 24).
     private string NameOf(string transponder) =>
-        _universe.TryGetValue(transponder, out var name) ? name : transponder;
+        _universe.TryGetValue(transponder, out var name) ? name
+        : _universe.TryGetValue(MainOf(transponder), out var owner) ? owner
+        : transponder;
 
     /// <summary>
     /// Every column's width: wide enough for the longest thing any of them
@@ -1137,12 +1209,16 @@ public sealed class HeatBalanceForm : Form
         {
             // The rules live in DescribeMoveBlocker so the phone's "move a
             // driver" follows exactly the same ones - see that method.
-            var heats = _columns
+            //
+            // WHY (23 Nov 2026, bug hunt 24): compared by main transponder,
+            // as the phone's move is. Raw ids let a driver seated in Q1
+            // Heat 1 under his second car's transponder be dropped into Q1
+            // Heat 2 under his main one - two heats of one round.
+            var heats = ByMainTransponder(_columns
                 .Where(c => c.Round is not null)
-                .Select(c => new HeatState(c.Round!, c.Locked, c.Current, OnTrack: IsOnTrack(c.Round!)))
-                .ToList();
+                .Select(c => new HeatState(c.Round!, c.Locked, c.Current, OnTrack: IsOnTrack(c.Round!))), MainOf);
 
-            if (DescribeMoveBlocker(heats, source.Round, targetRound, drag.Transponder, _roundsAreOneRaceDay, NameOf) is { } refusal)
+            if (DescribeMoveBlocker(heats, source.Round, targetRound, MainOf(drag.Transponder), _roundsAreOneRaceDay, NameOf) is { } refusal)
             {
                 Refuse(refusal);
                 return;
@@ -1437,7 +1513,13 @@ public sealed class HeatBalanceForm : Form
 
         var drivers = rounds.SelectMany(heats => heats.SelectMany(c => c.Current)).ToList();
 
-        if (!drivers.Any(d => _pace.TryGetValue(d, out var ms) && ms > 0))
+        // WHY (23 Nov 2026, bug hunt 24): pace is filed by main transponder,
+        // so a driver seated under his second car's one had "no pace" and was
+        // sorted with the drivers nobody has a lap for - a quick driver put
+        // in the slow heat. He now carries his own best lap.
+        var pace = PaceWithSeatedAlternates(drivers, _pace, MainOf);
+
+        if (!drivers.Any(d => pace.TryGetValue(d, out var ms) && ms > 0))
         {
             Refuse("None of these drivers has a lap in this class in the last "
                    + $"{(int)HeatSeeding.RecentForm.TotalDays} days, so there is no pace to sort by.", "No lap times yet");
@@ -1447,7 +1529,7 @@ public sealed class HeatBalanceForm : Form
         foreach (var heats in rounds)
         {
             var seeded = SeedRoundByPace(
-                heats.Select(c => (c.Round!, (IReadOnlyList<string>)c.Current)).ToList(), _pace, group, _profiles);
+                heats.Select(c => (c.Round!, (IReadOnlyList<string>)c.Current)).ToList(), pace, group, _profiles);
 
             for (var i = 0; i < heats.Count; i++)
             {
@@ -1466,6 +1548,34 @@ public sealed class HeatBalanceForm : Form
         }
 
         AfterChange();
+    }
+
+    /// <summary>
+    /// <paramref name="pace"/> with each driver in <paramref name="drivers"/>
+    /// who is seated under another of his transponders given his own best
+    /// lap, which is filed by main transponder (bug hunt 24).
+    /// </summary>
+    internal static IReadOnlyDictionary<string, long> PaceWithSeatedAlternates(
+        IEnumerable<string> drivers,
+        IReadOnlyDictionary<string, long> pace,
+        Func<string, string> mainOf)
+    {
+        var withAlternates = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (transponder, ms) in pace)
+        {
+            withAlternates[transponder] = ms;
+        }
+
+        foreach (var driver in drivers)
+        {
+            if (!withAlternates.ContainsKey(driver) && pace.TryGetValue(mainOf(driver), out var ms))
+            {
+                withAlternates[driver] = ms;
+            }
+        }
+
+        return withAlternates;
     }
 
     /// <summary>
@@ -1539,12 +1649,12 @@ public sealed class HeatBalanceForm : Form
         bool Counts(Column c) =>
             !c.IsSpares && HeatCounts(c.Round!, c.Locked, IsOnTrack(c.Round!), _roundsAreOneRaceDay);
 
+        // WHY (23 Nov 2026, bug hunt 24): by main transponder as well as the
+        // id in the heat. A driver seated under his second car's transponder
+        // used to be listed here as not in a heat while he stood in one.
         foreach (var column in _columns.Where(Counts))
         {
-            foreach (var transponder in column.Current)
-            {
-                racing.Add(transponder);
-            }
+            racing.UnionWith(SeatedIds(column.Current, MainOf));
         }
 
         // Who is in each qualifying round. Judged per round rather than
@@ -1556,7 +1666,7 @@ public sealed class HeatBalanceForm : Form
             .GroupBy(c => RoundKeyOf(c)!, StringComparer.Ordinal)
             .OrderBy(g => RoundKeyOrder(g.Key))
             .Select(g => (Name: RoundNameFor(g.Key, g.First().Round),
-                          Racing: g.SelectMany(c => c.Current).ToHashSet(StringComparer.OrdinalIgnoreCase)))
+                          Racing: SeatedIds(g.SelectMany(c => c.Current), MainOf)))
             .ToList();
 
         var spares = _columns[0];
@@ -1651,6 +1761,50 @@ public sealed class HeatBalanceForm : Form
     //  Saving
     // ------------------------------------------------------------------
 
+    /// <summary>
+    /// Why the changes cannot be saved because a heat they change moved on
+    /// while the window was open, or null when they can (bug hunt 24): the
+    /// heat is gone, has been raced and saved, is the one on track now
+    /// (<paramref name="onTrackNow"/>), or its drivers were changed somewhere
+    /// else since the window opened. All or nothing - a move half saved
+    /// leaves a driver in two heats or in none.
+    /// </summary>
+    /// <param name="roundNow">The heat as it is stored now, by id.</param>
+    public static string? DescribeStaleSave(
+        IReadOnlyList<RosterChange> changes,
+        Func<string, RoundDefinition?> roundNow,
+        string? onTrackNow)
+    {
+        const string Again = " Nothing was saved. Press Cancel and open Move Drivers Between Heats again.";
+
+        foreach (var change in changes)
+        {
+            if (roundNow(change.RoundId) is not { } round)
+            {
+                return "A heat you changed was deleted while this window was open." + Again;
+            }
+
+            if (round.IsRecorded)
+            {
+                return $"{round.RoundLabel} was raced and saved while this window was open, "
+                       + "so its drivers can't be changed now." + Again;
+            }
+
+            if (string.Equals(round.Id, onTrackNow, StringComparison.Ordinal))
+            {
+                return $"{round.RoundLabel} went on track while this window was open, "
+                       + "so its drivers can't be changed now." + Again;
+            }
+
+            if (!round.AssignedTransponders.SequenceEqual(change.Before, StringComparer.OrdinalIgnoreCase))
+            {
+                return $"{round.RoundLabel}'s drivers were changed somewhere else while this window was open." + Again;
+            }
+        }
+
+        return null;
+    }
+
     private void Commit()
     {
         var changes = new List<RosterChange>();
@@ -1668,6 +1822,19 @@ public sealed class HeatBalanceForm : Form
             {
                 changes.Add(new RosterChange(column.Round.Id, column.Original.ToList(), after));
             }
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): locks were worked out once, when the
+        // window opened, so a heat that went on track (Auto start) or was
+        // raced and saved while it stayed open was rewritten under its race.
+        // Asked again here, and nothing is saved if any changed heat moved on.
+        var onTrackNow = _onTrackNow is null ? _onTrackRoundId : _onTrackNow();
+
+        if (changes.Count > 0
+            && DescribeStaleSave(changes, id => _columns.FirstOrDefault(c => c.Round?.Id == id)?.Round, onTrackNow) is { } stale)
+        {
+            AppDialog.Show(this, stale, "Heat changed while open", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
         }
 
         // An empty heat is legal - a class can shrink during the day - but

@@ -105,14 +105,20 @@ public sealed partial class RaceDayEventControl
     /// night (Past Nights..., the day picker) makes that closed day current,
     /// and tonight's still counts as open then (bug hunt 19 #9).
     /// </summary>
-    private RaceEvent? OpenNight()
+    private RaceEvent? OpenNight() => OpenNightOf(_events.Active, _events.Real);
+
+    /// <summary>
+    /// OpenNight's rule on its own, so it can be tested without the page
+    /// (bug hunt 24: the Start Tonight window and the tab choice use it too).
+    /// </summary>
+    internal static RaceEvent? OpenNightOf(RaceEvent? active, IEnumerable<RaceEvent> real)
     {
         static bool InUse(RaceEvent day) =>
             day is { IsLegacy: false, IsOpen: true } && !(day.RoundIds.Count == 0 && day.ClassNames.Count == 0);
 
-        return _events.Active is { } active && InUse(active)
+        return active is not null && InUse(active)
             ? active
-            : _events.Real.Where(InUse).OrderByDescending(d => d.StartedUtc).FirstOrDefault();
+            : real.Where(InUse).OrderByDescending(d => d.StartedUtc).FirstOrDefault();
     }
 
     /// <summary>The banner and the cards, from the templates and race days as they are now.</summary>

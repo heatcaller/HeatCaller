@@ -112,6 +112,23 @@ public sealed class ObsLink : IDisposable
             ? new InvalidOperationException("OBS refused the password. Check it matches the one in OBS's WebSocket Server Settings.")
             : new WebSocketException("OBS closed the link.");
 
+    /// <summary>What the link says (State, and the log) after a connection failed with <paramref name="ex"/>.</summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): an OBS PC that never answers (off,
+    /// asleep, wrong address, or its firewall not letting port 4455 in) runs
+    /// out the five-second connect timeout, and ClientWebSocket throws that
+    /// as a plain cancel. Only WebSocket, socket and HTTP errors were said as
+    /// "isn't answering", so the Race video card read "OBS link: The
+    /// operation was canceled." - nothing had been cancelled, and there was
+    /// no hint to look at the PC. Any cancel that gets this far is the
+    /// connect timeout: the app closing and the settings changing are both
+    /// caught before it.
+    /// </remarks>
+    public static string FailureWords(Exception ex) =>
+        ex is WebSocketException or System.Net.Sockets.SocketException or HttpRequestException or OperationCanceledException
+            ? "OBS isn't answering - is it open, with its WebSocket server on?"
+            : ex.Message;
+
     /// <summary>Which OBS the settings point at: host, port and password - or null with neither race video nor scene switching on.</summary>
     public readonly record struct Target(string Host, int Port, string Password);
 
@@ -152,9 +169,7 @@ public sealed class ObsLink : IDisposable
             }
             catch (Exception ex)
             {
-                var said = ex is WebSocketException or System.Net.Sockets.SocketException or HttpRequestException
-                    ? "OBS isn't answering - is it open, with its WebSocket server on?"
-                    : ex.Message;
+                var said = FailureWords(ex);
 
                 if (State != said)
                 {

@@ -70,7 +70,7 @@ export const PUSH_CHANNEL = "pushsubs";
  */
 export const FOLLOW_CHANNEL = "followsubs";
 
-/** Phones following one name. A relative's phone never pushes the driver's own (PUSH_SUBS_PER_DRIVER) off. */
+/** Phones following one name; a new one past this is refused (23 Nov 2026, bug hunt 24), never pushing an older one off. A relative's phone never pushes the driver's own (PUSH_SUBS_PER_DRIVER) off. */
 export const FOLLOW_SUBS_PER_NAME = 10;
 
 /** Follower phones per club, every name together - a ceiling, not a plan. */
@@ -151,12 +151,60 @@ function ordinalWords(n: number): string {
 }
 
 /**
+ * How long after a race ends its result is still news to a follower. Wide
+ * on purpose: the laptop's clock is not the relay's, and results held back
+ * by a few minutes of bad internet at the track are still tonight's news.
+ */
+export const FOLLOW_RESULT_FRESH_MS = 60 * 60 * 1000;
+
+/** The same, counted from the race's start, for a result that does not say when it ended - wide enough for the longest race. */
+export const FOLLOW_RESULT_FRESH_FROM_START_MS = 6 * 3600 * 1000;
+
+/**
+ * Whether a result is recent enough to tell a follower about.
+ *
+ * WHY (23 Nov 2026, bug hunt 24): the only test used to be "the relay has
+ * not seen this result before". A night raced with no internet is sent when
+ * the laptop is next online - the next morning, or days later - and every
+ * one of those results was new to the relay, so a follower's phone was told
+ * "Sam P finished 2nd" as if it had just happened. Now a result that ended
+ * over an hour ago says nothing. One with no readable time (or a time in
+ * the future, from a laptop clock that is ahead) still counts as fresh, so
+ * nothing that alerted in time before goes quiet.
+ */
+export function followResultIsFresh(result: unknown, nowMs: number): boolean {
+  if (!isObject(result)) {
+    return true;
+  }
+
+  // A date before 1990 is a laptop's "no time set", not a time.
+  const at = (value: unknown): number => {
+    const ms = typeof value === "string" ? Date.parse(value) : NaN;
+    return Number.isFinite(ms) && new Date(ms).getUTCFullYear() >= 1990 ? ms : NaN;
+  };
+
+  const ended = at(result["endedUtc"]);
+
+  if (Number.isFinite(ended)) {
+    return nowMs - ended <= FOLLOW_RESULT_FRESH_MS;
+  }
+
+  const started = at(result["startedUtc"]);
+  return !Number.isFinite(started) || nowMs - started <= FOLLOW_RESULT_FRESH_FROM_START_MS;
+}
+
+/**
  * What a follower of <name> should hear for a result just published: where
  * they finished, in plain words. Only for a result that is new - one
- * republished (a correction) says nothing again.
+ * republished (a correction) says nothing again - and only while it is
+ * still news (followResultIsFresh).
  */
-export function followResultAlerts(before: unknown, after: unknown, name: string, url: string): PushMessage[] {
+export function followResultAlerts(before: unknown, after: unknown, name: string, url: string, nowMs: number = Date.now()): PushMessage[] {
   if (before !== undefined || !isObject(after) || !Array.isArray(after["results"])) {
+    return [];
+  }
+
+  if (!followResultIsFresh(after, nowMs)) {
     return [];
   }
 
@@ -852,7 +900,7 @@ export class PushService {
     await this.store.putItem(club, channel, id, { seq: 0, publishedAt: this.now().toISOString(), body: { ...extra, subs } });
   }
 
-  /** Signs a phone up for alerts about a driver it follows by name (follower alerts, see FOLLOW_CHANNEL). "full" at the ceilings. */
+  /** Signs a phone up for alerts about a driver it follows by name (follower alerts, see FOLLOW_CHANNEL). "full" at the ceilings: the club's, or ten phones already on this name. */
   async followSubscribe(club: string, name: string, sub: PushSub): Promise<"ok" | "full" | "bad"> {
     const clean = followNameFrom(name);
 
@@ -870,6 +918,17 @@ export class PushService {
       const subs = await this.subsOf(club, id, FOLLOW_CHANNEL);
 
       if (!subs.some((s) => s.endpoint === mine.endpoint)) {
+        // WHY (23 Nov 2026, bug hunt 24): a new phone past the ten used to
+        // push the oldest one off. Following needs no badge code, so ten
+        // made-up sign-ups took every real follower's phone off a driver's
+        // alerts, and those phones' pages still showed alerts as on. A new
+        // phone on a full name is now refused, as at the club's ceiling,
+        // and the phones already there keep their alerts. A phone already
+        // on the list can still sign up again (to change what it hears).
+        if (subs.length >= FOLLOW_SUBS_PER_NAME) {
+          return "full" as const;
+        }
+
         await this.pruneIdle(club, FOLLOW_CHANNEL);
         const all = await this.store.listItems(club, FOLLOW_CHANNEL);
         const count = all.reduce((n, item) => n + (isObject(item.doc.body) && Array.isArray(item.doc.body["subs"]) ? item.doc.body["subs"].length : 0), 0);
@@ -955,7 +1014,7 @@ export class PushService {
       for (const [id, name] of names) {
         if (isJunior(name)) continue;
 
-        for (const message of followResultAlerts(before, after, name, url)) {
+        for (const message of followResultAlerts(before, after, name, url, this.now().getTime())) {
           await this.deliver(club, id, message, PUSH_TTL_SECONDS, FOLLOW_CHANNEL);
         }
       }
@@ -1352,8 +1411,9 @@ export function myNightUrl(club: string): string {
  *
  *  - The club's own pages (Home, Live, Schedule, Results and its tabs,
  *    Tracks, Me, check-in, the one-bar app): network first, and the copy
- *    from the last visit when the network is gone or takes over three
- *    seconds. Kept by address, without the query, so one copy a page.
+ *    from the last visit when the network is gone, takes over three
+ *    seconds, or the relay answers that it is busy (a 502 or 503 during
+ *    a restart). Kept by address, without the query, so one copy a page.
  *  - The icon and the logo, which are versioned (?v=): the copy first.
  *  - The shared app.js and app.css (19 Nov 2026, item 1 step 6), also
  *    versioned: the copy first, and fetched as soon as the worker installs,
@@ -1390,8 +1450,34 @@ self.addEventListener('activate', (e) => e.waitUntil(Promise.all([
   self.clients.claim(),
   typeof caches === 'undefined' ? null : caches.keys()
     .then((keys) => Promise.all(keys.filter((k) => k.indexOf('hc-pages-') === 0 && k !== HC_CACHE).map((k) => caches.delete(k))))
-    .catch(() => null),
+    .catch(() => null)
+    .then(() => hcKeepOpen()),
 ])));
+// WHY (23 Nov 2026, bug hunt 24): the first page a phone opens after a
+// deploy is answered by the old worker, which keeps it in the old build's
+// cache - thrown away just above, seconds later. So the page the driver was
+// looking at had no copy for no signal until it was opened a second time.
+// The pages open on this phone right now are fetched again and kept in this
+// build's cache. Never longer than HC_WAIT_MS, so a phone with a bad signal
+// is not held up, and any failure is no failure: the page is kept on its
+// next visit, as before.
+function hcKeepOpen() {
+  const work = Promise.resolve()
+    .then(() => self.clients.matchAll({ type: 'window', includeUncontrolled: true }))
+    .then((all) => caches.open(HC_CACHE).then((cache) => Promise.all((all || []).map((c) => {
+      const route = hcRoute({ method: 'GET', url: c && c.url });
+      if (route === null || !route.page) return null;
+      return fetch(route.key).then((res) => {
+        if (res && res.ok && res.type === 'basic' && !res.redirected) return cache.put(route.key, res);
+        return null;
+      }).catch(() => null);
+    }))))
+    .catch(() => null);
+  return new Promise((resolve) => {
+    const late = setTimeout(resolve, HC_WAIT_MS);
+    work.then(() => { clearTimeout(late); resolve(); });
+  });
+}
 // What a request is to this worker: a club page, a versioned picture, or
 // nothing (left to the network as if there were no worker).
 function hcRoute(req) {
@@ -1415,6 +1501,12 @@ function hcNotHere() {
 }
 // Network first; the kept copy when the network fails or is slow; the
 // network's answer kept for next time whenever it comes.
+// WHY (23 Nov 2026, bug hunt 24): a 502 or 503 while the relay restarts or
+// is being deployed is an answer, not a failure, so it used to be shown -
+// the proxy's bare error text - although a good copy of the page was on the
+// phone. A 5xx is now answered from the kept copy when there is one, as the
+// pages already do for their data; with no copy it passes through. A 403
+// (a paused club) or a 404 is the relay's real answer and is always shown.
 function hcPage(req, key) {
   return caches.open(HC_CACHE).then((cache) => new Promise((resolve) => {
     let done = false;
@@ -1424,6 +1516,7 @@ function hcPage(req, key) {
     fetch(req).then((res) => {
       clearTimeout(slow);
       if (res && res.ok && res.type === 'basic') cache.put(key, res.clone()).catch(() => null);
+      if (res && res.status >= 500) { kept().then((hit) => give(hit || res)); return; }
       give(res);
     }).catch(() => {
       clearTimeout(slow);

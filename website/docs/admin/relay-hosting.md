@@ -551,7 +551,7 @@ The kinds are `logo` (nothing after it), `sponsor`, `track`, `badge`, `video`, `
 |---|---|
 | `logo` | The logo on every page, at `logo.png`, and as the picture on shared links (the club's icon is used instead). |
 | `sponsor` | That sponsor's whole tile - name, line, link and picture. The club's other sponsors stay. |
-| `track` | That track's picture. The track, its records and its laps stay. |
+| `track` | That track's picture. The track, its records and its laps stay. Name the track as the Tracks page shows it; capitals don't matter. The picture stays down even if the club renames the layout. |
 | `badge` | That achievement's artwork. The achievement and who won it stay. |
 | `video` | That YouTube video on every race, the live video, a driver's night and family links. The video itself stays on YouTube. |
 | `clip` | The clip's address and its place on the driver's night. The file is moved aside, not deleted. |

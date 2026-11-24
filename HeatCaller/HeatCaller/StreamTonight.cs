@@ -42,6 +42,10 @@ public sealed class StreamTonight
     private readonly string? _path;
     private Saved _saved = new();
 
+    // True when the file could not be read at startup: nothing is saved over
+    // it this session (bug hunt 24), so a restart that can read it loses nothing.
+    private readonly bool _holdWrites;
+
     /// <summary>Raised (on any thread) whenever a piece starts, stops or changes.</summary>
     public event Action? Changed;
 
@@ -51,12 +55,28 @@ public sealed class StreamTonight
 
         if (path is not null && File.Exists(path))
         {
+            // WHY (23 Nov 2026, bug hunt 24): the file was read once with a
+            // bare File.ReadAllText, and any failure - most often a backup,
+            // sync or virus tool holding it for a moment after a mid-night
+            // restart - loaded an empty night without a word. The next OBS
+            // event or desk change then saved that empty night over the real
+            // file, so tonight's pieces, pasted links and hidden races were
+            // gone. Now it is read with a short retry, and a file that still
+            // cannot be read (or copied aside) holds every save this session,
+            // as every other store in the data folder does. A list written
+            // as null is repaired too: it used to throw out of this
+            // constructor in LetGoOfEarlierNight.
             try
             {
-                _saved = JsonSerializer.Deserialize<Saved>(File.ReadAllText(path)) ?? new Saved();
+                _saved = JsonSerializer.Deserialize<Saved>(SafeFile.ReadAllTextWithRetry(path)) ?? new Saved();
+                _saved.Pieces ??= new();
+                _saved.HiddenRaces ??= new();
+                _saved.Pieces.RemoveAll(p => p is null);
+                _saved.HiddenRaces.RemoveAll(s => s is null);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _holdWrites = SafeFile.HoldWritesAfterUnreadable(path, ex);
                 _saved = new Saved();
             }
         }
@@ -402,17 +422,20 @@ public sealed class StreamTonight
 
     private void Save()
     {
-        if (_path is null)
+        if (_path is null || _holdWrites)
         {
             return;
         }
 
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            var temp = _path + ".tmp";
-            File.WriteAllText(temp, JsonSerializer.Serialize(_saved));
-            File.Move(temp, _path, overwrite: true);
+            // WHY (23 Nov 2026, bug hunt 24): written with File.WriteAllText
+            // and File.Move, which ignored SafeFile.Freeze - so after a
+            // restore or Take Over had put the restored files in, an OBS
+            // event on the link's own thread could still write this
+            // process's old pieces over the restored stream-tonight.json
+            // before the restart. SafeFile writes nothing once frozen.
+            SafeFile.WriteAllText(_path, JsonSerializer.Serialize(_saved));
         }
         catch (Exception)
         {

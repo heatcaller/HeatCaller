@@ -72,9 +72,9 @@ internal static class SettingsTable
             nameof(AppSettings.CoHostHeatCallerVoiceName),
             nameof(AppSettings.CoHostKokoroVoiceName),
 
-            // Voice: the Speak with card's two children's-privacy switches (15 Nov 2026).
+            // Voice: the Speak with card's children's-privacy switch (15 Nov 2026).
+            // Offline voices for juniors is kept - see the kept list.
             nameof(AppSettings.ElevenLabsNoLogging),
-            nameof(AppSettings.OfflineVoicesForJuniors),
 
             // Soundscapes: Lap Times Only.
             nameof(AppSettings.LapTimesOnly),
@@ -295,7 +295,6 @@ internal static class SettingsTable
             nameof(AppSettings.BetweenRacesSegments),
             nameof(AppSettings.BetweenRacesClubNotes),
             nameof(AppSettings.BetweenRacesCountdown),
-            nameof(AppSettings.BetweenRacesCustomLines),
             nameof(AppSettings.BetweenRacesFlagButtons),
             nameof(AppSettings.AnnouncerDensity),
             nameof(AppSettings.SayFullNamesWithOnlineVoices),
@@ -342,7 +341,6 @@ internal static class SettingsTable
             nameof(AppSettings.RelayPublishRoster),
             nameof(AppSettings.RelayListInDirectory),
             nameof(AppSettings.RelayAbbreviateNames),
-            nameof(AppSettings.RelayUnpublishAfterYears),
             nameof(AppSettings.PublishDriverNightsToTheRelay),
             nameof(AppSettings.PublishNightBeforeToTheRelay),
             nameof(AppSettings.ListenAlongOnTheRelay),
@@ -353,18 +351,13 @@ internal static class SettingsTable
             nameof(AppSettings.ClubNotesFromTheRelay),
             nameof(AppSettings.RoomVoteFromTheRelay),
             nameof(AppSettings.RelaySiteTheme),
-            nameof(AppSettings.RelayTagline),
-            nameof(AppSettings.RelayClubAlias),
-            nameof(AppSettings.RelayShortName),
             nameof(AppSettings.RelayTimeZone),
             nameof(AppSettings.RelayDriverThemes),
-            nameof(AppSettings.InboxQuickReplies),
             nameof(AppSettings.InboxDocked),
             nameof(AppSettings.InboxDockWidth),
             nameof(AppSettings.VideoEnabled),
             nameof(AppSettings.VideoObsHost),
             nameof(AppSettings.JuniorNamesOnStream),
-            nameof(AppSettings.StreamBasics),
             nameof(AppSettings.ObsSwitchScenes),
             nameof(AppSettings.ObsSceneStaging),
             nameof(AppSettings.ObsSceneRacing),
@@ -374,12 +367,6 @@ internal static class SettingsTable
             nameof(AppSettings.VideoLeadInSeconds),
             nameof(AppSettings.VideoUltraLowLatency),
             nameof(AppSettings.VideoOnPublicResults),
-            nameof(AppSettings.RelayNewcomerWhere),
-            nameof(AppSettings.RelayNewcomerWhen),
-            nameof(AppSettings.RelayNewcomerJoin),
-            nameof(AppSettings.RelayFirstNightGuide),
-            nameof(AppSettings.RelayClubUpdates),
-            nameof(AppSettings.RelaySocialLinks),
             nameof(AppSettings.RelayCheckInPhotos),
             nameof(AppSettings.RelayEmailSignInLink),
             nameof(AppSettings.RelayRacerPinsEnabled),
@@ -393,6 +380,39 @@ internal static class SettingsTable
             // A privacy choice (Backup & Restore's Getting help card): a
             // restore of defaults must never turn sharing back on.
             nameof(AppSettings.ShareUsageStats),
+
+            // WHY (23 Nov 2026, bug hunt 24): the two children's-privacy
+            // choices whose shipped default is the less private one - take
+            // old results down after N years (default 0, keep every year
+            // online) and Offline voices for juniors (default off). They
+            // were filed by the page they sit on, so Restore Default
+            // Settings (and Put Back Earlier Settings) quietly switched the
+            // protection off: old seasons with children's names could go
+            // back online and junior lines went to the online voice again.
+            nameof(AppSettings.RelayUnpublishAfterYears),
+            nameof(AppSettings.OfflineVoicesForJuniors),
+
+            // WHY (23 Nov 2026, bug hunt 24): words the club wrote itself -
+            // the first-night guide, club updates, the New here? card, its
+            // tagline, social links, short address and short name, the
+            // Desk Inbox quick replies, the stream's New to RC racing?
+            // cards and its own between-race lines. They were filed as
+            // tuning, so Restore Default Settings emptied them (the short
+            // address on the posters stopped pointing at the club), and Put
+            // Back Earlier Settings swapped them for an older copy's - the
+            // same mistake bug hunt 17 fixed for the night templates.
+            nameof(AppSettings.RelayFirstNightGuide),
+            nameof(AppSettings.RelayClubUpdates),
+            nameof(AppSettings.RelayNewcomerWhere),
+            nameof(AppSettings.RelayNewcomerWhen),
+            nameof(AppSettings.RelayNewcomerJoin),
+            nameof(AppSettings.RelayTagline),
+            nameof(AppSettings.RelaySocialLinks),
+            nameof(AppSettings.RelayClubAlias),
+            nameof(AppSettings.RelayShortName),
+            nameof(AppSettings.InboxQuickReplies),
+            nameof(AppSettings.StreamBasics),
+            nameof(AppSettings.BetweenRacesCustomLines),
 
             // The retired Next Level Timing connection, kept so old files load.
             nameof(AppSettings.Host),
@@ -477,6 +497,9 @@ internal static class SettingsTable
             nameof(AppSettings.CommentaryFactsNight),
             nameof(AppSettings.SponsorRotationNight),
             nameof(AppSettings.SponsorMentionsNight),
+
+            // WHY (23 Nov 2026, bug hunt 24, F304): kept as the mentions are.
+            nameof(AppSettings.SponsorStreamNight),
             nameof(AppSettings.CommentaryContinuityNight),
 
             // The club's own track parts, for the Track Designer.

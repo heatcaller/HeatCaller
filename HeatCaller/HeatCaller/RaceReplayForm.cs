@@ -52,8 +52,14 @@ public sealed class RaceReplayForm : Form
     private readonly List<Runner> _runners;
     private readonly long _raceLengthMs;
 
+    // Said beside the heading when any lap in the result was counted by hand (HandLapsNote).
+    private readonly string _handLapsNote;
+
     private readonly ReplayCanvas _canvas;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 33 };
+
+    // The real time since the last tick, restarted whenever the clock starts (see ReplayStep).
+    private readonly System.Diagnostics.Stopwatch _sinceTick = new();
     private readonly SliderControl _scrub = new();
     private readonly Button _btnPlay = new();
     private readonly Label _lblClock = new();
@@ -73,6 +79,9 @@ public sealed class RaceReplayForm : Form
         public required string Car { get; init; }
         public required Color Colour { get; init; }
         public required int Finished { get; init; }
+
+        /// <summary>Laps in their result counted by hand (HandCountedLaps.In): in the result, with no crossing to play back.</summary>
+        public int HandLaps { get; init; }
 
         /// <summary>Elapsed race time at each crossing, cumulative.</summary>
         public required List<long> CrossingsMs { get; init; }
@@ -139,6 +148,7 @@ public sealed class RaceReplayForm : Form
         _raceLengthMs = _runners.Count == 0
             ? 0
             : _runners.Max(r => r.CrossingsMs.Count == 0 ? 0 : r.CrossingsMs[^1]);
+        _handLapsNote = HandLapsNote(session.Results);
 
         Text = $"Replay - {(string.IsNullOrWhiteSpace(session.Label) ? "Race" : session.Label)}";
 
@@ -235,12 +245,53 @@ public sealed class RaceReplayForm : Form
                 Car = entry.CarModel,
                 Colour = palette[i % palette.Count],
                 Finished = entry.Position,
+                HandLaps = HandCountedLaps.In(entry),
                 CrossingsMs = crossings,
             });
         }
 
         return runners;
     }
+
+    /// <summary>
+    /// The line under the heading when any lap in this race's result was
+    /// counted by hand, or empty when none was.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a lap counted by hand (+1 Lap for a
+    /// dead transponder, or a lap Edit Result added) has no lap time, so the
+    /// replay cannot play it - and it said nothing about that. A winner whose
+    /// transponder died after lap 8 of 20 was drawn stopping on lap 8 and
+    /// finishing last, "12 laps" down, against a result sheet that had them
+    /// winning on 20*. The lanes still draw only what was measured; now the
+    /// replay says which laps it cannot show and where the final order is.
+    /// </summary>
+    internal static string HandLapsNote(IEnumerable<SessionResultEntry> results) =>
+        results.Any(r => HandCountedLaps.In(r) > 0)
+            ? HandCountedLaps.Mark + " laps counted by hand have no time, so they are not played back - the result has the final order"
+            : string.Empty;
+
+    /// <summary>A driver's name in their lane: with the hand-counted mark after it when any of their laps were counted by hand (see HandLapsNote).</summary>
+    internal static string LaneName(string name, int handLaps) =>
+        handLaps > 0 ? name + HandCountedLaps.Mark : name;
+
+    /// <summary>
+    /// How far the replay moves on for a tick: the real time since the last
+    /// one, times the speed chosen.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): every tick moved the race on by the
+    /// timer's 33 ms times the speed, as if each tick came exactly 33 ms
+    /// after the last. A window timer never comes early and usually comes
+    /// late (about 47 ms on most PCs, and later still while the lanes
+    /// repaint), so "1x" ran well slower than the race really did, and every
+    /// other speed by the same share. A wait longer than StepCapMs (the PC
+    /// busy, a window dragged) counts only that much, so the race does not
+    /// leap ahead when the replay gets the thread back.
+    /// </summary>
+    internal static long ReplayStep(long elapsedRealMs, double speed) =>
+        (long)(Math.Clamp(elapsedRealMs, 0, StepCapMs) * speed);
+
+    /// <summary>The most real time one tick counts for (see ReplayStep).</summary>
+    internal const long StepCapMs = 250;
 
     private void BuildTransport()
     {
@@ -386,6 +437,7 @@ public sealed class RaceReplayForm : Form
             _positionMs = 0;
         }
 
+        _sinceTick.Restart();
         _timer.Start();
         _btnPlay.Text = "Pause";
     }
@@ -402,6 +454,7 @@ public sealed class RaceReplayForm : Form
 
         if (_resumeAfterScrub && _positionMs < _raceLengthMs)
         {
+            _sinceTick.Restart();
             _timer.Start();
         }
         else if (_resumeAfterScrub)
@@ -415,7 +468,11 @@ public sealed class RaceReplayForm : Form
 
     private void Advance()
     {
-        _positionMs += (long)(_timer.Interval * _speed);
+        // WHY (23 Nov 2026, bug hunt 24): by the real time since the last
+        // tick, not a fixed 33 ms a tick - see ReplayStep.
+        var elapsed = _sinceTick.ElapsedMilliseconds;
+        _sinceTick.Restart();
+        _positionMs += ReplayStep(elapsed, _speed);
 
         if (_positionMs >= _raceLengthMs)
         {
@@ -595,11 +652,28 @@ public sealed class RaceReplayForm : Form
             TextRenderer.DrawText(g, "Running order", AppTheme.BoldFont,
                 new Point(margin, headingTop), AppTheme.TextDark);
 
+            var lapLeft = Math.Max(UiLayout.AtTextSize(120), Width - margin - UiLayout.AtTextSize(116));
+
             TextRenderer.DrawText(g,
                 $"Lap {Math.Max(1, (int)Math.Floor(leader))}",
                 AppTheme.BoldFont,
-                new Point(Math.Max(UiLayout.AtTextSize(120), Width - margin - UiLayout.AtTextSize(116)), headingTop),
+                new Point(lapLeft, headingTop),
                 AppTheme.Primary);
+
+            // WHY (23 Nov 2026, bug hunt 24): laps counted by hand are in the
+            // result but not in the lanes - say so on the heading's line,
+            // between the heading and the lap, cut short with "..." when the
+            // window is narrow (see HandLapsNote).
+            if (_owner._handLapsNote.Length > 0)
+            {
+                var headingWidth = TextRenderer.MeasureText(g, "Running order", AppTheme.BoldFont).Width;
+                var noteLeft = margin + headingWidth + UiLayout.AtTextSize(12);
+                var noteHeight = Pieces.LineHeight(AppTheme.BoldFont);
+
+                TextRenderer.DrawText(g, _owner._handLapsNote, AppTheme.SmallFont,
+                    new Rectangle(noteLeft, headingTop, Math.Max(0, lapLeft - UiLayout.AtTextSize(12) - noteLeft), noteHeight),
+                    AppTheme.TextMuted, InLane);
+            }
 
             for (var place = 0; place < order.Count; place++)
             {
@@ -632,7 +706,7 @@ public sealed class RaceReplayForm : Form
 
                 // The name up to the bar, and "..." where a long one would
                 // have run on under the bar and its car.
-                TextRenderer.DrawText(g, runner.Name, AppTheme.BodyFont,
+                TextRenderer.DrawText(g, LaneName(runner.Name, runner.HandLaps), AppTheme.BodyFont,
                     new Rectangle(row.Left + nameLeft, row.Top, Math.Max(0, barLeft - nameRoom - (row.Left + nameLeft)), row.Height),
                     AppTheme.TextDark, InLane);
 

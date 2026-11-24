@@ -55,6 +55,12 @@ internal static class CoachReport
     /// <summary>A setup change whose effect is smaller than this is "about the same".</summary>
     internal const long SameWithinMs = 20;
 
+    /// <summary>
+    /// Two lap times closer than this are level: the card writes gaps to the
+    /// hundredth, so anything smaller would print as "0.00".
+    /// </summary>
+    internal const long LevelWithinMs = 5;
+
     /// <summary>The setup change logged tonight for the car the driver ran, as the caller found it.</summary>
     /// <param name="AtUtc">When it was logged.</param>
     /// <param name="What">What changed, already in words - SetupDiff.Describe's "Pinion 22 → 23" - or null when it is not known.</param>
@@ -139,7 +145,11 @@ internal static class CoachReport
         var bestSectors = BestSectors(mine, cuts);
         var where = layout.Length > 0 ? $" on {layout}" : string.Empty;
 
-        if (bestSectors is { } sectors && sectors.Bests.Sum() < best)
+        // WHY (23 Nov 2026, bug hunt 24): the ideal lap used to be written
+        // whenever the best sectors summed to anything under the best lap, so
+        // a 1-4 ms difference printed "0.00s still to find" - a gap of
+        // nothing. Under LevelWithinMs it is the plain best-lap line.
+        if (bestSectors is { } sectors && best - sectors.Bests.Sum() >= LevelWithinMs)
         {
             var ideal = sectors.Bests.Sum();
             lines.Add($"Best lap {input.NightWord}{where}: {Seconds(best)}s, from {Plural.Of(laps.Count, "lap")}. "
@@ -433,6 +443,15 @@ internal static class CoachReport
         }
 
         var gap = best - quickest.Best;
+
+        // WHY (23 Nov 2026, bug hunt 24): a rival 1-4 ms quicker used to get
+        // "0.00s off Sam's best", a gap of nothing. Under LevelWithinMs the
+        // driver is level with them, and no sector carries a gap that small.
+        if (gap < LevelWithinMs)
+        {
+            return $"Level with {name}'s best of {Seconds(quickest.Best)}s, the quickest lap of anyone you raced with {nightWord}.";
+        }
+
         var line = $"{Gap(gap)}s off {name}'s best of {Seconds(quickest.Best)}s, the quickest lap of anyone you raced with {nightWord}";
 
         // Most of it in one sector: the rival's best sectors against theirs,

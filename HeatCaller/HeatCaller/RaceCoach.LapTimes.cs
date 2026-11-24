@@ -75,7 +75,8 @@ public static partial class RaceCoach
     /// fourth clean lap to the third from last, and the split where the two
     /// halves each sit closest to their own average is where the pace
     /// changed. It is a fade when the second half is slower, by at least
-    /// <see cref="FadeLeastMs"/> a lap.
+    /// <see cref="FadeLeastMs"/> a lap, and the last laps are still that
+    /// much slower than the laps before them.
     /// </summary>
     public static Fade? FadeOf(IReadOnlyList<long> laps)
     {
@@ -117,6 +118,23 @@ public static partial class RaceCoach
         var perLap = (long)Math.Round(split.After - split.Before);
 
         if (perLap < FadeLeastMs(laps.Min()))
+        {
+            return null;
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): a fade is pace that "stayed down to
+        // the flag", but the old rule only asked that the laps after the
+        // split averaged slower than the laps before it. A race that slumped
+        // in the middle and ended on its quickest laps was told "quickest at
+        // the end ... then you faded", got a "Fade starts" mark, and the card
+        // beside it said "You finished strong". The last laps must now be
+        // slower than the laps before them, counted as ThreeThings counts
+        // them, so the two can never disagree.
+        var lastCount = Math.Min(5, times.Count / 3);
+        var tail = times.Skip(times.Count - lastCount).Average();
+        var rest = times.Take(times.Count - lastCount).Average();
+
+        if (tail - rest < FadeLeastMs(laps.Min()))
         {
             return null;
         }

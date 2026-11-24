@@ -271,6 +271,9 @@ const FIELD_ID = /^[A-Za-z0-9_-]{1,48}$/;
 const REF = /^[0-9A-F]{6}$/;
 const LEGACY = [['tires', 'Tires'], ['gearing', 'Gearing'], ['springs', 'Springs'], ['ride', 'Ride height'], ['motor', 'Motor']];
 const EVERY_MS = 15000;
+// How long one garage read may take before it is given up on (bug hunt 24):
+// under EVERY_MS, so a read that never comes back costs one turn, not the page.
+const READ_WAIT_MS = 12000;
 
 // One answer for every kind of nothing, as the night page has: a bad
 // code, a closed club and a driver not on tonight's list all land here.
@@ -386,16 +389,31 @@ function newId() {
 }
 
 // Every relay call this page makes: a POST, with whatever it carries in the body.
-async function post(path, payload) {
-  const r = await fetch(API + path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-    cache: 'no-store',
-  });
-  let body = {};
-  try { body = await r.json(); } catch (e) { /* an empty answer is still an answer */ }
-  return { status: r.status, body: body || {} };
+// WHY (23 Nov 2026, bug hunt 24): waitMs gives up on a call after that long,
+// as grab's waitMs does on the night page. The garage read had no limit, and
+// while one read was out no other could start, so a read that never came
+// back - a phone moving between venue Wi-Fi and mobile data - froze the
+// garage until a reload: no "In the car", sends stuck on "Sent", the Updated
+// time stopped. The limit covers reading the answer too. Sends (driver/ask,
+// a photo) still have none, so a slow photo upload is never cut off and sent twice.
+async function post(path, payload, waitMs) {
+  const stop = waitMs && typeof AbortController === 'function' ? new AbortController() : null;
+  const cut = stop ? setTimeout(() => stop.abort(), waitMs) : 0;
+  try {
+    const init = {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+    };
+    if (stop) init.signal = stop.signal;
+    const r = await fetch(API + path, init);
+    let body = {};
+    try { body = await r.json(); } catch (e) { /* an empty answer is still an answer */ }
+    return { status: r.status, body: body || {} };
+  } finally {
+    if (stop) clearTimeout(cut);
+  }
 }
 
 // ---- what the relay said
@@ -491,8 +509,20 @@ const view = {
   setupSheet: {},
 };
 
-function section(name, id, keyOf, build) {
-  SECTIONS[name] = { box: document.getElementById(id), keyOf: keyOf, build: build, key: null };
+// follows (bug hunt 24): for a section that shows one car, which car that is.
+function section(name, id, keyOf, build, follows) {
+  SECTIONS[name] = { box: document.getElementById(id), keyOf: keyOf, build: build, key: null, follows: follows || null, on: '' };
+}
+
+// WHY (23 Nov 2026, bug hunt 24): the driver swiped to another car, or tapped
+// Log setup on one, and the setup card shows a different car: draw it even
+// though a sheet has unsent typing. That typing was always the other car's
+// (drafts are kept per car), so drawing this car's sheet loses none of it,
+// and going back puts it back. The old hold kept the card on the first car
+// until they saved, so a setup could be logged on the wrong car. A garage
+// read that changes the car by itself (no car picked) is still held.
+function carMoved(drawn, now, picked) {
+  return now !== '' && now !== drawn && now === picked;
 }
 
 function focusedIn(box) {
@@ -517,12 +547,15 @@ function paint(name, force) {
   // found no garage) holds nothing to protect: it is drawn, and any draft
   // refills its form. The same goes for a box left empty by a read that
   // answered with no garage in it yet.
-  if (!force && s.key !== null && s.box.children.length > 0 && busy(name, s)) return;
+  const on = s.follows ? String(s.follows() || '') : '';
+  if (!force && s.key !== null && s.box.children.length > 0 && busy(name, s)
+    && !(s.follows && carMoved(s.on, on, view.carAt))) return;
   // New data: anything sent and settled starts again from it.
   if (key !== s.key) {
     for (const [form, d] of [...drafts]) if (d.section === name && !d.dirty) drafts.delete(form);
   }
   s.key = key;
+  s.on = on;
   s.box.textContent = '';
   s.build(s.box, name);
 }
@@ -727,7 +760,9 @@ async function readGarage() {
   if (p !== '') payload.pass = p;
 
   let a = null;
-  try { a = await post('/driver/garage', payload); } catch (e) { a = null; }
+  // WHY (23 Nov 2026, bug hunt 24): a read that is not back in READ_WAIT_MS
+  // is given up on and counts as no answer, so the page tries again.
+  try { a = await post('/driver/garage', payload, READ_WAIT_MS); } catch (e) { a = null; }
   reading = false;
 
   if (a === null) {
@@ -953,14 +988,27 @@ function raceRow(r, all, sec) {
 
   const tagged = str(r.pack);
   const choices = all.filter((p) => p.retired !== true || p.id === tagged);
+  // WHY (23 Nov 2026, bug hunt 24): a race run on a pack that is no longer in
+  // their list - a club pack since taken out of the car, a pack now another
+  // driver's - had no choice for it, so the picker showed nothing and Save
+  // sent "Not recorded", wiping the pack off the race. It is a choice now,
+  // named by the race's packLabel when HeatCaller sends one, and Save with
+  // it still picked changes nothing.
+  const missing = OBJECT_ID.test(tagged) && !choices.some((p) => p.id === tagged);
+  const list = choices.map((p) => [p.id, packLabel(p)]);
+  if (missing) list.push([tagged, str(r.packLabel) || 'A pack not in your garage']);
   const form = 'race-' + r.id;
   const wrap = el('div', 'su gfull');
   const pick = selectBox(wrap, sec, form, 'pack', 'Pack in ' + (str(r.label) || 'this race'),
-    [['none', 'Not recorded']].concat(choices.map((p) => [p.id, packLabel(p)])),
+    [['none', 'Not recorded']].concat(list),
     OBJECT_ID.test(tagged) ? tagged : 'none');
   wrap.appendChild(tapButton('Save', 'go quiet', async () => {
     const v = String(pick.input.value || 'none');
     if (v !== 'none' && !OBJECT_ID.test(v)) return;
+    if (missing && v === tagged) {
+      setStatus(form, 'Nothing changed: that pack is already recorded for this race.');
+      return;
+    }
     if (await change('pack', { pack: v, race: r.id }, form)) settled(form);
   }));
   wrap.appendChild(statusLine(form));
@@ -2261,7 +2309,8 @@ section('packs', 'gp', () => [garage ? [garage.packs, garage.chemistries] : null
 section('races', 'gr', () => [garage ? [garage.races, garage.packs] : null], buildRaces);
 section('charts', 'gc', () => [garage ? garage.stats : null], buildCharts);
 section('cars', 'gg', () => [garage ? [garage.cars, garage.chassis, garage.classes, garage.limits] : null], buildCars);
-section('setup', 'gs', () => [garage ? [garage.cars, garage.sheets, garage.races] : null, garage ? (carInView() || {}).id || '' : ''], buildSetup);
+section('setup', 'gs', () => [garage ? [garage.cars, garage.sheets, garage.races] : null, garage ? (carInView() || {}).id || '' : ''], buildSetup,
+  () => (garage ? (carInView() || {}).id || '' : ''));
 
 function start() {
   if (!CODE) {

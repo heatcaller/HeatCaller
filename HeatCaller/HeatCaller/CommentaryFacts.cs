@@ -345,6 +345,29 @@ public sealed class SaidTonight
         return any;
     }
 
+    /// <summary>
+    /// Gives one fact back, as if it had never been said - for a line that
+    /// was settled as said when it was queued and then thrown away by the
+    /// voice before a word of it was heard.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): a battle watch binned unheard kept its
+    /// battle key spent, so the same fight could not be called again that
+    /// race - the room never heard it called at all.
+    /// </remarks>
+    public void Forget(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            _spent.Remove(key);
+        }
+    }
+
     /// <summary>A new race day. Last week's facts are this week's news again.</summary>
     public void NewMeeting(string dayId)
     {

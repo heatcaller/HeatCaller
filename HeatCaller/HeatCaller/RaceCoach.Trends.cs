@@ -164,6 +164,16 @@ public static partial class RaceCoach
             return CurveStage.Plateau;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): any rate under LearningRate fell to
+        // Refining, negative ones too, so a driver losing 0.16 s a week with
+        // a best two sessions back was told "You are here. Still finding
+        // time" beside a headline saying "Slower lately". Slower than the
+        // headline's own "slower lately" line is no stage on the curve.
+        if (rate < -PlateauRate)
+        {
+            return null;
+        }
+
         return rate >= LearningRate ? CurveStage.Learning : CurveStage.Refining;
     }
 
@@ -220,7 +230,9 @@ public static partial class RaceCoach
 
         if (now < -PlateauRate)
         {
-            return $"Slower lately: losing about {Rate(-now)} a week.{(reading.SessionsSinceBest > 0 ? $" Your best was {reading.SessionsSinceBest} sessions ago." : string.Empty)}";
+            // WHY (23 Nov 2026, bug hunt 24): this said "Your best was 1
+            // sessions ago" when the best came in the session before last.
+            return $"Slower lately: losing about {Rate(-now)} a week.{(reading.SessionsSinceBest > 0 ? $" Your best was {Plural.Of(reading.SessionsSinceBest, "session")} ago." : string.Empty)}";
         }
 
         if (now < PlateauRate)
@@ -283,6 +295,25 @@ public static partial class RaceCoach
         CurveStage.Refining => $"Still finding time, under {Rate(LearningRate)} a week.",
         _ => $"{PlateauDrought} sessions with no new best, under {Rate(PlateauRate)} a week.",
     };
+
+    /// <summary>
+    /// The line under the "Where you are on the curve" card.
+    /// WHY (23 Nov 2026, bug hunt 24): a driver getting slower is placed on
+    /// no stage (see StageOf), and the page's old line for no stage said "It
+    /// takes 4 sessions over more than a week to place you", which is untrue
+    /// when they have those sessions. This says why nothing is lit.
+    /// </summary>
+    public static string WhereNote(TrendReading reading)
+    {
+        if (reading.Stage is not null)
+        {
+            return $"From your last {Plural.Of(reading.RecentSessions, "session")} here.";
+        }
+
+        return reading.Sessions >= TrendLeastSessions && reading.RecentRate is double rate && rate < -PlateauRate
+            ? $"Slower over your last {Plural.Of(reading.RecentSessions, "session")} here, so none of these fits right now."
+            : $"It takes {TrendLeastSessions} sessions over more than a week to place you.";
+    }
 
     /// <summary>"0.11 s", for a rate in seconds.</summary>
     private static string Rate(double seconds) => $"{seconds:0.00} s";

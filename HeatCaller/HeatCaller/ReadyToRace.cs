@@ -249,25 +249,7 @@ internal static class TextSheetRenderer
                 var bitmap = new Bitmap(PageWidth, PageHeight);
                 pages.Add(bitmap);
 
-                using var g = Graphics.FromImage(bitmap);
-                g.Clear(Color.White);
-                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-
-                using var heading = new Font("Segoe UI", 16f, FontStyle.Bold, GraphicsUnit.Point);
-                using var body = new Font("Segoe UI", 13f, FontStyle.Regular, GraphicsUnit.Point);
-                using var foot = new Font("Segoe UI", 8f, FontStyle.Regular, GraphicsUnit.Point);
-
-                var y = (float)Margin;
-                var index = first;
-
-                foreach (var line in lines.Skip(first).Take(perPage))
-                {
-                    g.DrawString(line, index == 0 ? heading : body, Brushes.Black, Margin, y);
-                    y += LineHeight;
-                    index++;
-                }
-
-                HeatCallerMark.DrawPrintFooter(g, Margin, PageWidth - Margin, PageHeight - Margin, foot);
+                DrawPage(bitmap, lines, first, perPage);
                 bitmap.SetResolution(150f, 150f);
             }
         }
@@ -282,6 +264,38 @@ internal static class TextSheetRenderer
         }
 
         return pages;
+    }
+
+    /// <summary>Draws one page - lines <paramref name="first"/> on, at most <paramref name="perPage"/> of them - on a heat-sheet-sized bitmap.</summary>
+    internal static void DrawPage(Bitmap bitmap, IReadOnlyList<string> lines, int first, int perPage)
+    {
+        // WHY (23 Nov 2026, bug hunt 24): 96 DPI, not the screen's. A new
+        // Bitmap takes the screen's DPI, so under --dpi-aware at 150% the
+        // point-size text drew half as big again against the fixed 34 px
+        // line and 80-character width: the drivers' meeting sheet printed
+        // with lines touching and long lines running into the right margin.
+        // The other sheet renderers already pin 96 before drawing.
+        bitmap.SetResolution(96, 96);
+
+        using var g = Graphics.FromImage(bitmap);
+        g.Clear(Color.White);
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+        using var heading = new Font("Segoe UI", 16f, FontStyle.Bold, GraphicsUnit.Point);
+        using var body = new Font("Segoe UI", 13f, FontStyle.Regular, GraphicsUnit.Point);
+        using var foot = new Font("Segoe UI", 8f, FontStyle.Regular, GraphicsUnit.Point);
+
+        var y = (float)Margin;
+        var index = first;
+
+        foreach (var line in lines.Skip(first).Take(perPage))
+        {
+            g.DrawString(line, index == 0 ? heading : body, Brushes.Black, Margin, y);
+            y += LineHeight;
+            index++;
+        }
+
+        HeatCallerMark.DrawPrintFooter(g, Margin, PageWidth - Margin, PageHeight - Margin, foot);
     }
 
     /// <summary>A line broken at spaces so no piece is longer than <paramref name="width"/> characters; follow-on pieces are indented.</summary>

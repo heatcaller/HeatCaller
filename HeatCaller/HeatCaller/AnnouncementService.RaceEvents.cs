@@ -227,7 +227,7 @@ public sealed partial class AnnouncementService
         EnqueueVoice(AnnouncementEventType.SplitRecordPace, standing, null, extras: SplitExtras(split, upMs), sayByMs: SplitSayBy());
 
     /// <summary>{split} and {gap} - a gap to the tenth, said as "two tenths".</summary>
-    private static Dictionary<string, (string, string)> SplitExtras(string split, long upMs)
+    internal static Dictionary<string, (string, string)> SplitExtras(string split, long upMs)
     {
         // Tenths: a split time is good to a few hundredths. SAID the way
         // a gap is called (15 Oct 2026) - "two tenths up", "half a second
@@ -235,13 +235,20 @@ public sealed partial class AnnouncementService
         // computer reading RaceNumbers exists to replace. Never under a
         // tenth: a split that came out at nought would read as "nothing
         // up", and a call this fires on is at least a tenth by its rule.
-        var tenths = Math.Max(1, (long)Math.Round(Math.Abs(upMs) / 100.0));
-        var spoken = RaceNumbers.GapSpoken(tenths / 10.0);
+        //
+        // WHY (23 Nov 2026, bug hunt 24): past a second it was said to the
+        // half second and shown to the tenth - "a second and a half up at
+        // the split" over "1.3s" on the screens, and 1.2 was said as "a
+        // second". The split coach and split battle lines were moved to the
+        // tenths for exactly this on 8 Nov 2026 and this one was left
+        // behind. Now it is said and shown from the same tenths, rounded the
+        // one way the rest are.
+        var tenths = Math.Max(1, RaceNumbers.TenthsOf(upMs));
 
         return new Dictionary<string, (string, string)>
         {
             ["split"] = (split, split),
-            ["gap"] = (spoken, (tenths / 10.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "s"),
+            ["gap"] = (RaceNumbers.GapInTenths(tenths), RaceNumbers.TenthsShown(tenths)),
         };
     }
 
@@ -1639,7 +1646,13 @@ public sealed partial class AnnouncementService
     internal static string? QualifyingLeader(IEnumerable<RaceStanding> field,
         IReadOnlyDictionary<string, List<long>> flyingLaps, QualifyingMethod method, int consecutiveLaps)
     {
-        var standings = field.ToList();
+        // WHY (23 Nov 2026, bug hunt 24): a black-flagged car is left out, as
+        // bug hunt 22 left it out of the running order, the battles and the
+        // winner. It used to stay in here, so a disqualified driver with the
+        // quickest run held provisional pole for the rest of the qualifier -
+        // the driver really on top was never called - and a flagged car
+        // back ahead on laps was called as taking pole.
+        var standings = field.Where(s => !s.BlackFlagged).ToList();
         if (standings.Count == 0)
         {
             return null;

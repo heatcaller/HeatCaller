@@ -561,6 +561,19 @@ public sealed class ThemeStore
                 // a faster model was picked on the Voice page quietly put the
                 // slower one back.
                 voice.RaceCallModelId = now.RaceCallModelId;
+
+                // WHY (23 Nov 2026, bug hunt 24): on the HeatCaller voice the
+                // wording stays as it is now, the same rule Apply keeps. The
+                // undo used to put back every line from before the apply, so
+                // a club that applied a built-in soundscape, then picked the
+                // HeatCaller voice, then pressed Undo had its own typed lines
+                // spoken on HeatCaller's account - and shown read-only on the
+                // Voice page, where they could not be changed back.
+                if (now.EffectiveEngine == VoiceEngine.HeatCaller)
+                {
+                    voice.Events = now.Events;
+                }
+
                 voiceStore.Save(voice);
             }
 

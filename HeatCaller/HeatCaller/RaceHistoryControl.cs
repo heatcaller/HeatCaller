@@ -204,6 +204,11 @@ public sealed class RaceHistoryControl : UserControl
         //
         // What it was and when, over its results, in the bold face.
         _lblDetailTitle.AutoSize = true;
+        // WHY (23 Nov 2026, bug hunt 24): the title carries the director's own
+        // class and track names. Left as a shortcut-key label, an & in one
+        // ("Smith & Sons Raceway") was not drawn and the next letter was
+        // underlined instead. _lblNight beside it already had this.
+        _lblDetailTitle.UseMnemonic = false;
         _lblDetailTitle.Text = "Select a session to see full results.";
         _textSize.Wear(_lblDetailTitle, () => AppTheme.BoldFont);
 
@@ -748,10 +753,9 @@ public sealed class RaceHistoryControl : UserControl
             var traceCell = _detailGrid.Rows[rowIndex].Cells["trace"];
             traceCell.Tag = laps;
 
-            if (laps.Count > 0)
+            if (LapTraceTip(r) is { } tip)
             {
-                var bestAt = laps.IndexOf(laps.Min());
-                traceCell.ToolTipText = $"{Count(laps.Count, "lap")} · best {laps[bestAt] / 1000.0:0.000}s on lap {bestAt + 1}";
+                traceCell.ToolTipText = tip;
             }
 
             if (Sectors.Bests(r) is { } shaded)
@@ -910,12 +914,51 @@ public sealed class RaceHistoryControl : UserControl
         Math.Min(column.GetPreferredWidth(DataGridViewAutoSizeColumnMode.AllCells, fixedHeight: true), UiLayout.AtTextSize(200));
 
     /// <summary>
-    /// A driver's laps for their line: the timed ones. Not the start lap, a
-    /// part lap from the grid to the line that is quicker than any real one -
-    /// a lap faster than their recorded fastest cannot be a whole lap.
+    /// A driver's laps for their line: the timed ones. Not the start lap -
+    /// the first entry (two for a credited start) is the run from the grid
+    /// to the line, never a flying lap.
     /// </summary>
-    private static List<long> LapsToDraw(SessionResultEntry result) =>
-        result.LapTimesMs.Where(ms => ms > 0 && (result.FastLapMs <= 0 || ms >= result.FastLapMs)).ToList();
+    // WHY (23 Nov 2026, bug hunt 24): this used to spot the start lap only by
+    // its being quicker than the driver's fastest lap. A start slower than
+    // that (the grid well short of the line, a stall on the grid) was kept:
+    // drawn as the first point of the lap line, counted in "N laps", and
+    // moving "best ... on lap N" by one against a driver in the same race
+    // whose quick start was dropped. Now the start goes by position, as
+    // every other lap reader does (StartSlots).
+    internal static List<long> LapsToDraw(SessionResultEntry result) =>
+        result.LapTimesMs.Skip(result.StartSlots(result.LapTimesMs)).Where(ms => ms > 0).ToList();
+
+    /// <summary>
+    /// The Lap Times cell's hover: how many timed laps, and the best one with
+    /// its lap number counted from the race's first crossing - the same lap
+    /// number Lap Detail, the Driver Cut and the lap file give it. Null when
+    /// there are no timed laps.
+    /// </summary>
+    // WHY (23 Nov 2026, bug hunt 24): the lap number was the best lap's place
+    // in the drawn list, which sometimes had the start lap in it and
+    // sometimes not, so two drivers who set their best on the same lap were
+    // told different numbers, and neither matched Lap Detail.
+    internal static string? LapTraceTip(SessionResultEntry result)
+    {
+        var laps = LapsToDraw(result);
+
+        if (laps.Count == 0)
+        {
+            return null;
+        }
+
+        var best = -1;
+
+        for (var i = result.StartSlots(result.LapTimesMs); i < result.LapTimesMs.Count; i++)
+        {
+            if (result.LapTimesMs[i] > 0 && (best < 0 || result.LapTimesMs[i] < result.LapTimesMs[best]))
+            {
+                best = i;
+            }
+        }
+
+        return $"{Count(laps.Count, "lap")} · best {result.LapTimesMs[best] / 1000.0:0.000}s on lap {best + 1}";
+    }
 
     /// <summary>The race's longest driver name, which the Driver column is kept wide enough for.</summary>
     private string _longestDriver = string.Empty;

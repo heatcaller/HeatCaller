@@ -641,14 +641,32 @@ public sealed class RentalTransponderControl : UserControl
 
         var lines = unit.History
             .OrderByDescending(h => h.InUtc)
-            .Select(h =>
-                $"{AppTime.DateAndTime(h.OutUtc.ToLocalTime())} -> {AppTime.TimeOfDay(h.InUtc.ToLocalTime())}"
-                + $"   {h.HolderName}"
-                + (string.IsNullOrWhiteSpace(h.ReturnNotes) ? "" : $"   [{h.ReturnNotes}]"));
+            .Select(LoanLine);
 
         AppDialog.Show(this,
             $"{unit.DisplayName} - {Plural.Of(unit.History.Count, "loan")}\r\n\r\n" + string.Join("\r\n", lines),
             "Loan history", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    /// <summary>
+    /// One line of Loan History: when the unit went out, when it came back,
+    /// who had it and any return notes.
+    /// </summary>
+    internal static string LoanLine(RentalLoan loan)
+    {
+        var outLocal = loan.OutUtc.ToLocalTime();
+        var inLocal = loan.InUtc.ToLocalTime();
+
+        // WHY (23 Nov 2026, bug hunt 24): the line used to give only the time
+        // the unit came back, so a unit kept until the next meeting read
+        // "11/14/2026 8:10 PM -> 7:05 PM" - back the same day, and an hour
+        // before it went out. The return now carries its date whenever it
+        // falls on a different day from the loan.
+        var back = inLocal.Date == outLocal.Date ? AppTime.TimeOfDay(inLocal) : AppTime.DateAndTime(inLocal);
+
+        return $"{AppTime.DateAndTime(outLocal)} -> {back}"
+            + $"   {loan.HolderName}"
+            + (string.IsNullOrWhiteSpace(loan.ReturnNotes) ? "" : $"   [{loan.ReturnNotes}]");
     }
 
     /// <summary>

@@ -293,10 +293,43 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>One of the club's winner lines, with the name in - {winner}, or {driver} as every other call has it.</summary>
-    internal static string WinnerLine(IReadOnlyList<string> templates, string winner) =>
-        TemplateBag.Pick(templates)
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): any other placeholder - "{class}",
+    /// "{car}", "{team}" - was left in, so the voice was sent the braces at
+    /// the flag and the screens showed them, while the same row's lines
+    /// without {winner} had the empty clause tidied away. The winner's line
+    /// fills nothing else, so every other placeholder is now taken out with
+    /// its lead-in, the way an empty one is on every other call. A line with
+    /// none is left exactly as it was.
+    /// </remarks>
+    internal static string WinnerLine(IReadOnlyList<string> templates, string winner)
+    {
+        var template = TemplateBag.Pick(templates);
+        var unfilled = false;
+
+        template = OtherPlaceholder.Replace(template, match =>
+        {
+            if (match.Value.Equals("{winner}", StringComparison.OrdinalIgnoreCase)
+                || match.Value.Equals("{driver}", StringComparison.OrdinalIgnoreCase))
+            {
+                return match.Value;
+            }
+
+            unfilled = true;
+
+            return AnnouncementText.Missing;
+        });
+
+        var line = template
             .Replace("{winner}", winner, StringComparison.OrdinalIgnoreCase)
             .Replace("{driver}", winner, StringComparison.OrdinalIgnoreCase);
+
+        return unfilled ? line.TidyTemplate() : line;
+    }
+
+    /// <summary>A {placeholder} in a winner's line - see WinnerLine.</summary>
+    private static readonly System.Text.RegularExpressions.Regex OtherPlaceholder =
+        new(@"\{[a-z]+\}", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
     /// At the flag: the winner's line, first in the queue - said the moment
@@ -363,6 +396,15 @@ public sealed partial class AnnouncementService
             {
                 try
                 {
+                    // WHY (23 Nov 2026, bug hunt 24): put on the screens as it
+                    // comes to be said. This line goes straight into the queue,
+                    // past EnqueueVoiceWork - the only place a queued line's
+                    // words reach the Big Screen and the Announcer feed - so
+                    // the room heard "Victory for Sam!" and neither showed it.
+                    // Raised here rather than at the insert so the caption
+                    // does not jump ahead of the finish call still being said.
+                    RaiseAnnouncementText(call.Text, winner);
+
                     // Handed over only now - a flag's clear-out empties the
                     // render-ahead list, and this line outlives the finish's.
                     if (call.Key is { } key && call.Render is { } render)
@@ -443,8 +485,12 @@ public sealed partial class AnnouncementService
         if (winner is null || IsPracticeMode || Muted || NoWinnerToName || config is null
             || SharedHeatClasses?.Invoke() is not { } classOf
             || MixedHeats.ClassWinnersLine(
+                // WHY (23 Nov 2026, bug hunt 24): black-flagged cars left out
+                // too, as TheWinnerToName does. The engine still counts their
+                // laps, so a disqualified car still first of its class on laps
+                // was said as "Mo wins Mod" while the result puts it last.
                 _standings.Values
-                    .Where(s => !GhostService.IsGhost(s.Transponder))
+                    .Where(s => !GhostService.IsGhost(s.Transponder) && !s.BlackFlagged)
                     .OrderByDescending(s => s.Laps)
                     .ThenBy(s => s.ElapsedMs)
                     .Select(s => s.Transponder)
@@ -461,6 +507,10 @@ public sealed partial class AnnouncementService
         {
             try
             {
+                // On the screens as it comes to be said (23 Nov 2026, bug
+                // hunt 24) - see the winner's call in QueueTheWinnersCall.
+                RaiseAnnouncementText(line, winner);
+
                 await SynthesizeAndPlayAsync(line, "[voice] Class winners", speedOverride: speed);
             }
             catch (Exception ex)
@@ -514,28 +564,57 @@ public sealed partial class AnnouncementService
         var how = "named the winner, made ahead";
         var take = call.Render;
 
-        if (take is null)
+        async Task<SynthesisResult> MakeItNow()
         {
-            how = "named the winner, made at the flag";
-
-            // None of the queue's AsyncLocals reach the render - see RenderAhead.
-            using (ExecutionContext.SuppressFlow())
+            if (LineAsItWillBeAsked(text, AnnouncementEventType.RaceCompleted, speed) is not { } line)
             {
-                take = Task.Run(async () =>
-                {
-                    if (LineAsItWillBeAsked(text, AnnouncementEventType.RaceCompleted, speed) is not { } line)
-                    {
-                        throw new InvalidOperationException("the announcer can't speak just now");
-                    }
+                throw new InvalidOperationException("the announcer can't speak just now");
+            }
 
-                    return await RenderLineAsync(line.Profile, line.Text);
-                });
+            return await RenderLineAsync(line.Profile, line.Text);
+        }
+
+        // None of the queue's AsyncLocals reach the render - see RenderAhead.
+        using (ExecutionContext.SuppressFlow())
+        {
+            if (take is null)
+            {
+                how = "named the winner, made at the flag";
+                take = Task.Run(() => MakeItNow());
+            }
+            else if (!take.IsCompletedSuccessfully)
+            {
+                // WHY (23 Nov 2026, bug hunt 24): an early render that failed
+                // (a timeout, a 429, a blip, with no Kokoro standing in) was
+                // handed on as it was, so the take replayed that old failure:
+                // the fanfare, then no finish call and no winner named, though
+                // ElevenLabs had been fine for seconds. It is made again now,
+                // once, as every other line made ahead is (RenderAheadOrNowAsync).
+                var early = take;
+                take = Task.Run(() => MadeAgainIfItFailed(early, () => MakeItNow()));
             }
         }
 
         SpeakFlagTake(AnnouncementEventType.RaceCompleted, text, take, profile, config, how);
 
         return true;
+    }
+
+    /// <summary>
+    /// The early render's result, or - when it failed or was cancelled - the
+    /// line made again now, once (23 Nov 2026, bug hunt 24). A second failure
+    /// is the take's failure, said in the log where it is taken.
+    /// </summary>
+    internal static async Task<T> MadeAgainIfItFailed<T>(Task<T> early, Func<Task<T>> again)
+    {
+        try
+        {
+            return await early;
+        }
+        catch
+        {
+            return await again();
+        }
     }
 
     /// <summary>A new race: no line made for the last one's winner is about this one's.</summary>

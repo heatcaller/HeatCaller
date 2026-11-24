@@ -62,6 +62,25 @@ public sealed class BroadcastImagingControl : UserControl
     /// </summary>
     private const double ReactionSeconds = 0.15;
 
+    /// <summary>
+    /// Where in the piece a mark pressed now lands, for a preview that
+    /// started at <paramref name="from"/> and was handed to the sound card at
+    /// <paramref name="startedUtc"/>. Not clamped - the caller rounds and
+    /// keeps it at zero or more.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the mark was timed from when the
+    /// preview was queued, but the room hears it later by the sound card's
+    /// buffering (VoiceLineTiming.DeviceAheadMs, about 0.2 s). Only the
+    /// finger's reaction was taken off, so every post or out marked by ear
+    /// saved about a fifth of a second late - the announcer's last word ran
+    /// into the piece's voice. The device's buffer is taken off too now. The
+    /// extra wait while a cold device opens on the very first sound is not
+    /// counted here: the preview does not yet say when it was first heard.
+    /// </remarks>
+    internal static double MarkedAt(double from, DateTime startedUtc, DateTime nowUtc) =>
+        from + (nowUtc - startedUtc).TotalSeconds - VoiceLineTiming.DeviceAheadMs / 1000.0 - ReactionSeconds;
+
     /// <summary>One picker per point in the run of show.</summary>
     private readonly Dictionary<ImagingCue, ComboBox> _cuePickers = new();
 
@@ -945,7 +964,7 @@ public sealed class BroadcastImagingControl : UserControl
             return;
         }
 
-        var heard = at.From + (DateTime.UtcNow - at.StartedUtc).TotalSeconds - ReactionSeconds;
+        var heard = MarkedAt(at.From, at.StartedUtc, DateTime.UtcNow);
 
         if (length > 0 && heard > length)
         {

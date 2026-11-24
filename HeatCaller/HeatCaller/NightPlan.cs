@@ -53,7 +53,10 @@ public static class NightPlan
     {
         public DateTime EndUtc => StartUtc + Length;
 
-        /// <summary>For a main not built yet: its class's own format, before tonight's cut. See <see cref="UnbuiltMains.Format"/>.</summary>
+        /// <summary>
+        /// For a main not built yet: its class's own format, before tonight's cut. See <see cref="UnbuiltMains.Format"/>.
+        /// For a built round, the format it runs to, when the plan was given one (23 Nov 2026, bug hunt 24 - see <c>formatOf</c> on <see cref="NightPlan.For"/>).
+        /// </summary>
         public RaceFormat? Format { get; init; }
     }
 
@@ -124,15 +127,25 @@ public static class NightPlan
     /// override, the class's qualifier format for a qualifier, the class's
     /// format, the app default).
     /// </summary>
-    public static TimeSpan LengthOf(RoundDefinition round, RaceClass? raceClass, RaceFormat appDefault)
-    {
-        var format = round.FormatOverride
-                     ?? (round.Kind == RoundKind.Qualifier ? raceClass?.QualifierFormat : null)
-                     ?? raceClass?.Format
-                     ?? appDefault;
+    public static TimeSpan LengthOf(RoundDefinition round, RaceClass? raceClass, RaceFormat appDefault) =>
+        LengthOf(FormatOf(round, raceClass, appDefault));
 
-        return LengthOf(format);
-    }
+    /// <summary>
+    /// The format a round runs to, chosen as Race Control chooses it (the
+    /// round's override, the class's qualifier format for a qualifier, the
+    /// class's format, the app default).
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): pulled out of LengthOf so the plan can
+    /// carry each round's format (see <c>formatOf</c> on <see cref="For"/>)
+    /// and "qualifiers a minute shorter" can price what the change really
+    /// takes off, from the same format the change is made to.
+    /// </remarks>
+    public static RaceFormat FormatOf(RoundDefinition round, RaceClass? raceClass, RaceFormat appDefault) =>
+        round.FormatOverride
+        ?? (round.Kind == RoundKind.Qualifier ? raceClass?.QualifierFormat : null)
+        ?? raceClass?.Format
+        ?? appDefault;
 
     /// <summary>
     /// The finals a class will still race when it qualifies but has none
@@ -273,6 +286,11 @@ public static class NightPlan
     /// between the last race of the round it follows and the next race, and
     /// pushes everything after it back by its length.
     /// </param>
+    /// <param name="formatOf">
+    /// The format each round runs to (see <see cref="FormatOf"/>), or null.
+    /// WHY (23 Nov 2026, bug hunt 24): with it, "qualifiers a minute shorter"
+    /// counts only the heats the change can really shorten.
+    /// </param>
     public static Projection? For(
         IReadOnlyList<RoundDefinition> dayRounds,
         Func<RoundDefinition, TimeSpan> lengthOf,
@@ -286,7 +304,8 @@ public static class NightPlan
         IReadOnlyList<PlannedBreak>? breaks = null,
         bool keepPromises = false,
         RaceControlControl.NextStartFact? nextStart = null,
-        int? heatSize = null)
+        int? heatSize = null,
+        Func<RoundDefinition, RaceFormat?>? formatOf = null)
     {
         var gap = tonightsGap is { } measured && measured > TimeSpan.Zero ? measured : DefaultGap;
         var slots = new List<Slot>();
@@ -336,7 +355,7 @@ public static class NightPlan
             // Half done, on average - see the model above.
             var length = lengthOf(onTrack);
             var start = nowUtc - TimeSpan.FromTicks(length.Ticks / 2);
-            slots.Add(new Slot(onTrack, onTrack.RoundLabel, onTrack.ClassName, onTrack.Kind, length, start));
+            slots.Add(new Slot(onTrack, onTrack.RoundLabel, onTrack.ClassName, onTrack.Kind, length, start) { Format = formatOf?.Invoke(onTrack) });
             cursor = start + length + gap;
             previous = onTrack;
             Reach(onTrack);
@@ -430,7 +449,7 @@ public static class NightPlan
             }
 
             var length = lengthOf(round);
-            slots.Add(new Slot(round, round.RoundLabel, round.ClassName, round.Kind, length, cursor));
+            slots.Add(new Slot(round, round.RoundLabel, round.ClassName, round.Kind, length, cursor) { Format = formatOf?.Invoke(round) });
             cursor += length + gap;
             previous = round;
             Reach(round);
@@ -496,6 +515,23 @@ public static class NightPlan
         return DateTime.SpecifyKind(best, DateTimeKind.Local).ToUniversalTime();
     }
 
+    /// <summary>
+    /// What a minute off one qualifier really saves (23 Nov 2026, bug hunt
+    /// 24): from its format, what <see cref="Shortened"/> takes off - a
+    /// minute, or nothing for a lap race or a heat already at 3 minutes.
+    /// Without its format, the old slot test stands in.
+    /// </summary>
+    public static TimeSpan QualifierMinuteSaves(Slot qualifier)
+    {
+        if (qualifier.Format is not { } format)
+        {
+            return qualifier.Length >= ShortestToShorten ? TimeSpan.FromMinutes(1) : TimeSpan.Zero;
+        }
+
+        var saves = LengthOf(format) - LengthOf(Shortened(format, 1) ?? format);
+        return saves > TimeSpan.Zero ? saves : TimeSpan.Zero;
+    }
+
     /// <summary>What would bring the finish forward, biggest saving first.</summary>
     private static List<Fix> FixesFor(List<Slot> slots, TimeSpan gap, RoundDefinition? onTrack, IReadOnlyList<RoundDefinition> dayRounds, int? heatSize)
     {
@@ -520,12 +556,21 @@ public static class NightPlan
         }
 
         // 2. A minute off every qualifier still to run that can spare one.
-        var shortenable = qualifiers.Count(s => s.Length >= ShortestToShorten);
+        // WHY (23 Nov 2026, bug hunt 24): this counted a minute for every
+        // qualifier whose SLOT was 3 minutes or more - staging and countdown
+        // included, and a lap race counted as 5 - though the change itself
+        // (Shortened, as Get back on time applies it) does nothing to a lap
+        // race and never takes a time limit below 3 minutes. So a night of
+        // 3-minute or lap-count heats was offered "save 12 min" that ticking
+        // changed nothing, and the offer never went away after the heats
+        // were down to 3. Now each heat counts what Shortened really takes off
+        // its own format; the old slot test is kept only for a heat whose
+        // format the plan was not given.
+        var qualifierSaves = TimeSpan.FromTicks(qualifiers.Sum(s => QualifierMinuteSaves(s).Ticks));
 
-        if (shortenable > 0)
+        if (qualifierSaves > TimeSpan.Zero)
         {
-            var saves = TimeSpan.FromMinutes(shortenable);
-            fixes.Add(new Fix($"run qualifiers a minute shorter to save {Minutes(saves)}", saves, Kind: FixKind.ShorterQualifiers));
+            fixes.Add(new Fix($"run qualifiers a minute shorter to save {Minutes(qualifierSaves)}", qualifierSaves, Kind: FixKind.ShorterQualifiers));
         }
 
         // 3. One main fewer in each class with more than one still to run.

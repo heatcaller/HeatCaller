@@ -237,7 +237,10 @@ public static partial class AchievementEvaluator
             }
 
             // --- Clean runs and consistency, as in a race ---
-            var streak = LongestCleanRun(entry.LapTimesMs);
+            // WHY (23 Nov 2026, bug hunt 24): the same start slots a race skips,
+            // so a credited start lap's dash is never judged as a flying lap.
+            var startSlots = entry.StartSlots(entry.LapTimesMs);
+            var streak = LongestCleanRun(entry.LapTimesMs, startSlots);
 
             if (streak >= 50)
             {
@@ -252,19 +255,19 @@ public static partial class AchievementEvaluator
                 Award(AchievementCatalogue.CleanTen, $"{streak} laps");
             }
 
-            if (IsWithinTolerance(entry.LapTimesMs, ConsistencyTolerance))
+            if (IsWithinTolerance(entry.LapTimesMs, startSlots, ConsistencyTolerance))
             {
                 Award(AchievementCatalogue.Consistent);
 
-                if (IsWithinTolerance(entry.LapTimesMs, TightConsistencyTolerance))
+                if (IsWithinTolerance(entry.LapTimesMs, startSlots, TightConsistencyTolerance))
                 {
                     Award(AchievementCatalogue.SwissWatch);
                 }
             }
 
-            if (entry.LapTimesMs.Count >= 10 && LongestCleanRun(entry.LapTimesMs) >= entry.LapTimesMs.Count - 1)
+            if (entry.LapTimesMs.Count >= 10 && LongestCleanRun(entry.LapTimesMs, startSlots) >= entry.LapTimesMs.Count - startSlots)
             {
-                Award(AchievementCatalogue.Unbroken, $"{entry.LapTimesMs.Count - 1} laps");
+                Award(AchievementCatalogue.Unbroken, $"{entry.LapTimesMs.Count - startSlots} laps");
             }
 
             // --- Personal bests, against races and practice alike ---

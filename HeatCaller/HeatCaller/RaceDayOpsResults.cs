@@ -400,8 +400,8 @@ public sealed partial class RaceDayService
             text.Append($"   P{row.Position}  {ShownName(row.DriverName, row.Transponder, channel)}  {Plural.Of(row.Laps, "lap")}{outcome}{moved}\r\n");
         }
 
-        if (session.RoundId is not null && _host.Rounds.Get(session.RoundId) is { Kind: RoundKind.Qualifier } round
-            && TodaysRoundsForClass(round.ClassName).Any(r => r.Kind == RoundKind.Main))
+        if (session.RoundId is not null && _host.Rounds.Get(session.RoundId) is { } round
+            && MainsAlreadySeededFor(round, _host.Events.ActiveRoundScope(), TodaysRoundsForClass(round.ClassName)))
         {
             text.Append($"\r\nThe mains for {round.ClassName} have already been seeded. They are not changed by this - re-seed them if this changes who belongs in which main.");
         }
@@ -410,4 +410,24 @@ public sealed partial class RaceDayService
 
         return text.ToString();
     }
+
+    /// <summary>
+    /// Whether correcting a result of <paramref name="correctedRound"/> should
+    /// warn that its class's mains are already seeded: only for a qualifier
+    /// run on the race day now open, when that day has mains for the class.
+    /// </summary>
+    // WHY (23 Nov 2026, bug hunt 24): the old check looked the qualifier up in
+    // the whole round store and then asked whether TONIGHT's rounds (every
+    // round on file when no day was open) had mains for the class. Correcting
+    // last week's Stock qualifier while tonight's Stock mains existed - or any
+    // old qualifier after Close Day - told the steward the mains "have already
+    // been seeded" and to re-seed them, about mains that result never seeded.
+    internal static bool MainsAlreadySeededFor(
+        RoundDefinition correctedRound,
+        IReadOnlySet<string>? openDayRoundIds,
+        IEnumerable<RoundDefinition> todaysClassRounds) =>
+        correctedRound.Kind == RoundKind.Qualifier
+        && openDayRoundIds is not null
+        && openDayRoundIds.Contains(correctedRound.Id)
+        && todaysClassRounds.Any(r => r.Kind == RoundKind.Main);
 }

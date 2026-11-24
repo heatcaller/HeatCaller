@@ -95,6 +95,8 @@ internal static class SponsorStream
             return;
         }
 
+        string? saved = null;
+
         lock (Gate)
         {
             var night = TonightAtTheTrack.NightOf(nowUtc.ToLocalTime());
@@ -116,7 +118,139 @@ internal static class SponsorStream
                 return;
             }
 
-            Seconds[sponsorId] = (Seconds.TryGetValue(sponsorId, out var had) ? had : 0) + gap.TotalSeconds;
+            var had = Seconds.TryGetValue(sponsorId, out var before) ? before : 0;
+            var total = had + gap.TotalSeconds;
+            Seconds[sponsorId] = total;
+
+            // WHY (23 Nov 2026, bug hunt 24): kept every fifteen seconds of a
+            // sponsor's logo time rather than on every poll (a page asks about
+            // once a second), so a restart loses at most a turn's worth.
+            if ((long)(had / TurnSeconds) != (long)(total / TurnSeconds))
+            {
+                saved = SaveLocked();
+            }
+        }
+
+        Tell(saved);
+    }
+
+    /// <summary>
+    /// Told tonight's logo time and graphic counts, as <see cref="Save"/>
+    /// writes them, for whatever keeps the night across a restart (23 Nov
+    /// 2026, bug hunt 24). Run outside the lock, on whichever thread counted.
+    /// </summary>
+    internal static Action<string>? Changed { get; set; }
+
+    private static void Tell(string? saved)
+    {
+        if (saved is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Changed?.Invoke(saved);
+        }
+        catch
+        {
+            // A save that failed is not a reason to stop counting.
+        }
+    }
+
+    /// <summary>
+    /// How tonight's logo time and graphic counts are kept across a restart
+    /// (23 Nov 2026, bug hunt 24). Keyed to the race night inside, so last
+    /// week's time can never come back - see <see cref="Restore"/>.
+    /// </summary>
+    private sealed record SavedNight(string Night, Dictionary<string, double>? Seconds, Dictionary<string, int>? Graphics);
+
+    private static string NightKey(DateTime night) => night.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Tonight's logo time and graphic counts, for whatever holds the night across a restart.</summary>
+    internal static string Save()
+    {
+        lock (Gate)
+        {
+            return SaveLocked();
+        }
+    }
+
+    private static string SaveLocked() => System.Text.Json.JsonSerializer.Serialize(new SavedNight(
+        NightKey(_night),
+        new Dictionary<string, double>(Seconds, StringComparer.Ordinal),
+        new Dictionary<string, int>(Graphics, StringComparer.Ordinal)));
+
+    /// <summary>
+    /// WHY (23 Nov 2026, bug hunt 24): the logo time and the "presented by"
+    /// graphic counts lived in memory only, so a club that reopened
+    /// HeatCaller mid-evening sent a sponsor report with every read and
+    /// mention for the night but only the logo time since the restart - or
+    /// no stream line at all. This picks tonight's back up - only when it
+    /// was saved on this same race night; anything else, or a save that will
+    /// not read, is passed over. The larger of saved and counted is taken for
+    /// each sponsor, so laying it back twice changes nothing.
+    /// </summary>
+    internal static void Restore(string? saved, DateTime nowUtc)
+    {
+        if (string.IsNullOrWhiteSpace(saved))
+        {
+            return;
+        }
+
+        SavedNight? night;
+
+        try
+        {
+            night = System.Text.Json.JsonSerializer.Deserialize<SavedNight>(saved);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return;
+        }
+
+        if (night is null)
+        {
+            return;
+        }
+
+        lock (Gate)
+        {
+            var tonight = TonightAtTheTrack.NightOf(nowUtc.ToLocalTime());
+
+            if (tonight != _night)
+            {
+                _night = tonight;
+                Seconds.Clear();
+                Graphics.Clear();
+                GraphicSeen.Clear();
+                _lastShownUtc = default;
+            }
+
+            if (!string.Equals(night.Night, NightKey(_night), StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            foreach (var (id, seconds) in night.Seconds ?? new Dictionary<string, double>())
+            {
+                if (string.IsNullOrWhiteSpace(id) || double.IsNaN(seconds) || seconds <= 0)
+                {
+                    continue;
+                }
+
+                Seconds[id] = Math.Max(Seconds.TryGetValue(id, out var had) ? had : 0, seconds);
+            }
+
+            foreach (var (id, count) in night.Graphics ?? new Dictionary<string, int>())
+            {
+                if (string.IsNullOrWhiteSpace(id) || count <= 0)
+                {
+                    continue;
+                }
+
+                Graphics[id] = Math.Max(Graphics.TryGetValue(id, out var had) ? had : 0, count);
+            }
         }
     }
 
@@ -147,6 +281,8 @@ internal static class SponsorStream
             return;
         }
 
+        string saved;
+
         lock (Gate)
         {
             var night = TonightAtTheTrack.NightOf(nowUtc.ToLocalTime());
@@ -170,7 +306,13 @@ internal static class SponsorStream
 
             GraphicSeen[key] = nowUtc;
             Graphics[sponsorId] = (Graphics.TryGetValue(sponsorId, out var had) ? had : 0) + 1;
+
+            // WHY (23 Nov 2026, bug hunt 24): kept at once, as the mentions
+            // are - the restart this is for is usually a force-closed window.
+            saved = SaveLocked();
         }
+
+        Tell(saved);
     }
 
     /// <summary>How many "presented by" graphics each sponsor had on the stream on this race night, by sponsor id.</summary>
@@ -194,5 +336,7 @@ internal static class SponsorStream
             GraphicSeen.Clear();
             _lastShownUtc = default;
         }
+
+        Changed = null;
     }
 }

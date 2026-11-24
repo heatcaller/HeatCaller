@@ -219,7 +219,7 @@ public sealed class MixerControl : UserControl
 
         // Repeats the sample line so there's always something to balance
         // against, rather than one announcement then silence.
-        _auditionVoice.Tick += (_, _) => SpeakAuditionLine();
+        _auditionVoice.Tick += (_, _) => AuditionTick();
     }
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
@@ -1390,6 +1390,60 @@ public sealed class MixerControl : UserControl
         // A sound effect alongside it, since that's a fourth level to set
         // and it's the one most easily lost under everything else.
         _ = SoundPacks.PlayAsync(_soundStore.Current.Effects.GetValueOrDefault(nameof(SoundEffectKind.GoodLap)), SoundEffectKind.GoodLap, (float)_soundStore.Current.Volume);
+    }
+
+    /// <summary>
+    /// The race's state now, for the level check's repeat to ask before it
+    /// speaks. Set by the main window; left unset, the repeat runs as before.
+    /// </summary>
+    public Func<RaceState>? RaceStateNow { get; set; }
+
+    /// <summary>
+    /// Whether the level check's repeating line and chime may sound while the
+    /// race is in this state: only between races, never from staging on.
+    /// </summary>
+    public static bool LevelCheckMayTalk(RaceState state) => state is RaceState.Idle or RaceState.Finished;
+
+    /// <summary>
+    /// The repeat timer's tick.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the only thing that stopped the "Level
+    /// check" repeat for a race was SessionAdoptedAudio, and that is called
+    /// only when session sound starts on its own - off by default for races,
+    /// and with "Starting at" Green flag not until the green. So Play
+    /// Everything left on the Mixer page while Auto start began the next heat
+    /// kept saying "Level check" and playing the Good Lap chime every few
+    /// seconds over staging, the countdown and the race. Now each tick asks
+    /// the race first and stops the repeat once a race is under way. Announce
+    /// Now still speaks the line when the director presses it.
+    /// </summary>
+    private void AuditionTick()
+    {
+        if (RaceStateNow is { } stateNow && !LevelCheckMayTalk(stateNow()))
+        {
+            RaceStarted();
+            return;
+        }
+
+        SpeakAuditionLine();
+    }
+
+    /// <summary>
+    /// A race has been staged or started: the level check's repeating line
+    /// stops. The crowd and music it started stay as they are, so Stop
+    /// Everything still puts them back (SessionAdoptedAudio hands those over
+    /// when the session keeps them).
+    /// </summary>
+    public void RaceStarted()
+    {
+        if (!_auditioning || !_auditionVoice.Enabled)
+        {
+            return;
+        }
+
+        _auditionVoice.Stop();
+        _lblStatus.Text = "A race has started, so the level check has stopped. Stop Everything stops the audition's sound.";
+        _lblStatus.ForeColor = AppTheme.TextMuted;
     }
 
     /// <summary>

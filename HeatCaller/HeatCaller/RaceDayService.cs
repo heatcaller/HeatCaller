@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace HeatCaller;
 
@@ -128,6 +129,15 @@ public sealed partial class RaceDayService
 
     private const int MaxPendingConfirms = 200;
 
+    /// <summary>
+    /// How long a confirmation is remembered after it has run out, so a late
+    /// yes is told it ran out rather than that the laptop never gave it.
+    /// </summary>
+    private static readonly TimeSpan ExpiredConfirmMemory = TimeSpan.FromMinutes(10);
+
+    /// <summary>The clock confirmations are timed by. A seam for tests; the real clock otherwise.</summary>
+    internal Func<DateTime> ConfirmClock { get; set; } = () => DateTime.UtcNow;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -210,7 +220,7 @@ public sealed partial class RaceDayService
 
         if (_host.IsClosing() || window.IsDisposed || !window.IsHandleCreated)
         {
-            return Fail(request.Id, "HeatCaller on the laptop is closing or still starting - try again in a moment.");
+            return FailNotRun(request.Id, "HeatCaller on the laptop is closing or still starting - try again in a moment.");
         }
 
         // Already on the UI thread (a caller there, or a test): no hop.
@@ -239,7 +249,7 @@ public sealed partial class RaceDayService
         {
             // The window went between the check and the post. Also covers
             // ObjectDisposedException, which derives from it.
-            return Fail(request.Id, "HeatCaller on the laptop is closing - try again when it is back.");
+            return FailNotRun(request.Id, "HeatCaller on the laptop is closing - try again when it is back.");
         }
 
         var first = await Task.WhenAny(answer.Task, Task.Delay(AnswerTimeout, ct)).ConfigureAwait(false);
@@ -251,7 +261,7 @@ public sealed partial class RaceDayService
 
         if (Interlocked.CompareExchange(ref call.State, PendingCall.Withdrawn, PendingCall.Waiting) == PendingCall.Waiting)
         {
-            return Fail(request.Id, ct.IsCancellationRequested
+            return FailNotRun(request.Id, ct.IsCancellationRequested
                 ? "Canceled - nothing was changed."
                 : "The laptop didn't answer in time - nothing was changed. Try again.");
         }
@@ -322,7 +332,7 @@ public sealed partial class RaceDayService
                 return Fail(request.Id, "That confirmation isn't one the laptop gave for this - ask again.");
             }
 
-            if (pending.ExpiresUtc < DateTime.UtcNow)
+            if (pending.ExpiresUtc < ConfirmClock())
             {
                 return Fail(request.Id, "That confirmation ran out (they last a minute) - ask again.");
             }
@@ -474,16 +484,25 @@ public sealed partial class RaceDayService
 
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
 
-        _confirms[token] = new PendingConfirm(op, argsKey, StateStamp(), DateTime.UtcNow + ConfirmLifetime, channel);
+        _confirms[token] = new PendingConfirm(op, argsKey, StateStamp(), ConfirmClock() + ConfirmLifetime, channel);
 
         return token;
     }
 
     private void ForgetExpiredConfirms()
     {
-        var now = DateTime.UtcNow;
+        // WHY (23 Nov 2026, bug hunt 24): this used to forget a confirmation
+        // the moment it ran out, and every request sweeps first - so a
+        // manager who took over a minute to press Yes had their token gone
+        // before it was looked up, and was told "That confirmation isn't one
+        // the laptop gave for this", which reads like a fault or a forgery.
+        // The "ran out (they last a minute)" answer could never be reached.
+        // A run-out confirmation is now kept a while longer (it still cannot
+        // be used - Run refuses it as run out), so the late yes hears the
+        // plain reason. MaxPendingConfirms still bounds how many are kept.
+        var forgetBefore = ConfirmClock() - ExpiredConfirmMemory;
 
-        foreach (var token in _confirms.Where(kv => kv.Value.ExpiresUtc < now).Select(kv => kv.Key).ToList())
+        foreach (var token in _confirms.Where(kv => kv.Value.ExpiresUtc < forgetBefore).Select(kv => kv.Key).ToList())
         {
             _confirms.Remove(token);
         }
@@ -925,6 +944,15 @@ public sealed partial class RaceDayService
         public string? Message { get; set; }
         public string? ConfirmToken { get; set; }
         public object? Data { get; set; }
+
+        /// <summary>
+        /// True when the request never ran - the laptop was closing or still
+        /// starting, or it was withdrawn before the UI thread picked it up -
+        /// so the caller knows for certain nothing was changed and it is safe
+        /// to send again. Left out of the answer otherwise.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool NotRun { get; set; }
     }
 
     private static Request Parse(string? requestJson)
@@ -1014,6 +1042,13 @@ public sealed partial class RaceDayService
 
     private static string Fail(string? id, string error) =>
         Serialize(new Response { Id = id, Ok = false, Error = error });
+
+    // WHY (23 Nov 2026, bug hunt 24, asked by another fixer): an answer for a
+    // request that never ran looked the same as one for a request that ran
+    // and was refused, so a caller could not tell "nothing happened, send it
+    // again" from "the laptop looked at it". These say notRun: true.
+    private static string FailNotRun(string? id, string error) =>
+        Serialize(new Response { Id = id, Ok = false, Error = error, NotRun = true });
 
     /// <summary>
     /// What the phone needs to know before it draws anything: which channel

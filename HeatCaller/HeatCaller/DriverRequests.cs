@@ -281,6 +281,21 @@ internal sealed class DriverRequestStore
         filed = 0;
         var confirmable = new List<string>();
 
+        // WHY (23 Nov 2026, bug hunt 24): with driver-requests.json unreadable
+        // at start-up (held by a backup or sync tool) nothing can be saved, but
+        // each request was still taken into memory - so the roster tick applied
+        // packs, cars and setups from phones and the desk answered the rest,
+        // none of it reaching the disk. The relay kept them all (none could be
+        // confirmed), and after the restart the app itself asks for they came
+        // back as new and were applied a second time: setups twice in the log,
+        // car and pack edits written over the desk's, answered requests waiting
+        // again. Now they are not taken in at all - left on the club's website
+        // until HeatCaller is restarted, as the state line already says.
+        if (LoadedUnreadable)
+        {
+            return confirmable;
+        }
+
         lock (_gate)
         {
             foreach (var ask in incoming.OrderBy(a => a.AskedUtc))

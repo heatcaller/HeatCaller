@@ -476,7 +476,8 @@ public sealed partial class RelayPublisher
 
             var added = 0;
             var changed = 0;
-            var refused = 0;
+            var full = 0;
+            var notCounted = 0;
 
             using (var doc = JsonDocument.Parse(text))
             {
@@ -499,9 +500,14 @@ public sealed partial class RelayPublisher
                         // WHY (20 Oct 2026): the relay holds the opaque id,
                         // not the transponder - turned back here. One that
                         // is not on this poll's ballot is refused.
+                        //
+                        // WHY (23 Nov 2026, bug hunt 24): no longer counted
+                        // in the console line. It is mostly a vote cast under
+                        // a replaced ballot's ids, which may well be in the
+                        // tally already, and was reported as one "the vote
+                        // had no room for".
                         if (!onTheBallot.TryGetValue(picked.GetString() ?? string.Empty, out var driver))
                         {
-                            refused++;
                             continue;
                         }
 
@@ -527,9 +533,16 @@ public sealed partial class RelayPublisher
                         // before the close, but read here after it, used to
                         // be lost. A relay too old to send "at" gives null,
                         // and Cast falls back to "is it open now".
-                        if (vote.Cast(who, driver, polledFor ?? string.Empty, RelayVoteCastAt(item, relayAhead)) is not null)
+                        if (vote.Cast(who, driver, polledFor ?? string.Empty, RelayVoteCastAt(item, relayAhead)) is { } refusal)
                         {
-                            refused++;
+                            if (IsVoteFullAnswer(refusal))
+                            {
+                                full++;
+                            }
+                            else
+                            {
+                                notCounted++;
+                            }
                         }
                         else if (hadOne)
                         {
@@ -552,11 +565,7 @@ public sealed partial class RelayPublisher
 
             // Through Log, which is this class's one way of saying
             // anything - it has no StatusMessage of its own.
-            Log?.Invoke(
-                $"[show] {Plural.Of(added, "vote")} from the club's page"
-                + (changed > 0 ? $", and {changed} changed" : string.Empty)
-                + (refused > 0 ? $", and {refused} the vote had no room for" : string.Empty)
-                + $". {Plural.Of(vote.Votes, "vote")} in on {vote.OnRace}.");
+            Log?.Invoke(VoteLogLine(added, changed, full, notCounted, vote.Votes, vote.OnRace));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -573,6 +582,43 @@ public sealed partial class RelayPublisher
         {
             VoteTrouble($"Could not read the room's vote: {Plain(ex)}");
         }
+    }
+
+    /// <summary>RoomVote.Cast's answer when the vote already holds as many voters as it can (RoomVote.MostVoters).</summary>
+    private const string VoteFullAnswer = "That is as many votes as this one can take.";
+
+    /// <summary>Whether a refusal from RoomVote.Cast is the one about the vote being full.</summary>
+    internal static bool IsVoteFullAnswer(string? refusal) =>
+        string.Equals(refusal, VoteFullAnswer, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The console line for one read of the room's vote from the club's page.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): every vote that was not counted - too
+    /// late after the close, a driver no longer on the grid, a vote under a
+    /// replaced ballot - was put down as one "the vote had no room for",
+    /// telling the director the vote was full when it holds 500. Only the
+    /// full vote is worded that way now; the rest are "not counted". And a
+    /// read with only changed picks no longer starts "0 votes from the club's page".
+    /// </remarks>
+    internal static string VoteLogLine(int added, int changed, int full, int notCounted, int votes, string? onRace)
+    {
+        var line = added > 0
+            ? $"[show] {Plural.Of(added, "vote")} from the club's page" + (changed > 0 ? $", and {changed} changed" : string.Empty)
+            : $"[show] {Plural.Of(changed, "vote")} changed on the club's page";
+
+        if (full > 0)
+        {
+            line += $", and {full} the vote had no room for";
+        }
+
+        if (notCounted > 0)
+        {
+            line += $", and {notCounted} not counted (too late, or not for this race)";
+        }
+
+        return line + $". {Plural.Of(votes, "vote")} in on {onRace}.";
     }
 
     /// <summary>

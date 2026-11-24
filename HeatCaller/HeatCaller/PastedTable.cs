@@ -435,7 +435,19 @@ internal static class PastedTable
         {
             var (cells, isMarked, number) = kept[i];
 
-            if (IsTitleRow(cells, width))
+            // WHY (23 Nov 2026, bug hunt 24): any row with one cell filled in
+            // was taken for a title and left out without a word, so a new
+            // racer with only a name (no transponder or car yet) vanished
+            // from a pasted list that the same sheet as a CSV file kept - and
+            // in a class-by-class list the rows after them lost their class.
+            // A lone name under the name heading, with an ordinary row after
+            // it, is a driver; titles ("Modified" over repeated headings, a
+            // class with its count, a race name under "Pos") still go.
+            var nextCells = i + 1 < kept.Count ? kept[i + 1].Cells : null;
+            var nextMarked = i + 1 < kept.Count && kept[i + 1].Marked;
+            if (IsTitleRow(cells, width)
+                && !IsNameOnlyDriver(cells, isMarked, hasHeadings ? headers : null, first.Cells, lastTitle,
+                    nextCells, nextMarked, width))
             {
                 classTitle = ClassFromTitle(cells, lastTitle) ?? (classTitle is null ? null : string.Empty);
                 lastTitle = cells.First(c => c.Length > 0);
@@ -694,6 +706,55 @@ internal static class PastedTable
     /// <summary>One cell with words in it across a table three or more wide: a title, not a driver.</summary>
     private static bool IsTitleRow(List<string> cells, int width) =>
         width >= 3 && cells.Count(cell => cell.Length > 0) == 1;
+
+    /// <summary>
+    /// WHY (23 Nov 2026, bug hunt 24): whether a row with one cell filled in
+    /// is a driver with only a name rather than a title. It is when the table
+    /// has headings, the cell sits under the driver's name heading (Driver,
+    /// Name, First name, Last name), it is not marked as headings, it is not
+    /// a class with its entry count, and the row after it is an ordinary row
+    /// - not the headings again, not marked as headings, not another lone
+    /// cell. A title over a class ("Modified") is followed by the headings
+    /// again, so it still goes; a driver at the very end has no row after it
+    /// and is kept, where the old rule left them out without a word.
+    /// </summary>
+    private static bool IsNameOnlyDriver(
+        List<string> cells,
+        bool marked,
+        IReadOnlyList<string>? headers,
+        List<string> headingCells,
+        string? lastTitle,
+        List<string>? nextCells,
+        bool nextMarked,
+        int width)
+    {
+        if (headers is null || marked)
+        {
+            return false;
+        }
+
+        var column = cells.FindIndex(cell => cell.Length > 0);
+
+        if (column < 0 || column >= headers.Count
+            || DriverImport.Guess(headers[column]) is not (ImportColumn.DriverName or ImportColumn.FirstName or ImportColumn.LastName))
+        {
+            return false;
+        }
+
+        if (ClassFromTitle(cells, lastTitle) is not null)
+        {
+            return false;
+        }
+
+        if (nextCells is null)
+        {
+            return true;
+        }
+
+        return !nextMarked
+               && !IsTitleRow(nextCells, width)
+               && !nextCells.SequenceEqual(headingCells, StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Whether a first row is headings: any of it a heading the import

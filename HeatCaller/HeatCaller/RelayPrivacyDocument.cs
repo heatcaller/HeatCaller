@@ -52,6 +52,29 @@ internal static class RelayPrivacyDocument
         return from > 0 && int.TryParse(year, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var y) && y < from;
     }
 
+    /// <summary>
+    /// Whether a session is older than the club keeps online, judged by the
+    /// same year the results index files it under (RelayResultsIndex.YearOf:
+    /// the local race night, 6am to 6am) against the local now.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the session check used TooOld on the
+    /// session's UTC start against the UTC now, while the index year it is
+    /// listed under is the LOCAL race night checked against the local now.
+    /// Around New Year the two disagree: west of UTC a New Year's Eve race
+    /// (UTC 1 Jan) was taken down with its index year but sent back on the
+    /// next re-send; east of UTC a New Year's Day morning race (UTC 31 Dec)
+    /// stopped being sent a year early while its index year was still up.
+    /// One year now decides both. A session saved with no time at all is
+    /// unknown, not old, as before.
+    /// </summary>
+    public static bool SessionTooOld(SessionRecord session, int keepYears, DateTime localNow)
+    {
+        if (session is null || RelayResultsIndex.EffectiveStart(session) == DateTime.MinValue)
+            return false;
+
+        return YearTooOld(RelayResultsIndex.YearOf(session), keepYears, localNow);
+    }
+
     /// <summary>The document, as JSON.</summary>
     public static string Build(PublicPrivacy privacy, int keepYears, DateTime now)
     {

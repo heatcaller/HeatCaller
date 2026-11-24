@@ -166,21 +166,15 @@ public sealed class OverlayEditorForm : Form
     /// and how far in it sits there - the page's own CSS for it, in vw. A
     /// graphic moved from its usual place starts from here.
     /// </summary>
-    internal static (OverlayAnchor Anchor, double X, double Y) UsualPlace(OverlayElementKind kind) => kind switch
-    {
-        OverlayElementKind.Tower => (OverlayAnchor.TopLeft, 2, 3),
-        OverlayElementKind.Champ => (OverlayAnchor.TopLeft, 2, 3),
-        OverlayElementKind.Battle => (OverlayAnchor.Bottom, 0, 3),
-        OverlayElementKind.Fastest => (OverlayAnchor.BottomRight, 2, 3),
-        OverlayElementKind.Moment => (OverlayAnchor.Top, 0, 3),
-        OverlayElementKind.Grid or OverlayElementKind.Podium or OverlayElementKind.Schedule => (OverlayAnchor.Middle, 0, 0),
-        OverlayElementKind.Captions => (OverlayAnchor.Bottom, 0, 1),
-        OverlayElementKind.Ticker => (OverlayAnchor.Bottom, 0, 2),
-        OverlayElementKind.Basics => (OverlayAnchor.Bottom, 0, 3),
-        OverlayElementKind.ClubLogo => (OverlayAnchor.TopLeft, 2, 2),
-        OverlayElementKind.Mark => (OverlayAnchor.BottomRight, 2, 2),
-        _ => (OverlayAnchor.TopRight, 2, 2),
-    };
+    // WHY (24 Nov 2026, bug hunt 24 #218): the editor kept its own copy of
+    // this table, and it had the championship box at the pylon's own corner
+    // (TopLeft 2,3) while the page draws it under the pylon (OverlayOverlap
+    // has TopLeft 2,28). So nudging the championship box by Across, Down or
+    // Size saved 2,3 and on a points night it jumped up on top of the
+    // pylon's first rows, covering the leaders. Now the editor reads the one
+    // table the overlap check uses, so the two cannot drift apart again (it
+    // also puts the captions at the page's own 0.8 up, not 1).
+    internal static (OverlayAnchor Anchor, double X, double Y) UsualPlace(OverlayElementKind kind) => OverlayOverlap.UsualPlace(kind);
 
     private static readonly (OverlayDuring Part, string Name, string At)[] PartsOfTheNight =
     {
@@ -332,12 +326,18 @@ public sealed class OverlayEditorForm : Form
         Spinner(_numRows, 0, 20, 1, 0);
         Spinner(_numGlass, 40, 100, 5, 0);
         Spinner(_numTextScale, 80, 160, 5, 0);
-        _numX.ValueChanged += (_, _) => EditElement(e => { OutOfUsualPlace(e); e.X = (double)_numX.Value; });
-        _numY.ValueChanged += (_, _) => EditElement(e => { OutOfUsualPlace(e); e.Y = (double)_numY.Value; });
-        _numScale.ValueChanged += (_, _) => EditElement(e => { OutOfUsualPlace(e); e.Scale = (double)_numScale.Value / 100; });
-        _numRows.ValueChanged += (_, _) => EditElement(e => e.Rows = (int)_numRows.Value);
-        _numGlass.ValueChanged += (_, _) => Edit(layout => layout.Glass = (double)_numGlass.Value / 100);
-        _numTextScale.ValueChanged += (_, _) => Edit(layout => layout.TextScale = (double)_numTextScale.Value / 100);
+        // WHY (23 Nov 2026, bug hunt 24): each box's value is read BEFORE Edit
+        // runs. The old lambdas read the box inside the change, but on a
+        // preset's first change Edit makes the club's copy and refills every
+        // box from it first - so the change then read the preset's old number
+        // back and wrote that: the strip said the change went into a copy,
+        // and the copy was unchanged.
+        _numX.ValueChanged += (_, _) => { var v = (double)_numX.Value; EditElement(e => { OutOfUsualPlace(e); e.X = v; }); };
+        _numY.ValueChanged += (_, _) => { var v = (double)_numY.Value; EditElement(e => { OutOfUsualPlace(e); e.Y = v; }); };
+        _numScale.ValueChanged += (_, _) => { var v = (double)_numScale.Value / 100; EditElement(e => { OutOfUsualPlace(e); e.Scale = v; }); };
+        _numRows.ValueChanged += (_, _) => { var v = (int)_numRows.Value; EditElement(e => e.Rows = v); };
+        _numGlass.ValueChanged += (_, _) => { var v = (double)_numGlass.Value / 100; Edit(layout => layout.Glass = v); };
+        _numTextScale.ValueChanged += (_, _) => { var v = (double)_numTextScale.Value / 100; Edit(layout => layout.TextScale = v); };
         _pillsShows.SetPills(new[] { new TogglePills.Pill(AutoPill, "Auto") }
             .Concat(PartsOfTheNight.Select(p => new TogglePills.Pill(p.Name, PartWords(p.Part)))).ToList());
         _pillsShows.Clicked += ShowsPillClicked;

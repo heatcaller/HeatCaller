@@ -503,14 +503,38 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
             },
         };
 
+        return await CollectAsync(
+            executor.InferAsync(BuildPrompt(systemPrompt, userPrompt), inference, ct),
+            maxTokens,
+            ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gathers the model's tokens into one line and says whether it stopped
+    /// because it ran out of tokens.
+    /// </summary>
+    internal static async Task<(string? Text, bool HitLimit)> CollectAsync(
+        IAsyncEnumerable<string> tokens,
+        int maxTokens,
+        CancellationToken ct)
+    {
         var built = new StringBuilder();
         var produced = 0;
 
-        await foreach (var token in executor.InferAsync(BuildPrompt(systemPrompt, userPrompt), inference, ct).ConfigureAwait(false))
+        await foreach (var token in tokens.ConfigureAwait(false))
         {
             built.Append(token);
             produced++;
         }
+
+        // WHY (23 Nov 2026, bug hunt 24): LLamaSharp 0.27.0 does not throw
+        // when a line runs out of time - it only checks the token between
+        // words and ends the stream quietly. The old code took that as a
+        // finished line, so a deadline that passed mid-write sent the half
+        // sentence ("...and Sam Smith is") to the PA and the captions, with
+        // no "Timed out" on the console and no templates used. Throwing here
+        // sends a deadline or a call-off down the same paths as before.
+        ct.ThrowIfCancellationRequested();
 
         return (StripThinking(built.ToString()), produced >= maxTokens);
     }
@@ -841,6 +865,13 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether a warm-up actually ran the model and so has anything to
+    /// report. Once the model is marked unavailable the weights were never
+    /// loaded, and MarkUnavailable has already said why.
+    /// </summary>
+    internal static bool WarmUpRanTheModel(bool unavailable) => !unavailable;
+
     private void MarkUnavailable(string why)
     {
         _unavailable = true;
@@ -913,6 +944,19 @@ public sealed class BundledLlmClient : ICommentaryBrain, IDisposable
                 clock).ConfigureAwait(false);
 
             clock.Stop();
+
+            // WHY (23 Nov 2026, bug hunt 24): when there is no model to load
+            // (no file, too little memory, an engine that will not start),
+            // MarkUnavailable has already said why - and the old code went on
+            // to say "Warmed up in 0s but wrote nothing - the model may not be
+            // the one this expects", pointing the director at swapping a model
+            // file that was never run. Nothing was warmed, so nothing more is
+            // said and no timing is recorded.
+            if (!WarmUpRanTheModel(_unavailable))
+            {
+                return;
+            }
+
             _measured = clock.Elapsed;
 
             if (string.IsNullOrWhiteSpace(line.Text))

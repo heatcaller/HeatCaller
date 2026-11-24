@@ -136,7 +136,7 @@ These are on the **Reactions** card, under the layers. How loud the ambience is 
 
 ## Music
 
-**Sounds → Music** is a soundtrack for between races. Eleven tracks are included: Horizon Line, Chasing Sunset, Grid Runner, Afterglow, Cooldown Lap, Vanishing Point, Last Lap Lights, Redline Memory, One More Run, Back to the Grid and Long Way Home. The soundscapes' own music is included too; see [Theme music](#theme-music).
+**Sounds → Music** is a soundtrack for between races. Some tracks come with the app, and they're listed as "Included" in the library. The soundscapes' own music is included too; see [Theme music](#theme-music).
 
 ![Sounds, Music tab: Enable music and Shuffle ticked, Theme music picked, the player not playing, and the top of the library of included tracks](../assets/images/sounds-music.png)
 
@@ -187,7 +187,7 @@ The status line under the page counts your ticks, for example "9 of 15 tracks in
 | **Remove** | Takes tracks out of the library. The files stay in the music folder. Included tracks come back the next time HeatCaller starts, unless you delete the file from the music folder. |
 | **Open Music Folder** | Opens the folder in File Explorer. |
 | **Restore Included Tracks** | Puts the included tracks back if they're missing. |
-| **Clear Library** | Removes every track. It then asks whether to delete the files too; choose No to keep them (the clear can be undone), Yes to delete them for good (that can't be undone). |
+| **Clear Library** | Removes every track. It then asks whether to delete the files too; choose No to keep them (the clear can be undone), Yes to delete them for good (that can't be undone). Included tracks come back the next time HeatCaller starts while their files are in the music folder, or if the folder is left empty; to keep one from playing, leave it listed and use **Include / Exclude** to take it out of **My music**. |
 
 ### Behavior settings
 
@@ -300,6 +300,7 @@ The choice is applied when you move off the step, and stays until you change it,
 - **Voice → AI Commentary:** **Race intros - a "coming up" line as each race goes to the grid**, **Race recaps - a wrap-up after the checkered flag** and **Teasers before the recap:** are switched off.
 - No soundscape card is marked **LAST APPLIED**.
 - The **Unofficial result** at the flag isn't said while lap times only is on, whatever its tick box says. That tick box itself isn't changed, so it's back when lap times only ends.
+- The achievements read after a race, and its show music, isn't played while lap times only is on. The tick for it isn't changed either, so it's back when lap times only ends.
 
 Whether the lap time includes the driver's name, and how often it's read, stay as you set them on the **Lap time only** row of **Voice → Race Calls**.
 
@@ -405,7 +406,7 @@ A soundscape's music is what **Sounds → Music** plays when it's set to **Theme
 
 | Soundscape | Theme music |
 |---|---|
-| **Classic** | The eleven included tracks and its own three songs: **Chrome Apex**, **Starlight Straight** and **Afterburn**. |
+| **Classic** | The included tracks and its own three songs: **Chrome Apex**, **Starlight Straight** and **Afterburn**. |
 | **Podium** | Its own four songs: **Full Throttle**, **Top Step**, **Burnout** and **Champagne Spray**. |
 | **Arcade** | No music of its own: **Theme music** plays your **My music** tracks. |
 | **Broadcast** | Its own four songs: **Prime Time**, **Highlight Reel**, **Under the Lights** and **Post-Race Show**. |

@@ -259,7 +259,14 @@ public static partial class AchievementEvaluator
             }
 
             // --- Single race ---
-            var streak = LongestCleanRun(entry.LapTimesMs);
+            // WHY (23 Nov 2026, bug hunt 24): a credited start lap is a zero then
+            // the rest of the start (StartSlots), and the clean-run, Finished
+            // Strong and Machine helpers skipped only one slot, so that dash -
+            // a lap plus however early the car was read - was judged as a
+            // flying lap: it broke the run on lap two, refused Machine and
+            // Unbroken, and could hand out Finished Strong for an even race.
+            var startSlots = entry.StartSlots(entry.LapTimesMs);
+            var streak = LongestCleanRun(entry.LapTimesMs, startSlots);
 
             if (streak >= 50)
             {
@@ -347,7 +354,7 @@ public static partial class AchievementEvaluator
 
             // Faster over the back half than the front half - somebody who
             // found the track rather than faded on it.
-            if (FinishedStrong(entry.LapTimesMs) is { } improvementMs)
+            if (FinishedStrong(entry.LapTimesMs, startSlots) is { } improvementMs)
             {
                 Award(AchievementCatalogue.FinishedStrong, $"{improvementMs / 1000.0:0.000}s a lap quicker");
             }
@@ -812,13 +819,13 @@ public static partial class AchievementEvaluator
                 }
             }
 
-            if (IsWithinTolerance(entry.LapTimesMs, ConsistencyTolerance))
+            if (IsWithinTolerance(entry.LapTimesMs, startSlots, ConsistencyTolerance))
             {
                 Award(AchievementCatalogue.Consistent);
 
                 // The same test, held to a fifth of the tolerance. Rare
                 // enough on a real track to be worth its own badge.
-                if (IsWithinTolerance(entry.LapTimesMs, TightConsistencyTolerance))
+                if (IsWithinTolerance(entry.LapTimesMs, startSlots, TightConsistencyTolerance))
                 {
                     Award(AchievementCatalogue.SwissWatch);
                 }
@@ -826,9 +833,9 @@ public static partial class AchievementEvaluator
 
             // A whole race without the clean run ever breaking - every lap
             // inside the lap-to-lap window, start to finish.
-            if (entry.LapTimesMs.Count >= 10 && LongestCleanRun(entry.LapTimesMs) >= entry.LapTimesMs.Count - 1)
+            if (entry.LapTimesMs.Count >= 10 && LongestCleanRun(entry.LapTimesMs, startSlots) >= entry.LapTimesMs.Count - startSlots)
             {
-                Award(AchievementCatalogue.Unbroken, $"{entry.LapTimesMs.Count - 1} laps");
+                Award(AchievementCatalogue.Unbroken, $"{entry.LapTimesMs.Count - startSlots} laps");
             }
 
             // A scrappy race put right in the very next one. Both races
@@ -980,9 +987,11 @@ public static partial class AchievementEvaluator
     /// than being a lap at all, and using it as a baseline would break every
     /// run on lap two.
     /// </summary>
-    private static int LongestCleanRun(IReadOnlyList<long> lapTimesMs)
+    private static int LongestCleanRun(IReadOnlyList<long> lapTimesMs, int startSlots)
     {
-        if (lapTimesMs.Count < 3)
+        // WHY (23 Nov 2026, bug hunt 24): skips startSlots (two for a credited
+        // start lap), not a fixed one, so the dash after the zero is not the baseline.
+        if (lapTimesMs.Count < startSlots + 2)
         {
             return 0;
         }
@@ -990,7 +999,7 @@ public static partial class AchievementEvaluator
         var best = 0;
         var current = 0;
 
-        for (var i = 2; i < lapTimesMs.Count; i++)
+        for (var i = startSlots + 1; i < lapTimesMs.Count; i++)
         {
             var previous = lapTimesMs[i - 1];
             var allowance = previous * 0.25;
@@ -1010,11 +1019,13 @@ public static partial class AchievementEvaluator
     }
 
     /// <summary>Every flying lap within the given fraction of this driver's own average for the race.</summary>
-    private static bool IsWithinTolerance(IReadOnlyList<long> lapTimesMs, double tolerance)
+    private static bool IsWithinTolerance(IReadOnlyList<long> lapTimesMs, int startSlots, double tolerance)
     {
         // Enough laps for it to mean something. Three tidy laps is not a
         // machine, it's a short race.
-        var flying = lapTimesMs.Skip(1).Where(t => t > 0).ToList();
+        // WHY (23 Nov 2026, bug hunt 24): Skip(startSlots), not Skip(1) - the
+        // dash after a credited start lap is not a flying lap.
+        var flying = lapTimesMs.Skip(startSlots).Where(t => t > 0).ToList();
 
         if (flying.Count < 8)
         {
@@ -1078,9 +1089,12 @@ public static partial class AchievementEvaluator
     /// so leaving it in loads the first half with something that is not a
     /// lap and would hand this badge to everybody.
     /// </summary>
-    private static long? FinishedStrong(IReadOnlyList<long> lapTimesMs)
+    private static long? FinishedStrong(IReadOnlyList<long> lapTimesMs, int startSlots)
     {
-        var flying = lapTimesMs.Skip(1).Where(t => t > 0).ToList();
+        // WHY (23 Nov 2026, bug hunt 24): Skip(startSlots), not Skip(1) - the
+        // dash after a credited start lap loaded the first half and could
+        // give an even race "a lap quicker", or refuse a real one.
+        var flying = lapTimesMs.Skip(startSlots).Where(t => t > 0).ToList();
 
         if (flying.Count < 8)
         {
@@ -1346,7 +1360,18 @@ public static partial class AchievementEvaluator
             .ToList();
 
     /// <summary>The club night a race started in, in local time - 6am to 6am (TonightAtTheTrack.NightOf).</summary>
-    private static DateTime LocalDay(SessionRecord race) => TonightAtTheTrack.NightOf(race.StartedAtUtc.ToLocalTime());
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): an old session saved with no start
+    /// time is DateTime.MinValue, and six hours before that is no date - it
+    /// threw. PersonalBestsOf called this on every personal best without a
+    /// guard, so two such sessions stopped every badge and running total
+    /// being saved for the race. Such a session now gets its own date, as
+    /// RaceHistoryControl.NightOf does.
+    private static DateTime LocalDay(SessionRecord race)
+    {
+        var local = race.StartedAtUtc.ToLocalTime();
+        return local < DateTime.MinValue.AddDays(1) ? local.Date : TonightAtTheTrack.NightOf(local);
+    }
 
     /// <summary>
     /// Who won a past race among real cars - null when fewer than two real

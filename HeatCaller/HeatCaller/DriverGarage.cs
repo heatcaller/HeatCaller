@@ -65,8 +65,15 @@ internal static class DriverGarage
         IReadOnlyList<string> Classes,
         Func<string, string?> Thumb);
 
-    /// <summary>One driver's garage document, as JSON.</summary>
-    internal static string Build(DriverProfile profile, Sources from, DateTime nowUtc)
+    /// <summary>
+    /// The most one garage document is let grow to: the relay's limit
+    /// (RelayPublisher.MostGarageBytes) less a little room for what the
+    /// publish wraps round it.
+    /// </summary>
+    internal const int BudgetBytes = RelayPublisher.MostGarageBytes - 8 * 1024;
+
+    /// <summary>One driver's garage document, as JSON, no bigger than <paramref name="budgetBytes"/> (see FitToBudget).</summary>
+    internal static string Build(DriverProfile profile, Sources from, DateTime nowUtc, int budgetBytes = BudgetBytes)
     {
         var key = BatteryPackStore.DriverKey(from.Profiles, profile.Transponder);
         var name = (profile.DriverName ?? string.Empty).Trim();
@@ -124,6 +131,13 @@ internal static class DriverGarage
             ["layout"] = x.Session.TrackLayoutName ?? string.Empty,
             ["best"] = x.Row!.FastLapMs > 0 ? Math.Round(x.Row.FastLapMs / 1000.0, 3) : null,
             ["pack"] = from.Packs.PackIdFor(x.Session.Id, key),
+
+            // WHY (23 Nov 2026, bug hunt 24): the pack's name as the desk
+            // shows it. A race run on a pack no longer in this driver's list
+            // (a club pack since taken out, one now another driver's) had
+            // only its id, so the phone could only call it "A pack not in
+            // your garage". Null when no pack is tagged or it is gone.
+            ["packLabel"] = from.Packs.PackFor(x.Session.Id, key)?.DisplayName,
             ["by"] = ByWhom(from.Packs, x.Session.Id, key),
         }).ToList();
 
@@ -148,7 +162,7 @@ internal static class DriverGarage
         var setups = from.Setups.All;
         var sheetsUsed = new HashSet<string>(StringComparer.Ordinal);
 
-        doc["cars"] = cars.Select(car =>
+        var carDocs = cars.Select(car =>
         {
             var chassis = from.ChassisTypes.Get(car.ChassisTypeId);
             var sheet = from.Sheets.Get(chassis?.SetupSheetId);
@@ -203,6 +217,8 @@ internal static class DriverGarage
             };
         }).ToList();
 
+        doc["cars"] = carDocs;
+
         // --- What a car can be: the club's chassis, classes and sheets.
         doc["chassis"] = from.ChassisTypes.InUse.Select(t =>
         {
@@ -227,7 +243,7 @@ internal static class DriverGarage
         // first, so the phone can offer them all as the desk's form does.
         var sheetIds = sheetsUsed.Concat(from.Sheets.All.Select(t => t.Id)).Distinct(StringComparer.Ordinal).Take(MostSheets);
 
-        doc["sheets"] = sheetIds.Select(id => from.Sheets.Get(id)).Where(t => t is not null).ToDictionary(t => t!.Id, t => (object?)new Dictionary<string, object?>
+        var sheetDocs = sheetIds.Select(id => from.Sheets.Get(id)).Where(t => t is not null).ToDictionary(t => t!.Id, t => (object?)new Dictionary<string, object?>
         {
             ["name"] = t!.Name,
             ["sections"] = t.Sections.Select(s => new Dictionary<string, object?>
@@ -244,7 +260,148 @@ internal static class DriverGarage
             }).ToList(),
         });
 
+        doc["sheets"] = sheetDocs;
+
         doc["limits"] = new Dictionary<string, object?> { ["photosPerCar"] = PhonePhotos.MostPerCar, ["photoBytes"] = PhonePhotos.MaxBytes };
+
+        return FitToBudget(doc, carDocs, sheetDocs, sheetsUsed, budgetBytes);
+    }
+
+    /// <summary>
+    /// The garage as JSON, trimmed until it fits <paramref name="budget"/>:
+    /// first the photos that are not a car's cover (retired cars first, then
+    /// whichever car has the most), then retired cars' covers, then each
+    /// car's setups beyond its newest, then setup sheets no car, chassis or
+    /// setup left links to. "trimmed" is set when anything was left out.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24, F278): a driver with a lot of car
+    /// photos made a garage over the relay's 512 KB. The relay refused it,
+    /// every time, so their phone kept the garage it had before - or none -
+    /// and nothing changed there however often the desk published. Now the
+    /// newest, most useful part always gets there.
+    ///
+    /// Each removal takes its own size off the running total rather than
+    /// serialising the whole document again; the document is serialised
+    /// for real once at the end.
+    /// </summary>
+    private static string FitToBudget(
+        Dictionary<string, object?> doc,
+        List<Dictionary<string, object?>> cars,
+        Dictionary<string, object?> sheets,
+        HashSet<string> linkedSheets,
+        int budget)
+    {
+        var json = JsonSerializer.Serialize(doc);
+        long size = System.Text.Encoding.UTF8.GetByteCount(json);
+
+        if (size <= budget)
+        {
+            return json;
+        }
+
+        var trimmed = false;
+
+        // Room for the ,"trimmed":true added at the end, counted now so the
+        // finished document is inside the budget and not just the parts.
+        size += ",\"trimmed\":true".Length;
+
+        // Its bytes in the document, and the comma beside it.
+        static long Bytes(object? part) => System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(part)) + 1;
+        static List<Dictionary<string, object?>> Photos(Dictionary<string, object?> car) => (List<Dictionary<string, object?>>)car["photos"]!;
+        static List<Dictionary<string, object?>> Setups(Dictionary<string, object?> car) => (List<Dictionary<string, object?>>)car["setups"]!;
+        static bool Retired(Dictionary<string, object?> car) => car["retired"] is true;
+
+        // 1. Photos other than the cover.
+        while (size > budget)
+        {
+            var car = cars
+                .Where(c => Photos(c).Count > 1)
+                .OrderByDescending(Retired)
+                .ThenByDescending(c => Photos(c).Count)
+                .FirstOrDefault();
+
+            if (car is null)
+            {
+                break;
+            }
+
+            var photos = Photos(car);
+            size -= Bytes(photos[^1]);
+            photos.RemoveAt(photos.Count - 1);
+            trimmed = true;
+        }
+
+        // 2. Retired cars' covers.
+        foreach (var car in cars.Where(Retired))
+        {
+            if (size <= budget)
+            {
+                break;
+            }
+
+            var photos = Photos(car);
+
+            if (photos.Count > 0)
+            {
+                foreach (var photo in photos)
+                {
+                    size -= Bytes(photo);
+                }
+
+                photos.Clear();
+                car["cover"] = null;
+                trimmed = true;
+            }
+        }
+
+        // 3. Setups beyond each car's newest.
+        foreach (var car in cars)
+        {
+            if (size <= budget)
+            {
+                break;
+            }
+
+            var setups = Setups(car);
+
+            while (setups.Count > 1)
+            {
+                size -= Bytes(setups[^1]);
+                setups.RemoveAt(setups.Count - 1);
+                trimmed = true;
+            }
+        }
+
+        // 4. Sheets nothing left links to.
+        if (size > budget)
+        {
+            var keep = new HashSet<string>(linkedSheets, StringComparer.Ordinal);
+
+            foreach (var setup in cars.SelectMany(c => Setups(c)))
+            {
+                if (setup["sheet"] is string sheetId)
+                {
+                    keep.Add(sheetId);
+                }
+            }
+
+            foreach (var id in sheets.Keys.Where(k => !keep.Contains(k)).ToList())
+            {
+                if (size <= budget)
+                {
+                    break;
+                }
+
+                size -= Bytes(sheets[id]) + System.Text.Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(id)) + 1;
+                sheets.Remove(id);
+                trimmed = true;
+            }
+        }
+
+        if (trimmed)
+        {
+            doc["trimmed"] = true;
+        }
 
         return JsonSerializer.Serialize(doc);
     }
@@ -363,7 +520,7 @@ internal static class DriverGarage
                     using var stream = new MemoryStream();
                     var codec = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
                     using var options = new EncoderParameters(1);
-                    options.Param[0] = new EncoderParameter(Encoder.Quality, 72L);
+                    options.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 72L);
                     image.Save(stream, codec, options);
                     made = "data:image/jpeg;base64," + Convert.ToBase64String(stream.ToArray());
                 }

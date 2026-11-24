@@ -397,6 +397,69 @@ public sealed class AchievementDetailForm : Form
     private SessionHistoryStore? _history;
 
     /// <summary>
+    /// The words under a holder's date: how long ago they earned it.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): counted in club nights (6am to 6am,
+    /// TonightAtTheTrack.NightOf), as PastMeetings.HowLongAgo is. It used to
+    /// count whole 24-hour lumps, so a badge earned at 9pm read "today" at
+    /// 10am the next morning - under yesterday's date - and one from two
+    /// nights back read "yesterday".
+    /// </summary>
+    internal static string HolderAgo(DateTime earnedUtc, DateTime nowUtc, TimeZoneInfo? zone = null)
+    {
+        var days = (TonightAtTheTrack.NightOf(LocalOf(nowUtc, zone)) - TonightAtTheTrack.NightOf(LocalOf(earnedUtc, zone))).Days;
+
+        return days switch
+        {
+            <= 0 => "today",
+            1 => "yesterday",
+            < 14 => $"{days} days ago",
+            < 60 => $"{days / 7} weeks ago",
+            < 730 => $"{Math.Max(1, days / 30)} months ago",
+            _ => $"{days / 365} years ago",
+        };
+    }
+
+    private static DateTime LocalOf(DateTime utc, TimeZoneInfo? zone) =>
+        zone is null
+            ? DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime()
+            : TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), zone);
+
+    /// <summary>
+    /// How far the holder list can be scrolled: never above the first row,
+    /// never so far that there is empty room under the last one.
+    /// </summary>
+    internal static int ClampHolderScroll(int scroll, int rows, int rowHeight, int firstRowTop, int height) =>
+        Math.Clamp(scroll, 0, Math.Max(0, firstRowTop + rows * rowHeight - height));
+
+    /// <summary>
+    /// Where the holder list scrolls to on a key: a row for Up and Down, a
+    /// screenful for Page Up and Page Down, the ends for Home and End. Null
+    /// for any other key.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the list only moved on the mouse
+    /// wheel, so holders below the first screenful could not be reached
+    /// from the keyboard, or with a mouse that has no wheel.
+    /// </summary>
+    internal static int? HolderScrollForKey(Keys key, int scroll, int rows, int rowHeight, int firstRowTop, int height)
+    {
+        var page = Math.Max(rowHeight, height - rowHeight);
+
+        int? wanted = key switch
+        {
+            Keys.Down => scroll + rowHeight,
+            Keys.Up => scroll - rowHeight,
+            Keys.PageDown => scroll + page,
+            Keys.PageUp => scroll - page,
+            Keys.Home => 0,
+            Keys.End => int.MaxValue / 2,
+            _ => null,
+        };
+
+        return wanted is { } to ? ClampHolderScroll(to, rows, rowHeight, firstRowTop, height) : null;
+    }
+
+    /// <summary>
     /// Who has it, oldest first - the club's roll of honour for this badge.
     /// </summary>
     private sealed class HolderList : Control
@@ -437,10 +500,72 @@ public sealed class AchievementDetailForm : Form
             SetStyle(ControlStyles.OptimizedDoubleBuffer
                      | ControlStyles.AllPaintingInWmPaint
                      | ControlStyles.UserPaint
-                     | ControlStyles.ResizeRedraw, true);
+                     | ControlStyles.ResizeRedraw
+                     | ControlStyles.Selectable, true);
 
             DoubleBuffered = true;
-            TabStop = false;
+
+            // WHY (23 Nov 2026, bug hunt 24): the list can now take the focus
+            // (Tab, or a click on it) so the arrow and page keys scroll it.
+            // It was TabStop = false and moved only on the mouse wheel, so
+            // holders past the first screenful could not be reached without
+            // one.
+            TabStop = true;
+        }
+
+        protected override bool IsInputKey(Keys keyData) =>
+            keyData is Keys.Up or Keys.Down or Keys.PageUp or Keys.PageDown or Keys.Home or Keys.End
+            || base.IsInputKey(keyData);
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+
+            var to = HolderScrollForKey(e.KeyData, _scroll, _holders.Count, RowHeight, FirstRowTop, Height);
+
+            if (to is { } scroll)
+            {
+                _scroll = scroll;
+                e.Handled = true;
+                Invalidate();
+            }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            Focus();
+        }
+
+        protected override void OnGotFocus(EventArgs e)
+        {
+            base.OnGotFocus(e);
+            Invalidate();
+        }
+
+        protected override void OnLostFocus(EventArgs e)
+        {
+            base.OnLostFocus(e);
+            Invalidate();
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+
+            // The base constructor can size the control before the holders
+            // are set.
+            if (_holders is null)
+            {
+                return;
+            }
+
+            // WHY (23 Nov 2026, bug hunt 24): the scroll was only kept in
+            // range when the wheel turned, so after scrolling to the end and
+            // making the window taller the rows stayed pushed up with an
+            // empty gap under the last one.
+            _scroll = ClampHolderScroll(_scroll, _holders.Count, RowHeight, FirstRowTop, Height);
+            Invalidate();
         }
 
         private int RowAt(Point point)
@@ -559,6 +684,12 @@ public sealed class AchievementDetailForm : Form
 
                 DrawRow(g, _holders[i], i, top);
             }
+
+            // A mark round the list while the keys scroll it (bug hunt 24).
+            if (Focused && ShowFocusCues)
+            {
+                ControlPaint.DrawFocusRectangle(g, ClientRectangle);
+            }
         }
 
         private void DrawRow(Graphics g, Holder holder, int index, float top)
@@ -639,20 +770,8 @@ public sealed class AchievementDetailForm : Form
                 new RectangleF(dateLeft, lowerTop, dateWidth, lowerHeight), far);
         }
 
-        private static string Ago(DateTime utc)
-        {
-            var days = (int)(DateTime.UtcNow - utc).TotalDays;
-
-            return days switch
-            {
-                <= 0 => "today",
-                1 => "yesterday",
-                < 14 => $"{days} days ago",
-                < 60 => $"{days / 7} weeks ago",
-                < 730 => $"{Math.Max(1, days / 30)} months ago",
-                _ => $"{days / 365} years ago",
-            };
-        }
+        // Counted in club nights - see HolderAgo (bug hunt 24).
+        private static string Ago(DateTime utc) => HolderAgo(utc, DateTime.UtcNow);
     }
 }
 

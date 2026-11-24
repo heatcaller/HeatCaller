@@ -246,12 +246,35 @@ public sealed partial class CheckInControl
         }
 
         var r = ReadinessOf(profile);
-        var headline = r.Here ? _deskHeadline : "Not checked in";
+        var headline = DeskHeadline(r.Here, _deskHeadline);
+
+        // WHY (23 Nov 2026, bug hunt 24): kept, so the needs list under it
+        // offers Undo again - see DeskHeadline.
+        if (r.Here && !string.Equals(headline, _deskHeadline, StringComparison.Ordinal))
+        {
+            _deskHeadline = headline;
+            _deskTone = AppTheme.Success;
+        }
         var tone = r.Ready ? AppTheme.Success : r.Here ? _deskTone : AppTheme.Warning;
 
         _deskCard.Show(profile, r.Ready ? $"{headline} · ready to race" : headline, ClassCellText(profile), tone);
         BuildNeeds(profile);
     }
+
+    /// <summary>
+    /// The card's headline: "Not checked in" while the driver is not here;
+    /// otherwise what the desk last said about them.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): Undo stores "Not checked in", and a
+    /// check-in from anywhere but the desk card (their phone, the tick, the
+    /// right-click menu) never replaced it, so the card read NOT CHECKED IN
+    /// over a "Checked in" line for a driver who was. Here again, it says so.
+    /// </remarks>
+    internal static string DeskHeadline(bool here, string stored) =>
+        !here ? "Not checked in"
+        : string.IsNullOrEmpty(stored) || string.Equals(stored, "Not checked in", StringComparison.Ordinal) ? "Checked in"
+        : stored;
 
     /// <summary>
     /// One row per gate for the driver on the card: done ones as a quiet

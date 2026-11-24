@@ -109,6 +109,13 @@ internal static class DriverLive
         /// <summary>Asks to cover a marshal post still open (MarshalSwaps.Offers) - 12 Nov 2026.</summary>
         public IReadOnlyList<MarshalSwaps.Offer> CoverOffers { get; init; } = Array.Empty<MarshalSwaps.Offer>();
 
+        /// <summary>
+        /// How far the relay's clock is ahead of this laptop's
+        /// (RelayPublisher.RelayClockOffset), so an answer's "at" is written
+        /// on the relay's clock - see OnRelayClock. Zero when not known.
+        /// </summary>
+        public TimeSpan RelayAhead { get; init; }
+
         /// <summary>A badge id's main transponder, or null - for the names on an ask to cover.</summary>
         public Func<string, string?>? MainOfBadge { get; init; }
 
@@ -231,7 +238,7 @@ internal static class DriverLive
                 return;
             }
 
-            var answers = AsksFor(who.Badge, inputs.AsksOf);
+            var answers = AsksFor(who.Badge, inputs.AsksOf, inputs.RelayAhead);
 
             if (onlyWithAsks && answers.Count == 0)
             {
@@ -630,7 +637,24 @@ internal static class DriverLive
         return cars;
     }
 
-    private static List<Dictionary<string, object?>> AsksFor(string badge, Func<string, IReadOnlyList<DriverAskAnswer>>? asksOf)
+    /// <summary>
+    /// A time on this laptop's clock moved onto the relay's, the other way
+    /// from RelayPublisher.ToLaptopClock and clamped the same way.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24, F343): the phone keeps a desk answer
+    /// up for 15 minutes from its "at", measured on the relay's clock. The
+    /// laptop wrote its own time there, so a laptop 15 minutes slow made
+    /// every answer stale on arrival - the answer card never showed - and a
+    /// fast one kept it up too long.
+    /// </summary>
+    internal static DateTime OnRelayClock(DateTime laptopUtc, TimeSpan relayAhead)
+    {
+        var ticks = DateTime.SpecifyKind(laptopUtc, DateTimeKind.Utc).Ticks + relayAhead.Ticks;
+        ticks = Math.Clamp(ticks, DateTime.MinValue.Ticks, DateTime.MaxValue.Ticks);
+        return new DateTime(ticks, DateTimeKind.Utc);
+    }
+
+    private static List<Dictionary<string, object?>> AsksFor(string badge, Func<string, IReadOnlyList<DriverAskAnswer>>? asksOf, TimeSpan relayAhead = default)
     {
         var list = new List<Dictionary<string, object?>>();
 
@@ -679,7 +703,7 @@ internal static class DriverLive
             // phone shows the answer while it is fresh. Only on an answer.
             if (answer.State != DriverAsk.Waiting && answer.AnsweredUtc is { } at)
             {
-                one["at"] = DateTime.SpecifyKind(at, DateTimeKind.Utc).ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+                one["at"] = OnRelayClock(at, relayAhead).ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
             }
 
             list.Add(one);

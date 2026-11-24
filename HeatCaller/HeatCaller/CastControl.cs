@@ -1809,7 +1809,26 @@ public sealed class CastControl : UserControl
 
             if (!IsDisposed)
             {
-                FillVoices(engine, voices);
+                // WHY (23 Nov 2026, bug hunt 24): the engine is asked again
+                // now the answer is in. A slow answer used to fill every list
+                // for the engine in use when Load Voices was pressed, even
+                // when the engine had been changed on the Voice tab in the
+                // meantime and this page shown again - so the lists showed
+                // the old engine's voices and each pick was saved for an
+                // engine that no longer spoke. Now the answer is kept for
+                // its own engine (it comes back if that engine is picked
+                // again) and the lists stay on the engine in use.
+                var inUse = EngineInUse?.Invoke() ?? VoiceEngine.ElevenLabs;
+
+                if (inUse == engine)
+                {
+                    FillVoices(engine, voices);
+                }
+                else
+                {
+                    _loaded = (engine, voices);
+                    FillVoices(inUse);
+                }
             }
         }
         catch (Exception ex)

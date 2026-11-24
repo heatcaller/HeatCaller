@@ -5,6 +5,48 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 ## Unreleased
 
 - **No more white scroll bar flashing on a first visit (24 November).** The first time you opened some tabs, Windows' own bright scroll bar showed for a moment before the app's slim one covered it. It happened on Driver Hub's **Garage**, **Transponders**, **Setups** and **Batteries** tabs, and on tabs on **Race Day**, **Championship**, **Race Analytics** and **Sounds**, and never on later visits. A part of a page that was built hidden was drawn once at its starting size, before it got its real size. HeatCaller now holds the drawing until each part is laid out and the slim bar is in place, then draws it once. Update HeatCaller on the race PC; nothing changes on the relay.
+- **Whole-codebase bug hunt (23 November): about 360 fixes.** Every shipped file of HeatCaller and the club relay was read, and each suspected bug was checked again by others before it was fixed. Each fix has a test. The ones a club is most likely to notice:
+  - **Privacy:**
+    - Automatic backups are no longer copied to the cloud unlocked when the backup folder itself is inside OneDrive, Google Drive or iCloud Drive. Without a backup password they are now made on this PC only.
+    - A junior's full name can no longer reach the stream captions, whether split across two captions or said by its announcer spelling.
+    - A junior who goes by initials and shares them with another driver ("M.K. 2") can't be followed by name.
+    - A junior's name straight after a line break still keeps the page out of search engines.
+    - The juniors' privacy rules are sent to the relay again if it loses them.
+    - **Restore Default Settings** no longer switches off the club's junior choices, or wipes the club's own words: the first-night guide, club updates and its own between-race lines.
+    - **Save Support Info** also hides crew, mentor and guardian names.
+    - **Forget this driver** no longer renames other drivers' results on a transponder that changed hands.
+    - The relay now forgets an internet address after ten minutes, as the cookie policy says.
+  - **Timing and results:**
+    - A pass held up on the decoder link is timed by when the car crossed, so two cars no longer swap places and a lap is no longer falsely short.
+    - A credited start lap's dash is no longer counted as a flying lap in best-consecutive qualifying, the badges, the lap window or the phone's lap stats.
+    - The live **Gained** column no longer counts no-shows and ghost cars.
+    - A race reset part-way through no longer shows on phones as finished with a winner.
+  - **Race night:**
+    - A mouse-clicked flag button lets go of the keyboard, so a stray Space or Enter no longer throws the yellow again.
+    - Hold now stops the clock while a race waits for the time drivers were given.
+    - Auto start adds planned breaks and the rest between back-to-back races.
+    - In the docked Inbox, N and A no longer start the race or open the announcer screen.
+    - Editing, moving or deleting a heat that Auto start has put on track is refused.
+    - A closed race day's leftover heats are no longer offered by **Start Next**.
+    - **Edit Result** after the flag no longer opens an earlier race.
+  - **The announcer:**
+    - AI battle calls stop under a red or yellow flag.
+    - A built-in-model line that runs out of time is no longer read out cut off.
+    - On a club's first nights with HeatCaller, long-time drivers are no longer called "first ever" starters or winners.
+    - Two drivers level on points are no longer both told they lead the championship.
+    - A disqualified driver is no longer named class winner, on provisional pole or quickest through a sector.
+  - **The program and the night plan:**
+    - **Get back on time** only offers "Qualifiers 1 min shorter" for heats that can lose a minute, and its saving stays up to date.
+    - Pole Shootout runs follow the club's default race format.
+    - The printed marshal list and the drivers' meeting sheet print at the right size.
+    - Sheets printed after midnight carry the race night's date.
+  - **Phones:**
+    - Home's **Racing tonight?** no longer says alerts are on when only follower alerts are.
+    - A night that ran past midnight is no longer "Today" all of the next day.
+    - With no signal, the footer no longer claims the page was just updated.
+    - Pages that lose a read keep polling instead of freezing.
+
+  Deploy the relay for the phone and privacy fixes, and update HeatCaller on the race PC. Two badges were renamed so no two share a name: fifty clean laps in a row is now **Untouchable**, and twenty-five races is **Seasoned**. Badges already earned are kept.
 - **Driver Hub has no Table view (23 November).** The switch in the upper left of **Driver Hub** is now **Card** and **Garage**. The Table view repeated the Card view's roster in a sortable table, with the driver you picked in a panel beside it. If you last left the page on Table, it opens on **Card**. See [Driver Hub](race-day/drivers-and-classes.md#driver-hub). Update HeatCaller on the race PC; nothing changes on the relay.
 - **A maximised Inbox docks at the panel's width (23 November).** Docking the Inbox while its own window was maximised, with **Dock in the main window** at its foot, kept it full-screen size inside the panel. Its list and the item you picked stayed side by side and ran off the right of the main window. It's now put back to its normal size first, so it fills the panel with the item under the list, as when it's docked from Race Control. See [Docking it in the main window](race-control/inbox.md#docking-it-in-the-main-window). Update HeatCaller on the race PC; nothing changes on the relay.
 - **The battery pack is on a driver's phone only on race night (23 November).** On the **Me** page, **Your details** showed a battery pack picker whenever the **Right now** card wasn't up. The pack is now only on the **Right now** card, and on race night the hero card's pack tile reads **Battery Pack**, not **Pack**. Deploy the relay for it.

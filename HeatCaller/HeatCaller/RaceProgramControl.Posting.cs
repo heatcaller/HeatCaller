@@ -212,7 +212,9 @@ public sealed partial class RaceProgramControl
             if (marshals)
             {
                 var lists = classes
-                    .Select(c => (c.Name, MarshalAssigner.ToText(c.Name, MarshalAssigner.Assign(c.Rounds, LayoutOf(c.Rounds), _profiles))))
+                    // A shared heat gets its host class's marshals on every
+                    // sheet (23 Nov 2026, bug hunt 24) - see AssignForClassSheet.
+                    .Select(c => (c.Name, MarshalAssigner.ToText(c.Name, AssignForClassSheet(c.Name, n => DayRoundsForClass(n), LayoutOf, _profiles))))
                     .ToList();
 
                 if (lists.Count > 0)
@@ -239,6 +241,52 @@ public sealed partial class RaceProgramControl
                 page.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// One class's marshal list for tonight: every round it races in, each
+    /// with the marshals the announcer, Race Control and the phones give it.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the class's list was handed to
+    /// MarshalAssigner.Assign as it stood, so a heat shared with another
+    /// class ("Stock + Mod") was marshalled by the round before it IN THAT
+    /// LIST. On the second class's sheet that was its own earlier heat (or
+    /// "not assigned" for its first), while the announcer and the phones
+    /// take the round before it in the host class's list (round.ClassName,
+    /// see MarshalAssigner.ClassRoundsFor) - two sheets on the board named
+    /// different people for the same corners. Each round's marshals now
+    /// come from its host class's list; a class's own heats come out
+    /// exactly as before.
+    /// </remarks>
+    internal static List<MarshalAssigner.Assignment> AssignForClassSheet(
+        string className,
+        Func<string, IReadOnlyList<RoundDefinition>> dayRoundsForClass,
+        Func<IReadOnlyList<RoundDefinition>, TrackLayout?> layoutOf,
+        ProfileStore profiles)
+    {
+        var own = dayRoundsForClass(className);
+        var byHost = new Dictionary<string, List<MarshalAssigner.Assignment>>(StringComparer.OrdinalIgnoreCase);
+        var sheet = new List<MarshalAssigner.Assignment>();
+
+        foreach (var round in own.OrderBy(r => r.Order))
+        {
+            var host = string.IsNullOrWhiteSpace(round.ClassName) ? className : round.ClassName;
+
+            if (!byHost.TryGetValue(host, out var assignments))
+            {
+                var hostRounds = string.Equals(host, className, StringComparison.OrdinalIgnoreCase) ? own : dayRoundsForClass(host);
+                assignments = MarshalAssigner.Assign(hostRounds, layoutOf(hostRounds), profiles);
+                byHost[host] = assignments;
+            }
+
+            if (assignments.FirstOrDefault(a => string.Equals(a.Round.Id, round.Id, StringComparison.Ordinal)) is { } assignment)
+            {
+                sheet.Add(assignment);
+            }
+        }
+
+        return sheet;
     }
 
     /// <summary>The track layout some rounds run on, for their marshal posts: the first one named, as the Marshals window reads it.</summary>
@@ -385,7 +433,10 @@ public sealed partial class RaceProgramControl
             .Select(t => _profiles.Get(t))
             .OfType<DriverProfile>()
             .Select(p => (Name: string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName.Trim(),
-                Problems: (IReadOnlyList<string>)DeskPapers.Problems(p, _settings.AskForWaivers, _settings.WaiverMonths, _settings.CheckMemberships, DateTime.Today)))
+                // WHY (23 Nov 2026, bug hunt 24): judged against the race night (6am to
+                // 6am), not DateTime.Today - at midnight papers good for the race date
+                // turned into problems mid-night in the posting words.
+                Problems: (IReadOnlyList<string>)CheckInControl.PapersProblemsAt(p, _settings, DateTime.Now)))
             .ToList();
 
         return DeskPapers.PostingWords(drivers);
@@ -412,7 +463,9 @@ public sealed partial class RaceProgramControl
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(t => _profiles.Get(t))
             .OfType<DriverProfile>()
-            .Where(p => DeskPapers.Problems(p, _settings.AskForWaivers, _settings.WaiverMonths, _settings.CheckMemberships, DateTime.Today).Count > 0)
+            // WHY (23 Nov 2026, bug hunt 24): the race night, not DateTime.Today - after
+            // midnight a driver whose papers were good to the race date was listed as a problem.
+            .Where(p => CheckInControl.PapersProblemsAt(p, _settings, DateTime.Now).Count > 0)
             .Select(p => string.IsNullOrWhiteSpace(p.DriverName) ? p.Transponder : p.DriverName.Trim())
             .ToList();
     }

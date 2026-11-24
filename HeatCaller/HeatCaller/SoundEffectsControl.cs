@@ -1645,14 +1645,18 @@ public sealed class SoundEffectsControl : UserControl
         // level) - see BuildProfile.
         var profile = BuildProfile();
 
-        _store.Save(profile);
+        // WHY (23 Nov 2026, bug hunt 24): the answer Save gives was thrown
+        // away, so a write that failed (disk full, the file read-only or held
+        // by a sync tool) still put "Saved" on the status line, and the sounds
+        // were back as they were at the next start.
+        var written = _store.Save(profile);
         _profileShown = _store.Current;
 
         var races = profile.Effects.Values.Count(c => c.Enabled);
         var practice = profile.Effects.Values.Count(c => c.EnabledInPractice ?? c.Enabled);
 
-        _lblStatus.Text = SavedStatus(_store.LoadedUnreadable, AppTime.TimeWithSeconds(DateTime.Now), races, practice);
-        _lblStatus.ForeColor = _store.LoadedUnreadable ? AppTheme.Danger : AppTheme.TextMuted;
+        _lblStatus.Text = SavedStatus(_store.LoadedUnreadable, AppTime.TimeWithSeconds(DateTime.Now), races, practice, writeFailed: !written);
+        _lblStatus.ForeColor = written ? AppTheme.TextMuted : AppTheme.Danger;
     }
 
     /// <summary>
@@ -1661,11 +1665,18 @@ public sealed class SoundEffectsControl : UserControl
     /// not be read at startup - SoundEffectsStore.LoadedUnreadable), so an
     /// evening's set-up looked saved and was gone at the next start.
     /// </summary>
-    internal static string SavedStatus(bool notWritten, string time, int races, int practice) =>
+    /// <param name="writeFailed">
+    /// The write itself failed (23 Nov 2026, bug hunt 24) - the file could be
+    /// read at startup, but not written now. Read after <paramref name="notWritten"/>.
+    /// </param>
+    internal static string SavedStatus(bool notWritten, string time, int races, int practice, bool writeFailed = false) =>
         notWritten
             ? "Not saved - the sounds file (sound-effects.json) couldn't be read when HeatCaller started, so it is left as it is. "
               + "These changes play until HeatCaller closes. Restart HeatCaller to save changes."
-            : $"Saved {time} - {Plural.Of(races, "sound")} on for races, {practice} for practice.";
+            : writeFailed
+                ? "Not saved - HeatCaller couldn't write the sounds file (sound-effects.json). These changes play until HeatCaller closes. "
+                  + "Check the disk has room and the file isn't read-only, then change something again."
+                : $"Saved {time} - {Plural.Of(races, "sound")} on for races, {practice} for practice.";
 
     /// <summary>
     /// Puts one of this page's bulk or destructive changes on the undo

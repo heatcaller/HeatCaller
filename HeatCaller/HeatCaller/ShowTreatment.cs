@@ -990,6 +990,16 @@ internal sealed class ShowTreatment
 
         _announcer.SpeakingChanged += onSpeaking;
 
+        // WHY (23 Nov 2026, bug hunt 24): seeded from the announcer's state.
+        // The flag used to start false and change only on an edge, so a
+        // wait begun mid-line (Play again over a line still being read)
+        // took that line for silence and returned about five seconds in,
+        // and the caller freed the show floor before the replay was read.
+        if (_announcer.IsTalking)
+        {
+            speaking.Now = true;
+        }
+
         try
         {
             await WaitForQuietAsync(speaking, longest ?? LongestRead, ct).ConfigureAwait(true);
@@ -2122,6 +2132,20 @@ internal sealed class ShowTreatment
             }
 
             _announcer.SpeakingChanged += onSpeaking;
+
+            // WHY (23 Nov 2026, bug hunt 24): seeded from the announcer's
+            // state, not just his edges. SpeakingChanged only fires on a
+            // change, so a show opened while a line was still being read -
+            // Play again pressed mid-line - thought he was silent: the bed
+            // sat at full level over the rest of that line, and the wait for
+            // quiet could take a long line for silence and hand the music
+            // back before the show's own read had started. Subscribe first
+            // and seed second, so an edge between the two is not lost; a
+            // repeated "talking" is harmless. As BroadcastImaging's bed does.
+            if (_announcer.IsTalking)
+            {
+                onSpeaking(true);
+            }
 
             // The evening has heard this one. Here and not up beside
             // Billing, so a show that fell over or was called off on its

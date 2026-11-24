@@ -141,13 +141,18 @@ public sealed class TransponderWatch
     /// ALTERNATE transponder of - or null when it is nobody's alternate.
     /// Wired to ProfileStore.PrimaryForAlternate.
     ///
-    /// The pre-race check asks about the roster, and the roster lists
-    /// drivers by their main transponder. A driver out in their second car
+    /// The pre-race check asks about the roster, and the roster usually
+    /// lists drivers by their main transponder. A driver out in their second car
     /// used to show as "not heard at all" AND as a stranger on track - two
     /// warnings about one car that is fine. Filing the pass under the
     /// driver's main id answers the question actually being asked: is this
     /// driver's car being heard. Left null, every pass is filed under its
     /// own id as before.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24, F269): "usually", not always - a grid
+    /// can seat a driver on their alternate id. Anything that asks Of() for
+    /// a roster id must first map it through this to the main id, or a car
+    /// that is heard reads as not heard (RollCall.Build, ReadinessCheckForm).
     /// </summary>
     public Func<string, string?>? AlternateTransponderOwner { get; set; }
 

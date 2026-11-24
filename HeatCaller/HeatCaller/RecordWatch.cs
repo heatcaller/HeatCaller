@@ -417,6 +417,45 @@ public sealed class RecordWatch
         }
     }
 
+    /// <summary>
+    /// A lap of this driver's was taken off by hand (-1 lap folds a double
+    /// read into the lap before). Their pace, their best and their lap count
+    /// are rebuilt from the laps that are left, in order. What has been said
+    /// about them is left alone: it was said, and the watch only escalates.
+    /// </summary>
+    // WHY (23 Nov 2026, bug hunt 24): the watch had no way to take a lap
+    // back, so a phantom split (say 2.0 s against a 5.04 s record) stayed
+    // the driver's best for the rest of the race even after -1 lap. Every
+    // later lap then asked whether that 2.0 s could stand as the record, was
+    // told no, and the record-in-danger call for that driver went silent
+    // until the next race - however close their real laps got. PaceWatch
+    // had the same hole and got its Forget in bug hunt 10.
+    internal void Forget(string driverId, IEnumerable<double> survivingLapSeconds)
+    {
+        if (string.IsNullOrWhiteSpace(driverId))
+        {
+            return;
+        }
+
+        var surviving = survivingLapSeconds
+            .Where(s => s > 0 && s <= LongestCredibleLap)
+            .ToList();
+
+        _seen[driverId] = surviving.Count;
+
+        var keep = Math.Max(1, RollingLaps);
+        _recent[driverId] = surviving.Skip(Math.Max(0, surviving.Count - keep)).ToList();
+
+        if (surviving.Count > 0)
+        {
+            _bestThisRace[driverId] = surviving.Min();
+        }
+        else
+        {
+            _bestThisRace.Remove(driverId);
+        }
+    }
+
     /// <summary>How many laps this driver has turned this race. For the console and the tests.</summary>
     public int Seen(string driverId) => _seen.GetValueOrDefault(driverId);
 

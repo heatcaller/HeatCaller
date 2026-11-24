@@ -80,6 +80,14 @@ public partial class MainForm
         // no-longer-available check further down.
         var idx = -1;
 
+        // WHY (23 Nov 2026, bug hunt 24): a closed day picked on The Day to
+        // look at its results is still the current day, and the box listed
+        // its leftover heats as if they were still to run - choosing one
+        // filed tonight's race into last week's meeting. Race Control's Next
+        // Up bar and Start Next already leave them out; so does this, until
+        // the day is reopened. A race running now stays (runningRound).
+        var closedDay = CheckInStore.ClosedCurrentDay(_raceEvents);
+
         _rebuildingRoundCombo = true;
         try
         {
@@ -89,9 +97,12 @@ public partial class MainForm
             // box listed every unrun round the club had ever made, so last
             // month's heats sat above tonight's with nothing to tell them
             // apart, and choosing one filed the race against that meeting.
-            foreach (var round in _rounds.Unrecorded(_raceEvents.ActiveRoundScope()))
+            if (closedDay is null)
             {
-                cmbActiveRound.Items.Add(new RoundComboItem(round));
+                foreach (var round in _rounds.Unrecorded(_raceEvents.ActiveRoundScope()))
+                {
+                    cmbActiveRound.Items.Add(new RoundComboItem(round));
+                }
             }
 
             // Kept in the list while it runs - see runningRound above.
@@ -159,9 +170,13 @@ public partial class MainForm
         // be the reason.
         if (previousId is not null && idx < 0 && selectRoundId is null)
         {
-            OnClientRawMessage(
-                $"{AppTime.LogStampNow()}  [program] The selected race round is no longer available "
-                + "(already recorded or deleted) - session setup is back to freeform.");
+            // Said for what it is when the day is closed - not "recorded or
+            // deleted", which it may be neither of.
+            OnClientRawMessage(closedDay is not null
+                ? $"{AppTime.LogStampNow()}  [program] \"{closedDay.DisplayName}\" is closed, so its heats are not offered in the Round box "
+                  + "- session setup is back to freeform. Reopen it on Race Day, or start tonight's race day."
+                : $"{AppTime.LogStampNow()}  [program] The selected race round is no longer available "
+                  + "(already recorded or deleted) - session setup is back to freeform.");
         }
     }
 
@@ -235,6 +250,18 @@ public partial class MainForm
             return _race.IsDemoMode
                 ? $"A demo is running. Starting \"{round.RoundLabel}\" ends it - confirm to go ahead."
                 : $"A race is running. Starting \"{round.RoundLabel}\" abandons it and clears its laps - confirm to go ahead.";
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): a heat of a CLOSED day - last
+        // week's dropped C-Main, with that day picked on The Day to look at
+        // its results - was still started from the Program tab or a phone,
+        // and tonight's race was filed into last week's meeting. Refused
+        // before anything is touched, and said on the console as well,
+        // because the desk callers do not show the reason.
+        if (ClosedDayRefusal(_raceEvents.EventForRound(round.Id)) is { } closed)
+        {
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [program] {closed}");
+            return closed;
         }
 
         // 17 Oct 2026, Bug Hunt 8, A03-1: not while On Air is opening a
@@ -325,6 +352,16 @@ public partial class MainForm
     }
 
     /// <summary>
+    /// Why a round may not be started because the race day it belongs to is
+    /// closed, or null when it may (an open day, the legacy holder, or no day
+    /// at all). Pure - see StartRoundNow.
+    /// </summary>
+    internal static string? ClosedDayRefusal(RaceEvent? dayOfRound) =>
+        dayOfRound is { IsLegacy: false, IsOpen: false }
+            ? $"\"{dayOfRound.DisplayName}\" is closed, so its heats are not run - reopen it on Race Day, or start tonight's race day."
+            : null;
+
+    /// <summary>
     /// Checks a driver in or out from a phone - the LAN check-in page and
     /// the race-day manager both come here. True when it changed anything.
     /// UI thread only.
@@ -373,6 +410,11 @@ public partial class MainForm
         // Only the ticks, not the whole page: somebody may be
         // working down the list at the desk.
         _checkInControl?.RefreshCheckInMarks();
+
+        // WHY (23 Nov 2026, bug hunt 24): and Driver Hub's count and Tonight
+        // tile, which were read only when the page was opened. Here, not on
+        // CheckInStore.CheckedIn, which a check-out does not raise.
+        RefreshDriverHubCheckIns();
         return true;
     }
 
@@ -453,6 +495,10 @@ public partial class MainForm
                 RefreshActiveRoundCombo();
                 _raceControlControl?.RefreshFormat();
                 _checkInControl?.RefreshCheckInMarks();
+
+                // WHY (23 Nov 2026, bug hunt 24): the race-day manager's
+                // changes include check-ins - see ApplyPhoneCheckIn.
+                RefreshDriverHubCheckIns();
             },
 
             Log = OnClientRawMessage,

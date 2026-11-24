@@ -610,11 +610,26 @@ public sealed class TodayControl : UserControl
         var choices = RunSheet.ChoicesFor(plan);
 
         // The same fixes as last time keep their ticks; new ones start clear.
-        if (!choices.Select(c => (c.Kind, c.Label)).SequenceEqual(_choices.Select(c => (c.Kind, c.Label))))
+        //
+        // WHY (23 Nov 2026, bug hunt 24): the same fixes with new minutes
+        // used to be ignored, so a fix kept the saving it was first shown
+        // with - "Qualifiers 1 min shorter -12 min" stayed at 12 after six of
+        // the qualifiers had run, and ticking it previewed a finish six
+        // minutes earlier than Apply could give. Now the new minutes are
+        // handed over and the ticks stay.
+        switch (FixesChangeOf(_choices, choices))
         {
-            _choices = choices;
-            _fixList.SetChoices(choices.Where(c => c.CanTick).ToList());
-            _program.PreviewFixes(_fixList.Ticked);
+            case FixesChange.New:
+                _choices = choices;
+                _fixList.SetChoices(choices.Where(c => c.CanTick).ToList());
+                _program.PreviewFixes(_fixList.Ticked);
+                break;
+
+            case FixesChange.Figures:
+                _choices = choices;
+                _fixList.UpdateChoices(choices.Where(c => c.CanTick).ToList());
+                _program.PreviewFixes(_fixList.Ticked);
+                break;
         }
 
         var advice = choices.Where(c => !c.CanTick).ToList();
@@ -639,6 +654,30 @@ public sealed class TodayControl : UserControl
         _fixesCard.Visible = choices.Count > 0 || _lastAnnouncement.Length > 0;
         _btnApply.Visible = choices.Any(c => c.CanTick);
         RefreshFixButtons();
+    }
+
+    /// <summary>How the night's fixes differ from the ones the card shows - see RefreshFixes.</summary>
+    internal enum FixesChange
+    {
+        /// <summary>Nothing changed.</summary>
+        Same,
+
+        /// <summary>The same fixes in the same order, with different minutes (or round): the ticks stay.</summary>
+        Figures,
+
+        /// <summary>A fix came, went or moved: the list starts again with nothing ticked.</summary>
+        New,
+    }
+
+    /// <summary>Whether the card's fixes need replacing, and whether their ticks can stay (bug hunt 24).</summary>
+    internal static FixesChange FixesChangeOf(IReadOnlyList<RunSheet.Choice> shown, IReadOnlyList<RunSheet.Choice> fresh)
+    {
+        if (!fresh.Select(c => (c.Kind, c.Label)).SequenceEqual(shown.Select(c => (c.Kind, c.Label))))
+        {
+            return FixesChange.New;
+        }
+
+        return fresh.SequenceEqual(shown) ? FixesChange.Same : FixesChange.Figures;
     }
 
     private void RefreshFixButtons()
@@ -747,12 +786,7 @@ public sealed class TodayControl : UserControl
         {
             if (lights.FirstOrDefault(t => t.Key == "website") is { } web)
             {
-                rows.Add(web.Level switch
-                {
-                    MissionControl.Level.Good => new CheckList.Row("phones", RunSheet.Mark.Tick, web.Level, "Phones", " · relay live", null),
-                    MissionControl.Level.Off => new CheckList.Row("phones", RunSheet.Mark.None, web.Level, "Phones", " · off", null),
-                    _ => new CheckList.Row("phones", RunSheet.Mark.Triangle, MissionControl.Level.Watch, "Phones", " · " + web.Value.ToLowerInvariant(), null),
-                });
+                rows.Add(PhonesRow(web));
             }
 
             if (lights.FirstOrDefault(t => t.Key == "sound") is { } sound)
@@ -765,6 +799,19 @@ public sealed class TodayControl : UserControl
 
         _checkList.SetRows(rows);
     }
+
+    /// <summary>The go/no-go row for the phones, from Mission Control's website tile.</summary>
+    internal static CheckList.Row PhonesRow(MissionControl.Tile web) => web.Level switch
+    {
+        MissionControl.Level.Good => new CheckList.Row("phones", RunSheet.Mark.Tick, web.Level, "Phones", " · relay live", null),
+        // WHY (23 Nov 2026, bug hunt 24): the grey level is used both for
+        // publishing switched off ("Off") and for a relay that is on but has
+        // only just become unreachable ("Offline"). The row always said
+        // "off", so for up to five minutes a dropped connection read as if
+        // publishing had been turned off. It now says the tile's own word.
+        MissionControl.Level.Off => new CheckList.Row("phones", RunSheet.Mark.None, web.Level, "Phones", " · " + web.Value.ToLowerInvariant(), null),
+        _ => new CheckList.Row("phones", RunSheet.Mark.Triangle, MissionControl.Level.Watch, "Phones", " · " + web.Value.ToLowerInvariant(), null),
+    };
 
     private void ActOnCheck(string key)
     {
@@ -1410,6 +1457,9 @@ internal sealed class FixList : Control
     private readonly HashSet<int> _ticked = new();
     private int _hot = -1;
 
+    /// <summary>The row Space ticks and the focus box is drawn on - moved by Up and Down (bug hunt 24).</summary>
+    private int _focus;
+
     public event Action? Changed;
 
     public FixList()
@@ -1428,8 +1478,63 @@ internal sealed class FixList : Control
         _choices = choices;
         _ticked.Clear();
         _hot = -1;
+        _focus = 0;
         AccessibleName = string.Join(", ", choices.Select(c => $"{c.Label}, saves {c.SavesWords}"));
         Parent?.PerformLayout();
+        Invalidate();
+    }
+
+    /// <summary>
+    /// The same fixes with new minutes: the figures change, the ticks stay.
+    /// WHY (23 Nov 2026, bug hunt 24): SetChoices clears the ticks, so the
+    /// card never handed over new minutes for the same fixes and kept the
+    /// first saving each was shown with - see TodayControl.RefreshFixes.
+    /// </summary>
+    public void UpdateChoices(List<RunSheet.Choice> choices)
+    {
+        _choices = choices;
+        _ticked.RemoveWhere(i => i >= choices.Count);
+        _focus = Math.Clamp(_focus, 0, Math.Max(0, choices.Count - 1));
+        AccessibleName = string.Join(", ", choices.Select(c => $"{c.Label}, saves {c.SavesWords}"));
+        Invalidate();
+    }
+
+    /// <summary>
+    /// The row the keyboard moves to from <paramref name="current"/> on
+    /// <paramref name="key"/>, kept within the <paramref name="count"/> rows.
+    /// WHY (23 Nov 2026, bug hunt 24): there was no keyboard row at all -
+    /// Space ticked the row under the mouse, or else always the first, so a
+    /// director working by keyboard could never tick the second fix.
+    /// </summary>
+    internal static int NextFocus(int current, int count, Keys key)
+    {
+        if (count <= 0)
+        {
+            return 0;
+        }
+
+        var next = key switch
+        {
+            Keys.Up => current - 1,
+            Keys.Down => current + 1,
+            _ => current,
+        };
+
+        return Math.Clamp(next, 0, count - 1);
+    }
+
+    protected override bool IsInputKey(Keys keyData) =>
+        keyData is Keys.Up or Keys.Down || base.IsInputKey(keyData);
+
+    protected override void OnGotFocus(EventArgs e)
+    {
+        base.OnGotFocus(e);
+        Invalidate();
+    }
+
+    protected override void OnLostFocus(EventArgs e)
+    {
+        base.OnLostFocus(e);
         Invalidate();
     }
 
@@ -1468,16 +1573,35 @@ internal sealed class FixList : Control
     protected override void OnMouseClick(MouseEventArgs e)
     {
         base.OnMouseClick(e);
-        Toggle(RowAt(e.Y));
+        var row = RowAt(e.Y);
+
+        if (row >= 0)
+        {
+            _focus = row;
+        }
+
+        Toggle(row);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
 
-        if (e.KeyCode is Keys.Space && _choices.Count > 0)
+        if (_choices.Count == 0)
         {
-            Toggle(_hot >= 0 ? _hot : 0);
+            return;
+        }
+
+        if (e.KeyCode is Keys.Up or Keys.Down)
+        {
+            _focus = NextFocus(_focus, _choices.Count, e.KeyCode);
+            Invalidate();
+            e.Handled = true;
+        }
+        else if (e.KeyCode is Keys.Space)
+        {
+            // The keyboard's row, not the one the mouse happens to rest on (bug hunt 24).
+            Toggle(Math.Clamp(_focus, 0, _choices.Count - 1));
             e.Handled = true;
         }
     }
@@ -1556,7 +1680,9 @@ internal sealed class FixList : Control
 
         if (Focused && _choices.Count > 0)
         {
-            ControlPaint.DrawFocusRectangle(g, new Rectangle(0, 0, Width, Math.Min(Height, RowHeight)));
+            // On the keyboard's row, not always the first (bug hunt 24).
+            var focus = Math.Clamp(_focus, 0, _choices.Count - 1);
+            ControlPaint.DrawFocusRectangle(g, new Rectangle(0, focus * (RowHeight + Gap), Width, RowHeight));
         }
     }
 }

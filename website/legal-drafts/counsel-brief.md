@@ -7,6 +7,10 @@
 > **Updated 23 Nov 2026: DMCA agent registered.** HeatCaller LLC is registered in the Copyright Office's DMCA Designated Agent Directory as designation **DMCA-1087259**. The agent is "Copyright Agent, HeatCaller LLC", at the LLC's address (506 Pinyon Dr, Schenectady, NY 12303, which is also the owner's home), with support@heatcaller.com. The names listed are HeatCaller, heatcaller.com and heatcaller-relay.fly.dev. The takedown page (Part A of `copyright-takedown-policy.md`) carries the same details and is live at https://heatcaller.com/copyright since 23 Nov 2026. Its two open choices were filled in as drafted: a notice passed to the club has the sender's phone number and postal address removed, and a repeat infringer is three valid, uncountered notices in 12 months. A per-item admin removal for the relay is built (relay commands takedown, takedown-find, takedown-restore and takedown-list). Question 14 is updated to match.
 
 >
+> **Updated 24 Nov 2026: ElevenLabs' published terms.** We read ElevenLabs' Terms of Use, ElevenAPI Terms, Prohibited Use Policy, Privacy Policy and DPA (all dated 2026) and filed what they say against each letter question in `vendor-letters.md`. In short: paid plans may use output commercially and we own it, so caching is fine; there is no flow-down to clubs, but our terms must be no more permissive than theirs, and the policy bans a "client, wrapper, or proxy" outside their terms; the DPA applies to a self-serve business without signature, names ElevenLabs a processor and CCPA service provider, and doesn't mention COPPA; zero retention (`enable_logging=false`) is enterprise only; training on our content is on unless we opt out (Asher turned it off on both HeatCaller accounts on 24 Nov 2026; uses before that aren't affected); and the Prohibited Use Policy bans apps directed at under-18s and content using "the likeness of... a specific real minor", which is the open question for naming junior drivers (question 6). The letter now asks only the four open points.
+>
+> **Updated 24 Nov 2026: the IP assignment's consideration.** Asher chose to make the assignment part of his capital contribution, together with the US$500 opening deposit in the company bank account, for his membership interest (section 4 of `founder-ip-assignment.md`; a print copy is `founder-ip-assignment.pdf`). The heatcaller.com email runs through a personal Gmail account, not Google Workspace, so that account can't be transferred to the company as such; question 11 asks whether to move it.
+>
 > **Updated 23 Nov 2026: the company record, security program and IP assignment.** New York's entity record shows HeatCaller LLC as DOS ID 8031449, a domestic LLC formed 26 September 2026 (Articles of Organization, file 260926000436), Albany County, with process mailed to Asher Kent at 506 Pinyon Dr, Schenectady, NY 12303. No Certificate of Publication is on file yet: the publication under LLC Law §206 is under way and due by about 24 January 2027. The first biennial statement is due 30 September 2028. The security program (`security-program.md`) is adopted with Asher Kent as coordinator (support@heatcaller.com), next review 23 November 2027, support files kept at most 90 days and security records three years, and family-link codes, and the badge code a crew pick is sent with, have a wrong-guess limit like the PIN one (built 23 Nov 2026; the badge code is counted on crew picks only - see security-program.md section 5). The IP assignment (`founder-ip-assignment.md`) is filled in and ready to sign apart from the consideration; the founder confirms no employer or client contract claims any of it.
 
 # HeatCaller: brief for counsel
@@ -105,7 +109,7 @@ These run through our server, the "relay". The club decides what to record and p
 |---|---|---|
 | Fly.io | Everything on the relay (section 4.2) | HeatCaller LLC |
 | Anthropic (Claude API) | Commentary prompts: race facts with drivers' names (in full in prompts), pronouns, team and sponsors, the about line and notes (juniors' only with a parent's consent), "the driver is a junior" | HeatCaller LLC (key held as a Fly secret) |
-| ElevenLabs | Each spoken line's text, which can name drivers. We send `enable_logging=false`, honoured only on some plans | HeatCaller LLC's key, or the club's own |
+| ElevenLabs | Each spoken line's text, which can name drivers. We send `enable_logging=false`, which ElevenLabs honours on enterprise plans only; on our plan it is accepted and ignored, and each line is kept in the account's history (tested 24 Nov 2026). Deleting each line after it is rendered is planned (plans/elevenlabs-voice-replacement-plan.md, step H) | HeatCaller LLC's key, or the club's own |
 | Google FCM, Apple and Mozilla push services | Encrypted alert payloads naming the driver ("Mia K's race is next") | n/a (Web Push) |
 | GitHub | Update checks (no driver data) | HeatCaller LLC |
 | YouTube | The club's own stream, on the club's channel. The relay looks up a pasted video ID only. A visitor who taps to watch loads YouTube's privacy-enhanced player, which sends their IP address to Google and may store data in their browser | The club |
@@ -254,7 +258,7 @@ All paths are in the repository.
 4. `website/legal-drafts/security-program.md`: COPPA §312.8-style security program.
 5. `website/legal-drafts/founder-ip-assignment.md`: assignment from Asher Kent to the LLC.
 6. `website/legal-drafts/copyright-takedown-policy.md`: DMCA §512 policy and agent checklist.
-7. `website/legal-drafts/vendor-letters.md`: letters to ElevenLabs and Anthropic (not sent).
+7. `website/legal-drafts/vendor-letters.md`: letters to ElevenLabs and Anthropic. Zero data retention was requested from Anthropic on 24 Nov 2026 (through its "Contact us" form), and ElevenLabs was asked the same day to get in touch; no answers yet.
 8. `HeatCaller/HeatCaller/About.cs` (the header comment) and `Assets/Licences/LibVLC-plugins.txt`: open-source compliance.
 9. The cookie policy, on branch `claude/inbox-themes-followups`:
    - `relay/src/cookies.ts`, the text served at `/c/<club>/cookies`;
@@ -283,14 +287,14 @@ Retired, no review needed:
 5. **Safeguarding.** Is Terms section 7.3's "the club runs its own safeguarding" allocation sound? Does anything in MAAPP-style guidance oblige us further? Do family links (made by the driver, never expiring) need a lapse?
 
 **Vendors and AI**
-6. **ElevenLabs.** Can we resell its speech and cache lines across clubs (both already built) before ElevenLabs answers in writing? What do the end-user flow-down terms in Terms section 6 need to say?
+6. **ElevenLabs.** Its published terms (filed in vendor-letters.md, 24 Nov 2026) allow commercial use and ownership of output on paid plans, and have no flow-down, but ban making output available on "terms more permissive" and a "client, wrapper, or proxy" outside their terms. Can we resell its speech and cache lines across clubs (both already built) before ElevenLabs answers in writing? Does naming a junior driver in a spoken race call fall under its ban on content using "the likeness of... a specific real minor"? Without zero retention, is deleting each line from ElevenLabs' history after rendering enough, or should juniors' names never go to ElevenLabs (clubs can already use offline voices for juniors)?
 7. **Anthropic.** Do Anthropic's commercial terms and usage policy cover a product used by clubs with child participants, given that juniors' consented words reach the prompt? Do we need anything beyond the commercial terms?
 
 **IP and licences**
 8. **MisakiSharp.** Its Apache-2.0 code includes a fallback that "reproduces" phonemizer (GPL-3.0) behaviour, and HeatCaller reaches it for every word not in its dictionary. Is that a GPL obligation for us? Must we fork KokoroSharp to avoid it? Its number-reading code was ported from num2words (LGPL-2.1): do the LGPL terms we already meet for LibVLC suffice?
 9. **Reverse engineering.** The EasyLap decoder protocol was worked out from USB captures, cross-checked against Next Level Timing's debug log while running NLT under its licence. Is there exposure under NLT's EULA? The P3 reader was written from the published format. **[CHECK]** source documents.
 10. **LibVLC.** Is the written source offer plus an uploaded source tarball enough under LGPL-2.1 §6? Is a trimmed plugin set still "the Library"? The open items are listed in `LibVLC-plugins.txt`.
-11. **Founder IP and AI-written code.** Is the assignment draft complete, now filled in? What should the consideration be: US$1 and other good and valuable consideration, or a capital contribution under the operating agreement? How much copyright protection does AI-assisted code have, and should we rely on contract and trade secrets instead?
+11. **Founder IP and AI-written code.** Is the assignment draft complete, now filled in? The consideration is now the capital contribution (with the US$500 opening deposit) for the membership interest: does that fit the operating agreement, and does the operating agreement need to record the IP as contributed property? The heatcaller.com email runs through a personal Gmail account: should it move to an account the company owns? How much copyright protection does AI-assisted code have, and should we rely on contract and trade secrets instead?
 12. **Copies of everyone's data.** Are these acceptable, or must they be encrypted or limited?
     - relay backups on the operator's PC (unencrypted, all clubs);
     - the warm-standby zip on a club's second PC;
@@ -339,7 +343,7 @@ Retired, no review needed:
 **The owner's to do** (step by step in owner-todo.md):
 - ~~register the DMCA agent~~ (done 23 Nov 2026, DMCA-1087259) and ~~publish the policy page~~ (live 23 Nov 2026);
 - send the vendor letters and file the answers;
-- sign the IP assignment (ready to sign 23 Nov 2026; the consideration is question 11);
+- sign the IP assignment (ready to sign; consideration chosen 24 Nov 2026, print copy founder-ip-assignment.pdf);
 - ~~name the security coordinator~~ (done 23 Nov 2026);
 - finish the New York publication and file the Certificate of Publication by about 24 January 2027;
 - run a real club night.

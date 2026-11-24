@@ -81,6 +81,11 @@ public sealed partial class AnnouncementService
 
     internal const string ReportRulingForAPlace = "[excited] And with that ruling, {driver} is up into {place}! So it's {positions}.";
 
+    /// <summary>The correction when no car is named as having got through - see PasserOfAnUnclassedCar.</summary>
+    internal const string ReportCorrectionWithNoMover = "[excited] Hold on - so it's {positions}.";
+
+    internal const string ReportRulingWithNoMover = "[excited] And with that ruling, it's {positions}.";
+
     /// <summary>The position report being read out now, or null. Under _voiceQueueLock.</summary>
     private PositionReportOnAir? _positionReportOnAir;
 
@@ -163,6 +168,70 @@ public sealed partial class AnnouncementService
         // The same cars in the same class places, less some: it differs
         // where the shorter one ends, as FirstChangedPlace has it.
         return read.Count == now.Count ? -1 : Math.Min(read.Count, now.Count);
+    }
+
+    /// <summary>
+    /// In a heat classes share, when the change FirstChangedClassPlace found
+    /// at <paramref name="place"/> is a car with no class that has been
+    /// PASSED: where in <paramref name="now"/> the car that came through is.
+    /// -1 when the car at <paramref name="place"/> is the one that moved.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): a car the class map does not know (a
+    /// ghost, or a car not assigned to the heat) goes by its place overall,
+    /// so being passed changes its place - while the car that passed it, of
+    /// some class, is where it was in that class. It was the first change
+    /// from the top, so it was taken for the mover: "Hold on - Ghost is
+    /// through into third!", said of the car that had just lost the place,
+    /// and timed from that car's last crossing. The car that came through
+    /// is the one now ahead of it that the report read behind it. Its own class place
+    /// has not changed (it would have been found first if it had), so the
+    /// correction gives the order and credits nobody with a place.
+    /// </remarks>
+    internal static int PasserOfAnUnclassedCar(IReadOnlyList<string> read, IReadOnlyList<string> now, IReadOnlyDictionary<string, string> classOf, int place)
+    {
+        if (place < 0 || place >= now.Count)
+        {
+            return -1;
+        }
+
+        if (classOf.TryGetValue(now[place]?.Trim() ?? string.Empty, out var cls) && !string.IsNullOrWhiteSpace(cls))
+        {
+            return -1;
+        }
+
+        var was = -1;
+
+        for (var i = 0; i < read.Count; i++)
+        {
+            if (string.Equals(read[i], now[place], StringComparison.OrdinalIgnoreCase))
+            {
+                was = i;
+                break;
+            }
+        }
+
+        // New to the report, or no lower than it was read: it is the mover.
+        if (was < 0 || was >= place)
+        {
+            return -1;
+        }
+
+        // The car now ahead of it that the report had behind it - not just
+        // the first overall change, which may be two cars of other classes
+        // swapping higher up.
+        for (var i = 0; i < place; i++)
+        {
+            for (var j = was + 1; j < read.Count; j++)
+            {
+                if (string.Equals(read[j], now[i], StringComparison.OrdinalIgnoreCase))
+                {
+                    return i;
+                }
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>
@@ -319,12 +388,33 @@ public sealed partial class AnnouncementService
 
         var wasSpeaking = StopCurrentPlaybackAfterABeat(orTheLineAboutToPlay: true);
 
-        var mover = place < now.Count ? now[place].Standing : null;
-        var why = mover is null
-            ? "the order it was reading changed"
-            : byRuling
+        // A car with no class that was passed is not the one that got
+        // through (23 Nov 2026, bug hunt 24) - see PasserOfAnUnclassedCar.
+        var passer = SharedHeatClasses?.Invoke() is { Count: > 0 } classes
+            ? PasserOfAnUnclassedCar(read, nowOrder, classes, place)
+            : -1;
+
+        var mover = passer >= 0 ? now[passer].Standing : place < now.Count ? now[place].Standing : null;
+        string why;
+
+        if (mover is null)
+        {
+            why = "the order it was reading changed";
+        }
+        else if (passer >= 0)
+        {
+            var passed = DisplayNameFor(now[place].Standing.Transponder);
+
+            why = byRuling
+                ? $"a correction by hand put {DisplayNameFor(mover.Transponder)} ahead of {passed}"
+                : $"{DisplayNameFor(mover.Transponder)} got past {passed}";
+        }
+        else
+        {
+            why = byRuling
                 ? $"a correction by hand put {DisplayNameFor(mover.Transponder)} into {Ordinal(place + 1)}"
                 : $"{DisplayNameFor(mover.Transponder)} got through into {Ordinal(place + 1)}";
+        }
 
         StatusMessage?.Invoke($"[voice] Position report {(wasSpeaking ? "cut off mid-sentence" : "dropped before it spoke")} - {why}.");
 
@@ -336,6 +426,14 @@ public sealed partial class AnnouncementService
         // Only a correction actually queued stands in for the lead change
         // call (21 Nov 2026): one whose words came out empty was never going
         // to say the new leader, so the lead change call goes ahead.
+        // One that credits nobody does not say the new leader either, so it
+        // never stands in for the lead change call (23 Nov 2026, bug hunt 24).
+        if (passer >= 0)
+        {
+            QueuePositionReportCorrection(now, passer, report.Depth, byRuling, namesNoMover: true);
+            return false;
+        }
+
         var queued = QueuePositionReportCorrection(now, place, report.Depth, byRuling);
 
         return place == 0 && queued;
@@ -403,7 +501,12 @@ public sealed partial class AnnouncementService
     /// (CorrectionSlot), worded from <paramref name="now"/>, with the few
     /// seconds a battle's pass call gets (QueueBattlePass).
     /// </summary>
-    private bool QueuePositionReportCorrection(List<PositionReportOrder.Row> now, int place, int depth, bool byRuling)
+    /// <param name="namesNoMover">
+    /// The car at <paramref name="place"/> came past a car with no class and
+    /// is where it was in its own class: the order is given and nobody is
+    /// credited with a place (23 Nov 2026, bug hunt 24).
+    /// </param>
+    private bool QueuePositionReportCorrection(List<PositionReportOrder.Row> now, int place, int depth, bool byRuling, bool namesNoMover = false)
     {
         var mover = now[place].Standing;
         var worded = OrderOf(now);
@@ -413,7 +516,9 @@ public sealed partial class AnnouncementService
         var inClass = SharedHeatClasses?.Invoke() is { Count: > 0 } classOf
             ? ClassPlaces(worded, classOf)[place]
             : (Class: string.Empty, Place: place + 1);
-        var template = ReportCorrectionTemplate(SpokenNameFor(mover), inClass.Place, byRuling, inClass.Class);
+        var template = namesNoMover
+            ? (byRuling ? ReportRulingWithNoMover : ReportCorrectionWithNoMover)
+            : ReportCorrectionTemplate(SpokenNameFor(mover), inClass.Place, byRuling, inClass.Class);
         var words = WordRunningOrder(now, template, sayGaps: false, placesOnly: true);
 
         if (words.Length == 0)
@@ -467,7 +572,12 @@ public sealed partial class AnnouncementService
                 // lead change call too.
                 if (!heard && movedAgain && place == 0 && !byRuling)
                 {
-                    CallTheLeadAfterADroppedCorrection(mover.Transponder, depth, sayBy);
+                    // One that credited nobody never stood in for the lead
+                    // change call, which was queued as usual (bug hunt 24).
+                    if (!namesNoMover)
+                    {
+                        CallTheLeadAfterADroppedCorrection(mover.Transponder, depth, sayBy);
+                    }
                 }
             })
             {

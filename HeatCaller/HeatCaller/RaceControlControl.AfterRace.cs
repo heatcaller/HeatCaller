@@ -843,7 +843,7 @@ public sealed partial class RaceControlControl
 
                 if (aMainOverall is { } decided)
                 {
-                    var overallLine = AMainLegs.OverallCall(SpokenDriverName(decided.Winner.Transponder), decided.Counting, decided.Legs, decided.Letter);
+                    var overallLine = AMainOverallLine(SpokenDriverName(decided.Winner.Transponder), decided.Winner.Transponder, decided.Counting, decided.Legs, decided.Letter);
                     // "Unnamed driver" for a car with no profile, as the recap's own result lines have it - never a blank name.
                     aMainOverallFact = AMainLegs.OverallFact(decided, s => RelayDocuments.PublicNameOrUnnamed(SpokenDriverName(s.Transponder), s.Transponder));
                     resultRead = resultRead is null ? overallLine : $"{resultRead} {overallLine}";
@@ -976,7 +976,14 @@ public sealed partial class RaceControlControl
                 // recap's history that is true for the whole evening - the
                 // winner's career before tonight - is spent once a night
                 // rather than once a race. See RaceForm.NightKey.
-                raceHistory = new RaceForm(grid, rivalries, round?.ClassName, _events?.Active?.Id);
+                // WHY (23 Nov 2026, bug hunt 24, F087): with the nights those records
+                // cover, so a club's first nights with the app do not call every
+                // winner a first-time winner - see CommentaryHistoryFacts.KnowsFirsts.
+                // The same race left out as above.
+                raceHistory = new RaceForm(grid, rivalries, round?.ClassName, _events?.Active?.Id)
+                {
+                    NightsOnFile = CommentaryReaders.NightsOnFile(round?.ClassName, _sessionHistory, _rounds, exceptSessionId: record.Id),
+                };
             }
             catch (Exception ex)
             {
@@ -2984,6 +2991,14 @@ public sealed partial class RaceControlControl
     /// called out one at a time, and "neither" must never be something a
     /// club has to work out for themselves.
     /// </summary>
+    /// <summary>
+    /// True when the achievements segment may be read after a race: the
+    /// club has asked for it, and the sound is not "Lap times only"
+    /// (bug hunt 24). Pure.
+    /// </summary>
+    internal static bool HonoursSegmentAllowed(AppSettings settings) =>
+        settings.RecapBadgeHonours && !LapTimesOnly.IsOn(settings);
+
     private HonoursPlan? PlanHonours(IReadOnlyList<AchievementUnlock> unlocks, SessionRecord? record = null)
     {
         // Nothing said and nothing logged when the club has not asked for
@@ -2991,6 +3006,19 @@ public sealed partial class RaceControlControl
         // the badge calls working exactly as they always have.
         if (!_settings.RecapBadgeHonours)
         {
+            return null;
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): "Lap times only" was never asked
+        // here, so a club that had ticked the achievements segment still
+        // heard it after any race that unlocked a badge - three or four
+        // lines, with its own show music - on the plainest sound there is.
+        // The tick itself is left alone, so it is back when the mode ends.
+        if (!HonoursSegmentAllowed(_settings))
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [achievements] No achievements segment - the sound is set to lap times only.");
+
             return null;
         }
 
@@ -3613,6 +3641,18 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// The spoken A-Main overall line for a winner whose spoken name is
+    /// <paramref name="spokenName"/>.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a car with no profile name was given
+    /// to OverallCall as a blank name, so the room heard " wins the A-Main
+    /// overall, best two of three legs." with nobody in it. It now says
+    /// "Unnamed driver", as the recap's fact line beside it already did.
+    /// </summary>
+    internal static string AMainOverallLine(string? spokenName, string? transponder, int counting, int legs, string letter) =>
+        AMainLegs.OverallCall(RelayDocuments.PublicNameOrUnnamed(spokenName, transponder), counting, legs, letter);
+
+    /// <summary>
     /// How long past the pause after the flag the throw into the stop set
     /// is waited for before the line written in StopSetThrow goes instead.
     /// The pause is usually long enough on its own; this is the margin for
@@ -4120,10 +4160,26 @@ public sealed partial class RaceControlControl
             return null;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): whether the winner also set the
+        // fastest lap is decided on the cars, not their spoken names. The old
+        // code compared the names, so with two drivers both said "Dave" - one
+        // winning, the other setting the fastest lap - the room was told
+        // "And Dave had the fastest lap of the race too."
         return FlagResult(
             podium.Select(r => SpokenDriverName(r.Transponder)).ToList(),
-            fastest is null ? null : SpokenDriverName(fastest.Transponder));
+            fastest is null ? null : SpokenDriverName(fastest.Transponder),
+            FastestIsWinner(podium[0], fastest));
     }
+
+    /// <summary>
+    /// Whether the race's fastest lap belongs to the winner's own car (bug
+    /// hunt 24) - the same row, or the same transponder. Pure, for the tests.
+    /// </summary>
+    internal static bool FastestIsWinner(SessionResultEntry winner, SessionResultEntry? fastest) =>
+        fastest is not null
+        && (ReferenceEquals(winner, fastest)
+            || (!string.IsNullOrWhiteSpace(fastest.Transponder)
+                && string.Equals(fastest.Transponder.Trim(), (winner.Transponder ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
     /// Who the unofficial result at the flag names (bug hunt 14, 7 Nov 2026,
@@ -4170,25 +4226,55 @@ public sealed partial class RaceControlControl
     /// </summary>
     private string? SectorsAtTheFlag(SessionRecord record)
     {
-        var bests = record.Results
-            .Where(r => !GhostService.IsGhost(r.Transponder)
-                        && _profiles.Get(r.Transponder) is not { ExcludeFromRecords: true })
-            .Select(r => (Result: r, Bests: Sectors.Bests(r)))
-            .Where(x => x.Bests is { Length: >= 2 })
-            .ToList();
+        var (field, cut) = SectorsAtTheFlagField(
+            record, transponder => _profiles.Get(transponder) is { ExcludeFromRecords: true });
 
-        if (bests.Count == 0)
+        if (field.Count == 0)
         {
             return null;
         }
 
-        var cut = bests.GroupBy(x => x.Bests!.Length).OrderByDescending(g => g.Count()).ThenByDescending(g => g.Key).First().Key;
-        var field = bests.Where(x => x.Bests!.Length == cut).ToList();
-        var names = QuickestThroughSectors(field.Select(x => (x.Result.Position, x.Bests!)).ToList(), cut)
+        var names = QuickestThroughSectors(field.Select(x => (x.Result.Position, x.Bests)).ToList(), cut)
             .Select(i => i < 0 ? string.Empty : SpokenDriverName(field[i].Result.Transponder))
             .ToList();
 
         return _announcer.SectorsRecapLine(names);
+    }
+
+    /// <summary>
+    /// Who the sectors line at the flag picks from, and how many sectors it
+    /// reads: every row with at least two best sectors, bar ghosts, cars
+    /// <paramref name="keptOut"/> of records and the disqualified, cut the way
+    /// most of them were. An empty field for nobody. Pure, for the tests.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): a disqualified car is left out here as
+    /// it is of the podium and the fastest lap (FlagResultRows). The black
+    /// flags are applied before this is read but keep the laps and sectors on
+    /// the row, so the old code read a result that had struck the DQ and then
+    /// said "Quickest through sector one was" that same disqualified driver.
+    /// A DNF's sectors were set on track, so they stand, as its fastest lap does.
+    /// </remarks>
+    internal static (List<(SessionResultEntry Result, long[] Bests)> Field, int Cut) SectorsAtTheFlagField(
+        SessionRecord record, Func<string, bool> keptOut)
+    {
+        var bests = record.Results
+            .Where(r => !GhostService.IsGhost(r.Transponder)
+                        && !keptOut(r.Transponder)
+                        && !string.Equals(r.Outcome?.Trim(), ResultEditor.Dq, StringComparison.OrdinalIgnoreCase))
+            .Select(r => (Result: r, Bests: Sectors.Bests(r)))
+            .Where(x => x.Bests is { Length: >= 2 })
+            .Select(x => (x.Result, Bests: x.Bests!))
+            .ToList();
+
+        if (bests.Count == 0)
+        {
+            return (new List<(SessionResultEntry Result, long[] Bests)>(), 0);
+        }
+
+        var cut = bests.GroupBy(x => x.Bests.Length).OrderByDescending(g => g.Count()).ThenByDescending(g => g.Key).First().Key;
+
+        return (bests.Where(x => x.Bests.Length == cut).ToList(), cut);
     }
 
     /// <summary>
@@ -4228,7 +4314,11 @@ public sealed partial class RaceControlControl
     /// <summary>The words of the unofficial result - see FlagResultFor. Pure, for the tests.</summary>
     /// <param name="podium">The top three's spoken names, in finishing order; a blank name is left out.</param>
     /// <param name="fastestLap">Who set the race's fastest lap, or null/blank for nobody.</param>
-    internal static string? FlagResult(IReadOnlyList<string> podium, string? fastestLap)
+    /// <param name="fastestIsWinner">
+    /// Whether the fastest lap is the winner's own car (FastestIsWinner).
+    /// Null falls back to comparing the spoken names, as before.
+    /// </param>
+    internal static string? FlagResult(IReadOnlyList<string> podium, string? fastestLap, bool? fastestIsWinner = null)
     {
         if (podium.Count == 0 || string.IsNullOrWhiteSpace(podium[0]))
         {
@@ -4249,7 +4339,7 @@ public sealed partial class RaceControlControl
 
         if (fast.Length > 0)
         {
-            line += string.Equals(fast, winner, StringComparison.OrdinalIgnoreCase)
+            line += (fastestIsWinner ?? string.Equals(fast, winner, StringComparison.OrdinalIgnoreCase))
                 ? $" And {winner} had the fastest lap of the race too."
                 : $" The fastest lap of the race went to {fast}.";
         }
@@ -6149,6 +6239,17 @@ public sealed partial class RaceControlControl
 
             CommercialBreak.ReadBegins();
 
+            // WHY (23 Nov 2026, bug hunt 24): the sponsor's picture was left to
+            // SponsorOnAir's deadline, which runs two seconds past the words, so
+            // the recap's opener was said over the sponsor's picture - and a read
+            // cut off by the next race left it up for the rest of its estimate.
+            // This is the one path that knows when the read is over, so it takes
+            // the picture down itself: once the last part is heard out, or when
+            // the read is abandoned. Not when the wait ran out with the voice
+            // still going - the deadline is left to finish that one.
+            var putPictureUp = false;
+            var stillSpeaking = false;
+
             try
             {
                 // THE WHOLE COPY, PART AFTER PART (16 Oct 2026). One read is
@@ -6177,6 +6278,7 @@ public sealed partial class RaceControlControl
                     if (onScreen is { } shown)
                     {
                         SponsorOnAir.Begin(shown.PictureFileName, shown.Name, SponsorCopy.SpokenLength(read.Text));
+                        putPictureUp = true;
                     }
 
                     StatusMessage?.Invoke(previous is null
@@ -6185,7 +6287,8 @@ public sealed partial class RaceControlControl
 
                     _announcer.SpeakReminder(read.Text, showOnScreens: true, onAir: OnAirParts.StopSet);
 
-                    await _announcer.WaitForAudioAsync(SpokenWait(), nextRace);
+                    stillSpeaking = false;
+                    stillSpeaking = !await _announcer.WaitForAudioAsync(SpokenWait(), nextRace);
 
                     if (!read.MoreToCome)
                     {
@@ -6198,6 +6301,11 @@ public sealed partial class RaceControlControl
             finally
             {
                 CommercialBreak.ReadEnds();
+
+                if (putPictureUp && !stillSpeaking)
+                {
+                    SponsorOnAir.End();
+                }
             }
         }
         catch (OperationCanceledException)
@@ -7273,7 +7381,13 @@ public sealed partial class RaceControlControl
                 // without a night key a club running six heats with the
                 // same ten entries heard the same debut announced six
                 // times. See RaceForm.NightKey and ForIntro's remarks.
-                form = new RaceForm(grid, rivalries, round.ClassName, _events?.Active?.Id);
+                // WHY (23 Nov 2026, bug hunt 24, F087): with the nights those records
+                // cover, so members of fifteen years are not introduced as making
+                // their first ever start on a club's first night with the app.
+                form = new RaceForm(grid, rivalries, round.ClassName, _events?.Active?.Id)
+                {
+                    NightsOnFile = CommentaryReaders.NightsOnFile(round.ClassName, _sessionHistory, _rounds),
+                };
             }
 
             stake = CommentaryReaders.ChampionshipBefore(
@@ -8655,6 +8769,12 @@ public sealed partial class RaceControlControl
                     ? _race.SessionGeneration
                     : null;
 
+                // WHY (23 Nov 2026, bug hunt 24): which round this race was
+                // filed under, so the gap passes over only that round in the
+                // Round box, not one picked by hand afterwards (see
+                // RoundJustRun in RaceControlControl.BetweenRaces.cs).
+                _gapFiled = (record.RoundId, _race.SessionGeneration);
+
                 // Each driver's pack in the car, recorded for them on this
                 // race or practice - one picked on a row's right-click during
                 // it is already there, and stays. Here, at the flag, rather
@@ -8908,10 +9028,14 @@ public sealed partial class RaceControlControl
             // flag carried whatever start time and track were here before -
             // so a second crash before the next crossing came back with the
             // wrong ones.
-            WriteJournal(force: true);
-
+            // WHY (24 Nov 2026, bug hunt 24 #88): a restored race's lead change
+            // count started again from zero, so the next change was called
+            // "the second" when it was the sixth. The journal now carries the
+            // tally; it is handed to the announcer before the journal is
+            // written again, so a second crash under the red keeps it too.
             // See SeedAnnouncerFromRace.
-            SeedAnnouncerFromRace();
+            SeedAnnouncerFromRace(entry.Leads());
+            WriteJournal(force: true);
             RenderLeaderboard();
             UpdateClockDisplay(force: true);
 

@@ -631,7 +631,14 @@ public static class MixedHeats
     /// is one race and cannot be split back into two; a heat deleted since
     /// is not brought back either.
     /// </summary>
-    public static bool UndoRunTogether(RoundDefinitionStore rounds, RunTogetherUndo undo, out string? refusal)
+    public static bool UndoRunTogether(RoundDefinitionStore rounds, RunTogetherUndo undo, out string? refusal) =>
+        UndoRunTogether(rounds, undo, null, out refusal);
+
+    /// <summary>
+    /// As above, and also refused while the shared heat is the one on track
+    /// (<paramref name="onTrackRoundId"/>, as <see cref="WhyNotTogether"/> takes it).
+    /// </summary>
+    public static bool UndoRunTogether(RoundDefinitionStore rounds, RunTogetherUndo undo, string? onTrackRoundId, out string? refusal)
     {
         var current = rounds.Get(undo.KeptBefore.Id);
 
@@ -644,6 +651,19 @@ public static class MixedHeats
         if (current.IsRecorded)
         {
             refusal = $"\"{current.RoundLabel}\" has been run as one race since, and its result cannot be split back into two heats.";
+            return false;
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): a heat on track is not recorded
+        // yet, so the undo used to go ahead mid-race - the live round went
+        // back to one class's drivers with its class notes wiped, and the
+        // folded heat came back as still to run. When that race was saved,
+        // the second class's drivers were filed unstamped in the first
+        // class's heat, with no way to put the shared heat back. Run
+        // Together itself refuses a heat on track; so does its undo now.
+        if (onTrackRoundId is { Length: > 0 } && string.Equals(current.Id, onTrackRoundId, StringComparison.Ordinal))
+        {
+            refusal = $"\"{current.RoundLabel}\" is on track now. Finish and save its race, then undo again.";
             return false;
         }
 

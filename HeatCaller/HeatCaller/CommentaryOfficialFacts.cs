@@ -323,7 +323,21 @@ internal static class CommentaryOfficialFacts
             var had = CommentaryService.Field(nameFor(roadWinner.Transponder));
             var won = CommentaryService.Field(nameFor(winner.Transponder));
 
-            if (had.Length > 0 && won.Length > 0)
+            // WHY (23 Nov 2026, bug hunt 24): position 1 is only a winner when
+            // it is a classified finisher (CommentaryService.Classified, bug
+            // hunt 15). When the road winner was disqualified and nobody else
+            // finished - a car that never turned a lap, or another DQ - the
+            // old line said "so the win went to" that car, while the same
+            // recap said the race had no winner. Now it says only that the
+            // road winner was disqualified, and names no new winner.
+            if (!CommentaryService.Classified(winner))
+            {
+                if (had.Length > 0 && ResultEditor.NormaliseOutcome(roadWinner.Outcome) == ResultEditor.Dq)
+                {
+                    lines.Add($"{had} had the winning result on the road but was disqualified.");
+                }
+            }
+            else if (had.Length > 0 && won.Length > 0)
             {
                 lines.Add(ResultEditor.NormaliseOutcome(roadWinner.Outcome) == ResultEditor.Dq
                     ? $"{had} had the winning result on the road but was disqualified, so the win went to {won}."

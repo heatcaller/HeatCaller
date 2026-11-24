@@ -1,11 +1,11 @@
 import { readBuildInfo, type BuildInfo } from "./buildinfo.js";
-import { lchown, mkdir, readFile } from "node:fs/promises";
+import { lchown, mkdir, readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { BRAIN_DIR, brainTopUpPath, brainUsagePath } from "./brain.js";
 import { loadConfig, type RelayConfig } from "./config.js";
 import { isActive, isValidClubId } from "./tenancy.js";
 import { readUsageLog, USAGE_LOG_PAGE } from "./usagelog.js";
-import { APP_USAGE_PAGE, forgetAppUsage, readAppUsage } from "./appusage.js";
+import { APP_USAGE_DIR, APP_USAGE_PAGE, forgetAppUsage, readAppUsage } from "./appusage.js";
 import { PAGE_COUNTS } from "./pagecounts.js";
 import { readDirectoryVisits } from "./directoryvisits.js";
 import { FileStore } from "./store.js";
@@ -647,6 +647,15 @@ export async function voiceAdmin(
     }
 
     const removed = await forgetAppUsage(config.dataDir, club);
+    // WHY (23 Nov 2026, bug hunt 24): run through `fly ssh console` this is
+    // root, and forgetting rewrites a month file in place - so the old code
+    // left this month's file root-only (0600), the running relay (its own
+    // user, see topUp) could no longer append to it, and no club's app usage
+    // was recorded until the month turned or the relay restarted. Hand the
+    // files back to the relay's user, as topUp does.
+    if (owner !== undefined) {
+      await handAppUsageToRelay(config.dataDir, owner);
+    }
     out(json ? JSON.stringify({ ok: true, club, removed }) + "\n" : `Removed ${removed} day(s) of usage totals for ${club}.\n`);
     return 0;
   }
@@ -972,6 +981,31 @@ function ownerFrom(env: NodeJS.ProcessEnv): { uid: number; gid: number } | "bad"
   const gid = Number(env["RELAY_GID"] ?? 1000);
 
   return Number.isInteger(uid) && uid >= 0 && Number.isInteger(gid) && gid >= 0 ? { uid, gid } : "bad";
+}
+
+/**
+ * Gives every app-usage month file to the relay's own user, after a
+ * command run as root has rewritten them (app-usage-forget). Nothing to do
+ * when there is no folder yet. `chown` is a seam for the tests, which do
+ * not run as root.
+ */
+export async function handAppUsageToRelay(
+  dataDir: string,
+  owner: { uid: number; gid: number },
+  chown: (path: string, uid: number, gid: number) => Promise<void> = lchown,
+): Promise<void> {
+  const folder = join(dataDir, APP_USAGE_DIR);
+  let names: string[];
+
+  try {
+    names = await readdir(folder);
+  } catch {
+    return;
+  }
+
+  for (const name of names.filter((n) => n.endsWith(".jsonl"))) {
+    await chown(join(folder, name), owner.uid, owner.gid);
+  }
 }
 
 async function readJson(path: string): Promise<unknown> {

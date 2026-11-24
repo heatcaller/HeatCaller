@@ -796,7 +796,15 @@ public static class AppTheme
 
                 var form = button.FindForm();
 
-                if (form is not null && ReferenceEquals(form.ActiveControl, button))
+                // WHY (23 Nov 2026, bug hunt 24): this used to test
+                // ReferenceEquals(form.ActiveControl, button). Every button
+                // given here sits inside a page (Race Control is a
+                // UserControl), and a form's ActiveControl is then the
+                // page, never the button inside it - so the test never
+                // matched, focus stayed on a mouse-clicked Yellow, and a
+                // stray Space or Enter later threw the yellow again. Ask
+                // the button itself whether it has the focus.
+                if (form is not null && button.Focused)
                 {
                     // Null is the documented way to deactivate, and it
                     // raises Leave and Validating on the way out - the

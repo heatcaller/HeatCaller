@@ -858,6 +858,24 @@ public sealed partial class RaceControlControl : UserControl
     /// <summary>Why the phone's command was not carried out, or null while nothing has refused it.</summary>
     private string? _remoteRefusal;
 
+    /// <summary>True when the phone's command only cut a demo's On Air opening short (SkipOnAirToTheDemo) - bug hunt 24.</summary>
+    private bool _remoteSkippedOnAirToDemo;
+
+    /// <summary>
+    /// The phone's answer for a Countdown, Green, Yellow or Red press that
+    /// only skipped a demo's On Air opening, or null when the press did
+    /// what its button says (or was Stage, whose "Staged." is near enough
+    /// true there: the demo stages itself a moment later).
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): those presses throw no flag on that
+    /// path, yet the phone was answered from the button - "Red flag out." -
+    /// while the laptop only cut the opening and started the demo. Pure.
+    /// </summary>
+    internal static string? OnAirSkippedAnswer(string action, bool skippedOnAirToDemo) =>
+        skippedOnAirToDemo && (action is "countdown" or "green" or "yellow" or "red")
+            ? "On Air skipped - the demo is starting and goes green by itself. No flag was thrown."
+            : null;
+
     /// <summary>
     /// Runs a race-control command from the phone remote and says what
     /// became of it, for the phone to show.
@@ -956,9 +974,11 @@ public sealed partial class RaceControlControl : UserControl
         // arrive inside another. Each gets its own answer.
         var outerRunning = _runningRemoteCommand;
         var outerRefusal = _remoteRefusal;
+        var outerSkipped = _remoteSkippedOnAirToDemo;
 
         _runningRemoteCommand = true;
         _remoteRefusal = null;
+        _remoteSkippedOnAirToDemo = false;
 
         // The between-race buttons' own answers (31 Oct 2026).
         var talkAnswer = string.Empty;
@@ -1030,6 +1050,12 @@ public sealed partial class RaceControlControl : UserControl
                 return RemoteCommandOutcome.Refused(refusal);
             }
 
+            // A flag pressed in a demo's On Air opening only skips it (bug hunt 24, see OnAirSkippedAnswer).
+            if (OnAirSkippedAnswer(action, _remoteSkippedOnAirToDemo) is { } skipped)
+            {
+                return RemoteCommandOutcome.Done(skipped);
+            }
+
             // Read from what the command left behind, not assumed from the
             // button pressed: between races, a format with a warm-up makes
             // Stage open the warm-up and stage only when it runs out (or on
@@ -1072,6 +1098,7 @@ public sealed partial class RaceControlControl : UserControl
         {
             _runningRemoteCommand = outerRunning;
             _remoteRefusal = outerRefusal;
+            _remoteSkippedOnAirToDemo = outerSkipped;
         }
     }
 
@@ -1110,6 +1137,11 @@ public sealed partial class RaceControlControl : UserControl
         var snapshotTakenUtc = DateTime.UtcNow;
         var sessionStart = _sessionStartedAtUtc;
         var prompted = _promptedTransponders.ToList();
+
+        // WHY (23 Nov 2026, bug hunt 24): the race's lead change tally, which the
+        // announcer's reset clears. Put back without it, the next lead change was
+        // called the first and the broadcast tower went back to one leader.
+        var leadsBefore = _announcer.Leads.Snapshot();
 
         // What kind of race it was, as the Reset button takes it: put back
         // without it, a Quick Race came back looking like any freeform race
@@ -1198,7 +1230,7 @@ public sealed partial class RaceControlControl : UserControl
             WriteJournal(force: true);
 
             // See SeedAnnouncerFromRace.
-            SeedAnnouncerFromRace();
+            SeedAnnouncerFromRace(leadsBefore);
             RenderLeaderboard();
             UpdateClockDisplay(force: true);
 

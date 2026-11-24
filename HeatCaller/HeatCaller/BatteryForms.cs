@@ -280,14 +280,27 @@ internal static class BatteryActions
     /// Records the pack a driver ran a session on (null: "no pack
     /// recorded"), picked by hand - and, with <paramref name="intoCar"/>,
     /// puts it in their car too, as Race Control does: a swap is usually
-    /// what prompted it. One undo step for both.
+    /// what prompted it. One undo step for both. Returns false, changing
+    /// nothing, when the pack asked for has been removed since it was offered.
     /// </summary>
-    public static void TagSession(BatteryPackStore store, UndoService undo, string sessionId, string sessionLabel,
+    public static bool TagSession(BatteryPackStore store, UndoService undo, string sessionId, string sessionLabel,
         string driverKey, string driverName, string? packId, PackTagSource source, bool intoCar)
     {
         var beforeTag = store.TagFor(sessionId, driverKey);
         var beforeCar = store.CurrentPackId(driverKey);
         var label = store.Get(packId)?.DisplayName;
+
+        // WHY (23 Nov 2026, bug hunt 24): a pack picked from a list that was
+        // removed (from the phone, by the roster tick) while the list was
+        // open has no label, and the old code took that as "no pack
+        // recorded" - it wrote that over the race's real pack and left an
+        // undo step called "Clear ...". Refused instead, as PutInCar does,
+        // leaving the tag, the car and the undo list as they were.
+        if (packId is not null && label is null)
+        {
+            return false;
+        }
+
         var moveCar = intoCar && label is not null && beforeCar != packId;
         var session = string.IsNullOrWhiteSpace(sessionLabel) ? "the session" : sessionLabel.Trim();
 
@@ -309,6 +322,8 @@ internal static class BatteryActions
         {
             store.SetCurrent(driverKey, packId);
         }
+
+        return true;
     }
 }
 

@@ -36,8 +36,47 @@ public sealed partial class RelayPublisher
             return false;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): the relay takes at most 512 KB for
+        // one driver's garage (relay/src/types.ts, garage.maxItemBytes), but
+        // only this class's 900 KB ceiling was checked. A bigger garage - a
+        // keen driver with several cars full of photos - was queued, said to
+        // be sent (so never tried again), and refused by the relay, and the
+        // driver's phone stayed on an old copy with nothing said at the desk.
+        // Now it is not queued, and the console says why, once per driver.
+        if (!GarageFits(json))
+        {
+            bool first;
+
+            lock (_garageTooBig)
+            {
+                first = _garageTooBig.Add(driverId!);
+            }
+
+            if (first)
+            {
+                Log?.Invoke("[relay] A driver's garage is too big for their phone's Garage page, so it was not sent. "
+                            + "Removing a few of their car photos or setup sheets will let it go.");
+            }
+
+            return false;
+        }
+
+        lock (_garageTooBig)
+        {
+            _garageTooBig.Remove(driverId!);
+        }
+
         return Enqueue(DriverGarage.Channel, driverId, json);
     }
+
+    /// <summary>The most the relay takes for one driver's garage - relay/src/types.ts, garage.maxItemBytes.</summary>
+    internal const int MostGarageBytes = 512 * 1024;
+
+    /// <summary>Drivers whose garage was too big, so the console says so once and not every build.</summary>
+    private readonly HashSet<string> _garageTooBig = new(StringComparer.Ordinal);
+
+    /// <summary>Whether one driver's garage document is small enough for the relay to take.</summary>
+    internal static bool GarageFits(string json) => Encoding.UTF8.GetByteCount(json) <= MostGarageBytes;
 
     /// <summary>Reads the photos waiting, files each, and confirms what was filed. Quiet when there are none.</summary>
     private void CollectDriverPhotos(CancellationToken token)

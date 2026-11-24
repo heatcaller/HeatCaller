@@ -301,31 +301,70 @@ export async function pruneAppUsage(dataDir: string, month: string): Promise<voi
  * Removes every line a club sent, from every month: for a club that has
  * left, or that asks for its usage totals to be deleted. The number of
  * lines removed.
+ *
+ * `afterRead` is for tests only: it runs after a month file has been read
+ * and before it is rewritten, so a test can append to it in that gap.
  */
-export async function forgetAppUsage(dataDir: string, club: string): Promise<number> {
+export async function forgetAppUsage(
+  dataDir: string,
+  club: string,
+  afterRead?: (path: string) => Promise<void> | void,
+): Promise<number> {
   let removed = 0;
+
+  const notTheClub = (line: string): boolean => {
+    try {
+      return (JSON.parse(line) as { club?: unknown }).club !== club;
+    } catch {
+      return true;
+    }
+  };
 
   for (const name of await monthFiles(dataDir)) {
     const path = join(dataDir, APP_USAGE_DIR, name);
-    const lines = (await readFile(path, "utf8")).split("\n").filter((line) => line.length > 0);
-    const kept = lines.filter((line) => {
-      try {
-        return (JSON.parse(line) as { club?: unknown }).club !== club;
-      } catch {
-        return true;
-      }
-    });
+    const first = await readFile(path);
+    const lines = first.toString("utf8").split("\n").filter((line) => line.length > 0);
+    const kept = lines.filter(notTheClub);
 
     if (kept.length === lines.length) {
       continue;
     }
 
     removed += lines.length - kept.length;
+    await afterRead?.(path);
 
-    if (kept.length === 0) {
+    // WHY (23 Nov 2026, bug hunt 24): the admin's app-usage-forget runs as
+    // its own process beside the serving relay, whose record() appends to
+    // this same file with no lock. The old code read the file once, then
+    // wrote the copy over it (or deleted it), so a report another club sent
+    // in between - already answered 204, so its laptop never sends it again -
+    // was silently thrown away. Now the live file is read again just before
+    // the rename or delete, and any lines added since (less this club's) are
+    // carried into the copy, until the file stops growing.
+    let seen = first.length;
+    let text = kept.length === 0 ? "" : kept.join("\n") + "\n";
+
+    for (let tries = 0; ; tries += 1) {
+      if (text.length > 0) {
+        await writeFile(`${path}.tmp`, text, { mode: 0o600 });
+      }
+
+      const live = await readFile(path).catch(() => undefined);
+
+      if (live === undefined || live.length <= seen || tries >= 20) {
+        break;
+      }
+
+      const tail = live.subarray(seen).toString("utf8").split("\n").filter((line) => line.length > 0);
+      const tailKept = tail.filter(notTheClub);
+      removed += tail.length - tailKept.length;
+      text += tailKept.map((line) => line + "\n").join("");
+      seen = live.length;
+    }
+
+    if (text.length === 0) {
       await unlink(path);
     } else {
-      await writeFile(`${path}.tmp`, kept.join("\n") + "\n", { mode: 0o600 });
       await rename(`${path}.tmp`, path);
     }
   }

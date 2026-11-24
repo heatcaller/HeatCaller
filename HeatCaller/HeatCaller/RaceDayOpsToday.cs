@@ -63,7 +63,10 @@ public sealed partial class RaceDayService
     {
         var day = _host.Events.Active;
         var rounds = _host.Program.TodaysRounds();
-        var step = _host.Program.NextStep();
+        // WHY (23 Nov 2026, bug hunt 24): the step's words went out as the
+        // desk wrote them, which for a car nobody has named is its whole
+        // transponder - see NextStepFor.
+        var step = NextStepFor(_host.Program.NextStep(), context.Channel);
         var active = _host.ActiveRound();
         var race = _host.Race;
         var next = NextRoundToStart();
@@ -138,6 +141,110 @@ public sealed partial class RaceDayService
             allowResultEditing = _host.Settings.AllowResultEditing,
             busy = LaptopBusy(),
         });
+    }
+
+    /// <summary>
+    /// The Next Steps card's step as a phone on this channel may see it. See
+    /// <see cref="StepForPhone"/>.
+    /// </summary>
+    private ProgramStep NextStepFor(ProgramStep step, RaceDayChannel channel)
+    {
+        if (channel == RaceDayChannel.WiFi || step.Stage is not (ProgramStage.LateArrivals or ProgramStage.PostHeats))
+        {
+            return step;
+        }
+
+        IReadOnlyList<LateArrivals.Arrival> late = step.Stage == ProgramStage.LateArrivals
+            ? _host.Program.LateArrivalsTonight()
+            : Array.Empty<LateArrivals.Arrival>();
+
+        IReadOnlyList<string> notHeard = step.Stage == ProgramStage.PostHeats && _host.Program.HeardTonight is { } heard
+            ? HeatPosting.NotHeard(_host.Program.TodaysRounds(), heard)
+            : Array.Empty<string>();
+
+        return StepForPhone(step, channel, _host.Profiles, late, notHeard);
+    }
+
+    /// <summary>
+    /// The Next Steps card's step with every driver it names written as
+    /// ShownNameOf writes them for <paramref name="channel"/>: as the desk
+    /// wrote it on the track's Wi-Fi, and through the relay an unnamed car
+    /// as the last three characters of its transponder.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): today.summary sent the step's headline
+    /// and detail as the desk wrote them, and the desk names a car nobody
+    /// has named by its whole transponder - "7654321 checked in after the
+    /// heats were posted." and "7654321 (Stock). Each goes into...", and the
+    /// "hasn't crossed the loop tonight" list on the post-the-heats step -
+    /// so a full transponder number went out through the relay, which every
+    /// other name in the same answer keeps to its last three characters.
+    ///
+    /// Only the names are swapped; the rest of the wording stays the desk's.
+    /// <paramref name="lateArrivals"/> is RaceProgramControl.LateArrivalsTonight
+    /// and <paramref name="notHeard"/> the transponders HeatPosting.NotHeard
+    /// gives - what the desk built the text from. The desk's names are found
+    /// the way the desk writes them (RaceProgramControl.NameOf and
+    /// NotHeardTonight).
+    /// </summary>
+    internal static ProgramStep StepForPhone(
+        ProgramStep step,
+        RaceDayChannel channel,
+        ProfileStore profiles,
+        IReadOnlyList<LateArrivals.Arrival> lateArrivals,
+        IReadOnlyList<string> notHeard)
+    {
+        if (channel == RaceDayChannel.WiFi)
+        {
+            return step;
+        }
+
+        string Shown(string transponder) =>
+            profiles.Get(transponder) is { } profile ? ShownNameOf(profile, channel) : ShowTransponder(transponder, channel);
+
+        if (step.Stage == ProgramStage.LateArrivals && lateArrivals.Count > 0)
+        {
+            string DeskName(string transponder) =>
+                profiles.Get(transponder) is { DriverName.Length: > 0 } profile ? profile.DriverName.Trim() : transponder;
+
+            var headline = step.Headline;
+            var detail = step.Detail;
+
+            // One name in the headline only when one driver is late; with
+            // more it says how many, and names nobody.
+            var deskNames = lateArrivals.Select(a => DeskName(a.Transponder)).Distinct().ToList();
+
+            if (deskNames.Count == 1)
+            {
+                headline = headline.StartsWith(deskNames[0] + " checked in", StringComparison.Ordinal)
+                    ? Shown(lateArrivals[0].Transponder) + headline[deskNames[0].Length..]
+                    : "1 driver checked in late.";
+            }
+
+            var deskList = string.Join(", ", lateArrivals.Select(a => $"{DeskName(a.Transponder)} ({a.ClassName})"));
+            var shownList = string.Join(", ", lateArrivals.Select(a => $"{Shown(a.Transponder)} ({a.ClassName})"));
+
+            detail = detail.StartsWith(deskList + ".", StringComparison.Ordinal)
+                ? shownList + detail[deskList.Length..]
+                : $"{shownList}. Add them on the laptop's Program tab, or say not tonight.";
+
+            return step with { Headline = headline, Detail = detail };
+        }
+
+        if (step.Stage == ProgramStage.PostHeats && notHeard.Count > 0)
+        {
+            var deskWords = HeatPosting.NotHeardWords(notHeard
+                .Select(t => profiles.Get(t)?.DriverName is { Length: > 0 } name ? name : t)
+                .ToList());
+
+            if (deskWords.Length > 0 && step.Detail.Contains(deskWords, StringComparison.Ordinal))
+            {
+                var shownWords = HeatPosting.NotHeardWords(notHeard.Select(Shown).ToList());
+
+                return step with { Detail = step.Detail.Replace(deskWords, shownWords, StringComparison.Ordinal) };
+            }
+        }
+
+        return step;
     }
 
     private OpResult DayList(OpContext context) =>

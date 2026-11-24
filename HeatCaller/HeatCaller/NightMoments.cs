@@ -230,7 +230,20 @@ internal static class NightMoments
         var timeline = record.Results
             .Where(row => !GhostService.IsGhost(row.Transponder) && !IsDisqualified(row))
             .ToList();
-        var marks = RaceHighlights.MarksFrom(new SessionRecord { Results = timeline });
+        // WHY (23 Nov 2026, bug hunt 24): NO LEAD CHANGES ON EACH CAR'S OWN
+        // CLOCK. In a qualifying start every car's lap times run from its
+        // own first crossing (and on a staggered "own release" from its own
+        // release), so laid on one timeline every car "crossed" at nought:
+        // the lowest transponder became the first leader by tie-break, the
+        // quickest first flying lap was handed a lead change on lap 2, and
+        // a late swap of the own-clock order became a last-lap lead - on a
+        // driver's night page, email and spoken piece, about a heat where
+        // nobody passed anybody. The live call refuses this on purpose (the
+        // top of a qualifier's order is provisional pole, not a pass), so
+        // the look-back does too. Fastest lap and the rest are untouched.
+        var marks = OnPerCarClocks(timeline)
+            ? new List<RaceHighlights.Mark>()
+            : RaceHighlights.MarksFrom(new SessionRecord { Results = timeline });
 
         // ONLY THE DRIVERS WHO SCORED, which MarksFrom does not filter and
         // is right not to: its job is handing a driver the seconds of the
@@ -417,6 +430,29 @@ internal static class NightMoments
     /// <summary>Whether the result was disqualified - ResultEditor's own reading of the outcome.</summary>
     private static bool IsDisqualified(SessionResultEntry row) =>
         ResultEditor.NormaliseOutcome(row.Outcome) == ResultEditor.Dq;
+
+    /// <summary>
+    /// Whether these rows were timed on each car's own clock - a qualifying
+    /// start, or a staggered start on "own release" - rather than all from
+    /// the green (23 Nov 2026, bug hunt 24). SessionRecord saves no start
+    /// type, so the rows are the only evidence: any row whose clock started
+    /// after the green (ClockZeroMs), or, for results saved before that was
+    /// kept, two or more timed rows that all begin with a zero start slot
+    /// without having been credited the start lap - a race from the green
+    /// never has a zero first lap, a qualifier always does.
+    /// </summary>
+    internal static bool OnPerCarClocks(IReadOnlyList<SessionResultEntry> rows)
+    {
+        var timed = rows.Where(row => row.LapTimesMs is { Count: > 0 }).ToList();
+
+        if (timed.Any(row => row.ClockZeroMs > 0))
+        {
+            return true;
+        }
+
+        return timed.Count >= 2
+            && timed.All(row => row.LapTimesMs[0] == 0 && !row.StartLapCredited);
+    }
 
     /// <summary>
     /// Whether this layout's outright record was set during this race, and

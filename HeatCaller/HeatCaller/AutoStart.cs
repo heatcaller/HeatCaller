@@ -210,8 +210,23 @@ public sealed class AutoStartClock
             return null;
         }
 
-        return _notBeforeUtc is { } notBefore && notBefore > gapStart && !_startNow ? notBefore : gapStart;
+        // WHY (23 Nov 2026, bug hunt 24): Hold must stop the clock while a race
+        // waits for the time drivers were given, too. The old code added the
+        // held time to the gap alone and returned the promised time unmoved,
+        // so during a hold the wait kept running down: the countdown marks
+        // ("one minute", "time's up") were said for a race the bar showed as
+        // held, and Resume after the promised time started the race that same
+        // second. The floor now moves with the hold as the gap does. Adding
+        // the same held time to both keeps whichever was the longer wait the
+        // longer one, so a late night still counts its gap as before.
+        var floor = _notBeforeUtc is { } notBefore ? notBefore + HeldSoFar(nowUtc) : (DateTime?)null;
+
+        return floor is { } held && held > gapStart && !_startNow ? held : gapStart;
     }
+
+    /// <summary>All the time held in this gap, including a hold still on.</summary>
+    private TimeSpan HeldSoFar(DateTime nowUtc) =>
+        _heldFor + (_heldSinceUtc is { } since ? nowUtc - since : TimeSpan.Zero);
 
     /// <summary>When the gap alone would start the race - the flag, the gap, the rest, the hold and the +1 mins - or null when it isn't open.</summary>
     public DateTime? GapStartsAtUtc(DateTime nowUtc, int pushedBackMinutes = 0)
@@ -221,9 +236,7 @@ public sealed class AutoStartClock
             return null;
         }
 
-        var held = _heldFor + (_heldSinceUtc is { } since ? nowUtc - since : TimeSpan.Zero);
-
-        return _openedUtc + _gap + _rest + held + TimeSpan.FromMinutes(Math.Max(0, pushedBackMinutes));
+        return _openedUtc + _gap + _rest + HeldSoFar(nowUtc) +TimeSpan.FromMinutes(Math.Max(0, pushedBackMinutes));
     }
 
     /// <summary>

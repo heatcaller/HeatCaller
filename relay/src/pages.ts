@@ -1764,6 +1764,13 @@ html.hc { --bg: #000000; --surface: #000000; --row-alt: #000000; --text: #FFFFFF
 html.hc.light, html.hc.hcl { --bg: #FFFFFF; --surface: #FFFFFF; --row-alt: #FFFFFF; --text: #000000; --muted: #222222; --border: #000000;
   --primary: #A3005A; --on-primary: #FFFFFF; --accent: #005F6B; --good: #006B2E; --bad: #A0001A; --warn: #7A5200;
   --tonal: #FFFFFF; --on-tonal: #000000; --ring: #000000; }
+/* WHY (23 Nov 2026, bug hunt 24): a team colour is two classes
+   (html.th-daylight.tc-blue), so it outranked the one-class html.hc above
+   whatever the order, and High contrast in the dark drew links and accents
+   in the deep Daylight blue on black - about 3:1. The colours a team rule
+   sets are said again here at more classes, so High contrast always wins. */
+html.hc.hc { --primary: #FF66C4; --on-primary: #000000; --accent: #5CF0FF; }
+html.hc.hc.light, html.hc.hc.hcl { --primary: #A3005A; --on-primary: #FFFFFF; --accent: #005F6B; }
 html.hc .card, html.hc .lc, html.hc .flagbar, html.hc .you, html.hc details, html.hc .hero { border: 2px solid var(--border); }
 html.hc .you { border-color: var(--primary); }
 html.hc #board tr.me td { outline: 2px solid var(--primary); outline-offset: -2px; }
@@ -2014,7 +2021,16 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => (
 // nothing, for a club without one or a document from before them.
 function sectors(list) {
   if (!Array.isArray(list) || list.length < 2 || !list.every((ms) => typeof ms === 'number' && ms > 0)) return '';
-  return list.map((ms, i) => 'S' + (i + 1) + ' ' + (ms / 1000).toFixed(2)).join(' \u00b7 ');
+  return list.map((ms, i) => 'S' + (i + 1) + ' ' + hcHundredths(ms)).join(' \u00b7 ');
+}
+
+// WHY (23 Nov 2026, bug hunt 24): a sector time in seconds to two places,
+// rounded half up from whole ms as the announcer and the laptop round it
+// (12315 ms is 12.32). toFixed(2) rounds the binary double, so 12.315 came
+// out 12.31 on the phone while the PC said 12.32.
+function hcHundredths(ms) {
+  const c = Math.floor((Math.round(Number(ms)) + 5) / 10);
+  return Math.floor(c / 100) + '.' + String(c % 100).padStart(2, '0');
 }
 
 function lap(ms) {
@@ -2136,6 +2152,18 @@ function learnRelayClock(response, asked, answered) {
 function relayClock() {
   return relayAhead === null ? null : Date.now() + relayAhead;
 }
+// WHY (23 Nov 2026, bug hunt 24): how old a time the relay stamped is, on
+// the relay's clock (this phone's own until an answer has said). Home's
+// "On track now", Live's on-air mark and the Live tab's red dot used to take
+// the phone's clock from the relay's stamp, so a phone two minutes fast
+// never showed a running race on Home, and a slow one kept a laptop that had
+// gone quiet "On track now" while Live already said it had lost touch.
+// NaN for a time it can't read, which is never fresh.
+function hcRelayAge(at) {
+  if (!(at > 0)) return NaN;
+  const now = relayClock();
+  return (now === null ? Date.now() : now) - at;
+}
 
 // WHEN SAID, IN WORDS A DRIVER READS (14 Nov 2026, driver phone plan
 // items 1 and 3). A time today is just the time; any other day says which,
@@ -2163,8 +2191,20 @@ function whenSaid(at) {
 function hcIsTonight(dayOrTime) {
   if (typeof dayOrTime !== 'string' || dayOrTime === '') return false;
   // A day as the club writes it is already the club's day; a time becomes one.
-  const day = /^\\d{4}-\\d{2}-\\d{2}$/.test(dayOrTime) ? dayOrTime : (isNaN(new Date(dayOrTime)) ? '' : hcYmd(new Date(dayOrTime)));
-  if (day === '') return false;
+  // WHY (23 Nov 2026, bug hunt 24): a time is read as the race night it
+  // falls in, six hours back, on both sides. The old code only moved the
+  // reader's clock, so a race started at 00:20 on Saturday - Friday's night -
+  // was "today" all of Saturday, and Schedule said "Today" for a finished night.
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(dayOrTime)) {
+    const at = new Date(dayOrTime).getTime();
+    if (isNaN(at)) return false;
+    const SIX_H = 6 * 3600 * 1000;
+    const night = hcYmd(new Date(at - SIX_H));
+    // Now as new Date() reads it, as the written-day branch below does, so
+    // the whole function asks one clock (23 Nov 2026, bug hunt 24).
+    return night !== '' && night === hcYmd(new Date(new Date().getTime() - SIX_H));
+  }
+  const day = dayOrTime;
   const now = new Date();
   if (day === hcYmd(now)) return true;
   let hour = now.getHours();
@@ -3441,7 +3481,12 @@ paintFollow();
 function touched() {
   if (stamp) {
     // While a page is drawn from copies, the time they were read.
-    const at = warm && warmAt > 0 ? new Date(warmAt) : new Date();
+    // WHY (23 Nov 2026, bug hunt 24): with no signal the page is drawn from
+    // the phone's last copy, so the stamp says when that copy was read - the
+    // same time the No signal strip gives. It used to say "Updated" with the
+    // time of every poll, telling a driver the old board was current.
+    const at = warm && warmAt > 0 ? new Date(warmAt)
+      : (hcNet.since > 0 && hcNet.shownAt > 0 ? new Date(hcNet.shownAt) : new Date());
     stamp.textContent = 'Updated ' + at.toLocaleTimeString([], { hour12: HC_H12, hour: HC_HOUR, minute: '2-digit' }) + (typeof hcZoneWord === 'function' ? hcZoneWord(at) : '');
   }
 }
@@ -4226,7 +4271,8 @@ if (!SHELL && typeof window.addEventListener === 'function') {
     const answer = await grab('/snapshot/state').catch(() => null);
     const frame = answer && !answer.missing && answer.body ? answer.body : null;
     const s = frame && frame.body ? frame.body : null;
-    const fresh = frame !== null && Date.now() - Date.parse(frame.publishedAt) < 120000;
+    // On the relay's clock (bug hunt 24) - see hcRelayAge.
+    const fresh = frame !== null && hcRelayAge(Date.parse(frame.publishedAt)) < 120000;
     tabs.classList.toggle('racing', !!(s && fresh && RACING.includes(String(s.state))));
   }, 30000);
 })();
@@ -4674,8 +4720,11 @@ ${sharedScriptTag(club, context.nonce)}
  * page builds elements.
  *
  * What the laptop sends, per driver (MainForm.PublishSessionToRelay,
- * DriverNightExtras): lapsMs - every flying lap, the start-lap slot left
- * out; startMs - that slot, green flag to the line; posAt - their position
+ * DriverNightExtras): lapsMs - every lap after the start-lap slot; startMs -
+ * that slot, green flag to the line; startLaps - for a driver credited the
+ * start lap, how many entries at the head of lapsMs are still the start
+ * (their dash from the grid, kept in the list as lap 2 since bug hunt 24,
+ * 23 Nov 2026 - DriverNightExtras no longer drops it); posAt - their position
  * after each of those laps, worked out on the laptop over the whole field
  * (LapByLap). And per race, its time limit in seconds. Any of them may be
  * missing - a result from before this, a practice, a race with no time
@@ -4742,11 +4791,27 @@ function lxConsecutive(list, k) {
   return best;
 }
 
+// WHY (23 Nov 2026, bug hunt 24): a driver credited with the start lap has
+// their dash from the grid sent as the first entry of lapsMs, marked by the
+// row's startLaps (MainForm.StartLapsInLapsMs, DriverNightExtras.StartLapsOf).
+// It stays in the lap list, in step with posAt, but it is not a lap of the
+// track: the old pages counted those few seconds in the average, the top 5,
+// the best run of laps in a row and the pace. How many entries to leave out
+// of the figures: a whole number above nothing, else none.
+function lxStartLaps(n) {
+  return typeof n === 'number' && isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+// The laps that count for the figures: lapsMs without its start entries.
+function lxFlying(list, startLaps) {
+  return Array.isArray(list) ? list.slice(lxStartLaps(startLaps)) : list;
+}
+
 // LiveRC's lap stats, in ms (consistency in percent), or null with no laps.
 // A figure that needs more laps than they did (the top 15 of a 12-lap race)
-// is null rather than the average of fewer.
-function lapStats(raw, bestMs) {
-  const laps = lxLaps(raw);
+// is null rather than the average of fewer. startLaps - see lxStartLaps.
+function lapStats(raw, bestMs, startLaps) {
+  const laps = lxLaps(lxFlying(raw, startLaps));
   if (laps.length === 0) return null;
 
   const sorted = laps.slice().sort((a, b) => a - b);
@@ -4790,16 +4855,20 @@ function lapStatLines(stats) {
 // with a time limit to project over, otherwise ''; pos is the place after
 // that lap, or 0 when it is not known. The laps are taken as sent, in
 // step with posAt, so a lap's position stays on its own row.
-function lapRows(raw, posAt, startMs, lengthS, bestMs) {
+function lapRows(raw, posAt, startMs, lengthS, bestMs, startLaps) {
   const list = Array.isArray(raw) ? raw : [];
   const places = Array.isArray(posAt) && posAt.length === list.length ? posAt : null;
   const limitMs = typeof lengthS === 'number' && lengthS > 0 ? lengthS * 1000 : 0;
-  const good = lxLaps(list);
+  // A credited start's dash (startLaps, bug hunt 24) is listed but is never
+  // the best lap and takes no part in the pace - see lxStartLaps.
+  const dash = lxStartLaps(startLaps);
+  const good = lxLaps(list.slice(dash));
   const quickest = lxBest(good, bestMs);
   const hasStart = lxHasStart(startMs);
   const start = hasStart ? startMs : 0;
   let total = start;
   let counted = 0;
+  let shown = 0;
   let marked = false;
   const rows = [];
 
@@ -4820,6 +4889,12 @@ function lapRows(raw, posAt, startMs, lengthS, bestMs) {
   list.forEach((ms, i) => {
     const real = typeof ms === 'number' && isFinite(ms) && ms > 0;
     if (!real) return;
+    shown++;
+    if (i < dash) {
+      const at = places !== null && typeof places[i] === 'number' && places[i] > 0 ? places[i] : 0;
+      rows.push({ n: shown - 1 + first, ms, best: false, pace: '', pos: at });
+      return;
+    }
     total += ms;
     counted++;
 
@@ -4834,7 +4909,7 @@ function lapRows(raw, posAt, startMs, lengthS, bestMs) {
     if (best) marked = true;
 
     const pos = places !== null && typeof places[i] === 'number' && places[i] > 0 ? places[i] : 0;
-    rows.push({ n: counted - 1 + first, ms, best, pace, pos });
+    rows.push({ n: shown - 1 + first, ms, best, pace, pos });
   });
 
   return rows;
@@ -5068,10 +5143,11 @@ let lengthOf = 0;
 // One driver's lap stats and lap list, as LiveRC's View Laps shows them.
 // Their lap chart is on their own night - see raceDetail there.
 function lapPanel(r, lengthS) {
-  const stats = lapStatLines(lapStats(r.lapsMs, r.fastLapMs));
+  // r.startLaps: a credited start's dash, listed but left out of the figures (bug hunt 24).
+  const stats = lapStatLines(lapStats(r.lapsMs, r.fastLapMs, r.startLaps));
   const theory = lxTheoretical(r.sectorsMs);
   if (theory !== null) stats.push(['Theoretical best', lap(theory)]);
-  const list = lapRows(r.lapsMs, r.posAt, r.startMs, lengthS, r.fastLapMs);
+  const list = lapRows(r.lapsMs, r.posAt, r.startMs, lengthS, r.fastLapMs, r.startLaps);
   const pace = list.some((x) => x.pace !== '');
   const pos = list.some((x) => x.pos > 0);
 
@@ -5102,7 +5178,13 @@ function positionGraph(results) {
 
   if (drivers.length < 2) return '';
 
-  const field = Math.max(drivers.length, ...drivers.map((r) => Math.max.apply(null, r.posAt)));
+  // WHY (23 Nov 2026, bug hunt 24): the chart is as deep as the grid slots
+  // too. It was sized from the lap places alone, so with a no-show ahead the
+  // last starter's slot (6 of 5 cars that ran) was drawn below the chart and
+  // their line came up from under the bottom edge. A slot past 40 is no grid
+  // slot and gets no lap 0 point.
+  const startOf = (r) => { const q = Math.round(Number(r.qual)); return Number.isFinite(q) && q > 0 && q <= 40 ? q : 0; };
+  const field = Math.max(drivers.length, ...drivers.map((r) => Math.max(startOf(r), Math.max.apply(null, r.posAt))));
   // posAt is one place per FLYING lap (LapByLap), so with a start lap sent
   // the first of them is the place after lap 2, not lap 1 - see lapRows.
   const first = (r) => lxHasStart(r.startMs) ? 2 : 1;
@@ -5130,7 +5212,7 @@ function positionGraph(results) {
   drivers.forEach((r, i) => {
     const colour = LINE_COLOURS[i % LINE_COLOURS.length];
     const points = [];
-    if (Number(r.qual) > 0) points.push([0, Number(r.qual)]);
+    if (startOf(r) > 0) points.push([0, startOf(r)]);
     r.posAt.forEach((p, k) => points.push([k + first(r), p]));
     const path = points.map((pt) => x(pt[0]).toFixed(1) + ',' + y(pt[1]).toFixed(1)).join(' ');
     svg += '<g style="--c:' + colour + '"><polyline points="' + path + '"/>' +
@@ -5297,12 +5379,16 @@ function withLength(body, draw) {
 // not midnight: the labels are drawn in the club's time zone (CLOCK_JS),
 // and the phone's midnight is the evening before for a phone ahead of the
 // club - noon stays on the same day either side (bug hunt 18).
+// WHY (23 Nov 2026, bug hunt 24): the phone's noon only held for a phone
+// under 12 hours from the club - a US club's archive read in Sydney still
+// headed every night with the day before. The day is now noon UTC, and
+// dayLabel, daySay and dayForms draw it in UTC, so no zone can move it.
 function dayDate(iso) {
   const parts = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(String(iso ?? ''));
 
   if (parts === null) return null;
 
-  const d = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]), 12);
+  const d = new Date(Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]), 12));
 
   return isNaN(d) ? null : d;
 }
@@ -5312,7 +5398,7 @@ function dayLabel(iso) {
 
   return d === null
     ? (String(iso ?? '') || 'Undated')
-    : d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+    : d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 }
 
 // The same day with its year on it, for a shared link: the headings on
@@ -5324,7 +5410,7 @@ function daySay(iso) {
 
   return d === null
     ? ''
-    : d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    : d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
 
 // A Date back to the day the index would have filed it under, so that the
@@ -5333,6 +5419,21 @@ function isoOf(d) {
   return d.getFullYear() + '-' +
     String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0');
+}
+
+// WHY (23 Nov 2026, bug hunt 24): the race night a session belongs to, as
+// the index files it - by when it started, six hours back (a night runs 6am
+// to 6am), in the club's zone (CLOCK_JS). The flat list used isoOf on the
+// end time, the phone's midnight, so a main that ended at 00:10 got a second
+// day heading and a link naming the next day.
+function nightIsoOf(session, fallback) {
+  const raw = session.startedUtc || session.endedUtc || fallback;
+  const t = raw ? new Date(raw).getTime() : NaN;
+  if (isNaN(t)) return '';
+  try {
+    const day = new Date(t - 6 * 3600 * 1000).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    return /^\\d{4}-\\d{2}-\\d{2}$/.test(day) ? day : '';
+  } catch (e) { return ''; }
 }
 
 // Every way somebody might type one day into the search box, built once
@@ -5351,12 +5452,12 @@ function dayForms(iso) {
   const parts = [String(iso ?? '')];
 
   if (d !== null) {
-    const short = d.toLocaleDateString([], { month: 'short' });
-    const long = d.toLocaleDateString([], { month: 'long' });
-    const y = d.getFullYear();
-    const month = d.getMonth() + 1;
+    const short = d.toLocaleDateString([], { month: 'short', timeZone: 'UTC' });
+    const long = d.toLocaleDateString([], { month: 'long', timeZone: 'UTC' });
+    const y = d.getUTCFullYear();
+    const month = d.getUTCMonth() + 1;
 
-    for (const a of [String(d.getDate()), String(d.getDate()).padStart(2, '0')]) {
+    for (const a of [String(d.getUTCDate()), String(d.getUTCDate()).padStart(2, '0')]) {
       for (const b of [String(month), String(month).padStart(2, '0')]) {
         parts.push(a + '/' + b + '/' + y, b + '/' + a + '/' + y, a + '/' + b, b + '/' + a);
       }
@@ -5364,7 +5465,7 @@ function dayForms(iso) {
       parts.push(short + ' ' + a, a + ' ' + short, long + ' ' + a, a + ' ' + long);
     }
 
-    parts.push(d.toLocaleDateString(), d.toLocaleDateString([], { weekday: 'long' }));
+    parts.push(d.toLocaleDateString([], { timeZone: 'UTC' }), d.toLocaleDateString([], { weekday: 'long', timeZone: 'UTC' }));
   }
 
   const text = parts.join('|').toLowerCase();
@@ -6485,7 +6586,7 @@ async function loadFlat() {
     // filled - here View laps opened empty until the next redraw.
     bodyOf.set(item.id, body);
     const d = when(body, item.publishedAt);
-    const iso = d ? isoOf(d) : '';
+    const iso = d ? (nightIsoOf(body, item.publishedAt) || isoOf(d)) : '';
     const label = d ? dayLabel(iso) : 'Undated';
 
     if (label !== heading) {
@@ -7827,7 +7928,8 @@ function drawBar(state, over, at, rows, mode) {
   }
   // The warm-up flag (14 Nov 2026) runs between races - after one, the
   // laptop still says Finished - and it is the news, not the race before.
-  if (String(state.flag || '').toLowerCase() === 'warmup') over = false;
+  const warmUp = String(state.flag || '').toLowerCase() === 'warmup';
+  if (warmUp) over = false;
   const flag = over ? 'checkered' : String(state.flag || 'None').toLowerCase();
   const running = String(state.state || 'Idle');
   bar.className = 'flagbar f-' + esc(flag) + (over ? ' over' : '');
@@ -7836,7 +7938,12 @@ function drawBar(state, over, at, rows, mode) {
     : LB_FLAG_WORDS[flag] || (running === 'Staging' ? 'Get ready' : running === 'Countdown' ? 'Start sequence' : 'Race control');
   const said = over ? 'Race over' : flag === 'warmup' ? 'Free laps' : running === 'Idle' ? 'Not racing' : running;
 
-  const list = Array.isArray(rows) ? rows : [];
+  // WHY (23 Nov 2026, bug hunt 24): in a warm-up the board is still the
+  // last race's (the laptop stays Finished, or this phone kept it), so the
+  // card read its winner's laps and name as the warm-up's: "Lap 12 ...
+  // warm-up 2:00 left - Leader Sam P.". A warm-up reads no rows: its own
+  // countdown only, with the last race's board left below as it was.
+  const list = warmUp ? [] : Array.isArray(rows) ? rows : [];
   const lead = list[0] && typeof list[0] === 'object' ? list[0] : null;
   const done = lead ? lbLaps(lead) : 0;
   const left = over ? null : lbToGo(state.countdown);
@@ -8012,9 +8119,19 @@ const posChart = (function () {
     try { localStorage.setItem(KEY, JSON.stringify(h)); } catch (e) { /* this visit only */ }
   }
 
+  // WHY (23 Nov 2026, bug hunt 24): the lines are kept by driver name in a
+  // plain object, and a name every object already has - "constructor",
+  // "toString", "__proto__" - read back the built-in in place of a line, so
+  // take() threw on it and render stopped before the board: one such name
+  // froze the Live board on every phone. A driver's line is only ever one
+  // this chart put there itself.
+  function own(k) {
+    return Object.prototype.hasOwnProperty.call(h.d, k) ? h.d[k] : undefined;
+  }
+
   // A name per row; one the board shows twice gets a number after it.
   function names(rows) {
-    const seen = {};
+    const seen = Object.create(null);
     return rows.map((r) => {
       const k = String((r && r.name) || 'Unnamed driver');
       seen[k] = (seen[k] || 0) + 1;
@@ -8039,13 +8156,18 @@ const posChart = (function () {
   function take(rows) {
     const ns = names(rows);
     const counts = rows.map(lapsOf);
-    let fresh = Object.keys(h.d).length > 0 && !ns.some((k) => h.d[k]);
-    ns.forEach((k, i) => { if (h.d[k] && counts[i] < top(h.d[k])) fresh = true; });
+    let fresh = Object.keys(h.d).length > 0 && !ns.some((k) => own(k));
+    ns.forEach((k, i) => { if (own(k) && counts[i] < top(own(k))) fresh = true; });
     if (fresh) h = { d: {}, n: 0 };
     let changed = fresh;
     ns.forEach((k, i) => {
-      let d = h.d[k];
-      if (!d) { d = h.d[k] = { c: h.n % COLOURS.length, p: {} }; h.n += 1; changed = true; }
+      let d = own(k);
+      if (!d) {
+        d = { c: h.n % COLOURS.length, p: {} };
+        // Defined, not assigned: assigning "__proto__" would not make a line.
+        Object.defineProperty(h.d, k, { value: d, writable: true, enumerable: true, configurable: true });
+        h.n += 1; changed = true;
+      }
       const lap = counts[i];
       const pos = i + 1;
       if (lap === 0) {
@@ -8065,7 +8187,7 @@ const posChart = (function () {
   function drawPos(rows) {
     if (!box || !out) return;
     const ns = names(rows);
-    const lines = ns.map((k, i) => ({ k: k, now: i + 1, d: h.d[k] })).filter((x) => x.d);
+    const lines = ns.map((k, i) => ({ k: k, now: i + 1, d: own(k) })).filter((x) => x.d);
     const laps = [];
     lines.forEach((x) => Object.keys(x.d.p).forEach((l) => laps.push(Number(l))));
     box.hidden = false;
@@ -8138,7 +8260,7 @@ const posChart = (function () {
     const lines = ns.map((k, i) => {
       const laps = rows[i] && Array.isArray(rows[i].laps)
         ? rows[i].laps.filter((v) => typeof v === 'number' && isFinite(v) && v > 0).slice(0, 300) : [];
-      const d = h.d[k];
+      const d = own(k);
       return { k: k, now: i + 1, laps: laps, c: d ? d.c : i % COLOURS.length };
     });
     const all = [];
@@ -8218,7 +8340,7 @@ const posChart = (function () {
 
   // The colour a driver has in these charts, for the track map's dots.
   function colourOf(name) {
-    const d = h.d[name];
+    const d = own(name);
     return d ? COLOURS[d.c % COLOURS.length] : '#9E8AC7';
   }
 
@@ -8819,10 +8941,19 @@ function render(state, seen, at, empty, copy) {
     // Between races: the last one's board under "Race over".
     const kept = keptRace();
     liveMap.hide();
-    drawBar(state, !!kept, kept ? kept.at : 0, kept && Array.isArray(kept.state.standings) ? kept.state.standings : []);
+    // WHY (23 Nov 2026, bug hunt 24): any kept board was drawn as a finished
+    // race, so a race reset part-way (Racing, then an empty Idle board) showed
+    // on every phone as "Chequered flag - Race over - Winner Sam P.", and the
+    // followed driver's card still said what they needed "to catch by the
+    // flag". Only a board the laptop called Finished is a result; one that
+    // never got there stays up under "Not racing", with no winner and no
+    // lap or leader read from it. Either way it is not a live race, so the
+    // driver's card says nothing about catching anybody.
+    const keptDone = !!kept && String(kept.state.state || '') === 'Finished';
+    drawBar(state, keptDone, keptDone ? kept.at : 0, keptDone && Array.isArray(kept.state.standings) ? kept.state.standings : []);
     if (kept) {
       drawBoard(kept.state);
-      drawYou(kept.state, Array.isArray(kept.state.standings) ? kept.state.standings : [], false);
+      drawYou(Object.assign({}, kept.state, { state: 'Finished' }), Array.isArray(kept.state.standings) ? kept.state.standings : [], false);
       posChart.draw(Array.isArray(kept.state.standings) ? kept.state.standings : []);
       return;
     }
@@ -8915,7 +9046,10 @@ async function load() {
   // race is staged, counting down or running - the same reading, and the
   // same two minutes before a laptop that went quiet stops counting, as
   // the red dot the other pages put on the Live tab.
-  const fresh = Date.now() - at < 120000;
+  // WHY (23 Nov 2026, bug hunt 24): on the relay's clock, as render() just
+  // judged the same board - the phone's own clock left a fast phone with no
+  // on-air mark, and so no hold on the reload prompt, mid-race.
+  const fresh = hcRelayAge(at) < 120000;
   onAir(fresh && ['Staging', 'Countdown', 'Racing'].includes(String(state.state)));
   touched();
 }
@@ -11193,9 +11327,17 @@ var homeLines = [];
 var homeTracks = [];
 
 // The race night a moment belongs to: six in the morning to six the next,
-// the same turn the laptop files a night by. yyyy-mm-dd, local.
+// the same turn the laptop files a night by. yyyy-mm-dd, in the club's zone.
+// WHY (23 Nov 2026, bug hunt 24): the day was read on the phone's own clock,
+// so for a far-away parent (a UK club watched from Sydney) the phone's six
+// in the morning fell mid-evening at the club: the key moved to the next day
+// while the laptop's night had not, and Tonight in numbers, Moments and
+// "racing done for tonight" lost the races before it. Read in the club's
+// zone (hcYmd, as hcIsTonight does); the phone's day only without one.
 function nightOf(ms) {
   const d = new Date(ms - 6 * 3600000);
+  const club = typeof hcYmd === 'function' ? hcYmd(d) : '';
+  if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(club)) return club;
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
@@ -11575,6 +11717,11 @@ function drawSponsor() {
 async function loadSponsor() {
   const answer = await grab('/snapshot/sponsors').catch(() => null);
   if (answer === null) return;
+  // WHY (23 Nov 2026, bug hunt 24): only a 404 is "no sponsors". A busy or
+  // broken relay (429, or a 5xx with no copy on this phone) hid the card for
+  // five minutes, and those views went uncounted, although the sponsors were
+  // still published; it keeps what it shows, as Live's sponsors card does.
+  if (answer.missing && answer.status !== 404) return;
   const doc = !answer.missing && answer.body ? answer.body.body : null;
   spList = doc && Array.isArray(doc.sponsors)
     ? doc.sponsors.filter((x) => x && typeof x.id === 'string' && x.id !== '' && typeof x.name === 'string' && x.name !== '')
@@ -11874,7 +12021,16 @@ async function rtwProbe(code, prog) {
     if (navigator.serviceWorker && typeof navigator.serviceWorker.getRegistration === 'function') {
       const reg = await navigator.serviceWorker.getRegistration('/c/' + encodeURIComponent(CLUB) + '/');
       const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null;
-      next.alerts = !!sub;
+      // WHY (23 Nov 2026, bug hunt 24): the phone has one push sign-up, and
+      // follower alerts ("Tell me before Mia races") make it too - and keep it
+      // when turned off - so a driver whose own alerts were off was ticked
+      // "Alerts on", told "You're all set for tonight", and then got no "your
+      // race is next". The driver's own switch (Me's, 'hc-alerts:' + CLUB) has
+      // to be on as well, with the phone still letting the page notify.
+      let ownOn = false;
+      try { ownOn = localStorage.getItem('hc-alerts:' + CLUB) === '1'; } catch (e) { /* off */ }
+      const allowed = typeof Notification === 'undefined' || !Notification || Notification.permission === 'granted';
+      next.alerts = ownOn && allowed && !!sub;
     }
   } catch (e) { /* no alerts here */ }
   rtwKnown = next;
@@ -11932,7 +12088,8 @@ async function load() {
 
   const frame = state && !state.missing ? state.body : null;
   const s = frame ? frame.body || {} : null;
-  const fresh = frame !== null && Date.now() - Date.parse(frame.publishedAt) < STALE_MS;
+  // On the relay's clock (bug hunt 24) - see hcRelayAge.
+  const fresh = frame !== null && hcRelayAge(Date.parse(frame.publishedAt)) < STALE_MS;
   const p = prog && !prog.missing ? prog.body.body || {} : null;
   const lines = p && Array.isArray(p.lines) ? p.lines : [];
   const running = lines.find((l) => l.status === 'running');
@@ -12466,11 +12623,13 @@ function draw() {
   const lines = Array.isArray(doc.lines) ? doc.lines : [];
   const cls = picker.value;
   const q = find.value.trim().toLowerCase();
+  // Asked once for the whole draw (23 Nov 2026, bug hunt 24): both the empty
+  // board and the laptop's estimates below hang on it.
+  const dayTonight = !(doc.event && doc.event.startedUtc) || hcDayIsTonight(doc, docAt);
 
   if (lines.length === 0) {
     // "today" only when it is (item 3): an old race day had no order.
-    const ev = doc.event || {};
-    board.innerHTML = !ev.startedUtc || hcDayIsTonight(doc, docAt)
+    board.innerHTML = dayTonight
       ? '<p class="note">No running order has been published for today yet.</p>'
       : '<p class="note">No running order was published for that race day.</p>';
     return;
@@ -12485,7 +12644,13 @@ function draw() {
     return;
   }
 
-  const late = runningLate(lines);
+  // WHY (23 Nov 2026, bug hunt 24): how late the night runs only for a race
+  // started tonight, as Home's tile has it (startedTonight), and the
+  // laptop's "about 20:42" only on a day that is tonight's. The old page
+  // said "Running 14 min behind" in the present tense under "Last race day",
+  // a week on, with unrun lines still "about 21:14".
+  const ranTonight = lines.some((l) => l && typeof l.startedUtc === 'string' && l.startedUtc !== '' && hcIsTonight(l.startedUtc));
+  const late = ranTonight ? runningLate(lines) : null;
   const banner = late === null ? '' : '<p class="late' + (late > 2 ? ' behind' : '') + '">' + esc(lateWords(late)) + '</p>';
 
   board.innerHTML = banner + shown.map((l) => {
@@ -12497,7 +12662,7 @@ function draw() {
     if (Number.isFinite(started)) {
       const by = Number.isFinite(planned) ? Math.round((started - planned) / 60000) : 0;
       when = 'started ' + clockWords(started) + (Math.abs(by) > 2 ? (by > 0 ? ', ' + by + ' min late' : ', ' + (-by) + ' min early') : '');
-    } else if (estimateWords(l)) {
+    } else if (dayTonight && estimateWords(l)) {
       when = estimateWords(l);
     } else if (late !== null && late > 2 && Number.isFinite(planned) && (l.status === 'next' || l.status === 'upcoming')) {
       when = 'about ' + clockWords(planned + late * 60000);
@@ -12591,8 +12756,15 @@ poll(load, 15000);
 // marked as they are in the line-ups.
 const qualBox = document.getElementById('qual');
 let qualText = '';
+// The provisional lines as last drawn (bug hunt 24) - see loadQual.
+let qualProvKey = '';
+
+function qualProvKeyOf(classes) {
+  return classes.map((c) => qualProvisional(c)).join('|');
+}
 
 function drawQual(classes) {
+  qualProvKey = qualProvKeyOf(classes);
   const cls = picker.value;
   const q = find.value.trim().toLowerCase();
   const shown = classes.filter((c) => c && Array.isArray(c.rows) && c.rows.length > 0 && (!cls || c.name === cls));
@@ -12616,7 +12788,14 @@ async function loadQual() {
   const answer = await grab('/snapshot/qualifying').catch(() => null);
   if (answer === null || answer.missing) { if (answer && answer.status === 404) { qualClasses = []; drawQual([]); } return; }
   const text = JSON.stringify(answer.body.body);
-  if (text === qualText) return;
+  // WHY (23 Nov 2026, bug hunt 24): the same copy is drawn again when a
+  // "Provisional until 20:42" line has run out. The old page redrew only on
+  // a new copy, so with the laptop shut at the end of the night the line
+  // stayed long after the protest window had closed.
+  if (text === qualText) {
+    if (qualProvKeyOf(qualClasses) !== qualProvKey) drawQual(qualClasses);
+    return;
+  }
   qualText = text;
   qualClasses = answer.body.body && Array.isArray(answer.body.body.classes) ? answer.body.body.classes : [];
   drawQual(qualClasses);
@@ -12732,6 +12911,11 @@ function earnedDay(whenUtc) {
   const t = Date.parse(String(whenUtc || ''));
   if (!Number.isFinite(t)) return '';
   const d = new Date(t - 6 * 3600000);
+  // WHY (23 Nov 2026, bug hunt 24): in the club's zone, as nightOf on Home.
+  // The phone's own day linked an achievement earned late in the club's
+  // evening, seen from far away, to the next day's results - a night with none.
+  const club = typeof hcYmd === 'function' ? hcYmd(d) : '';
+  if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(club)) return club;
   const two = (n) => (n < 10 ? '0' : '') + n;
   return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate());
 }
@@ -12941,7 +13125,8 @@ function card(t, current) {
       stat('Length', t.lengthFeet > 0 ? esc(Math.round(t.lengthFeet)) + ' ft' : '') +
       stat('Typical lap', t.averageLapSeconds > 0 ? esc(Number(t.averageLapSeconds).toFixed(1)) + 's' : '') +
       stat('Sector records', Array.isArray(t.sectorRecords) && t.sectorRecords.length > 0
-        ? t.sectorRecords.map((r) => esc('S' + r.sector + ' ' + (Number(r.ms) / 1000).toFixed(2)) + (r.holder ? ' ' + nm(r.holder) : '')).join(' &middot; ')
+        // Rounded as the laptop rounds it (hcHundredths, bug hunt 24).
+        ? t.sectorRecords.map((r) => esc('S' + r.sector + ' ' + hcHundredths(r.ms)) + (r.holder ? ' ' + nm(r.holder) : '')).join(' &middot; ')
         : '') +
     '</div>' + (rec === null && best.length === 0 ? '<p class="when">No laps recorded here yet.</p>' : '') + '</div>' +
     (best.length === 0 ? '' : '<table><thead><tr><th class="pos">#</th><th>Driver</th>' +
@@ -14197,11 +14382,14 @@ function draw() {
   // Whether the night's own name already says its day ("Race Day 6 Nov
   // 2026"): its day of the month and the month's first three letters.
   function nightSaysItsDay(n) {
-    const d = n && typeof n.night === 'string' ? new Date(n.night + 'T12:00:00') : null;
+    // WHY (23 Nov 2026, bug hunt 24): noon UTC, read in UTC. The month was
+    // drawn in the club's zone from the phone's noon, so 12 hours or more
+    // away, on the 1st or the last of a month, it named the wrong month.
+    const d = n && typeof n.night === 'string' ? new Date(n.night + 'T12:00:00Z') : null;
     const title = String((n && n.title) || '').toLowerCase();
     if (!d || isNaN(d) || title === '') return false;
-    const month = d.toLocaleDateString('en-GB', { month: 'short' }).toLowerCase().slice(0, 3);
-    return new RegExp('(^|\\\\D)' + d.getDate() + '(\\\\D|$)').test(title) && title.indexOf(month) >= 0;
+    const month = d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }).toLowerCase().slice(0, 3);
+    return new RegExp('(^|\\\\D)' + d.getUTCDate() + '(\\\\D|$)').test(title) && title.indexOf(month) >= 0;
   }
 
   // The date once (14 Nov 2026, driver phone plan item 14): a night named
@@ -15351,13 +15539,32 @@ function learnClock(r) {
 
 // Every relay call this page makes beyond the first read: a POST, with
 // whatever it carries in the body.
-async function post(path, payload) {
-  const r = await fetch(API + path, {
+//
+// WHY (23 Nov 2026, bug hunt 24): waitMs gives up after that long, as
+// grab's does (26 Oct 2026). The live card's poll waits for its answer
+// before it sets the next one, so a poll that never came back - a phone
+// moving between venue Wi-Fi and mobile data - left the Right now card,
+// the You're up buzz and Your result is in frozen until a reload. Only the
+// reads pass it; a send that changes something is left to take its time.
+async function post(path, payload, waitMs) {
+  const stop = waitMs && typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = stop ? setTimeout(() => stop.abort(), waitMs) : 0;
+  try {
+    return await postNow(path, payload, stop);
+  } finally {
+    if (stop) clearTimeout(timer);
+  }
+}
+
+async function postNow(path, payload, stop) {
+  const asked = {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
     cache: 'no-store',
-  });
+  };
+  if (stop) asked.signal = stop.signal;
+  const r = await fetch(API + path, asked);
   let body = {};
   try { body = await r.json(); } catch (e) { /* an empty answer is still an answer */ }
   learnClock(r);
@@ -15600,7 +15807,19 @@ function marshalWhen(away) {
 // says "Max P. asks you to cover Turn 3 in Q2 Heat 3" with Accept and
 // Decline. A yes becomes the swap - by itself, or after the desk's OK.
 // Only while the club takes asks and this phone has the driver.
-const coverPick = { round: '', k: '', open: false };
+const coverPick = { round: '', k: '', open: false, sel: null, since: 0 };
+
+// WHY (23 Nov 2026, bug hunt 24): the live card is not built again while the
+// driver has the "Who to ask" list open. Every poll used to throw the list
+// away and make a new one, so the phone's driver list shut by itself under
+// their finger. Held for half a minute at most, so a list left focused
+// (iOS keeps it so until a tap elsewhere) never stops the card updating.
+const COVER_HOLD_MS = 30000;
+function coverHeld() {
+  const sel = coverPick.sel;
+  return sel !== null && typeof document !== 'undefined' && document.activeElement === sel &&
+    coverPick.since > 0 && Date.now() - coverPick.since < COVER_HOLD_MS;
+}
 
 function marshalActs(m) {
   if (!(typeof asksOpen !== 'undefined' && asksOpen && me)) return null;
@@ -15637,6 +15856,9 @@ function marshalActs(m) {
       pick.appendChild(o);
     }
     pick.addEventListener('change', () => { coverPick.k = pick.value; });
+    // While the driver is choosing (bug hunt 24) - see coverHeld.
+    coverPick.sel = pick;
+    pick.addEventListener('focus', () => { coverPick.since = Date.now(); });
     part.appendChild(pick);
     part.appendChild(tapButton('Ask them', 'go quiet', async () => {
       if (coverPick.k === '') { toast('Pick who to ask first'); return; }
@@ -15845,6 +16067,8 @@ function liveCard() {
 
 function drawLive() {
   if (!lvBox) return;
+  // The next poll draws it (bug hunt 24) - see coverHeld.
+  if (coverHeld()) return;
 
   lvBox.textContent = '';
 
@@ -15977,11 +16201,20 @@ function sameLaps(a, b) {
 // field (races[].field, DriverNightExtras.FieldOf) has its start lap taken
 // off the same way as their own laps, so a row of it sent without startMs
 // (a laptop from before 9 Nov) is drawn from their own first lap.
+//
+// WHY (23 Nov 2026, bug hunt 24): a credited start's dash from the grid is
+// the first entry of lapsMs, marked by startLaps. It was drawn as a lap on
+// the Lap times chart - a few seconds, the "best lap" dot and the top of the
+// scale. laps now leaves it out, and lapsFirst is the lap its first entry
+// is (one on from first per dash entry); posAt, in step with lapsMs, keeps
+// its own first.
 function meLines(r, field) {
-  const own = { name: 'You', me: true, posAt: r.posAt, start: num(r.start), laps: lxLaps(r.lapsMs), first: lxHasStart(r.startMs) ? 2 : 1 };
+  const skip = (x) => lxStartLaps(x.startLaps);
+  const own = { name: 'You', me: true, posAt: r.posAt, start: num(r.start), laps: lxLaps(lxFlying(r.lapsMs, r.startLaps)), first: lxHasStart(r.startMs) ? 2 : 1 };
+  own.lapsFirst = own.first + skip(r);
   const night = Array.isArray(field) && field === r.field;
   const list = Array.isArray(field) ? field.filter((x) => x && typeof x === 'object') : [];
-  let at = list.findIndex((x) => sameLaps(lxLaps(x.lapsMs), own.laps));
+  let at = list.findIndex((x) => sameLaps(lxLaps(lxFlying(x.lapsMs, x.startLaps)), own.laps));
   if (at < 0 && num(r.pos) > 0) at = list.findIndex((x) => num(x.pos) === num(r.pos));
   if (list.length < 2 || at < 0) return [Object.assign(own, { colour: ME_COLOURS[0] })];
   return list.map((x, i) => i === at
@@ -15991,11 +16224,14 @@ function meLines(r, field) {
       posAt: Array.isArray(own.posAt) && own.posAt.length > 0 ? own.posAt : x.posAt,
       start: own.start > 0 ? own.start : num(x.qual),
     })
-    : {
-      name: String(x.name || 'Unnamed driver'), me: false, colour: ME_COLOURS[i % ME_COLOURS.length],
-      posAt: x.posAt, start: num(x.qual), laps: lxLaps(x.lapsMs),
-      first: lxHasStart(x.startMs) ? 2 : night && x.startMs == null ? own.first : 1,
-    });
+    : (() => {
+      const first = lxHasStart(x.startMs) ? 2 : night && x.startMs == null ? own.first : 1;
+      return {
+        name: String(x.name || 'Unnamed driver'), me: false, colour: ME_COLOURS[i % ME_COLOURS.length],
+        posAt: x.posAt, start: num(x.qual), laps: lxLaps(lxFlying(x.lapsMs, x.startLaps)),
+        first, lapsFirst: first + skip(x),
+      };
+    })());
 }
 
 // The frame both charts share: level lines with their labels are the
@@ -16103,11 +16339,13 @@ function meTimes(lines, W) {
   let hi = Math.ceil(slow / 1000 / step) * step;
   if (hi - lo < step / 2) hi = lo + step;
   const places = step >= 1 ? 0 : step === 0.25 ? 2 : 1;
-  const most = Math.max.apply(null, use.map((l) => l.laps.length - 1 + (l.first || 1)));
-  const lowest = Math.min.apply(null, use.map((l) => l.first || 1));
+  // lapsFirst: the lap a line's first lap time is (meLines, bug hunt 24).
+  const lf = (l) => l.lapsFirst || l.first || 1;
+  const most = Math.max.apply(null, use.map((l) => l.laps.length - 1 + lf(l)));
+  const lowest = Math.min.apply(null, use.map(lf));
   const me = use.find((l) => l.me);
   const mine = me ? Math.min.apply(null, me.laps) : 0;
-  const aria = 'Lap times for every lap' + (me ? ', your best ' + lap(mine) + ' on lap ' + (me.laps.indexOf(mine) + (me.first || 1)) : '');
+  const aria = 'Lap times for every lap' + (me ? ', your best ' + lap(mine) + ' on lap ' + (me.laps.indexOf(mine) + lf(me)) : '');
   const f = meFrame(W, 260, lowest, Math.max(lowest + 1, most), 'Lap time (s)', aria, 'metimes');
   const yOf = (s) => f.T + (s - lo) / (hi - lo) * (f.base - 12 - f.T);
   const y = (ms) => ms > cap ? f.base - 4 : yOf(ms / 1000);
@@ -16122,7 +16360,7 @@ function meTimes(lines, W) {
     const l = use[i];
     const best = Math.min.apply(null, l.laps);
     const at = l.laps.indexOf(best);
-    const pts = l.laps.map((ms, k) => [f.x(k + (l.first || 1)), y(ms), ms > cap]);
+    const pts = l.laps.map((ms, k) => [f.x(k + lf(l)), y(ms), ms > cap]);
     meLine(f.svg, l, pts, (j) => j === at);
   }
   const key = meKey(use, (l) => lap(Math.min.apply(null, l.laps)));
@@ -16425,8 +16663,11 @@ function raceFacts(r) {
 function shortDay(iso) {
   const p = /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(String(iso || ''));
   if (!p) return '';
-  const d = new Date(Number(p[1]), Number(p[2]) - 1, Number(p[3]), 12);
-  return d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  // WHY (23 Nov 2026, bug hunt 24): noon UTC drawn in UTC. The phone's noon
+  // drawn in the club's zone was the day before (or after) for a phone 12
+  // hours or more from the club.
+  const d = new Date(Date.UTC(Number(p[1]), Number(p[2]) - 1, Number(p[3]), 12));
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
 // Their best lap on one layout, night by night - six bars at most, tonight
@@ -16793,7 +17034,8 @@ function raceDetail(r, stats, own) {
     c.appendChild(ul);
   }
 
-  const list = lapRows(r.lapsMs, r.posAt, r.startMs, r.lenS, r.bestMs);
+  // r.startLaps: a credited start's dash, listed but left out of best and pace (bug hunt 24).
+  const list = lapRows(r.lapsMs, r.posAt, r.startMs, r.lenS, r.bestMs, r.startLaps);
   const tabs = [];
 
   if (list.length > 0) {
@@ -16908,7 +17150,7 @@ function racesPart(into, id, title, all, clipsOf) {
     part.appendChild(el('p', 'note', 'Only demo races and practice so far. Untick to see them.'));
     return;
   }
-  const stats = races.map((r) => lapStats(r.lapsMs, r.bestMs));
+  const stats = races.map((r) => lapStats(r.lapsMs, r.bestMs, r.startLaps));
 
   const values = races.map((r, i) => pickValue(r, stats[i], view.pick));
   const good = values.filter((v) => v !== null);
@@ -17486,9 +17728,14 @@ function asksPart() {
 
 // ---- "Something wrong?" under a race
 
+// WHY (23 Nov 2026, bug hunt 24): the window's end is the laptop's time, so
+// it is read on the relay's clock (relayNow), as the rest of this page reads
+// laptop times - not the phone's own, which can be minutes out and took the
+// button away early or left it after the desk had closed. (A laptop whose
+// own clock is out still moves it; that needs the laptop to say its time.)
 function queryStillOpen(r) {
   const until = Number(r && r.qUntil) || 0;
-  return until <= 0 || Date.now() < until;
+  return until <= 0 || relayNow() < until;
 }
 
 // Redraw the night when the next race's query window closes, so its
@@ -17499,10 +17746,10 @@ function watchQueryWindows() {
   const races = night && Array.isArray(night.races) ? night.races : [];
   const next = races
     .map((r) => Number(r && r.qUntil) || 0)
-    .filter((t) => t > Date.now())
+    .filter((t) => t > relayNow())
     .sort((a, b) => a - b)[0];
   if (!next) return;
-  queryWindowTimer = setTimeout(() => { paintNight(); }, Math.min(next - Date.now() + 500, 2147483000));
+  queryWindowTimer = setTimeout(() => { paintNight(); }, Math.min(next - relayNow() + 500, 2147483000));
 }
 
 function queryPart(r) {
@@ -18596,15 +18843,23 @@ function refreshSoon() {
 
 async function refreshNight() {
   let a = null;
-  try { a = await post('/night', { id: CODE }); } catch (e) { return; }
+  // A limit, as the live poll has (bug hunt 24): see post.
+  try { a = await post('/night', { id: CODE }, 10000); } catch (e) { return; }
   if (a.status !== 200) return;
 
   // asksOpen is in the key because each race card's "Something wrong?"
   // comes and goes with it (22 Oct 2026, driver experience, RP2).
   const before = JSON.stringify([night, clips, asksOpen, queriesOff]);
   const was = live;
+  const wasNight = night;
   take(a.body);
   if (live === null) live = was;
+  // WHY (23 Nov 2026, bug hunt 24): a different night starts from no races,
+  // as the push side has it (push.ts nightAlerts). The relay keeps one night
+  // per driver from meeting to meeting, so the page opened on last week's
+  // five races, and tonight's first result (one race) was not more than
+  // five: no buzz and no "Your result is in".
+  if (wasNight && night && wasNight.night !== night.night) racesSeen = 0;
   if (JSON.stringify([night, clips, asksOpen, queriesOff]) !== before) paintNight();
   const races = night && Array.isArray(night.races) ? night.races : [];
   // Each kind as Which alerts has it (Bug hunt 18): one ticked off there
@@ -18648,7 +18903,9 @@ async function pollLive() {
   lastPoll = Date.now();
 
   let a = null;
-  try { a = await post('/night', { id: CODE, part: 'live' }); } catch (e) { a = null; }
+  // WHY (23 Nov 2026, bug hunt 24): ten seconds at most, so a poll that
+  // never comes back fails into the catch and the next one is still set.
+  try { a = await post('/night', { id: CODE, part: 'live' }, 10000); } catch (e) { a = null; }
 
   polling = false;
 
@@ -18719,6 +18976,7 @@ async function load() {
 
   if (!answer.ok) {
     nothing(NOTHING);
+    meWayOut();
     return;
   }
 
@@ -18735,6 +18993,7 @@ async function load() {
   // a live entry is a driver before their first race (22 Oct 2026).
   if (night === null && live === null) {
     nothing(NOTHING);
+    meWayOut();
     return;
   }
 
@@ -18761,6 +19020,26 @@ load();
  * it. Kept apart from NIGHT_JS so the night itself does not change.
  */
 const NIGHT_ME_JS = `
+// WHY (23 Nov 2026, bug hunt 24): a code this phone remembers that the
+// relay no longer answers (nights switched off and on, Forget driver) showed
+// only the NOTHING words: the Signed in button is drawn after a night opens,
+// and My night sends a remembered phone straight back here, so there was no
+// PIN box, no sign-out and no switch to another driver on the phone. Under
+// the same words, the way out - shown only for what this phone remembers,
+// never from the relay's answer, so a guessed code sees what it always did.
+function meWayOut() {
+  if (!CODE) return;
+  const kept = meCode() === CODE || meDrivers().some((d) => d.c === CODE);
+  if (!kept) return;
+  const p = el('p', 'note');
+  const a = el('a', 'more', 'Sign in with your PIN');
+  a.setAttribute('href', '/c/' + encodeURIComponent(CLUB) + '/mynight?add=1');
+  p.appendChild(a);
+  box.appendChild(p);
+  // Sign out, or switch to another driver on this phone.
+  meSignedInButton();
+}
+
 function meRemembered(code, junior) {
   // Signed out of in this tab and come back to by Back or a reload: the
   // PIN again, never remembered again.
@@ -18935,9 +19214,16 @@ function drawFamily() {
     stop.type = 'button';
     stop.className = 'page';
     stop.textContent = 'Stop';
+    // WHY (23 Nov 2026, bug hunt 24): Stopped only when the relay says so.
+    // The old handler said 'Stopped. That link no longer opens.' whatever
+    // the answer - a busy relay, a restart, no signal - while the link still
+    // opened, and with no signal it said nothing at all.
     stop.addEventListener('click', async () => {
-      await post('/family/manage', { id: CODE, action: 'stop', code: l.code });
-      famSaid = 'Stopped. That link no longer opens.';
+      let a = null;
+      try { a = await post('/family/manage', { id: CODE, action: 'stop', code: l.code }); } catch (e) { a = null; }
+      famSaid = a !== null && a.status === 200
+        ? 'Stopped. That link no longer opens.'
+        : (a !== null && a.body && typeof a.body.error === 'string' && a.body.error) || 'That link couldn\u2019t be stopped just now, so it still opens. Try again in a minute.';
       readFamily();
     });
     row.appendChild(stop);
@@ -18981,8 +19267,11 @@ async function readFamily() {
   if (!CODE) return;
   try {
     const a = await post('/family/manage', { id: CODE, action: 'list' });
-    famLinks = a.status === 200 && Array.isArray(a.body.links) ? a.body.links : null;
-  } catch (e) { famLinks = null; }
+    // A busy or failed re-read keeps the list already showing (bug hunt 24),
+    // so the words under it stay on screen; a 404 is nights closed.
+    if (a.status === 200 && Array.isArray(a.body.links)) famLinks = a.body.links;
+    else if (a.status === 404 || famLinks === null) famLinks = null;
+  } catch (e) { /* no signal: the list already showing, if any, stays */ }
   drawFamily();
 }
 
@@ -19161,7 +19450,9 @@ function emailLinkBox() {
     } catch (e) { a = null; }
     send.disabled = false;
     if (a !== null && a.status === 200) { said.textContent = String(a.body.message || 'If that address is on the club\\u2019s list, a link is on its way.'); input.value = ''; return; }
-    if (a !== null && a.status === 429) { said.textContent = 'That\\u2019s a few asks already. Try again in an hour, or ask at the desk.'; return; }
+    // WHY (23 Nov 2026, bug hunt 24): the relay's limit on sign-in links from
+    // one connection is ten minutes now; the old words still said an hour.
+    if (a !== null && a.status === 429) { said.textContent = 'That\\u2019s a few asks already. Try again in ten minutes, or ask at the desk.'; return; }
     if (a !== null && a.status === 400) { said.textContent = 'That doesn\\u2019t look like an email address.'; return; }
     if (a !== null && a.status === 404) { said.textContent = 'The club isn\\u2019t sending links just now. Ask at the desk.'; return; }
     said.textContent = 'That didn\\u2019t go through just now. Try again in a moment.';
@@ -19249,7 +19540,9 @@ function draw(message) {
   // The phone's other clubs (item 5).
   const clubs = typeof hcOtherClubs === 'function' ? hcOtherClubs() : null;
   if (clubs) part.appendChild(clubs);
-  part.appendChild(el('p', 'when', 'This phone remembers you once your night opens, until you sign out at the bottom of it.'));
+  // WHY (23 Nov 2026, bug hunt 24): the sign-out at the foot of the page went
+  // on 7 Nov 2026; these words still sent drivers to the bottom looking for it.
+  part.appendChild(el('p', 'when', 'This phone remembers you once your night opens, until you sign out - tap Signed in at the top of your page.'));
   box.appendChild(part);
 }
 
@@ -20978,8 +21271,26 @@ function drawFam(d) {
   const list = document.createElement('section');
   list.className = 'card famlinks';
   const h = document.createElement('h3');
-  h.textContent = races.length ? 'Tonight' : 'No races yet tonight';
+  // WHY (23 Nov 2026, bug hunt 24): the relay keeps one night per driver, the
+  // last one filed, so on any day after a meeting - or tonight before their
+  // first race is filed - last week's finishes were headed Tonight, under a
+  // live Next race card for tonight. With the night's day sent (d.night), an
+  // older night is headed with its day, as Me's first tab is (meTonightLabel).
+  const day = typeof d.night === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(d.night) ? d.night : '';
+  const old = day !== '' && !hcIsTonight(day);
+  let dayWords = '';
+  if (old) {
+    const at = new Date(day + 'T12:00:00Z');
+    if (!isNaN(at)) dayWords = at.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  }
+  h.textContent = !races.length ? 'No races yet tonight' : old ? 'Last time out' + (dayWords ? ' - ' + dayWords : '') : 'Tonight';
   list.appendChild(h);
+  if (old && races.length && next) {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = 'Tonight\u2019s races show here once the desk files them.';
+    list.appendChild(p);
+  }
   for (const r of races.slice().reverse()) {
     const row = document.createElement('div');
     row.className = 'famrace';
@@ -21048,7 +21359,8 @@ export function familyPage(club: string, clubName: string, context: PageContext 
     clubName,
     active: "home",
     heading: "Following",
-    sub: "Their races tonight, from the club's timing - a family link they sent you.",
+    // Not "tonight" (bug hunt 24): the races shown may be their last night's.
+    sub: "Their races, from the club's timing - a family link they sent you.",
     body: '<div id="fam"><p class="note">Loading&hellip;</p></div>',
     script: FAMILY_JS,
     noindex: true,

@@ -139,6 +139,28 @@ public sealed class RaceJournalRecorder
     public Func<bool>? RetryDueBeforeWrite { get; set; }
 
     /// <summary>
+    /// The announcer's lead change tally, read at every write and kept in the
+    /// journal (RaceJournal.Entry.LeadChanges) - on the timing thread too in
+    /// threaded mode, so it must be safe there (LeadTracker locks). MainForm
+    /// points it at the announcer. Null: the journal carries none.
+    /// </summary>
+    public Func<(int Changes, IReadOnlyDictionary<string, int> TimesLed)?>? LeadsSource { get; set; }
+
+    /// <summary>
+    /// The tally to write now: only once the race is green. Before that the
+    /// announcer may still hold the last race's count - the journal written
+    /// at Stage runs ahead of the announcer's reset - and a crash then would
+    /// hand it to the new race.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Nov 2026, bug hunt 24 #88, Asher): the journal did not carry
+    /// the lead changes, so a race picked up after a crash called its fifth
+    /// lead change "the first".
+    /// </remarks>
+    internal (int Changes, IReadOnlyDictionary<string, int> TimesLed)? LeadsNow() =>
+        _race.State == RaceState.Racing ? LeadsSource?.Invoke() : null;
+
+    /// <summary>
     /// Raised after every write, whether or not Record actually wrote (it
     /// skips an idle, finished, demo or practice session, and throttles) -
     /// Race Control's race recording follows the race from here, as it always
@@ -193,7 +215,7 @@ public sealed class RaceJournalRecorder
         var details = Details;
 
         Journal.Record(_race, SessionStartedAtUtc, details.TrackLayoutName, force,
-            details.RoundId, details.RaceLabel, details.IsRerun);
+            details.RoundId, details.RaceLabel, details.IsRerun, LeadsNow());
 
         Written?.Invoke();
     }
@@ -473,7 +495,7 @@ public sealed class RaceJournalRecorder
             var details = Details;
 
             Journal.Record(_race, SessionStartedAtUtc, details.TrackLayoutName, force,
-                details.RoundId, details.RaceLabel, details.IsRerun);
+                details.RoundId, details.RaceLabel, details.IsRerun, LeadsNow());
 
             PostWritten();
         }
@@ -583,7 +605,7 @@ public sealed class RaceJournalRecorder
         var startedAt = SessionStartedAtUtc;
 
         _race.Host!.Invoke(() => Journal.Record(_race, startedAt, details.TrackLayoutName, force,
-            details.RoundId, details.RaceLabel, details.IsRerun));
+            details.RoundId, details.RaceLabel, details.IsRerun, LeadsNow()));
 
         Written?.Invoke();
     }

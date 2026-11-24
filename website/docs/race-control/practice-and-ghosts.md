@@ -220,7 +220,7 @@ The grid lists everyone in the class, with **Driver**, **Transponder**, **Time c
 **Suggest from History** works out time credits from recent pace:
 
 1. Set **Use last:** (how many of each driver's recent sessions to use, default 5) and **Typical race:** (laps, default 20).
-2. HeatCaller averages each driver's best lap across those sessions. It gives each driver the gap to the quickest driver's average, multiplied by the typical race length. The quickest driver is scratch. The aim is for everyone to finish together.
+2. HeatCaller averages each driver's best lap across those sessions. Only races on the same layout as the class's newest race count, so a change of layout isn't mistaken for a change of pace; a driver who hasn't raced the newest layout yet gets no suggestion. (Races with no layout name count as a layout of their own.) It gives each driver the gap to the quickest driver's average, multiplied by the typical race length. The quickest driver is scratch. The aim is for everyone to finish together.
 3. Tick the suggestions you want (the **Apply** column) and press **Apply Ticked**.
 
 Nothing is applied until you tick it, and **Apply Ticked** is off while nothing is ticked. Drivers you've marked **Locked - leave this driver alone when suggesting** start unticked. At least two drivers in the class need a recorded best lap. Applied suggestions note how they were worked out in **Notes**.

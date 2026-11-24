@@ -219,7 +219,14 @@ public sealed class NewRaceDayForm : Form
         // previous day would otherwise have to tick all three to get the
         // only outcome they could have wanted, and a day with none ticked is
         // the trap this dialog exists to close.
-        if (alreadyRacing.Count == 0)
+        //
+        // WHY (23 Nov 2026, bug hunt 24): this used to test alreadyRacing.Count
+        // == 0 - what was handed in, not what got ticked. When every class the
+        // last day raced had since been deleted, the names handed in matched
+        // nothing on file, so the window opened with no class ticked and
+        // "Something different..." started a day with no classes. Now it ticks
+        // every class whenever nothing ended up ticked.
+        if (_lstClasses.CheckedItems.Count == 0)
         {
             for (var i = 0; i < _lstClasses.Items.Count; i++)
             {

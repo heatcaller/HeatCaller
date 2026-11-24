@@ -613,9 +613,14 @@ public sealed class HeadToHeadControl : UserControl
             allLapsA.AddRange(rA.LapTimesMs.Skip(rA.StartSlots(rA.LapTimesMs)).Where(l => l > 0));
             allLapsB.AddRange(rB.LapTimesMs.Skip(rB.StartSlots(rB.LapTimesMs)).Where(l => l > 0));
 
-            if (rA.FastLapMs > 0 && rB.FastLapMs > 0)
+            // WHY (23 Nov 2026, bug hunt 24): the old else branch handed a
+            // best lap tied to the millisecond to driver B, where the Matchup
+            // card's "Quicker best lap" row counts it for neither, so the two
+            // disagreed for the same pair. QuickerLapSide is the card's rule.
+            switch (QuickerLapSide(rA.FastLapMs, rB.FastLapMs))
             {
-                if (rA.FastLapMs < rB.FastLapMs) { fastestLapWinsA++; } else { fastestLapWinsB++; }
+                case > 0: fastestLapWinsA++; break;
+                case < 0: fastestLapWinsB++; break;
             }
 
             positionsA.Add(placeA);
@@ -672,9 +677,17 @@ public sealed class HeadToHeadControl : UserControl
         AddStat("Current streak", StreakText(results, forA: true), StreakText(results, forA: false));
         AddStat("Longest win streak", LongestStreak(results, true).ToString(), LongestStreak(results, false).ToString());
         AddStat("Recent form (last 5)", FormText(results, true), FormText(results, false));
-        AddStat("Fastest lap of session", fastestLapWinsA.ToString(), fastestLapWinsB.ToString());
+        // WHY (23 Nov 2026, bug hunt 24): this row was called "Fastest lap of
+        // session", which reads like the card's "Fastest lap of the race"
+        // (the whole field's fastest), but it only counts which of the two
+        // was quicker - two mid-field drivers showed "7 / 3" next to a card
+        // reading "Level 0-0". Named as the card names the same measure.
+        AddStat(QuickerBestLapRow, fastestLapWinsA.ToString(), fastestLapWinsB.ToString());
         AddStat("Best lap ever", Fmt(bestLapsA.Count > 0 ? bestLapsA.Min() : 0), Fmt(bestLapsB.Count > 0 ? bestLapsB.Min() : 0));
-        AddStat("Average best lap", Fmt(bestLapsA.Count > 0 ? (long)bestLapsA.Average() : 0), Fmt(bestLapsB.Count > 0 ? (long)bestLapsB.Average() : 0));
+        // WHY (23 Nov 2026, bug hunt 24): the two averages round to the
+        // nearest thousandth (PaceAnalysis.MeanMs), as the phone does; a
+        // (long) cast cut them, so they read a thousandth under.
+        AddStat("Average best lap", Fmt(bestLapsA.Count > 0 ? PaceAnalysis.MeanMs(bestLapsA) : 0), Fmt(bestLapsB.Count > 0 ? PaceAnalysis.MeanMs(bestLapsB) : 0));
         AddStat("Consistency (std dev)", StdDevText(allLapsA), StdDevText(allLapsB));
         AddStat("Average finish position", positionsA.Count > 0 ? $"P{positionsA.Average():0.0}" : "-", positionsB.Count > 0 ? $"P{positionsB.Average():0.0}" : "-");
         AddStat("Biggest winning margin", biggestMarginA > 0 ? $"{biggestMarginA} place{(biggestMarginA == 1 ? "" : "s")}" : "-", biggestMarginB > 0 ? $"{biggestMarginB} place{(biggestMarginB == 1 ? "" : "s")}" : "-");
@@ -682,7 +695,7 @@ public sealed class HeadToHeadControl : UserControl
         AddStat("Podiums (P1-P3)", podiumsA.ToString(), podiumsB.ToString());
         AddStat("Wins without fastest lap", comebackWinsA.ToString(), comebackWinsB.ToString());
         AddStat("Pace gap on best lap", PaceGapText(bestLapsA, bestLapsB), PaceGapText(bestLapsB, bestLapsA));
-        AddStat("Average lap (all laps)", allLapsA.Count > 0 ? Fmt((long)allLapsA.Average()) : "-", allLapsB.Count > 0 ? Fmt((long)allLapsB.Average()) : "-");
+        AddStat("Average lap (all laps)", allLapsA.Count > 0 ? Fmt(PaceAnalysis.MeanMs(allLapsA)) : "-", allLapsB.Count > 0 ? Fmt(PaceAnalysis.MeanMs(allLapsB)) : "-");
         AddStat("Improvement over time", ImprovementText(bestLapsA), ImprovementText(bestLapsB));
         AddStat("Strongest track", TopKey(trackWinsA), TopKey(trackWinsB));
         AddStat("Most-used car", TopKey(carsA), TopKey(carsB));
@@ -697,6 +710,24 @@ public sealed class HeadToHeadControl : UserControl
         var split = $"{raceMeetings} race{(raceMeetings == 1 ? "" : "s")}, {practiceMeetings} practice";
         AddStat("Meeting types", split, split);
         AddStat("Closest session finish", closestGap == int.MaxValue ? "-" : $"{closestGap} place{(closestGap == 1 ? "" : "s")} apart", closestGap == int.MaxValue ? "-" : $"{closestGap} place{(closestGap == 1 ? "" : "s")} apart");
+    }
+
+    /// <summary>The career table's name for the pairwise best-lap count - the Matchup card's wording.</summary>
+    internal const string QuickerBestLapRow = "Quicker best lap";
+
+    /// <summary>
+    /// Which of two drivers set the quicker best lap in one session: 1 for A,
+    /// -1 for B, 0 when it counts for neither (a missing lap or a tie to the
+    /// millisecond) - the same rule as RaceCoach.RowBeat's QuickerBestLap.
+    /// </summary>
+    internal static int QuickerLapSide(long fastLapMsA, long fastLapMsB)
+    {
+        if (fastLapMsA <= 0 || fastLapMsB <= 0 || fastLapMsA == fastLapMsB)
+        {
+            return 0;
+        }
+
+        return fastLapMsA < fastLapMsB ? 1 : -1;
     }
 
     /// <summary>How many sessions in a row this driver has most recently won. Zero if the other driver won the latest meeting.</summary>

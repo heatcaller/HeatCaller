@@ -137,6 +137,13 @@ public sealed partial class WebServerService
         context.Response.ContentType = "application/zip";
         context.Response.Headers["Cache-Control"] = "no-store";
         context.Response.Headers[WarmStandby.TakenAtHeader] = atUtc.ToString("O", CultureInfo.InvariantCulture);
+
+        // WHY (23 Nov 2026, bug hunt 24, F325): how old the copy is (it can
+        // be reused for a few seconds), on THIS PC's clock, so the standby
+        // never takes one PC's clock from the other's. Its own stamp alone
+        // made every copy look minutes or hours old on a standby whose clock
+        // disagreed - see WarmStandby.CopyTakenOnThisClock.
+        context.Response.Headers[WarmStandby.AgeHeader] = WarmStandby.ServedAgeHeaderValue(atUtc, DateTime.UtcNow);
         context.Response.Headers[WarmStandby.PrimaryNameHeader] = Environment.MachineName;
         context.Response.Headers["X-HeatCaller-Files"] = files.ToString(CultureInfo.InvariantCulture);
         context.Response.ContentLength64 = zip.Length;

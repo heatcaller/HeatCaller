@@ -233,6 +233,16 @@ public sealed partial class VoiceSettingsControl : UserControl
     /// <summary>While the Kokoro test is speaking, so a change of engine doesn't re-enable its button part-way.</summary>
     private bool _kokoroTestRunning;
 
+    /// <summary>While the ElevenLabs Test Voice is rendering or playing, so nothing re-enables its button part-way.</summary>
+    // WHY (23 Nov 2026, bug hunt 24): ApplyHeatCallerLock used to set the
+    // button back on whenever the page refreshed (a voice list answering, the
+    // "Kokoro stands in" box ticked), so a second press mid-test bought a
+    // second paid render and played the phrase twice.
+    private bool _voiceTestRunning;
+
+    /// <summary>Whether Test Voice can be pressed: not on the HeatCaller voice, and not while a test is already running.</summary>
+    internal static bool TestVoiceEnabled(bool locked, bool testRunning) => !locked && !testRunning;
+
     /// <summary>The model download this page is showing, while it runs. KokoroSpeech holds it; its button cancels it.</summary>
     private Task? _kokoroDownload;
 
@@ -3234,11 +3244,16 @@ public sealed partial class VoiceSettingsControl : UserControl
                  {
                      _txtApiKey, _chkShowApiKey, _cmbVoice, _cmbModel,
                      _numStability, _numSimilarity, _numStyle, _numSpeed, _chkSpeakerBoost, _chkEnergyFollowsRace,
-                     _cmbTextNormalization, _txtLanguageCode, _txtOutputFormat, _btnTestVoice,
+                     _cmbTextNormalization, _txtLanguageCode, _txtOutputFormat,
                  })
         {
             control.Enabled = !locked;
         }
+
+        // WHY (23 Nov 2026, bug hunt 24): Test Voice stays off while its own
+        // test runs. It used to be in the list above, so any refresh mid-test
+        // switched it back on and a second press paid for a second take.
+        _btnTestVoice.Enabled = TestVoiceEnabled(locked, _voiceTestRunning);
 
         // The wording. Read-only rather than disabled so it can still be
         // read and copied, and the caret still shows where a line is. The
@@ -4510,6 +4525,9 @@ public sealed partial class VoiceSettingsControl : UserControl
 
     private async void BtnTestVoice_Click(object? sender, EventArgs e)
     {
+        // WHY (23 Nov 2026, bug hunt 24): one test at a time - see _voiceTestRunning.
+        if (_voiceTestRunning) { return; }
+
         var profile = BuildProfileFromControls();
         if (string.IsNullOrWhiteSpace(profile.ApiKey) || string.IsNullOrWhiteSpace(profile.VoiceId))
         {
@@ -4518,6 +4536,7 @@ public sealed partial class VoiceSettingsControl : UserControl
             return;
         }
 
+        _voiceTestRunning = true;
         _btnTestVoice.Enabled = false;
         _lblTestStatus.Text = "Synthesizing test phrase...";
         try
@@ -4541,9 +4560,14 @@ public sealed partial class VoiceSettingsControl : UserControl
         }
         finally
         {
+            _voiceTestRunning = false;
+
             if (!Gone)
             {
-                _btnTestVoice.Enabled = true;
+                // WHY (23 Nov 2026, bug hunt 24): back on only if the club is
+                // not on the HeatCaller voice now - it used to come back on
+                // regardless, even after a switch that locks it.
+                _btnTestVoice.Enabled = TestVoiceEnabled(_rdoHeatCaller.Checked, testRunning: false);
             }
         }
     }

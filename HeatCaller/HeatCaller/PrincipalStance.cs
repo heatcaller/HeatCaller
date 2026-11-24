@@ -250,7 +250,17 @@ internal static class PrincipalStance
             return Defensive;
         }
 
-        if (championshipPosition is > 0 && bestFinishTonight > 0)
+        // WHY (23 Nov 2026, bug hunt 24): a finish is a place inside one
+        // race's field, the standing is a place in the whole season table.
+        // The old code compared them straight, so a driver twelfth in the
+        // table racing eight-car heats was "vindicated" by finishing last
+        // (eighth is three above twelfth) and could never be defensive. The
+        // table stances now only apply when the standing is a place a finish
+        // tonight could actually match; otherwise the night is judged on
+        // pace, podiums and the rest. An unknown field size keeps the old
+        // reading.
+        if (championshipPosition is > 0 && bestFinishTonight > 0
+            && TableComparesWithTonight(championshipPosition.Value, night.FieldTypical))
         {
             var standing = championshipPosition.Value;
 
@@ -288,6 +298,15 @@ internal static class PrincipalStance
         // makes a segment shorter rather than longer.
         return night.RacesRun >= PrincipalFacts.LeastRacesForANight ? Blunt : Plain;
     }
+
+    /// <summary>
+    /// Whether a season standing can fairly be held against a finish in
+    /// tonight's races (23 Nov 2026, bug hunt 24): only when the standing
+    /// is no deeper than a typical field tonight. A field size of one or
+    /// less means it is not known, and the comparison is allowed as before.
+    /// </summary>
+    internal static bool TableComparesWithTonight(int standing, int fieldTypical) =>
+        fieldTypical <= 1 || standing <= fieldTypical;
 
     /// <summary>
     /// The position a JUNIOR's principal comes in with (15 Nov 2026, driver

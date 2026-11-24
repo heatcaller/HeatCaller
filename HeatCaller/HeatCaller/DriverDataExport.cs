@@ -50,6 +50,30 @@ internal static class DriverDataExport
             (!string.IsNullOrWhiteSpace(transponder) && ids.Contains(transponder.Trim()))
             || (string.IsNullOrWhiteSpace(transponder) && name.Length > 0 && DriverForget.SameName(driverName, name));
 
+        // WHY (23 Nov 2026, bug hunt 24, F119): saved results and their
+        // corrections used IsThem, which looks at the transponder only. A
+        // transponder handed on from one driver to another made the export
+        // list, under this driver's name, results the previous owner ran on
+        // it, and leave out this driver's own on a transponder they gave up.
+        // Forget already used DriverForget.IsTheirResult; the export now
+        // uses the same rule, built the same way, so the two always agree.
+        var theirNames = new[] { profile.DriverName, profile.AnnouncerName }
+            .Select(DriverForget.Clean)
+            .Where(n => n.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        HashSet<string>? otherNames = sources.Profiles is null
+            ? null
+            : sources.Profiles.All
+                .Where(p => !ReferenceEquals(p, profile)
+                            && !string.Equals((p.Transponder ?? string.Empty).Trim(), (profile.Transponder ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
+                .Select(p => DriverForget.Clean(p.DriverName))
+                .Where(n => n.Length > 0)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        bool IsTheirResult(string? transponder, string? driverName) =>
+            DriverForget.IsTheirResult(transponder, driverName, ids, name, theirNames, otherNames);
+
         // Everything in one object, for the JSON at the foot and to draw
         // the tables from.
         var data = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -88,7 +112,7 @@ internal static class DriverDataExport
 
         // --- Results ------------------------------------------------------
         var results = (sources.History?.All ?? Array.Empty<SessionRecord>())
-            .SelectMany(s => s.Results.Where(r => IsThem(r.Transponder, r.DriverName)).Select(r => (Session: s, Row: r)))
+            .SelectMany(s => s.Results.Where(r => IsTheirResult(r.Transponder, r.DriverName)).Select(r => (Session: s, Row: r)))
             .OrderBy(x => x.Session.StartedAtUtc)
             .ToList();
 
@@ -123,7 +147,7 @@ internal static class DriverDataExport
             })));
 
         var edits = (sources.History?.All ?? Array.Empty<SessionRecord>())
-            .SelectMany(s => s.Edits.Where(e => IsThem(e.Transponder, e.DriverName)).Select(e => (Session: s, Edit: e)))
+            .SelectMany(s => s.Edits.Where(e => IsTheirResult(e.Transponder, e.DriverName)).Select(e => (Session: s, Edit: e)))
             .ToList();
         if (edits.Count > 0)
         {
@@ -265,6 +289,118 @@ internal static class DriverDataExport
         {
             data["rivalries"] = rivalries;
             html.Append("<h2>Rivalries</h2>").Append(Rows(new[] { "Between" }, rivalries.Select(r => new[] { $"{r.DriverA} and {r.DriverB}" })));
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): the page says it is everything the
+        // laptop holds, but it skipped seven things Forget clears as theirs:
+        // what their principal said about them on air (the diary keeps their
+        // name and his words), their lap beep, personal-best resets, carried
+        // championship points, marshal no-shows, ghost cars chasing them, and
+        // race notes or other drivers' correction reasons that name them. A
+        // parent was handed a file that called itself complete and was not.
+        // Each is matched the way DriverForget.Forget matches it, so the two
+        // still agree on what "everything" is.
+        var names = new[] { profile.DriverName, profile.AnnouncerName }
+            .Select(DriverForget.Clean)
+            .Where(n => n.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        bool Names(string? text) => names.Count > 0
+            && !string.Equals(DriverForget.ReplaceNames(text, names, string.Empty), text ?? string.Empty, StringComparison.Ordinal);
+
+        var diary = (sources.Diary?.Invoke()?.All ?? Array.Empty<PrincipalDiary.Entry>())
+            .Where(e => ids.Contains((e.DriverId ?? string.Empty).Trim()))
+            .ToList();
+        if (diary.Count > 0)
+        {
+            data["saidOnAir"] = diary;
+            html.Append("<h2>Said about them on air</h2>").Append(Rows(
+                new[] { "When", "Race", "Who said it", "What was said" },
+                diary.Select(e => new[] { Stamp(e.AtUtc.ToLocalTime()), e.RaceLabel, e.PrincipalName, e.Said })));
+        }
+
+        var beeps = ids.Select(id => sources.LapBeeps?.Get(id)).OfType<DriverLapBeep>().ToList();
+        if (beeps.Count > 0)
+        {
+            data["lapBeeps"] = beeps;
+            html.Append("<h2>Lap beep</h2>").Append(Rows(
+                new[] { "Transponder", "Sound", "On" },
+                beeps.Select(b => new[]
+                {
+                    b.Transponder,
+                    b.ToneIndex >= 0 && b.ToneIndex < LapBeepStore.ToneNames.Length ? LapBeepStore.ToneNames[b.ToneIndex] : b.ToneIndex.ToString(CultureInfo.InvariantCulture),
+                    b.Enabled ? "yes" : "no",
+                })));
+        }
+
+        // Forget clears these by the profile's driver name as typed (ClearAllForDriver).
+        var pbPrefix = $"{profile.DriverName}|";
+        var pbResets = name.Length == 0 || sources.PersonalBestResets is null
+            ? new List<KeyValuePair<string, DateTime>>()
+            : sources.PersonalBestResets.Snapshot().Where(p => p.Key.StartsWith(pbPrefix, StringComparison.OrdinalIgnoreCase)).OrderBy(p => p.Value).ToList();
+        if (pbResets.Count > 0)
+        {
+            var pbRows = pbResets.Select(p => (Track: p.Key[pbPrefix.Length..], From: p.Value)).ToList();
+            data["personalBestResets"] = pbRows.Select(p => new { Track = p.Track.Length == 0 ? "All tracks" : p.Track, ResetUtc = p.From }).ToList();
+            html.Append("<h2>Personal best resets</h2>").Append(Rows(
+                new[] { "Track", "Reset on" },
+                pbRows.Select(p => new[] { p.Track.Length == 0 ? "All tracks" : p.Track, Stamp(p.From.ToLocalTime()) })));
+        }
+
+        var carried = name.Length == 0
+            ? new List<(string Season, int Points)>()
+            : (sources.Seasons?.All ?? Array.Empty<Season>())
+                .SelectMany(s => s.CarriedPoints.Where(c => DriverForget.SameName(c.DriverName, name)).Select(c => (Season: s.Name, c.Points)))
+                .ToList();
+        if (carried.Count > 0)
+        {
+            data["carriedPoints"] = carried.Select(c => new { c.Season, c.Points }).ToList();
+            html.Append("<h2>Championship points carried in</h2>").Append(Rows(
+                new[] { "Championship", "Points" },
+                carried.Select(c => new[] { c.Season, c.Points.ToString(CultureInfo.InvariantCulture) })));
+        }
+
+        var noShows = (sources.Rounds?.All ?? Array.Empty<RoundDefinition>())
+            .SelectMany(r => (r.NoShowMarshals ?? new List<MarshalNoShow>())
+                .Where(n => IsThem(n.Transponder, n.Who) || (name.Length > 0 && DriverForget.SameName(n.Who, name)) || Names(n.Who))
+                .Select(n => n.Who)
+                .Concat((r.MarshalNoShows ?? new List<string>()).Where(Names))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(who => (Round: $"{r.ClassName} {r.RoundLabel}".Trim(), Who: who)))
+            .ToList();
+        if (noShows.Count > 0)
+        {
+            data["marshalNoShows"] = noShows.Select(n => new { n.Round, n.Who }).ToList();
+            html.Append("<h2>Missed marshalling</h2>").Append(Rows(
+                new[] { "Race", "Logged as" },
+                noShows.Select(n => new[] { n.Round, n.Who })));
+        }
+
+        // The same rule as DriverForget.IsTheirGhost: a ghost chasing a
+        // transponder is that transponder's; one chasing nobody is theirs when
+        // their name is in its own as a whole word.
+        var ghosts = (sources.Ghosts?.Current.Ghosts ?? new List<GhostCar>())
+            .Where(g => string.IsNullOrWhiteSpace(g.SourceTransponder) ? Names(g.Name) : ids.Contains(g.SourceTransponder.Trim()))
+            .ToList();
+        if (ghosts.Count > 0)
+        {
+            data["ghostCars"] = ghosts;
+            html.Append("<h2>Ghost cars chasing them</h2>").Append(Rows(
+                new[] { "Ghost", "Pace" },
+                ghosts.Select(g => new[] { g.Name, g.PaceSource.ToString() })));
+        }
+
+        var listedEdits = edits.Select(x => x.Edit).ToHashSet();
+        var mentions = (sources.History?.All ?? Array.Empty<SessionRecord>())
+            .SelectMany(s => (Names(s.Notes) ? new[] { (Session: s, Where: "Race notes", Text: s.Notes) } : Array.Empty<(SessionRecord Session, string Where, string Text)>())
+                .Concat(s.Edits.Where(e => !listedEdits.Contains(e) && Names(e.Reason)).Select(e => (Session: s, Where: "Reason for a correction", Text: e.Reason))))
+            .ToList();
+        if (mentions.Count > 0)
+        {
+            data["namedInRaceNotes"] = mentions.Select(m => new { Race = m.Session.Label, When = m.Session.StartedAtUtc, m.Where, m.Text }).ToList();
+            html.Append("<h2>Race notes that name them</h2>").Append(Rows(
+                new[] { "When", "Race", "Where", "What it says" },
+                mentions.Select(m => new[] { Stamp(m.Session.StartedAtUtc.ToLocalTime()), m.Session.Label, m.Where, m.Text })));
         }
 
         var settings = sources.Settings;

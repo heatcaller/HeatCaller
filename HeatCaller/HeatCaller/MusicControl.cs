@@ -178,6 +178,19 @@ public sealed class MusicControl : UserControl
     }
 
     /// <summary>
+    /// The line at the top of the page.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): it used to say "Eleven tracks are
+    /// included", but the build ships a different set (the soundscapes'
+    /// songs, fifteen of them today) and none of the eleven it meant - so a
+    /// new club was told a count and a set it could never see. No number
+    /// now, so it stays true whatever ships.
+    /// </summary>
+    internal const string IntroText =
+        "A soundtrack for between races. Some tracks come with the app; Add Track copies your own into the "
+        + "app's music folder, so they keep working if you move the original.";
+
+    /// <summary>
     /// What the page is for, then the switches along one line - Enable
     /// music, and Shuffle with what it does - and under them the
     /// choice of Theme music or My music, with the sentence saying what that
@@ -199,8 +212,7 @@ public sealed class MusicControl : UserControl
     {
         var lblIntro = new Label
         {
-            Text = "A soundtrack for between races. Eleven tracks are included; Add Track copies your own into the "
-                 + "app's music folder, so they keep working if you move the original.",
+            Text = IntroText,
             AutoSize = true,
             ForeColor = AppTheme.TextMuted,
         };
@@ -357,16 +369,21 @@ public sealed class MusicControl : UserControl
         // every tick while they're still holding it.
         _seek.Minimum = 0;
         _seek.Maximum = 1000;
-        _seek.MouseDown += (_, _) => _seeking = true;
-        _seek.MouseUp += (_, _) =>
+        // WHY (23 Nov 2026, bug hunt 24): the bar used to seek only on
+        // mouse-up. Arrow keys, Page Up/Down, Home/End and the wheel moved
+        // the thumb but never the music, so the next tick snapped it back;
+        // a drag cut short without a mouse-up (a dialog, Alt+Tab) left the
+        // bar frozen while the clock counted on; and a right-click held it
+        // too. The rule is SeekBarStep, below.
+        _seek.MouseDown += (_, e) => ApplySeekStep(SeekBarInput.Press, e.Button);
+        _seek.MouseUp += (_, e) => ApplySeekStep(SeekBarInput.Release, e.Button);
+        _seek.Scroll += (_, _) => ApplySeekStep(SeekBarInput.Moved, MouseButtons.None);
+        _seek.MouseCaptureChanged += (_, _) =>
         {
-            var (_, duration) = _player.CurrentPosition;
-            if (duration > TimeSpan.Zero)
+            if (!_seek.Capture)
             {
-                _player.Seek(duration * (_seek.Value / 1000.0));
+                ApplySeekStep(SeekBarInput.CaptureLost, MouseButtons.None);
             }
-
-            _seeking = false;
         };
 
         // The clock against the card's right-hand edge, in a column as wide
@@ -567,6 +584,9 @@ public sealed class MusicControl : UserControl
         ShowTiles();
     }
 
+    /// <summary>The Plays tile: what the player will really play - see MusicPlayer.ThemeMusicInUse.</summary>
+    internal static string PlaysTileText(bool themeMusicInUse) => themeMusicInUse ? "Theme music" : "My music";
+
     /// <summary>
     /// The tiles over the cards: music on or off (or playing), theme or my
     /// music, how many tracks are ticked for My music, and the Mixer's music
@@ -589,7 +609,14 @@ public sealed class MusicControl : UserControl
             _player.IsPlaying ? "Playing" : _player.IsPaused ? "Paused" : on ? "On" : "Off",
             TileCaptions[0],
             _player.IsPlaying ? AppTheme.Success : on ? AppTheme.TextDark : AppTheme.TextMuted);
-        SoundsPagePieces.Show(_tiles[1], settings.PlayThemeMusic == true ? "Theme music" : "My music", TileCaptions[1]);
+        // WHY (23 Nov 2026, bug hunt 24): the tile read the Theme music
+        // radio alone, so with Theme music chosen and a soundscape that has
+        // no music this PC can play, it said Theme music while the club's
+        // own tracks were what the room heard. It follows the player now,
+        // amber like the sentence under the radios when it has fallen back.
+        var themeInUse = _player.ThemeMusicInUse;
+        SoundsPagePieces.Show(_tiles[1], PlaysTileText(themeInUse), TileCaptions[1],
+            settings.PlayThemeMusic == true && !themeInUse ? AppTheme.Warning : null);
         SoundsPagePieces.Show(_tiles[2], tracks.Count == 0 ? "-" : $"{ticked} of {tracks.Count}", TileCaptions[2],
             tracks.Count > 0 && ticked == 0 ? AppTheme.Danger : null);
         SoundsPagePieces.Show(_tiles[3], SoundsPagePieces.Percent(settings.Volume), TileCaptions[3]);
@@ -852,6 +879,56 @@ public sealed class MusicControl : UserControl
         }
 
         RefreshNowPlaying(_player.NowPlaying);
+    }
+
+    /// <summary>What happened to the seek bar - see SeekBarStep.</summary>
+    internal enum SeekBarInput
+    {
+        /// <summary>A mouse button went down on the bar.</summary>
+        Press,
+
+        /// <summary>A mouse button came up.</summary>
+        Release,
+
+        /// <summary>The person moved the value: a drag, a key or the wheel.</summary>
+        Moved,
+
+        /// <summary>The bar lost the mouse without a button coming up.</summary>
+        CaptureLost,
+    }
+
+    /// <summary>
+    /// The seek bar's rule: whether a drag is now held (so the position tick
+    /// leaves the thumb alone) and whether to seek the music to the bar now.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): only the left button drags, so only
+    /// it holds the bar; a move that isn't a drag (a key or the wheel) seeks
+    /// at once instead of being snapped back by the next tick; and losing
+    /// the mouse mid-drag lets go of the bar, so it follows the music again.
+    /// </summary>
+    internal static (bool Dragging, bool SeekNow) SeekBarStep(bool dragging, SeekBarInput input, MouseButtons button) =>
+        input switch
+        {
+            SeekBarInput.Press => button == MouseButtons.Left ? (true, false) : (dragging, false),
+            SeekBarInput.Release => button == MouseButtons.Left ? (false, true) : (dragging, false),
+            SeekBarInput.Moved => (dragging, !dragging),
+            SeekBarInput.CaptureLost => (false, false),
+            _ => (dragging, false),
+        };
+
+    /// <summary>Where in a track of <paramref name="duration"/> the bar's value (0-1000) points, or null with no track.</summary>
+    internal static TimeSpan? SeekTarget(int value, TimeSpan duration) =>
+        duration > TimeSpan.Zero ? duration * (Math.Clamp(value, 0, 1000) / 1000.0) : null;
+
+    private void ApplySeekStep(SeekBarInput input, MouseButtons button)
+    {
+        var (dragging, seekNow) = SeekBarStep(_seeking, input, button);
+        _seeking = dragging;
+
+        if (seekNow && SeekTarget(_seek.Value, _player.CurrentPosition.Duration) is { } target)
+        {
+            _player.Seek(target);
+        }
     }
 
     /// <summary>Moves the seek bar and clock while a track plays.</summary>
@@ -1216,6 +1293,40 @@ public sealed class MusicControl : UserControl
         RefreshGrid();
     }
 
+    /// <summary>The listed included tracks whose file is missing, by id - see RestoreCounts.</summary>
+    internal static HashSet<string> MissingIncludedIds(IEnumerable<MusicTrack> tracks) =>
+        tracks.Where(t => (t.IsBuiltIn || MusicStore.IsBundledTitle(t.DisplayName)) && !File.Exists(t.FilePath))
+              .Select(t => t.Id)
+              .ToHashSet();
+
+    /// <summary>
+    /// What Restore Included Tracks did, from the library before (its
+    /// entries' ids, and the included ones whose file was missing) and
+    /// after: entries that are new, and missing included tracks now back.
+    /// </summary>
+    internal static (int Added, int PutBack) RestoreCounts(
+        IReadOnlySet<string> beforeIds, IReadOnlySet<string> missingIds, IEnumerable<MusicTrack> after)
+    {
+        var list = after.ToList();
+        return (list.Count(t => !beforeIds.Contains(t.Id)),
+                list.Count(t => missingIds.Contains(t.Id) && File.Exists(t.FilePath)));
+    }
+
+    /// <summary>
+    /// The line Restore Included Tracks leaves on the page when it did
+    /// something: <paramref name="added"/> new entries, <paramref name="putBack"/>
+    /// listed tracks whose missing file it copied back. Null when it did
+    /// neither, so the page explains why instead (see RestoreIncluded).
+    /// </summary>
+    internal static string? RestoreStatus(int added, int putBack) =>
+        (added > 0, putBack > 0) switch
+        {
+            (true, true) => $"Added {Plural.Of(added, "included track")} and put back {Plural.Of(putBack, "missing file")}.",
+            (true, false) => $"Added {Plural.Of(added, "included track")}.",
+            (false, true) => $"Put back {Plural.Of(putBack, "missing included track")}.",
+            _ => null,
+        };
+
     /// <summary>
     /// Re-runs the bundled-track install. The tracks ship with the app and
     /// are copied in on first run; if that didn't happen - a build that
@@ -1224,17 +1335,25 @@ public sealed class MusicControl : UserControl
     /// </summary>
     private void RestoreIncluded()
     {
-        var before = _store.Current.Tracks.Count;
+        // WHY (23 Nov 2026, bug hunt 24): success was the list's length
+        // after minus before. Putting back a listed track's deleted file -
+        // the use the guide gives this button - keeps the entry, so the count
+        // didn't move and the page said "Nothing to add" while the row behind
+        // it went from MISSING to playable; an entry the same pass dropped
+        // also hid one it added. Now it counts entries that are new, and
+        // listed included tracks whose file was missing and is back.
+        var beforeIds = _store.Current.Tracks.Select(t => t.Id).ToHashSet();
+        var missingIds = MissingIncludedIds(_store.Current.Tracks);
 
         _store.ReinstallBundledTracks();
         _player.Settings = _store.Current;
         RefreshGrid();
 
-        var added = _store.Current.Tracks.Count - before;
+        var (added, putBack) = RestoreCounts(beforeIds, missingIds, _store.Current.Tracks);
 
-        if (added > 0)
+        if (RestoreStatus(added, putBack) is { } status)
         {
-            _lblStatus.Text = $"Added {Plural.Of(added, "included track")}.";
+            _lblStatus.Text = status;
             _lblStatus.ForeColor = AppTheme.Success;
         }
         else
@@ -1267,6 +1386,25 @@ public sealed class MusicControl : UserControl
     }
 
     /// <summary>
+    /// Clear Library's first question.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): it said only that the files stay
+    /// unless deleted next. But the included tracks are listed again at the
+    /// next start while their files are in the music folder (or the whole
+    /// set is copied back into an empty one), ticked for My music - so a
+    /// club that cleared to play only its own songs heard the included ones
+    /// mixed back in the next race night. Remove already warned about this;
+    /// Clear Library now does too.
+    /// </summary>
+    internal static string ClearLibraryQuestion(int count, bool anyIncluded) =>
+        $"Remove all {Plural.Of(count, "track")} from the library?\r\n\r\n"
+        + "The audio files stay in the music folder unless you choose to delete them next."
+        + (anyIncluded
+            ? "\r\n\r\nIncluded tracks come back next time the app starts while their files are in the music folder, "
+              + "or if the folder is left empty. To keep one from playing, leave it listed and use Include / Exclude to take it out of My music."
+            : "");
+
+    /// <summary>
     /// Empties the library listing, optionally deleting the audio files
     /// too.
     ///
@@ -1287,9 +1425,10 @@ public sealed class MusicControl : UserControl
 
         var count = _store.Current.Tracks.Count;
 
+        var anyIncluded = _store.Current.Tracks.Any(t => t.IsBuiltIn || MusicStore.IsBundledTitle(t.DisplayName));
+
         if (AppDialog.Show(this,
-                $"Remove all {Plural.Of(count, "track")} from the library?\r\n\r\n"
-                + "The audio files stay in the music folder unless you choose to delete them next.",
+                ClearLibraryQuestion(count, anyIncluded),
                 "Clear library", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
         {
             return;

@@ -234,14 +234,15 @@ public sealed partial class AnnouncementService
                 && since < TimeSpan.FromSeconds(gap)
                 && !AnnouncerDensity.WorthBreakingIn(weight, _lastRoutineWeight))
             {
+                // WHY (23 Nov 2026, bug hunt 24): Gap rounds to the nearest half second, so a call 7.8 s after the last on an 8 s gap read "leaves 8 seconds between calls, and the last one was only 8 seconds before"; GapSince rounds down so the time since always reads shorter than the gap.
                 Load.NoteHeld(Unsaid(UnsaidKind.Held, type, transponder, words,
                     $"Held back by the pacing dial: {AnnouncerDensity.For(Density).Name} leaves {AnnouncerDensity.Gap(gap)} "
-                    + $"between calls, and the last one was only {AnnouncerDensity.Gap(since.TotalSeconds)} before."));
+                    + $"between calls, and the last one was only {AnnouncerDensity.GapSince(since.TotalSeconds, gap)} before."));
 
                 StatusMessage?.Invoke(
                     $"[voice] Held {type} - {AnnouncerDensity.Gap(gap)} between calls at "
                     + $"{AnnouncerDensity.For(Density).Name}, and the last one was "
-                    + $"{AnnouncerDensity.Gap(since.TotalSeconds)} ago.");
+                    + $"{AnnouncerDensity.GapSince(since.TotalSeconds, gap)} ago.");
 
                 paced?.Invoke();
 

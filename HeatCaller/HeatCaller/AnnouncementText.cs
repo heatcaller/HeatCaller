@@ -40,10 +40,35 @@ internal static class AnnouncementText
     /// {lap}". Dropped whole, together with a comma in front of them if
     /// there was one.
     /// </summary>
+    // WHY (23 Nov 2026, bug hunt 24): an aside set off by two commas -
+    // "{driver}, in the {car}, takes the lead!" - lost only the comma in
+    // front, so a driver with no car model was read as "Sam, takes the
+    // lead!", with a pause and a stray comma on screen. The comma AFTER the
+    // clause now goes too, but only when there was one in front (so "takes
+    // the lead in his {car}, ahead of Bill" keeps its comma) and only when
+    // the words after it carry straight on in lower case, as a verb does.
+    // "Sam leads, in the {car}, Bill second" is a list, not an aside, and
+    // keeps the comma between its two halves.
     private static readonly Regex LeadIn = new(
-        @"[,;]?\s*\b(?:in|with|on|at|aboard|driving|behind\s+the\s+wheel\s+of)\s+"
-        + @"(?:the|his|her|their|its|a|an)?\s*" + Missing,
+        @"(?:(?<lead>,)|;)?\s*\b(?:in|with|on|at|aboard|driving|behind\s+the\s+wheel\s+of)\s+"
+        + @"(?:the|his|her|their|its|a|an)?\s*" + Missing
+        + AsideCloser,
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// The closing comma of an aside whose opening comma (the "lead" group)
+    /// was taken: only when the sentence carries on in lower case. Case
+    /// sensitive on purpose, inside patterns that are not.
+    /// </summary>
+    private const string AsideCloser = @"(?(lead)(?:\s*,(?=\s*(?-i:\p{Ll})))?)";
+
+    // WHY (23 Nov 2026, bug hunt 24): "[excited] In the {car}, Sam leads!"
+    // with no car model came out "[excited], Sam leads!". The repair for a
+    // line that starts with punctuation is anchored at the very start, and
+    // here the audio tag comes first. This takes punctuation left straight
+    // after the opening tag or tags.
+    private static readonly Regex PunctuationAfterOpeningTag = new(
+        @"^(\s*(?:\[[^\]]*\]\s*)+)[,;:][\s,;:]*", RegexOptions.Compiled);
 
     private static readonly Regex Marker = new(Missing, RegexOptions.Compiled);
     private static readonly Regex RunOfSpaces = new(@"[ \t]{2,}", RegexOptions.Compiled);
@@ -100,11 +125,24 @@ internal static class AnnouncementText
     /// class name was blank. Scoped to these two tokens, nothing that
     /// shipped before them can read differently.
     /// </summary>
+    // WHY (23 Nov 2026, bug hunt 24): three changes to the first
+    // alternative.
+    //  - "Fast lap for {team}'s {driver}!" with no team was read as "Fast
+    //    lap's Sam!": " for {team}" matched here first and left the "'s"
+    //    behind, so the possessive alternative below never got its turn.
+    //    A token followed by 's is now left to that alternative, giving
+    //    "Fast lap for Sam!".
+    //  - A bare "and" in front of the token ("for {team} and {sponsors}")
+    //    was not recognised, so a driver with no sponsors was read as
+    //    "takes the win and!". It now goes with the token.
+    //  - An aside between two commas ("{driver}, racing for {team}, takes
+    //    the lead!") lost only the comma in front: "Sam, takes the lead!".
+    //    The closing comma goes too, on the same terms as LeadIn.
     private static Regex DetailLeadIn(string token) => new(
-        @"[,;]?\s*\b(?:(?:and|with)\s+)?"
+        @"(?:(?<lead>,)|;)?\s*\b(?:(?:and|with)\s+)?"
         + @"(?:brought\s+to\s+you\s+by|(?:sponsored|backed|powered|supported)\s+by|by|thanks\s+to|representing"
-        + @"|(?:racing|running|driving|riding)\s+for|for|from|with|of)\s+"
-        + @"(?:the|his|her|their|team)?\s*\{" + token + @"\}"
+        + @"|(?:racing|running|driving|riding)\s+for|for|from|with|of|and)\s+"
+        + @"(?:the|his|her|their|team)?\s*\{" + token + @"\}(?!'s|’s)" + AsideCloser
         + @"|\s*[(\[]\s*\{" + token + @"\}\s*[)\]]"
         + @"|\{" + token + @"\}(?:'s|\u2019s)\s*",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -372,6 +410,7 @@ internal static class AnnouncementText
         text = DanglingComma.Replace(text, "$2");
         text = RepeatedPunctuation.Replace(text, OneMark);
         text = LeadingPunctuation.Replace(text, string.Empty);
+        text = PunctuationAfterOpeningTag.Replace(text, "$1 ");
 
         return text.Trim();
     }

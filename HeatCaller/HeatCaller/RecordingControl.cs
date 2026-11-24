@@ -192,6 +192,33 @@ public sealed class RecordingControl : UserControl
     internal Func<string, string, Task<string?>>? PlayADriversNight { get; set; }
 
     /// <summary>
+    /// Whether the piece that just played was recorded to a file - read
+    /// straight after a null (it went out) answer from PlayTonightsRecap,
+    /// PlayADriversNight or PlayTheSeason. Null until wired, and then the
+    /// page goes by the Record switch as it stood when the button was pressed.
+    /// </summary>
+    internal Func<bool>? PieceWasSaved { get; set; }
+
+    /// <summary>
+    /// What the page says once a piece has played (23 Nov 2026, bug hunt 24).
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a null answer from the announcer means
+    /// the piece went out, not that it was kept - the recording is skipped,
+    /// quietly, when "Record each race" is unticked or the disk is full. The
+    /// page said "Played, and saved in tonight's folder" for every null, so
+    /// with recording off the club was sent to find a file that was never
+    /// written - worst for the season piece, which the page says to play once
+    /// in an empty room and "play the saved file on the night".
+    /// </summary>
+    internal static string PlayedWords(string label, bool saved) => saved
+        ? $"Played, and saved in tonight's folder as \"{label}\". Open folder above to find it."
+        : "Played, but not saved - nothing was recording it. Tick \"Record each race\" above "
+          + "and play it again to keep a file.";
+
+    /// <summary>Whether the piece just played was kept: the host's answer when it gives one, else the Record switch as it stood at the press.</summary>
+    private bool WasSaved(bool recordingAtPress) => PieceWasSaved?.Invoke() ?? recordingAtPress;
+
+    /// <summary>
     /// Why the announcer said what it last said, written to the developer
     /// console - AnnouncerControl.TheProofOfTheLastLine. Hands back a
     /// sentence for the page either way.
@@ -844,6 +871,9 @@ public sealed class RecordingControl : UserControl
 
         try
         {
+            // WHY (23 Nov 2026, bug hunt 24): read before the piece plays,
+            // which is when the recording is started or skipped - see PlayedWords.
+            var recordingAtPress = _audio.Enabled;
             var problem = await PlayTonightsRecap.Invoke();
 
             if (IsDisposed)
@@ -851,9 +881,9 @@ public sealed class RecordingControl : UserControl
                 return;
             }
 
-            _lblNightRecap.Text = problem
-                ?? "Played, and saved in tonight's folder as \"The Night\". Open folder above to find it.";
-            _lblNightRecap.ForeColor = problem is null ? AppTheme.TextMuted : AppTheme.Accent;
+            var saved = problem is null && WasSaved(recordingAtPress);
+            _lblNightRecap.Text = problem ?? PlayedWords("The Night", saved);
+            _lblNightRecap.ForeColor = saved ? AppTheme.TextMuted : AppTheme.Accent;
         }
         catch (Exception ex)
         {
@@ -1021,6 +1051,8 @@ public sealed class RecordingControl : UserControl
 
         try
         {
+            // WHY (23 Nov 2026, bug hunt 24): "saved" only when it was - see PlayedWords.
+            var recordingAtPress = _audio.Enabled;
             var problem = await PlayTheSeason.Invoke(id);
 
             if (IsDisposed)
@@ -1028,10 +1060,9 @@ public sealed class RecordingControl : UserControl
                 return;
             }
 
-            _lblSeason.Text = problem
-                ?? $"Played, and saved in tonight's folder as \"{SeasonPiece.LabelFor(name)}\". "
-                   + "Open folder above to find it.";
-            _lblSeason.ForeColor = problem is null ? AppTheme.TextMuted : AppTheme.Accent;
+            var saved = problem is null && WasSaved(recordingAtPress);
+            _lblSeason.Text = problem ?? PlayedWords(SeasonPiece.LabelFor(name), saved);
+            _lblSeason.ForeColor = saved ? AppTheme.TextMuted : AppTheme.Accent;
         }
         catch (Exception ex)
         {
@@ -1112,6 +1143,8 @@ public sealed class RecordingControl : UserControl
 
         try
         {
+            // WHY (23 Nov 2026, bug hunt 24): "saved" only when it was - see PlayedWords.
+            var recordingAtPress = _audio.Enabled;
             var problem = await PlayADriversNight.Invoke(transponder, name);
 
             if (IsDisposed)
@@ -1119,10 +1152,9 @@ public sealed class RecordingControl : UserControl
                 return;
             }
 
-            _lblDriverCut.Text = problem
-                ?? $"Played, and saved in tonight's folder as \"{DriverCut.LabelFor(name)}\". "
-                   + "Open folder above to find it.";
-            _lblDriverCut.ForeColor = problem is null ? AppTheme.TextMuted : AppTheme.Accent;
+            var saved = problem is null && WasSaved(recordingAtPress);
+            _lblDriverCut.Text = problem ?? PlayedWords(DriverCut.LabelFor(name), saved);
+            _lblDriverCut.ForeColor = saved ? AppTheme.TextMuted : AppTheme.Accent;
         }
         catch (Exception ex)
         {

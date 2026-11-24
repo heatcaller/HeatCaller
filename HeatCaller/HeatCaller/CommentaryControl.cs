@@ -1853,21 +1853,60 @@ public sealed class CommentaryControl : UserControl
         // cheap, but pointless when the relay is switched off anyway.
         var ready = useRelay && new RelayCommentaryClient(_settings).RelayConfigured;
 
-        _lblRelayState.Text = RelayStateText(
-            useRelay,
-            ready,
-            useLocal,
-            modelHere: BundledLlmClient.IsModelAvailableWith(_settings.CommentaryLocalModelPath));
+        // WHY (23 Nov 2026, bug hunt 24): the page used to work from the tick
+        // box and whether a model FILE was on the PC, never from whether the
+        // model had switched itself off. On a PC too slow for it, or one it
+        // cannot run on, the page went on saying "Everything is written by the
+        // built-in model below" beside a green "Ready" tile while nothing was
+        // written all night. It now asks the model itself.
+        var local = CurrentLocalModel();
+
+        _lblRelayState.Text = RelayStateText(useRelay, ready, useLocal, local);
 
         // Amber whenever nothing would be written, which is the one state
         // worth interrupting someone over: commentary is ticked on and the
         // page is quietly telling them it will never say a word.
-        var willWrite = ready || useLocal;
+        var willWrite = ready || (useLocal && local == LocalModel.Ready);
 
         _lblRelayState.ForeColor = willWrite ? AppTheme.TextMuted : AppTheme.Accent;
 
         // The tiles over the page say the same (17 Nov 2026).
-        ShowTiles(ready);
+        ShowTiles(ready, local);
+    }
+
+    /// <summary>
+    /// Where the model on this PC stands (23 Nov 2026, bug hunt 24): no
+    /// file, switched off as too slow, switched off as unable to run here,
+    /// or ready. Pure, so the page's wording can be tested without a form.
+    /// </summary>
+    internal enum LocalModel
+    {
+        Ready,
+        NotHere,
+        TooSlow,
+        CannotRun,
+    }
+
+    /// <summary>
+    /// The rule behind <see cref="LocalModel"/>. No file wins - a missing file
+    /// is also reported as "unavailable" by the model, and "not installed" is
+    /// the plainer thing to say. Unknown (not tried yet) counts as ready.
+    /// </summary>
+    internal static LocalModel LocalModelState(bool modelFileHere, bool tooSlow, string? unavailable) =>
+        !modelFileHere ? LocalModel.NotHere
+        : unavailable is not null ? LocalModel.CannotRun
+        : tooSlow ? LocalModel.TooSlow
+        : LocalModel.Ready;
+
+    /// <summary>The model on this PC as it is now: the file, and what the built model has found out about this PC.</summary>
+    private LocalModel CurrentLocalModel()
+    {
+        var bundled = _localBrain as BundledLlmClient;
+
+        return LocalModelState(
+            BundledLlmClient.IsModelAvailableWith(_settings.CommentaryLocalModelPath),
+            bundled?.TooSlow ?? false,
+            bundled?.Unavailable);
     }
 
     /// <summary>
@@ -1876,7 +1915,7 @@ public sealed class CommentaryControl : UserControl
     /// PC is here, and the writing tone - from the page as it is now.
     /// <paramref name="relayReady"/> is UpdateRelayState's answer, asked once.
     /// </summary>
-    private void ShowTiles(bool relayReady)
+    private void ShowTiles(bool relayReady, LocalModel local)
     {
         if (IsDisposed)
         {
@@ -1888,29 +1927,83 @@ public sealed class CommentaryControl : UserControl
         VoicePagePieces.Show(_tiles[0], on ? "On" : "Off", TileCaptions[0], on ? VoicePagePieces.Tone.Good : VoicePagePieces.Tone.Muted);
 
         var useLocal = _settings.CommentaryUseLocalModel;
-        var (writer, writerTone) = (relayReady, useLocal) switch
+        var (writer, writerTone) = WriterTile(relayReady, useLocal, local);
+
+        VoicePagePieces.Show(_tiles[1], writer, TileCaptions[1], writerTone);
+
+        var (model, modelTone) = ModelTile(useLocal, local);
+        VoicePagePieces.Show(_tiles[2], model, TileCaptions[2], modelTone);
+
+        VoicePagePieces.Show(_tiles[3], VoicePagePieces.Short(VoicePagePieces.Picked(_cmbTone)), TileCaptions[3]);
+    }
+
+    /// <summary>
+    /// The "Written by" tile. WHY (23 Nov 2026, bug hunt 24): it said "This PC"
+    /// from the tick box alone, so a model that had switched itself off - or
+    /// was never installed - was still named as the writer.
+    /// </summary>
+    internal static (string Text, VoicePagePieces.Tone Tone) WriterTile(bool relayReady, bool useLocal, LocalModel local)
+    {
+        var localWrites = useLocal && local == LocalModel.Ready;
+
+        return (relayReady, localWrites) switch
         {
             (true, true) => ("Relay, then this PC", VoicePagePieces.Tone.Plain),
             (true, false) => ("Club relay", VoicePagePieces.Tone.Plain),
             (false, true) => ("This PC", VoicePagePieces.Tone.Plain),
             _ => ("Nothing", VoicePagePieces.Tone.Warn),
         };
+    }
 
-        VoicePagePieces.Show(_tiles[1], writer, TileCaptions[1], writerTone);
+    /// <summary>
+    /// The "Model on this PC" tile. WHY (23 Nov 2026, bug hunt 24): it said
+    /// "Ready" in green whenever the file was there, even after the model had
+    /// found this PC too slow or unable to run it and switched itself off.
+    /// </summary>
+    internal static (string Text, VoicePagePieces.Tone Tone) ModelTile(bool useLocal, LocalModel local)
+    {
+        var off = useLocal ? VoicePagePieces.Tone.Warn : VoicePagePieces.Tone.Muted;
 
-        var modelHere = BundledLlmClient.IsModelAvailableWith(_settings.CommentaryLocalModelPath);
-        VoicePagePieces.Show(_tiles[2], modelHere ? "Ready" : "Not here", TileCaptions[2],
-            modelHere ? VoicePagePieces.Tone.Good : useLocal ? VoicePagePieces.Tone.Warn : VoicePagePieces.Tone.Muted);
-
-        VoicePagePieces.Show(_tiles[3], VoicePagePieces.Short(VoicePagePieces.Picked(_cmbTone)), TileCaptions[3]);
+        return local switch
+        {
+            LocalModel.Ready => ("Ready", VoicePagePieces.Tone.Good),
+            LocalModel.TooSlow => ("Too slow", off),
+            LocalModel.CannotRun => ("Can't run", off),
+            _ => ("Not here", off),
+        };
     }
 
     /// <summary>
     /// What the line under the relay box says. Pure, so the sizing list and
     /// the live text cannot drift apart - see AllRelayStates.
     /// </summary>
-    private static string RelayStateText(bool useRelay, bool ready, bool useLocal, bool modelHere)
+    internal static string RelayStateText(bool useRelay, bool ready, bool useLocal, LocalModel localModel)
     {
+        // WHY (23 Nov 2026, bug hunt 24): with the box ticked this used to
+        // name the built-in model as the writer whatever state it was in - no
+        // file, too slow, or unable to run here - so the page promised lines
+        // that were never written. Ticked but unable to write now says why,
+        // and that nothing covers for it.
+        if (useLocal && localModel != LocalModel.Ready)
+        {
+            var why = localModel switch
+            {
+                LocalModel.TooSlow => "the model on this PC has switched itself off as too slow here",
+                LocalModel.CannotRun => "the model on this PC can't run here",
+                _ => "no model is installed on this PC",
+            };
+
+            if (!useRelay)
+            {
+                return $"Nothing will be written - the relay is off and {why}.";
+            }
+
+            return ready
+                ? $"The Club Website page is set up, so the relay writes - but {why}, so nothing covers the races it can't."
+                : $"The Club Website page isn't set up yet, and {why}, so nothing will be written.";
+        }
+
+        var modelHere = localModel == LocalModel.Ready;
         var local = useLocal ? "the built-in model" : null;
 
         if (!useRelay)
@@ -1946,13 +2039,15 @@ public sealed class CommentaryControl : UserControl
     /// Enumerated rather than typed out, so a reworded sentence cannot end
     /// up missing from the list and clipping on the night.
     /// </summary>
-    private static string[] AllRelayStates()
+    internal static string[] AllRelayStates()
     {
         var all = new List<string>();
 
         foreach (var useLocal in new[] { true, false })
         {
-            foreach (var modelHere in new[] { true, false })
+            // Every state of the model on this PC (23 Nov 2026, bug hunt 24), not
+            // just file-or-not, so the new "switched off" sentences size the label too.
+            foreach (var modelHere in Enum.GetValues<LocalModel>())
             {
                 all.Add(RelayStateText(useRelay: false, ready: false, useLocal, modelHere));
                 all.Add(RelayStateText(useRelay: true, ready: false, useLocal, modelHere));
@@ -2012,6 +2107,7 @@ public sealed class CommentaryControl : UserControl
         {
             ReleaseClient();
             _commentary.Client = null;
+            RefreshRelayStateSoon();
             return;
         }
 
@@ -2139,12 +2235,20 @@ public sealed class CommentaryControl : UserControl
             // Relay off and local off. Nothing can write, and saying so
             // plainly beats a client that fails on every line.
             _commentary.Client = null;
+            RefreshRelayStateSoon();
             return;
         }
 
         client.StatusMessage += msg =>
         {
             _lastClientDetail = msg;
+
+            // WHY (23 Nov 2026, bug hunt 24): the warm-up is where the model
+            // finds this PC too slow, or unable to run it, and switches
+            // itself off - but nothing redrew the page afterwards, so it went
+            // on saying the model writes. Redrawn on the window's thread when
+            // the model reports; skipped before the page has a window.
+            RefreshRelayStateSoon();
 
             // Passed on for the console. Nothing else ever heard the
             // client's "[llm] ..." lines - a timeout, a model not pulled -
@@ -2163,6 +2267,12 @@ public sealed class CommentaryControl : UserControl
 
         _commentary.Client = client;
         _clientKey = key;
+
+        // WHY (23 Nov 2026, bug hunt 24): a new model on this PC has not been
+        // measured yet - raising "Give up after" after a "too slow" is meant
+        // to let it try again - so the page is redrawn rather than left
+        // saying the old one switched itself off.
+        RefreshRelayStateSoon();
     }
 
     /// <summary>
@@ -2191,6 +2301,34 @@ public sealed class CommentaryControl : UserControl
     private void TriggerWarmUp() => _ = _commentary.Client?.WarmUpAsync();
 
     /// <summary>
+    /// Redraws the line under the relay box and the tiles from whatever
+    /// thread the model reported on (23 Nov 2026, bug hunt 24). Never makes
+    /// the window's handle - a page with no window yet draws it when shown.
+    /// </summary>
+    private void RefreshRelayStateSoon()
+    {
+        if (IsDisposed || !IsHandleCreated)
+        {
+            return;
+        }
+
+        try
+        {
+            BeginInvoke(() =>
+            {
+                if (!IsDisposed)
+                {
+                    UpdateRelayState();
+                }
+            });
+        }
+        catch (InvalidOperationException)
+        {
+            // The window closed between the check and the ask.
+        }
+    }
+
+    /// <summary>
     /// What Test Connection says when the relay's month is used up, and
     /// whether that means something is still writing. Pure, so the label's
     /// sizing list (AllSpentTestResults) is built from the same words.
@@ -2209,6 +2347,27 @@ public sealed class CommentaryControl : UserControl
         return modelHere
             ? ($"{lines}, and the model on this PC didn't answer - normal announcements carry on. Any [llm] line in the console says why.", false)
             : ($"{lines} - no model is installed on this PC, so normal announcements carry on.", false);
+    }
+
+    /// <summary>
+    /// Why the model on this PC said nothing, when it has switched itself
+    /// off (23 Nov 2026, bug hunt 24) - null when it hasn't, so Test
+    /// Connection keeps its generic line. Pure, for the tests.
+    /// </summary>
+    internal static string? SwitchedOffDetail(bool tooSlow, TimeSpan measured, TimeSpan timeout, string? unavailable)
+    {
+        if (unavailable is { Length: > 0 })
+        {
+            return $"The model on this PC is switched off: {unavailable}.";
+        }
+
+        if (tooSlow)
+        {
+            return $"The model on this PC is switched off: it took {measured.TotalSeconds:0.#}s to write one line, "
+                   + $"past the {timeout.TotalSeconds:0.#}s it is given. Raise \"Give up after\" if you would rather it tried.";
+        }
+
+        return null;
     }
 
     /// <summary>Every SpentTestResult sentence, at a four-figure allowance, for the result label to size to.</summary>
@@ -2266,8 +2425,22 @@ public sealed class CommentaryControl : UserControl
                 // timeout with the seconds it waited, a PC too slow to keep
                 // up - showing that beats guessing at a cause the client has
                 // already ruled in or out.
-                _lblTestResult.Text = _lastClientDetail is { Length: > 0 }
-                    ? $"{_lastClientDetail} Commentary will be skipped and normal announcements used."
+                // WHY (23 Nov 2026, bug hunt 24): a model that has switched
+                // itself off answers null without saying anything, so this
+                // fell to the generic "No response" line - the very place a
+                // too-slow PC was meant to be named. Its own reason is asked
+                // for when the client said nothing.
+                var bundled = _localBrain as BundledLlmClient;
+                var detail = _lastClientDetail is { Length: > 0 }
+                    ? _lastClientDetail
+                    : SwitchedOffDetail(
+                        bundled?.TooSlow ?? false,
+                        bundled?.Measured ?? TimeSpan.Zero,
+                        bundled?.Timeout ?? TimeSpan.Zero,
+                        bundled?.Unavailable);
+
+                _lblTestResult.Text = detail is { Length: > 0 }
+                    ? $"{detail} Commentary will be skipped and normal announcements used."
                     : "No response - any [llm] line in the console says why. "
                       + "Commentary will be skipped and normal announcements used.";
                 _lblTestResult.ForeColor = AppTheme.Danger;

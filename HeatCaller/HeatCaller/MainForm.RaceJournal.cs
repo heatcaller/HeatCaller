@@ -38,6 +38,12 @@ public partial class MainForm
         // RaceFilingService.RetryUnfiledBeforeJournal.
         _journalRecorder.BeforeEachWrite = _raceFiling.RetryUnfiledBeforeJournal;
 
+        // WHY (24 Nov 2026, bug hunt 24 #88, Asher): the race's lead change
+        // count goes in the journal too, so a race picked up after a crash
+        // does not call its fifth lead change "the first". LeadTracker locks,
+        // so this is safe on the timing thread as well.
+        _journalRecorder.LeadsSource = () => _announcer?.Leads.Snapshot();
+
         // The journal says when it cannot write, and when it can again -
         // the one moment the race is running without its safety net is
         // worth a line in the console.

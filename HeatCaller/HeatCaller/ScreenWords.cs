@@ -49,7 +49,11 @@ internal static class ScreenWords
     /// to "spic", so "that spices things up" dropped a whole recap. Checked
     /// before the endings come off; "spics" is still caught.
     /// </summary>
-    private static readonly Regex SpickAndSpan = new(@"\bspick[\s-]*(?:and|&|'?n'?)[\s-]*span\b", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    // WHY (23 Nov 2026, bug hunt 24): the k is optional. The hunt 21
+    // exemption only knew "spick and span", so the common US spelling
+    // "spic and span" / "spic-and-span" still read as the slur and the whole
+    // line or recap was dropped. "spic" and "spick" on their own are still caught.
+    private static readonly Regex SpickAndSpan = new(@"\bspick?[\s-]*(?:and|&|'?n'?)[\s-]*span\b", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly HashSet<string> OrdinaryWords =new(StringComparer.Ordinal)
     {
@@ -328,6 +332,16 @@ internal static class ScreenWords
         names
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .SelectMany(n => Regex.Split(n!, @"[^\p{L}\p{N}']+"))
+            // WHY (23 Nov 2026, bug hunt 24): the apostrophe stays in the word,
+            // so a sponsor "Dick's Sporting Goods" kept "Dick's" - but the swear
+            // match on screen is the bare "Dick", so with no driver or host
+            // called Dick the sponsor was still starred "D***'s" and counted
+            // against the Sailor-mouth dial. Keep the word without its
+            // possessive ending too ("Dick's" -> "Dick", "Dicks'" -> "Dicks").
+            .SelectMany(w =>
+                w.EndsWith("'s", StringComparison.OrdinalIgnoreCase) ? new[] { w, w[..^2] }
+                : w.EndsWith('\'') ? new[] { w, w.TrimEnd('\'') }
+                : new[] { w })
             .Where(w => w.Length > 0);
 
     /// <summary>

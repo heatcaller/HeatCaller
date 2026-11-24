@@ -960,6 +960,11 @@ public sealed partial class RelayPublisher : IDisposable
             _notesOpenTold = false;
             _ballotAsPublished = null;
 
+            // WHY (23 Nov 2026, bug hunt 24): the new club's sponsor counts
+            // are read on the next pass, not up to three minutes later - the
+            // old club's are no longer shown for it (RelayPublisher.Sponsors).
+            _nextSponsorViewsTick = 0;
+
             // And a new relay or club is told what is switched OFF, too
             // (17 Oct 2026, Bug Hunt 8, A16-1 / A14-2) - it may be holding
             // an open flag from before this laptop ever spoke to it.
@@ -3990,7 +3995,17 @@ public sealed partial class RelayPublisher : IDisposable
         {
             var transponder = transponders is not null && i < transponders.Count ? transponders[i] : null;
 
+            // WHY (23 Nov 2026, bug hunt 24, F276): a transponder the
+            // register knew always decided on its own. But a saved row keeps
+            // the name it was raced under, and a junior's transponder can
+            // since have gone to an adult: the adult's "not a junior" then
+            // put the junior's old rows online under their full name. The
+            // transponder decides only when its driver is a junior or the
+            // row is under that driver's own name - the adult twin who shares
+            // a junior's name still keeps theirs - and otherwise the name is
+            // matched against the juniors', as for a row with no transponder.
             return privacy.Knows(transponder)
+                   && (privacy.JuniorForTransponder(transponder) || privacy.GoesBy(transponder, names[i]))
                 ? privacy.JuniorForTransponder(transponder) && !privacy.InitialsForTransponder(transponder)
                 : privacy.JuniorShortName(names[i]) is not null && !privacy.InitialsFor(names[i]);
         }
@@ -4459,7 +4474,18 @@ public sealed partial class RelayPublisher : IDisposable
         return isRelayPage ? url[..club].TrimEnd('/') : url;
     }
 
-    /// <summary>Every page the relay serves under /c/{club}/ - its PAGES table. A pasted link to any of them is taken back to the relay.</summary>
+    /// <summary>
+    /// Every page the relay serves under /c/{club}/ - its PAGES table and the
+    /// pages routed beside it. A pasted link to any of them is taken back to the relay.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the list had fallen behind the relay.
+    /// A pasted link to the manager page (the one the Club Website page itself
+    /// opens), sign-up, night, family, garage, app or cookies page was kept
+    /// whole as the relay's address, so Test Connection asked for
+    /// .../manage/healthz and said the club's own relay "does not look like a
+    /// relay", and nothing published until the address was retyped.
+    /// </remarks>
     private static bool IsRelayPageName(string segment) =>
         segment.Equals("live", StringComparison.OrdinalIgnoreCase)
         || segment.Equals("schedule", StringComparison.OrdinalIgnoreCase)
@@ -4468,7 +4494,14 @@ public sealed partial class RelayPublisher : IDisposable
         || segment.Equals("badges", StringComparison.OrdinalIgnoreCase)
         || segment.Equals("tracks", StringComparison.OrdinalIgnoreCase)
         || segment.Equals("checkin", StringComparison.OrdinalIgnoreCase)
-        || segment.Equals("mynight", StringComparison.OrdinalIgnoreCase);
+        || segment.Equals("mynight", StringComparison.OrdinalIgnoreCase)
+        || segment.Equals("cookies", StringComparison.OrdinalIgnoreCase)
+        || segment.Equals("manage", StringComparison.OrdinalIgnoreCase)
+        || segment.Equals("signup", StringComparison.OrdinalIgnoreCase)
+        || segment.Equals("night", StringComparison.OrdinalIgnoreCase)
+        || segment.Equals("family", StringComparison.OrdinalIgnoreCase)
+        || segment.Equals("garage", StringComparison.OrdinalIgnoreCase)
+        || segment.Equals("app", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Makes a session id safe to be a file name on the relay.

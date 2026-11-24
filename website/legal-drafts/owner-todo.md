@@ -20,7 +20,7 @@ The original steps, for the record:
 
 ## 2. Sign the founder IP assignment (founder-ip-assignment.md) - READY TO SIGN
 
-Filled in 23 Nov 2026: both addresses ("506 Pinyon Dr, Schenectady, NY 12303"), formed 26 September 2026 (New York DOS ID 8031449), title Managing Member, Porkbun for the domain and Google for email (confirm it is Google Workspace), no payment or app-store accounts yet, and no employer claims anything. Left: the consideration (ask counsel, or use "US$1 and other good and valuable consideration"), then date and sign both copies.
+Filled in 23 Nov 2026: both addresses ("506 Pinyon Dr, Schenectady, NY 12303"), formed 26 September 2026 (New York DOS ID 8031449), title Managing Member, Porkbun for the domain and Google for email, no payment or app-store accounts yet, and no employer claims anything. 24 Nov 2026: the consideration is the US$500 opening deposit as Asher's capital contribution, for his membership interest (the assignment goes in with it); the email is a plain Gmail account, not Google Workspace. Print founder-ip-assignment.pdf twice, then date and sign both copies (once as Founder, once as Managing Member) and keep one with the company records.
 
 The original steps, for the record:
 
@@ -29,7 +29,7 @@ The repositories and the main accounts are already listed. You fill in:
 
 - **your address and the company's address.** The company's can be the registered address from the New York filing.
 - **the date the LLC was formed**, from the New York Articles of Organization.
-- **the consideration.** "US$1 and other good and valuable consideration" is the usual short form. Ask counsel whether it should be a capital contribution under your operating agreement.
+- **the consideration.** Decided 24 Nov 2026: part of the capital contribution with the US$500 opening deposit, for the membership interest. Counsel can confirm it matches the operating agreement.
 - **past employers.** Does any current or past employer's contract claim things you make in your own time? If one might, show that clause to counsel before signing.
 - **the accounts still missing:** domain registrar, email provider, payment or app-store accounts.
 - **your title.** "Managing Member" if the LLC is member-managed.
@@ -73,13 +73,13 @@ The release is marked as a pre-release, so the app's update check never treats i
 
 1. Read both letters and change anything that isn't how you would put it.
 2. Send each one through the company's "Contact sales" form, or by email if you have a contact. Send them from your HeatCaller address.
-3. Before sending the ElevenLabs one, open its DPA (reported at elevenlabs.io/dpa). It may already answer the caching, location and logging questions.
+3. Done 24 Nov 2026: ElevenLabs' terms, DPA and docs were read, and the ElevenLabs letter is cut to the four questions they leave open (the table in vendor-letters.md has the rest). Training opt-out done 24 Nov 2026 on the HeatCaller and development accounts (Data use turned off), so the letter's "We have opted out of training" is true.
 4. When answers come back, paste each under **Answer filed** with the date and who it was from. If an answer changes anything, the Terms Part 2 and section 7 of driver-crew-children.md need a matching edit; Claude can do that from the filed answer.
 
 What to expect, from the vendors' own documentation (16 Nov 2026):
 
-- **ElevenLabs:** Zero Retention Mode is for enterprise customers only, which probably means an enterprise plan.
-- **Anthropic:** zero data retention is granted by sales, for one organization at a time.
+- **ElevenLabs:** contact requested 24 Nov 2026 through its contact form; take the letter's four questions to that conversation. Zero Retention Mode is for enterprise customers only (confirmed in the API reference, 24 Nov 2026). Training on our content is on by default until we opt out. All Default voices (Daniel among them) stop working on 31 Dec 2026.
+- **Anthropic:** zero data retention is granted by sales, for one organization at a time. Requested 24 Nov 2026 through Anthropic's "Contact us" form (not sales); if it is passed back to sales, ask again at anthropic.com/contact-sales.
 
 ## 6. New York LLC publication (Limited Liability Company Law §206) - UNDER WAY
 

@@ -57,6 +57,18 @@ internal static class LlmText
                 continue;
             }
 
+            // WHY (23 Nov 2026, bug hunt 24): this is only called on an
+            // answer that ran out of words, so a full stop that is the very
+            // last thing written, straight after a digit, may be the point of
+            // a number cut in half - "a best lap of 12." when the model was
+            // writing 12.482. The guard above needs a digit on both sides, so
+            // the old code kept that as a whole sentence and the room heard
+            // "twelve" for a 12.482. Fall back to the sentence before instead.
+            if (ch == '.' && i > 0 && i + 1 == trimmed.Length && char.IsDigit(trimmed[i - 1]))
+            {
+                continue;
+            }
+
             var end = i + 1;
 
             while (end < trimmed.Length && trimmed[end] is '"' or '\'' or '”' or '’' or ')' or ']')

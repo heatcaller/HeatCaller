@@ -350,10 +350,20 @@ public static class MainsBuilder
         // place - QualifyingCalculator skips it for the same reason - so the
         // next eligible finisher moves up instead, or nobody does. A DNF
         // still counts in its place: that is a club's call, not a penalty.
+        // WHY (23 Nov 2026, bug hunt 24): a row with no laps is a car that
+        // never crossed the line - a grid car put on the board by a
+        // hand-released green and never let go, or one added by hand and
+        // never tapped. It is filed numbered at the bottom, so in a short
+        // feeder with fewer real finishers than the bump-up count it used to
+        // be moved up into the main above without having raced its way in.
+        // The same feeder run in legs already left it out (AMainLegs.Overall
+        // skips Laps <= 0, and SeasonStore gives it no points), so now a
+        // single feeder does too. A DNF with laps still counts in its place.
         foreach (var result in feederResults.Results
                      .Where(r => !string.IsNullOrWhiteSpace(r.Transponder)
                                  && !GhostService.IsGhost(r.Transponder)
-                                 && r.Outcome != ResultEditor.Dq)
+                                 && r.Outcome != ResultEditor.Dq
+                                 && r.Laps > 0)
                      .OrderBy(r => r.Position <= 0 ? int.MaxValue : r.Position))
         {
             if (top.Count >= target.BumpUpCount)

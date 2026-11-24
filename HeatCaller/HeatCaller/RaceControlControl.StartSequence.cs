@@ -358,6 +358,24 @@ public sealed partial class RaceControlControl
     /// </param>
     private void CaptureAbandonedRaceUndo(string description, Func<int> generationAfter, Action? restoreHostOnUndo = null)
     {
+        // WHY (23 Nov 2026, bug hunt 24): the host is told the race is being
+        // abandoned, so the run sheet takes the abandoned heat's start stamp
+        // off - it kept it, read "on track" until the heat was run again and
+        // was then timed from the start that was thrown away. What it hands
+        // back puts the stamp back on Undo. Asked here, the one place every
+        // abandon that can be undone passes (never a demo or practice).
+        Action? putBackHostSchedule = null;
+
+        try
+        {
+            putBackHostSchedule = RaceAbandoned?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage?.Invoke(
+                $"{AppTime.LogStampNow()}  [race] The abandoned race's start time could not be taken off the run sheet: {ex.Message}");
+        }
+
         var snapshot = _race.CreateSnapshot();
 
         // When the race stopped counting, so the undo can leave the time it
@@ -365,6 +383,11 @@ public sealed partial class RaceControlControl
         var snapshotTakenUtc = DateTime.UtcNow;
         var sessionStart = _sessionStartedAtUtc;
         var prompted = _promptedTransponders.ToList();
+
+        // WHY (23 Nov 2026, bug hunt 24): the race's lead change tally, which the
+        // announcer's reset clears. Put back without it, the next lead change was
+        // called the first and the broadcast tower went back to one leader.
+        var leadsBefore = _announcer.Leads.Snapshot();
 
         // What kind of race it was: Stage clears these for the new race, and
         // a Quick Race put back without them was filed against the next heat
@@ -441,6 +464,23 @@ public sealed partial class RaceControlControl
                 }
             }
 
+            // The run sheet's start stamp back too, BEFORE the race is put
+            // back: RestoreSnapshotAfterGap raises Racing, whose handler
+            // stamps the round with "now" - and the run sheet keeps the first
+            // stamp, so the real start has to be there already.
+            if (putBackHostSchedule is not null)
+            {
+                try
+                {
+                    putBackHostSchedule();
+                }
+                catch (Exception ex)
+                {
+                    StatusMessage?.Invoke(
+                        $"{AppTime.LogStampNow()}  [race] The race is being put back, but its start time on the run sheet could not be: {ex.Message}");
+                }
+            }
+
             _race.LapLimit = lapLimit;
             _race.TimeLimit = timeLimit;
             _race.MinLapTimeMs = minLapTimeMs;
@@ -485,7 +525,7 @@ public sealed partial class RaceControlControl
             WriteJournal(force: true);
 
             // Staging reset the announcer - see SeedAnnouncerFromRace.
-            SeedAnnouncerFromRace();
+            SeedAnnouncerFromRace(leadsBefore);
             RenderLeaderboard();
             UpdateClockDisplay(force: true);
 
@@ -501,6 +541,14 @@ public sealed partial class RaceControlControl
             NoteStartPutBack();
         });
     }
+
+    /// <summary>
+    /// Called by the host as Stage or Countdown abandons a running race (not
+    /// a demo), before anything changes; it hands back what puts its side
+    /// back when the abandon is undone, or null. Set once by MainForm - see
+    /// CaptureAbandonedRaceUndo.
+    /// </summary>
+    public Func<Action?>? RaceAbandoned { get; set; }
 
     /// <summary>The session generation an abandoned-race undo is good for, read when Undo is pressed.</summary>
     private sealed class AbandonedRaceUndo

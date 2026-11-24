@@ -147,8 +147,15 @@ public partial class MainForm
                 // Heard since the grid check began, not merely within
                 // TransponderWatch's twelve minutes - see _gridHeardSinceTicks.
                 var sinceTicks = Interlocked.Read(ref _gridHeardSinceTicks);
+
+                // WHY (23 Nov 2026, bug hunt 24): the watch files every pass
+                // under the driver's main transponder, and a grid can hold a
+                // second car's - asked for as it stood, that car was listed as
+                // not heard while it circulated fine. Looked up the way the
+                // watch files it, as ReadinessCheckForm.Build now does.
                 missing = expected
-                    .Where(t => _transponderWatch.Of(t) is not { } sighting || sighting.LastSeenUtc.Ticks < sinceTicks)
+                    .Where(t => (_transponderWatch.Of(_profiles.PrimaryForAlternate(t) ?? t) ?? _transponderWatch.Of(t)) is not { } sighting
+                                || sighting.LastSeenUtc.Ticks < sinceTicks)
                     .Select(DriverNameOf)
                     .ToList();
             }

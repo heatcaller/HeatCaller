@@ -469,6 +469,36 @@ public sealed class DayScheduleStore
         Save();
     }
 
+    /// <summary>
+    /// Takes the start stamp off a round's line when its race is thrown away
+    /// unsaved, and gives back the stamp it took (null when there was none),
+    /// so an undo of the abandon can put it back with MarkStarted.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): MarkStarted keeps only the first stamp
+    /// per line (so a pause and resume does not restamp), and nothing cleared
+    /// it when a heat went green and was then abandoned without being saved.
+    /// The heat then read "on track - started 7:42 PM" while the track was
+    /// idle or another heat ran, and when it was run for real at 8:30 PM its
+    /// line still said 7:42 and running late was measured from the heat
+    /// before it. A line already ticked done keeps its stamp: that race
+    /// counted.
+    /// </summary>
+    public DateTime? ClearStarted(string roundId)
+    {
+        var line = _entries.FirstOrDefault(e =>
+            string.Equals(e.EventId, CurrentEventId, StringComparison.Ordinal)
+            && string.Equals(e.RoundId, roundId, StringComparison.Ordinal));
+
+        if (line is null || line.IsComplete || line.ActualStartUtc is not { } was)
+        {
+            return null;
+        }
+
+        line.ActualStartUtc = null;
+        Save();
+        return was;
+    }
+
     public void Update(ScheduleEntry entry)
     {
         var index = _entries.FindIndex(e => e.Id == entry.Id);

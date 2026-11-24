@@ -511,6 +511,14 @@ internal static class MarshalSheetRenderer
                 var bitmap = new Bitmap(PageWidth, PageHeight);
                 pages.Add(bitmap);
 
+                // WHY (23 Nov 2026, bug hunt 24): 96 DPI, not the screen's, as
+                // every other printed sheet does. A new bitmap took the screen's
+                // DPI, so under --dpi-aware at 150% or 200% the point-size text
+                // drew half as big again or twice as big on the fixed 30 px line
+                // pitch: the marshal lines ran into each other and off the page.
+                // The 150 DPI label after drawing still sets the printed size.
+                bitmap.SetResolution(96, 96);
+
                 using var g = Graphics.FromImage(bitmap);
                 g.Clear(Color.White);
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;

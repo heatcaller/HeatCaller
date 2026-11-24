@@ -106,6 +106,32 @@ public static class RunSheetRenderer
         return RenderPage(title, entries.Take(RowsPerPage).ToList(), 1, 1, note);
     }
 
+    /// <summary>
+    /// The grey line under the title: the night's date, and the page count
+    /// when there is more than one page.
+    /// </summary>
+    internal static string DateLine(DateTime nowLocal, int pageNumber, int pageCount)
+    {
+        // The page count goes on the date line, so a loose second page at
+        // the drivers' stand says that a first page exists somewhere.
+        var pagePart = pageCount > 1 ? $"  -  page {pageNumber} of {pageCount}" : "";
+
+        // WHY (23 Nov 2026, bug hunt 24): the line used the PC's calendar
+        // date, so a sheet saved at 00:30 during Saturday night's meeting was
+        // headed "Sunday". A race night runs 6am to 6am, so the date is the
+        // night's, the same rule every other page uses.
+        return $"Run sheet  -  {TonightAtTheTrack.NightOf(nowLocal):dddd, MMM d yyyy}{pagePart}";
+    }
+
+    /// <summary>
+    /// A line's Time cell. WHY (23 Nov 2026, bug hunt 24): it printed the
+    /// stored time as stored, and Fill In the Times stores "HH:mm" whatever
+    /// the clock setting, so a 12-hour club got "19:40" in the Time column
+    /// beside "(started 7:42 PM)". Now it reads the way the timetable on
+    /// screen shows it.
+    /// </summary>
+    internal static string TimeText(string stored) => DayScheduleControl.ShownTime(stored);
+
     private static Bitmap RenderPage(
         string title,
         IReadOnlyList<ScheduleEntry> entries,
@@ -168,10 +194,7 @@ public static class RunSheetRenderer
         g.DrawString(title, titleFont, black, Margin, y);
         y += 40;
 
-        // The page count goes on the date line, so a loose second page at
-        // the drivers' stand says that a first page exists somewhere.
-        var pagePart = pageCount > 1 ? $"  -  page {pageNumber} of {pageCount}" : "";
-        g.DrawString($"Run sheet  -  {DateTime.Now:dddd, MMM d yyyy}{pagePart}", footFont, grey, Margin, y);
+        g.DrawString(DateLine(DateTime.Now, pageNumber, pageCount), footFont, grey, Margin, y);
         y += 28;
         g.DrawLine(heavyPen, Margin, y, PageWidth - Margin, y);
         y += 16;
@@ -208,7 +231,7 @@ public static class RunSheetRenderer
             var font = entry.IsComplete ? doneFont : bodyFont;
             var ink = entry.IsComplete ? grey : black;
 
-            g.DrawString(entry.ScheduledTime, font, ink, colX[1], y + 6);
+            g.DrawString(TimeText(entry.ScheduledTime), font, ink, colX[1], y + 6);
             g.DrawString(entry.ClassName, font, ink, colX[2], y + 6);
 
             var what = entry.Description;

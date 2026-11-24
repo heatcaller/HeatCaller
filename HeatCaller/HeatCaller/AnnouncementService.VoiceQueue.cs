@@ -1430,7 +1430,12 @@ public sealed partial class AnnouncementService
 
         lock (_voiceQueueLock)
         {
-            if (transponder is not null && SupersedesPerDriver(type))
+            // Not for a running order (23 Nov 2026, bug hunt 24): the rule
+            // below already replaces every report waiting, whoever it is
+            // queued under, but never a correction - and a correction is
+            // queued under the new leader, the very car the next report is
+            // queued under, so this rule used to bin it anyway.
+            if (transponder is not null && SupersedesPerDriver(type) && type != AnnouncementEventType.PositionReport)
             {
                 BinQueuedLocked(item => item.Type == type && item.Transponder == transponder, ref giveBack);
             }
@@ -1440,9 +1445,17 @@ public sealed partial class AnnouncementService
             // when the lead has changed hands in between - two orders read
             // back to back, the first already out of date, is the backlog
             // the per-driver rule above exists to prevent.
+            // WHY (23 Nov 2026, bug hunt 24): but never a correction. It is the
+            // end of a report already cut off, and when it names a new leader
+            // it stands in for the lead change call. With reports every lap,
+            // the next report used to bin it here before it was said, so the
+            // room heard the order cut off, no "Hold on", and the lead change
+            // never called. The newer report now waits behind it
+            // (PastWaitingCorrectionsLocked); the correction still drops
+            // itself, and calls the lead, if the order moves again.
             if (type == AnnouncementEventType.PositionReport)
             {
-                BinQueuedLocked(item => item.Type == AnnouncementEventType.PositionReport, ref giveBack);
+                BinQueuedLocked(item => item.Type == AnnouncementEventType.PositionReport && !item.IsCorrection, ref giveBack);
             }
 
             // The race's fastest lap the same way (1 Nov 2026): a newer one
@@ -1484,10 +1497,14 @@ public sealed partial class AnnouncementService
                 // Nor a position report's correction (11 Nov 2026): it is the
                 // end of a line already cut off, and the order it gives is
                 // the order on the screens.
+                // WHY (23 Nov 2026, bug hunt 24): their words are taken back off the
+                // screens. They will now never be said, and the feed used to list them
+                // as said; the instruction that cleared them is a different kind of
+                // line with different words, so nothing it shows is taken down.
                 var discarded = BinQueuedLocked(item =>
                     !item.IsCorrection
                     && !IsPriorityAnnouncement(item.Type) && !IsWorthWaitingFor(item.Type)
-                    && !(type == AnnouncementEventType.Reminder && IsLapBoundCall(item.Type)), ref giveBack);
+                    && !(type == AnnouncementEventType.Reminder && IsLapBoundCall(item.Type)), ref giveBack, withdrawText: true);
                 if (discarded > 0)
                 {
                     StatusMessage?.Invoke($"[voice] Cleared {Plural.Of(discarded, "queued announcement")} to make way for {type}.");
@@ -1597,7 +1614,11 @@ public sealed partial class AnnouncementService
 
         lock (_voiceQueueLock)
         {
-            binned = BinQueuedLocked(item => item.Type == AnnouncementEventType.FastLap, ref giveBack);
+            // WHY (23 Nov 2026, bug hunt 24): with its words taken back off the
+            // screens. No newer line has been shown yet (the new lap's own call is
+            // still to be weighed, and may be turned down), so the beaten lap stayed
+            // on the Big Screen and was listed as said in the feed.
+            binned = BinQueuedLocked(item => item.Type == AnnouncementEventType.FastLap, ref giveBack, withdrawText: true);
         }
 
         GiveBackLost(giveBack);

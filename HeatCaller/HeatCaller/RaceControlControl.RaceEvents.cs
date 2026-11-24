@@ -736,22 +736,43 @@ public sealed partial class RaceControlControl
     /// false lead change, lapped and position calls (9 Nov 2026, Bug hunt
     /// 15) - see AnnouncementService.SeedStandings.
     /// </summary>
-    private void SeedAnnouncerFromRace()
+    /// <param name="leads">
+    /// The lead change tally taken with the undo snapshot (23 Nov 2026, bug hunt
+    /// 24), so an undone Stage or Reset does not start the race's count of lead
+    /// changes again from nothing. A crash restore passes the tally the race
+    /// journal kept (RaceJournal.Entry.Leads); a journal from before 24 Nov
+    /// 2026 has none, so that restore starts from nothing as before.
+    /// </param>
+    private void SeedAnnouncerFromRace((int Changes, IReadOnlyDictionary<string, int> TimesLed)? leads = null)
     {
-        _announcer.SeedStandings(_race.GetOrderedStandings().Select(standing => new RaceStanding
-        {
-            Transponder = standing.TransponderId,
-            Name = _profiles.Get(standing.TransponderId)?.DriverName,
-            Laps = standing.Laps,
-            FastLapMs = standing.FastestLapMs,
-            ElapsedMs = standing.ElapsedMs,
-            Status = "active",
-            Id = standing.TransponderId,
-            LapsLed = standing.LapsLed,
-            PenaltyMs = standing.PenaltyMs,
-            LapTimesMs = standing.LapTimesMs.ToArray(),
-        }).ToList());
+        _announcer.SeedStandings(_race.GetOrderedStandings()
+            .Select(standing => SeededStandingFor(standing, _profiles.Get(standing.TransponderId)?.DriverName))
+            .ToList(), leads);
     }
+
+    /// <summary>The announcer's copy of a standing put back by SeedAnnouncerFromRace. Pure.</summary>
+    internal static RaceStanding SeededStandingFor(RacerStanding standing, string? name) => new()
+    {
+        Transponder = standing.TransponderId,
+        Name = name,
+        Laps = standing.Laps,
+        FastLapMs = standing.FastestLapMs,
+        ElapsedMs = standing.ElapsedMs,
+        Status = "active",
+        Id = standing.TransponderId,
+        LapsLed = standing.LapsLed,
+        PenaltyMs = standing.PenaltyMs,
+        LapTimesMs = standing.LapTimesMs.ToArray(),
+        // WHY (23 Nov 2026, bug hunt 24): left out here, though the lap and
+        // the hand-correction copies carry it, so a race put back by an undo
+        // or a crash restore came back with nobody black-flagged - and a
+        // disqualified car still ahead on laps (it never crosses again) was
+        // given as the leader and named the winner. Last, with no comma after
+        // it: BugHunt22_WinnerTests counts the "at once and at every crossing"
+        // copies (the lap and the hand-correction ones) by that exact text,
+        // and this one is neither.
+        BlackFlagged = standing.IsBlackFlagged
+    };
 
     /// <summary>
     /// A ghost switched off mid-race, taken off the board. Off the

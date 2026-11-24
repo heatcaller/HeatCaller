@@ -43,11 +43,68 @@ public sealed partial class RaceDayEventControl : UserControl
         Wordings = new[]
         {
             CurrentDaySentence + "999 checked in · 99 classes racing · 999 rounds in the program, 999 recorded · 999 timetable lines",
+
+            // WHY (23 Nov 2026, bug hunt 24): the longer words for a day with
+            // no classes ticked, so the line keeps its height for them too.
+            CurrentDaySentence + "999 checked in · " + NoClassesTickedWords + " · 999 rounds in the program, 999 recorded · 999 timetable lines",
         },
     };
 
     /// <summary>What the status line says first when the picked day is the current one.</summary>
     private const string CurrentDaySentence = "CURRENT - the whole page is about this race day.  ";
+
+    /// <summary>What the status line says of a day with no classes ticked: the program builds for every class that has a driver.</summary>
+    private const string NoClassesTickedWords = "racing every class with a driver";
+
+    /// <summary>
+    /// The classes part of the status line.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a day with nothing ticked under
+    /// Classes racing races every class that has a driver (ClassesTonight),
+    /// but the line said "0 classes racing" - while the banner under it said
+    /// "every class with a driver".
+    /// </summary>
+    internal static string ClassesRacingWords(int classCount) =>
+        classCount == 0 ? NoClassesTickedWords : $"{Plural.Of(classCount, "class", "classes")} racing";
+
+    /// <summary>
+    /// A drop-down that saves the moment it changes takes no turn of the
+    /// wheel; the turn goes to the scrolling page round it instead, so the
+    /// page carries on scrolling under the pointer (bug hunt 24). An open
+    /// list still scrolls itself.
+    /// </summary>
+    private static void RefuseWheel(ComboBox box)
+    {
+        box.MouseWheel += (_, e) =>
+        {
+            if (e is not HandledMouseEventArgs { Handled: false } handled || box.DroppedDown)
+            {
+                return;
+            }
+
+            handled.Handled = true;
+
+            if (e.Delta != 0 && WheelPassThrough.ScrollingPage(box) is { } page)
+            {
+                var screen = box.PointToScreen(e.Location);
+                var wParam = (IntPtr)(e.Delta << 16);
+                var lParam = (IntPtr)((screen.Y << 16) | (screen.X & 0xFFFF));
+
+                SendWheel(page.Handle, WM_MOUSEWHEEL, wParam, lParam);
+            }
+        };
+    }
+
+    private const int WM_MOUSEWHEEL = 0x020A;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SendMessageW")]
+    private static extern IntPtr SendWheel(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>The marshal rule box, for tests.</summary>
+    internal ComboBox MarshalRuleBox => _cmbMarshalRule;
+
+    /// <summary>The "Next race is:" box, for tests.</summary>
+    internal ComboBox AutoAdvanceScopeBox => _cmbAutoAdvanceScope;
     private readonly TextBox _txtName = new();
 
     /// <summary>
@@ -433,6 +490,12 @@ public sealed partial class RaceDayEventControl : UserControl
             lblMarshalHint.Text = MarshalRule.Effect(rule);
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): the wheel no longer changes it.
+        // Scrolling the page with the pointer coming to rest over this box
+        // stepped the club's marshal rule and saved it at once - so a later
+        // no-show cost a driver a qualifier or a time penalty nobody chose.
+        RefuseWheel(_cmbMarshalRule);
+
         _cmbMarshalRule.SelectedIndexChanged += (_, _) =>
         {
             var rule = (MarshalNoShowRule)Math.Max(0, _cmbMarshalRule.SelectedIndex);
@@ -777,6 +840,11 @@ public sealed partial class RaceDayEventControl : UserControl
             ShowSummaries();
         };
         _cmbAutoAdvanceScope.SelectedIndexChanged += (_, _) => CommitNow();
+
+        // WHY (23 Nov 2026, bug hunt 24): as the marshal rule - the wheel
+        // over "Next race is:" switched which race comes next, and saved it
+        // onto the night, while the page was only being scrolled.
+        RefuseWheel(_cmbAutoAdvanceScope);
 
         // A day being closed by the window closing still keeps what was
         // typed a moment before it.
@@ -1315,7 +1383,7 @@ public sealed partial class RaceDayEventControl : UserControl
         var classCount = raceEvent.ClassNames.Count;
 
         _lblStatus.Text = $"{current}{checkedIn} checked in · "
-            + $"{Plural.Of(classCount, "class", "classes")} racing · "
+            + $"{ClassesRacingWords(classCount)} · "
             + $"{Plural.Of(roundCount, "round")} in the program, {recorded} recorded · "
             + $"{Plural.Of(scheduleLines, "timetable line")}";
     }
@@ -1421,9 +1489,13 @@ public sealed partial class RaceDayEventControl : UserControl
 
         // A day still open with something in it is said in the window - it
         // used to be a second question, asked only on the template path.
-        var openDay = _events.Active is { IsLegacy: false, IsOpen: true } open && !(open.RoundIds.Count == 0 && open.ClassNames.Count == 0)
-            ? open.DisplayName
-            : null;
+        //
+        // WHY (23 Nov 2026, bug hunt 24): the open night by the Templates
+        // tab's own rule (OpenNight), not just the current day. Looking at a
+        // past night makes that closed day current, and the old check read
+        // only the current day - so the window said nothing about tonight's
+        // night still being open and started a second one beside it.
+        var openDay = OpenNight()?.DisplayName;
 
         using var ask = new NewRaceDayForm(
             options,

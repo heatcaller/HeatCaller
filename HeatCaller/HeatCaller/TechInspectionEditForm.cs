@@ -486,15 +486,81 @@ public sealed class TechInspectionEditForm : Form
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(item.Profile.ClassName) && _cmbClass.Items.Contains(item.Profile.ClassName))
+        // WHY (23 Nov 2026, bug hunt 24): a new inspection opens on the first
+        // driver in the list and fills in their car and class. Picking the
+        // driver actually at the table then only filled the car when the box
+        // was blank - and it held the first driver's car, which nobody typed -
+        // so Zed's inspection was saved with Aaron's car. When Zed's profile
+        // had no class (or one written in other capitals), Aaron's class stayed
+        // picked and Zed's pass was filed under it. What this method filled in
+        // itself is now replaced; what the scrutineer typed or picked is kept.
+        var classItems = _cmbClass.Items.Cast<object>().OfType<string>().ToList();
+        var current = _cmbClass.SelectedItem as string;
+        var nextClass = ClassAfterDriverChange(classItems, current, _autoClass, item.Profile.ClassName);
+
+        if (!string.Equals(nextClass, current, StringComparison.Ordinal))
         {
-            _cmbClass.SelectedItem = item.Profile.ClassName;
+            if (nextClass is null)
+            {
+                _cmbClass.SelectedIndex = -1;
+            }
+            else
+            {
+                _cmbClass.SelectedItem = nextClass;
+            }
         }
 
-        if (string.IsNullOrWhiteSpace(_txtCar.Text))
+        _autoClass = classItems.FirstOrDefault(n => string.Equals(n, item.Profile.ClassName, StringComparison.OrdinalIgnoreCase));
+
+        _txtCar.Text = CarAfterDriverChange(_txtCar.Text, _autoCar, item.Profile.CarModel);
+        _autoCar = item.Profile.CarModel ?? string.Empty;
+    }
+
+    /// <summary>The car and class OnDriverChanged last filled in itself, so a change of driver can replace them.</summary>
+    private string _autoCar = string.Empty;
+    private string? _autoClass;
+
+    /// <summary>
+    /// The car box after a change of driver: the new driver's car when the
+    /// box is blank or still holds the car the last driver's profile put
+    /// there; whatever was typed by hand otherwise.
+    /// </summary>
+    internal static string CarAfterDriverChange(string? currentText, string? autoFilled, string? profileCar)
+    {
+        var text = currentText ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(text)
+            || (!string.IsNullOrWhiteSpace(autoFilled) && string.Equals(text.Trim(), autoFilled.Trim(), StringComparison.Ordinal)))
         {
-            _txtCar.Text = item.Profile.CarModel;
+            return profileCar ?? string.Empty;
         }
+
+        return text;
+    }
+
+    /// <summary>
+    /// The class picked after a change of driver: the new driver's class from
+    /// the list (in any capitals); when they have none in it, nothing if the
+    /// class picked is the one the last driver's profile picked, or the class
+    /// the scrutineer (or Check-In) picked otherwise.
+    /// </summary>
+    internal static string? ClassAfterDriverChange(IEnumerable<string> items, string? current, string? autoPicked, string? profileClass)
+    {
+        var match = string.IsNullOrWhiteSpace(profileClass)
+            ? null
+            : items.FirstOrDefault(n => string.Equals(n, profileClass, StringComparison.OrdinalIgnoreCase));
+
+        if (match is not null)
+        {
+            return match;
+        }
+
+        if (current is not null && autoPicked is not null && string.Equals(current, autoPicked, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return current;
     }
 
     /// <summary>

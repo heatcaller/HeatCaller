@@ -790,6 +790,17 @@ internal static class CommentaryNumberCheck
         // "a tenth", "a third of a second", "a second and a half", "a half second".
         if (w is "a" or "an")
         {
+            // WHY (23 Nov 2026, bug hunt 24): every "a tenth" was read as
+            // 0.1 of a second, so "a tenth-place finish for Dee" or "a tenth
+            // win here for Sam" carried a 0.1 the facts never hold, and a
+            // true sentence was cut from the recap. Here the tenth is an
+            // ordinal, which is never a figure - stepped over like "his
+            // tenth win" already is.
+            if (OrdinalAfterA(ws, i))
+            {
+                return 2;
+            }
+
             if (FractionAt(ws, i + 1) is { } unit)
             {
                 found.Add(new Figure(Said(ws, i, 2), unit, false, unit));
@@ -1167,6 +1178,31 @@ internal static class CommentaryNumberCheck
                 "thousandth" or "thousandths" => 0.001,
                 _ => null,
             };
+
+    /// <summary>
+    /// Whether the "tenth", "hundredth" or "thousandth" after the "a" at
+    /// <paramref name="i"/> is a place in a count ("a tenth-place finish",
+    /// "a tenth win", "a hundredth start") rather than a part of a second
+    /// ("a tenth", "a tenth clear", "a tenth a lap", "a tenth-of-a-second
+    /// gap"): it is when the next word is joined to it by a hyphen (other
+    /// than "of") or is one of the things a club counts (bug hunt 24).
+    /// </summary>
+    private static bool OrdinalAfterA(List<Word> ws, int i)
+    {
+        if (!Is(ws, i + 1, "tenth", "hundredth", "thousandth") || i + 2 >= ws.Count)
+        {
+            return false;
+        }
+
+        var next = ws[i + 2];
+        return (next.Hyphened && next.Low != "of") || OrdinalNouns.Contains(next.Low);
+    }
+
+    private static readonly HashSet<string> OrdinalNouns = new(StringComparer.Ordinal)
+    {
+        "place", "placed", "win", "victory", "start", "podium", "straight", "consecutive", "race", "heat",
+        "main", "round", "title", "season", "year", "finish", "night", "appearance", "career",
+    };
 
     /// <summary>"third of a second" as a third, "quarters of a second" as quarters - times <paramref name="many"/>.</summary>
     private static (double Value, int Length)? PartOfASecond(List<Word> ws, int i, int many = 1)

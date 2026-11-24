@@ -95,10 +95,27 @@ export function streamFrom(body: unknown, dead: ReadonlySet<string> = new Set(),
   };
 }
 
+/**
+ * The longest a piece with no end counts as still streaming: the laptop's
+ * own night (StreamTonight lets a night go 20 hours after it began).
+ */
+export const STREAM_OPEN_PIECE_MAX_MS = 20 * 60 * 60 * 1000;
+
 /** The piece a race at greenMs..endMs sits wholly inside, with a usable video. */
 function pieceFor(stream: Stream, greenMs: number, endMs: number): StreamPiece | undefined {
-  return stream.pieces.find((p) => p.videoId !== "" && !p.hidden && !stream.dead.has(p.videoId)
-    && greenMs >= p.startMs && (p.endMs === undefined || endMs <= p.endMs));
+  // WHY (23 Nov 2026, bug hunt 24): the old code took the first piece of any
+  // kept night that had started before the green flag and had no end, so a
+  // piece left open on an earlier night (the app closed with the stream up,
+  // or "Stream stopped" never pressed) claimed every later race with no video
+  // of its own - tonight's link not in yet, tonight's piece hidden, or no
+  // stream at all - and phones opened last week's video days past its end.
+  // Now the race belongs to the latest piece that began before its green
+  // flag (pieces on one night never overlap), and a piece with no end only
+  // counts for the 20 hours of its own night.
+  let owner: StreamPiece | undefined;
+  for (const p of stream.pieces) if (p.startMs <= greenMs && (owner === undefined || p.startMs > owner.startMs)) owner = p;
+  if (owner === undefined || owner.videoId === "" || owner.hidden || stream.dead.has(owner.videoId)) return undefined;
+  return endMs <= (owner.endMs ?? owner.startMs + STREAM_OPEN_PIECE_MAX_MS) ? owner : undefined;
 }
 
 /**
@@ -179,8 +196,28 @@ const VIDEO_CHECK_MAX = 200;
  */
 export const VIDEO_RECHECK_BACKOFF_MS: readonly number[] = [2, 5, 15, 60].map((m) => m * 60 * 1000);
 
-/** One video's checks: when first and last asked, YouTube's last word, and refusals in a row. */
-type Checked = { firstMs: number; lastMs: number; dead: boolean; asking: boolean; refused: number };
+/** How soon a video is asked about again when YouTube gave no answer (bug hunt 24). */
+export const VIDEO_NO_ANSWER_RETRY_MS = 2 * 60 * 1000;
+
+/**
+ * How soon a video is asked about again after its first, second, third and
+ * fourth no-answer in a row; after that, the day it used to wait.
+ *
+ * WHY (24 Nov 2026, bug hunt 24 review): every no-answer was retried two
+ * minutes on, for good - a video YouTube kept refusing to answer about (a
+ * 429 that lasts, an outage) was asked about every two minutes all night,
+ * which is what keeps a 429 going. Now the wait grows, and a real answer
+ * starts it again.
+ */
+export const VIDEO_NO_ANSWER_BACKOFF_MS: readonly number[] = [VIDEO_NO_ANSWER_RETRY_MS, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000];
+
+/** The wait after this many no-answers in a row (1 = the first). */
+function noAnswerWait(inARow: number): number {
+  return VIDEO_NO_ANSWER_BACKOFF_MS[Math.max(0, inARow - 1)] ?? DAY_MS;
+}
+
+/** One video's checks: when first and last asked, YouTube's last word, refusals in a row, and no-answers in a row (not kept across restarts). */
+type Checked = { firstMs: number; lastMs: number; dead: boolean; asking: boolean; refused: number; noAnswers?: number };
 
 /** How long after its last ask a video is due again. */
 function waitFor(v: Checked): number {
@@ -300,9 +337,22 @@ export class VideoCheck {
       if (status === 200) {
         v.dead = false;
         v.refused = 0;
+        v.noAnswers = 0;
       } else if (status === 401 || status === 403 || status === 404) {
         v.dead = true;
         v.refused = Math.min(v.refused + 1, VIDEO_RECHECK_BACKOFF_MS.length + 1);
+        v.noAnswers = 0;
+      } else {
+        // WHY (23 Nov 2026, bug hunt 24): no answer (a timeout, a 429 or 5xx)
+        // used to count as the day's check, so a new video YouTube didn't
+        // answer about was not asked again for 24 hours - a private or removed
+        // one kept its Watch link all night. Now it is due again in a couple
+        // of minutes; whether it is dead is still left as it was.
+        // WHY (24 Nov 2026, bug hunt 24 review): by a wait that grows with
+        // each no-answer in a row (VIDEO_NO_ANSWER_BACKOFF_MS), up to the
+        // old day, not two minutes every time.
+        v.noAnswers = Math.min((v.noAnswers ?? 0) + 1, VIDEO_NO_ANSWER_BACKOFF_MS.length + 1);
+        v.lastMs = now - waitFor(v) + noAnswerWait(v.noAnswers);
       }
     }));
 
@@ -381,7 +431,14 @@ export function hiddenAfter(remembered: readonly string[], before: unknown, afte
   const now = new Set(list(after));
   // Only within one night: the laptop starts each night with no hidden
   // races, which is not the club showing last night's again.
-  const sameNight = streamNightId(before) !== undefined && streamNightId(before) === streamNightId(after);
+  // WHY (23 Nov 2026, bug hunt 24): the old rule needed the document before
+  // to name a night, so a race hidden and then unticked after the laptop had
+  // let the night's pieces go (no pieces, so no night) stayed hidden for
+  // good. A document with no pieces only loses a hidden race when the
+  // director unticks it - the laptop's own let-go needs pieces - so it
+  // counts as the same night.
+  const was = streamNightId(before);
+  const sameNight = was === undefined || was === streamNightId(after);
   const shownAgain = sameNight ? list(before).filter((s) => !now.has(s)) : [];
   const out = new Set(remembered.filter((s) => !shownAgain.includes(s)));
   for (const s of now) out.add(s);

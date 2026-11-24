@@ -150,6 +150,37 @@ public static class DriverPhotos
         {
             // As Delete.
         }
+
+        // WHY (23 Nov 2026, bug hunt 24): an EARLIER photo of this driver,
+        // replaced before, sits in Retired under its own name that nothing
+        // ties back to them, so the delete above can't find it. The old code
+        // left it there until some other photo happened to be retired. The
+        // week-old sweep runs here too, so a forget at least clears every
+        // retired photo past the undo window.
+        PruneRetiredNow();
+    }
+
+    /// <summary>
+    /// The retired-photo sweep on its own, for start-up and for Forget:
+    /// quiet when there is no Retired folder, best-effort like Delete.
+    /// </summary>
+    // WHY (23 Nov 2026, bug hunt 24): the sweep used to run only from
+    // Retire, so a photo a parent had taken down stayed on the laptop for
+    // months when no other photo was changed after it - not the week the
+    // comment on PruneRetired and the data-files page promise.
+    internal static void PruneRetiredNow()
+    {
+        try
+        {
+            if (Directory.Exists(RetiredFolder))
+            {
+                PruneRetired();
+            }
+        }
+        catch
+        {
+            // Tried again at the next start-up or retire.
+        }
     }
 
     /// <summary>
