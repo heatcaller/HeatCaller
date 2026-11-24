@@ -539,7 +539,13 @@ internal static class LayoutFreeze
                 // like Commentary is hundreds of controls deep, and letting
                 // its parents go first has each child ask its column to work
                 // itself out all over again.
-                Thaw(tab, childrenFirst: true);
+                //
+                // With painting held on the tab (24 Nov 2026): it is on
+                // screen by now, so its first layout used to be watched - a
+                // grid on Sounds' Music tab grew its own white scroll bar,
+                // and Race Analytics' Pace its sideways one, for a frame
+                // before the slim bars covered them. See ShowWithoutFlash.
+                ShowWithoutFlash.Hold(tab, () => Thaw(tab, childrenFirst: true));
             }
         };
     }

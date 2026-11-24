@@ -424,14 +424,20 @@ public sealed class SeasonsControl : UserControl
 
         _viewChips.Picked = key;
 
-        SuspendLayout();
-
-        foreach (var (name, view) in _viewParts)
+        // With painting held on the views' room through the swap and its
+        // layout (24 Nov 2026): each view is built hidden, so its first show
+        // is its first layout - see ShowWithoutFlash.
+        ShowWithoutFlash.Hold(_views, () =>
         {
-            view.Visible = name == key;
-        }
+            SuspendLayout();
 
-        ResumeLayout(true);
+            foreach (var (name, view) in _viewParts)
+            {
+                view.Visible = name == key;
+            }
+
+            ResumeLayout(true);
+        });
         _pickedPage?.LeastHeightMayHaveChanged();
     }
 

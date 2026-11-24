@@ -1080,12 +1080,18 @@ public sealed partial class FirstRunWizard : Form
 
         // This step's page on show, and every other one hidden - which takes
         // it out of the layout as well as out of sight.
+        // With painting held on their place (24 Nov 2026): each step's page
+        // is built hidden, so its first show is its first layout - see
+        // ShowWithoutFlash.
         var pages = StepPages;
 
-        for (var i = 0; i < pages.Length; i++)
+        ShowWithoutFlash.Hold(pages[0].Parent ?? this, () =>
         {
-            pages[i].Visible = i == _step;
-        }
+            for (var i = 0; i < pages.Length; i++)
+            {
+                pages[i].Visible = i == _step;
+            }
+        });
 
         var last = _step == StepNames.Length - 1;
 
