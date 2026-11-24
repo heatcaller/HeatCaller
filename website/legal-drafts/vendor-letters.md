@@ -4,7 +4,7 @@
 
 ## 1. ElevenLabs
 
-**To:** ElevenLabs sales, through the "Contact sales" form on elevenlabs.io, or your account manager if you have one. (Checked 16 Nov 2026: ElevenLabs' docs say Zero Retention Mode is for enterprise customers only and is arranged through sales, so question 6 is the one that decides the plan. A DPA is reported to be at elevenlabs.io/dpa; open it before sending, because it may answer 2, 5 and 6.)
+**To:** ElevenLabs sales, through the "Contact sales" form on elevenlabs.io (no public sales address was found on 24 Nov 2026); questions 2, 5 and 6 can also go to their data protection officer, dpo@elevenlabs.io. (Checked 16 Nov 2026: ElevenLabs' docs say Zero Retention Mode is for enterprise customers only and is arranged through sales, so question 6 is the one that decides the plan. A DPA is reported to be at elevenlabs.io/dpa; open it before sending, because it may answer 2, 5 and 6.)
 **Subject:** Reseller, caching and children's-data questions for a race-announcing product
 
 Hello,
@@ -33,7 +33,7 @@ support@heatcaller.com
 
 ## 2. Anthropic
 
-**To:** Anthropic sales, through the "Contact sales" form on anthropic.com. (Checked 16 Nov 2026: Anthropic's API docs say zero data retention is not self-serve; sales reviews it and turns it on for one organization at a time, so ask for it by name in question 1. If sales doesn't answer questions 4-6, send them to the privacy contact in Anthropic's privacy policy.)
+**To:** Anthropic sales, through the form at anthropic.com/contact-sales (no public sales address was found on 24 Nov 2026). (Checked 16 Nov 2026: Anthropic's API docs say zero data retention is not self-serve; sales reviews it and turns it on for one organization at a time, so ask for it by name in question 1. If sales doesn't answer questions 4-6, send them to the privacy contact in Anthropic's privacy policy.)
 **Subject:** Data retention, training and minors for an API product used by youth sports clubs
 
 Hello,
