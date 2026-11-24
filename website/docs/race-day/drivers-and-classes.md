@@ -8,9 +8,9 @@ The pages covered here are all in the sidebar: **Driver Hub**, **Classes**, **Re
 
 A driver profile ties a transponder to a person. When the decoder reports a transponder, HeatCaller looks up its profile to get the name the announcer says, the class the driver races in, and everything shown on screens and results.
 
-![Driver Hub in its Table view: nine drivers with their classes, car, transponder and whether they're checked in tonight, and Al Gorithim's card on the right with Edit, Photo and the buttons that open each part of the card](../assets/images/driver-hub.png)
+<!-- screenshot: Driver Hub in its Card view, the roster on the left and one driver's card with its tabs beside it -->
 
-The page has three views: **Card**, **Table** and **Garage**, in the upper left. The page opens on the one you used last. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is across the top of all three.
+The page has two views: **Card** and **Garage**, in the upper left. The page opens on the one you used last. The banner for [unknown transponders](../timing/transponders.md#unknown-transponders) is across the top of both.
 
 <a id="drivers-view"></a>
 
@@ -44,21 +44,9 @@ The driver has six tabs:
 
 On the **Stats** tab, under the driver's recent form, **Recent activity** lists the latest eight things they've done, newest first: each race with their place, the size of the field and their best lap (or "did not finish"), each personal best, and each setup logged under their name in the **Garage** with what it changed from the setup before it on the same car. Personal bests are in the theme's heading color.
 
-### Table view
-
-Every driver in one table, with the columns **Driver**, **No.**, **Classes**, **Car**, **Transponder** and **Tonight**. It's the quickest way to scan a big roster on race night.
-
-- Click a column heading to sort by it; click it again to sort the other way.
-- **All**, **In tonight** and **Not in** show every driver, only those checked in tonight, or only those who aren't.
-- The search box filters the table the same way the Card view's does.
-- **+ Add Driver** and **Import** are at the top right.
-- Double-click a driver to edit them, or press <kbd>Delete</kbd> to delete them.
-
-The driver you pick is in a panel on the right: their photo, name, number and classes, **Edit**, **Photo** and **⋯**, their car, transponder, and tonight's check-in and tech. **Open on the card** has a button for each of the driver's tabs; it switches to the Card view on that tab.
-
 ### Garage view
 
-One driver's cars fill the page. Pick whose in **Driver** at the top left, where the search box is in the Card view; the Card and Table views follow, so switching back shows the same driver. It's the same garage as the **Garage** tab, only bigger. Their transponders are on the **Transponders** tab in the Card view.
+One driver's cars fill the page. Pick whose in **Driver** at the top left, where the search box is in the Card view; the Card view follows, so switching back shows the same driver. It's the same garage as the **Garage** tab, only bigger. Their transponders are on the **Transponders** tab in the Card view.
 
 **Driver** also has **Everyone's cars** and **The club's own cars** at the top of its list. They show every car in the garage, or the club's own, as cards that say whose each car is, as on the [Garage](#garage) page. Retired cars are left out. **Add a Car** adds a car for the club, or for a driver you pick in **Owner:**. Picking one of these doesn't change the driver in the Card view, and switching to the Card view and back shows that driver's cars again.
 
@@ -161,7 +149,7 @@ Before this version a pack was recorded for a whole session, not for each driver
 
 ### Add a driver
 
-1. On the **Driver Hub** page, click **+ Add** at the top of the roster (in the Table view, **+ Add Driver**).
+1. On the **Driver Hub** page, click **+ Add** at the top of the roster.
 2. Enter the **Transponder:** number exactly as your decoder reports it. This is the only required field.
 3. Fill in the other fields you want (see below).
 4. Click **Save**.
@@ -172,8 +160,8 @@ You can also add a driver from a transponder that crossed the line with no profi
 
 ### Edit or delete a driver
 
-- To edit, double-click a driver in the roster or the table, or pick one and click **Edit** beside their name.
-- To delete, select one or more drivers and choose **Delete** from the **⋯** menu beside their name (in the Table view, select one and press <kbd>Delete</kbd>). You can bring them back with the **Undo** button in the sidebar. A deleted driver's photo file is kept so that Undo can restore it.
+- To edit, double-click a driver in the roster, or pick one and click **Edit** beside their name.
+- To delete, select one or more drivers and choose **Delete** from the **⋯** menu beside their name. You can bring them back with the **Undo** button in the sidebar. A deleted driver's photo file is kept so that Undo can restore it.
 
 Undo never overwrites a driver who has one of the deleted driver's transponders now, as their main or alternate transponder, and never puts two drivers on one transponder. A deleted driver whose transponder has been taken since stays deleted:
 
