@@ -645,8 +645,6 @@ public sealed partial class ProfileManagerControl : UserControl
 
         OnSelectionChanged();
 
-        // The Table view reads the same drivers (7 Nov 2026).
-        RefreshTable();
         RefreshRosterCount();
     }
 
