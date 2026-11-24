@@ -1626,7 +1626,9 @@ public sealed partial class RaceControlControl
         {
             if (e.Button == MouseButtons.Left)
             {
-                _startNextClicks.Pressed();
+                // Timed from here: held past a click and let go early, the
+                // click does nothing (23 Nov 2026) - see HeldClickFilter.
+                _startNextClicks.Down();
             }
         };
 

@@ -39,7 +39,7 @@ Every state on the page is told by a shape and a word as well as a color: a tick
 
 The card sits on the next race's row of the run sheet, so the time, the race and its **Start** button are in one line of sight. Over the time column it says **NEXT** and the time the race should start. It names the race with its class first, for example "Stock · Q2 Heat 1", because every class has a Q2 Heat 1. Under the name are the facts to check before you start it: how many drivers, how many of them are checked in (when the night is checking drivers in), how long the race is ("5 min race") and the track layout.
 
-- **Start** *race*, for example **Start Stock Q2 Heat 1**, starts it (see [Start a round](#start-a-round)). Press and hold it for about a second to run the same round as a demo instead: simulated laps, never filed as a result, never scored.
+- **Start** *race*, for example **Start Stock Q2 Heat 1**, starts it (see [Start a round](#start-a-round)). Press and hold it for about a second to run the same round as a demo instead: simulated laps, never filed as a result, never scored. If you let go before then, after holding it for longer than a click, nothing happens.
 - **Call to the Stand** calls the race up now, the same as **Call Up** on Race Control (see [The flag row after the flag](../race-control/running-a-race.md#the-flag-row-after-the-flag)). What it says back shows under the buttons for a few seconds.
 - **Skip** puts the race off: **Run It After the Next Race** or **Move It to the End of the Night**. **Undo** puts it back, and the console says where it went.
 
