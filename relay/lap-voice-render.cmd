@@ -1,7 +1,7 @@
 @echo off
 rem Makes the lap voice's clips - every lap time from 3.00 to 19.99 and the
 rem two halves of one with a thousandth, the lap numbers, places, gaps and
-rem target words - in ElevenLabs' Daniel voice, on
+rem target words - in ElevenLabs' Finley voice (Daniel before 24 Nov 2026), on
 rem YOUR ElevenLabs key, into the lap-voice folder here. See src\lapvoice.ts.
 rem
 rem   lap-voice-render.cmd count    what it would make and cost; spends nothing
@@ -12,7 +12,10 @@ rem voice test uses), or from RELAY_VOICE_KEY. It goes to ElevenLabs and
 rem nowhere else.
 rem
 rem Safe to run again: clips already made are never asked for twice, so a run
-rem that stopped carries on and costs only what is left. Then run
+rem that stopped carries on and costs only what is left. A set made on another
+rem model or in another voice is moved aside (lap-voice-daniel, say) and made
+rem again in full. Each clip is also deleted from the key's ElevenLabs history,
+rem which needs the key's Speech history permission. Then run
 rem fly deploy --ha=false from this folder and every club hears them.
 
 setlocal

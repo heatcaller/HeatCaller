@@ -844,10 +844,26 @@ is all it can decide.
 
 Every line is sent with `enable_logging=false`, ElevenLabs' zero-retention
 mode (15 Nov 2026, children's privacy). Set `RELAY_VOICE_NO_LOGGING=0` to
-stop asking. A plan that turns the flag down is asked again without it, and
-the relay logs that once and asks without it until it restarts.
+stop asking. Zero retention is for enterprise plans only: tried on 24 Nov
+2026, other plans accept the flag (200) and quietly ignore it, so the line is
+kept in the key's ElevenLabs history all the same.
 
-`speak` takes `{ "voice": "clubhouse", "text": "Green flag!", "shared": true }`.
+So each line is also deleted from that history (24 Nov 2026). Every speech
+answer carries a `history-item-id` header, and once the audio is in hand
+(or a stream has ended or been stopped) the relay sends
+`DELETE /v1/history/<that id>` with the same key. It is sent and not waited
+for, so it never delays or fails a line, and a 404 counts as done. Only that
+exact id is ever deleted: the relay never lists the history. The key needs
+ElevenLabs' **Speech history** permission for this. A key without it (401 or
+403 to the delete) is logged once - "This ElevenLabs key can't remove lines
+from its history ... give it the Speech history permission" - and not asked
+again until the relay restarts. `RELAY_VOICE_NO_LOGGING=0` turns the delete
+off too.
+
+A plan that does turn the flag down is asked again without it, and the
+relay logs that once and asks without it until it restarts.
+
+`speak` takes `{ "voice": "finley", "text": "Green flag!", "shared": true }`.
 `shared` is the laptop saying the line has nothing filled into it - no
 driver's name - so the rendered audio may be kept for every club. A line
 with a name arrives `shared:false` and is cached for that club alone.
@@ -1056,8 +1072,9 @@ voice-test.cmd
 ```
 
 The first run installs the build tools if they are missing, builds, writes
-`relay.config.voice-test.json` with a catalogue made from the voices your
-ElevenLabs account already has, mints a club token, prints the three values
+`relay.config.voice-test.json` with a catalogue of HeatCaller's three voices
+(Finley, Alicia and Baxter: ElevenLabs Library voices, used by id without
+saving them to your account, but not on ElevenLabs' free plan), mints a club token, prints the three values
 to paste into HeatCaller, and starts listening on `http://localhost:8787`.
 Later runs leave all of that alone and just start it.
 
@@ -1090,9 +1107,11 @@ working for this laptop.
 ### The lap voice (public, no token)
 
 The spoken laps on the Live page and a driver's own night ("Lap times in my
-ear") play short clips in one ElevenLabs voice, Daniel ("Steady
-Broadcaster", voice `onwK4e9ZLuTAKqWW03F9`, model `eleven_v4_turbo`), the
-same for every club whatever voice a club runs in its Cast tab. See
+ear") play short clips in one ElevenLabs voice, Finley ("Articulate
+Anchor", voice `fnYMz3F5gMEDGMWcH1ex`, model `eleven_v4_turbo`), the
+same for every club whatever voice a club runs in its Cast tab. It was
+Daniel ("Steady Broadcaster", `onwK4e9ZLuTAKqWW03F9`) until 24 Nov 2026;
+ElevenLabs retires Daniel with its other Default voices on 31 Dec 2026. See
 `src/lapvoice.ts`.
 
 | Route | What it is |
@@ -1109,7 +1128,7 @@ back" - and the same gaps ending "off the lead" (`gl-*`) and "clear"
 (`gb-*`) - "last lap", "two laps to go" to fifty, "a minute left" to sixty
 minutes and "ten seconds left" to fifty (`lt-*`), the target words up to two
 seconds, "best lap", "off your best", "Lap times on" and "Lap times off".
-2,744 clips, 45,755 characters: about $1.83 at Flash's $0.04 per 1,000,
+2,745 clips, 45,768 characters: about $1.83 at v4 Turbo's $0.04 per 1,000,
 once. A call the clips can't cover, or a clip that takes
 more than a second, is said in the phone's own voice, whole.
 
@@ -1122,7 +1141,14 @@ commercial licence):
 
 They land in `lap-voice/`, which git ignores - all but `lap6.mp3`, a recut
 take force-added so a fresh copy keeps it. Run it again any time: clips
-already there are never asked for twice. Then `fly deploy --ha=false` carries
+already there are never asked for twice. `lap-voice/MODEL` and
+`lap-voice/VOICE` say which model and voice made the set. A set made on
+another model or in another voice (a folder with `MODEL` and no `VOICE` is
+Daniel's, from before `VOICE` existed) is moved aside to
+`lap-voice-daniel/` (or `lap-voice-<old voice id or model>/`) and made
+again in full, and `count` reports every clip missing. Each clip is deleted
+from the key's ElevenLabs history as it is made, as the relay does for its
+lines. Then `fly deploy --ha=false` carries
 the folder into the image, and the relay logs how many it has when it
 starts. Deploying from a copy without the clips puts the relay back on the
 phone's voice until you make or copy them there.
@@ -2281,5 +2307,5 @@ topup-requests.cmd    the clubs waiting on an answer to Ask for More
                       (the relay admin app does all of these from buttons - see "Pausing a club")
 voice-topup.cmd       gives a club more voice characters for this month, on the Fly machine
 voice-test.cmd        runs a voice relay on this laptop against your own ElevenLabs key
-voice-test-setup.mjs  writes that test relay's config, once, from the account's own voices
+voice-test-setup.mjs  writes that test relay's config, once, with HeatCaller's three voices
 ```

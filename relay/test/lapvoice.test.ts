@@ -4,8 +4,8 @@ import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { LAP_VOICE, LapVoiceLibrary, lapClipCost, lapClips, lapTimeWords, lapTimeWordsMs, marginWords } from "../src/lapvoice.js";
-import { clipsModel, madeOnAnotherModel, missingClips, MODEL_FILE, renderLapClips, setAsideDir } from "../src/lapvoicerender.js";
+import { clipsVoiceName, LAP_VOICE, LapVoiceLibrary, lapClipCost, lapClips, lapTimeWords, lapTimeWordsMs, marginWords } from "../src/lapvoice.js";
+import { anotherSetTag, clipsModel, clipsVoice, LAP_SET, madeAnotherWay, missingClips, MODEL_FILE, renderLapClips, setAsideDir, VOICE_FILE } from "../src/lapvoicerender.js";
 import { DEFAULT_CONTEXT, livePage, nightPage } from "../src/pages.js";
 import { Relay } from "../src/server.js";
 import { MemoryStore } from "../src/store.js";
@@ -15,7 +15,7 @@ import { tenants } from "./helpers.js";
 
 /**
  * THE LAP VOICE (29 Oct 2026, asked for by Asher): the relay's spoken laps
- * in ElevenLabs' Daniel voice, for every club, from a set of clips made
+ * in one ElevenLabs voice (Finley since 24 Nov 2026, Daniel before), for every club, from a set of clips made
  * once on the operator's own key - lap times from 3.00 - and the phone's
  * own voice whenever a clip is missing or slow.
  */
@@ -24,9 +24,11 @@ const TEXT = new Map(lapClips().map((c) => [c.name, c.text]));
 const NAMES = [...TEXT.keys()];
 
 describe("lap voice: the clips", () => {
-  it("is Daniel, Steady Broadcaster, on v4 Turbo, for every club", () => {
-    assert.equal(LAP_VOICE.voiceId, "onwK4e9ZLuTAKqWW03F9");
-    assert.equal(LAP_VOICE.name, "Daniel");
+  it("is Finley, Articulate Anchor, on v4 Turbo, for every club (24 Nov 2026: Daniel retires on 31 Dec)", () => {
+    assert.equal(LAP_VOICE.voiceId, "fnYMz3F5gMEDGMWcH1ex");
+    assert.equal(LAP_VOICE.name, "Finley");
+    assert.equal(LAP_VOICE.what, "Articulate Anchor");
+    assert.equal(LAP_VOICE.id, "lap-finley");
     assert.equal(LAP_VOICE.modelId, "eleven_v4_turbo");
     assert.equal(LAP_VOICE.cloned, false);
   });
@@ -101,17 +103,37 @@ describe("lap voice: on the relay", () => {
   }
 
   it("serves only the clips on the list, and none that are empty", async () => {
-    const dir = await folder({ "t942.mp3": "nine", "best.mp3": "best", "extra.mp3": "no", "p2.mp3": "", "notes.txt": "no" });
+    const dir = await folder({ "t942.mp3": "nine", "best.mp3": "best", "extra.mp3": "no", "p2.mp3": "", "notes.txt": "no", VOICE: `${LAP_VOICE.voiceId}\n` });
     try {
-      const library = LapVoiceLibrary.load(dir);
+      const lines: string[] = [];
+      const library = LapVoiceLibrary.load(dir, (l) => lines.push(l));
       assert.deepEqual(library.manifest.clips, ["best", "t942"]);
-      assert.equal(library.manifest.voice, "Daniel");
+      assert.equal(library.manifest.voice, "Finley");
+      assert.match(lines[0] ?? "", /2 of \d+ clips in the Finley voice\.$/);
       assert.match(library.manifest.v, /^[0-9a-f]{12}$/);
       assert.equal(library.clip("t942")?.toString(), "nine");
       assert.equal(library.clip("extra"), undefined);
       assert.equal(library.clip("../t942"), undefined);
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("names the voice the clips are really in - Daniel for a folder with no VOICE file (24 Nov 2026)", async () => {
+    // Deployed with Finley in LAP_VOICE before the clips were made again, the
+    // relay would have said "in the Finley voice" over Daniel's clips.
+    const old = await folder({ "t942.mp3": "nine", MODEL: "eleven_v4_turbo\n" });
+    const other = await folder({ "t942.mp3": "nine", VOICE: "someOtherVoice1\n" });
+    try {
+      const lines: string[] = [];
+      assert.equal(LapVoiceLibrary.load(old, (l) => lines.push(l)).manifest.voice, "Daniel");
+      assert.match(lines[0] ?? "", /in the Daniel voice, not Finley: run lap-voice-render\.cmd/);
+      assert.equal(LapVoiceLibrary.load(other).manifest.voice, "");
+      assert.equal(clipsVoiceName(undefined), "Daniel");
+      assert.equal(clipsVoiceName(" fnYMz3F5gMEDGMWcH1ex\r\n"), "Finley");
+    } finally {
+      await rm(old, { recursive: true, force: true });
+      await rm(other, { recursive: true, force: true });
     }
   });
 
@@ -150,7 +172,7 @@ describe("lap voice: on the relay", () => {
       assert.match(list.headers.get("cache-control") ?? "", /max-age=300/);
       const body = (await list.json()) as { clips: string[]; voice: string };
       assert.deepEqual(body.clips, ["t942"]);
-      assert.equal(body.voice, "Daniel");
+      assert.equal(body.voice, "Finley");
 
       const clip = await fetch(`${h.base}/lap-voice/t942.mp3?v=abc`);
       assert.equal(clip.status, 200);
@@ -182,8 +204,9 @@ describe("lap voice: making the clips", () => {
   it("makes what is missing and never asks for a clip twice", async () => {
     const dir = await mkdtemp(join(tmpdir(), "lapvoice-make-"));
     try {
-      // A set made on this model, part way.
+      // A set made on this model, in this voice, part way.
       await writeFile(join(dir, MODEL_FILE), `${LAP_VOICE.modelId}\n`);
+      await writeFile(join(dir, VOICE_FILE), `${LAP_VOICE.voiceId}\n`);
       await writeFile(join(dir, `${few[0]!.name}.mp3`), "already");
       const asked: string[] = [];
       const report = await renderLapClips({ dir, clips: few, render: async (text) => { asked.push(text); return Buffer.from(text); } });
@@ -220,10 +243,11 @@ describe("lap voice: making the clips", () => {
     try {
       await mkdir(dir);
       await writeFile(join(dir, MODEL_FILE), "eleven_v3\n");
+      await writeFile(join(dir, VOICE_FILE), `${LAP_VOICE.voiceId}\n`);
       for (const clip of few) await writeFile(join(dir, `${clip.name}.mp3`), "v3");
 
-      assert.equal(await madeOnAnotherModel(dir, "eleven_v4_turbo", few), true);
-      assert.equal((await missingClips(dir, few, "eleven_v4_turbo")).length, few.length);
+      assert.equal(await madeAnotherWay(dir, { ...LAP_SET, model: "eleven_v4_turbo" }, few), "eleven_v3");
+      assert.equal((await missingClips(dir, few, { ...LAP_SET, model: "eleven_v4_turbo" })).length, few.length);
 
       const report = await renderLapClips({ dir, clips: few, model: "eleven_v4_turbo", render: async () => Buffer.from("v4") });
 
@@ -238,18 +262,18 @@ describe("lap voice: making the clips", () => {
     }
   });
 
-  it("treats a set from before the folder said its model as another model's", async () => {
+  it("treats a set from before the folder said its model or voice as Daniel's, another set", async () => {
     const parent = await mkdtemp(join(tmpdir(), "lapvoice-model-"));
     const dir = join(parent, "lap-voice");
     try {
       await mkdir(dir);
       await writeFile(join(dir, `${few[0]!.name}.mp3`), "old");
 
-      assert.equal(await madeOnAnotherModel(dir, LAP_VOICE.modelId, few), true);
+      assert.equal(await madeAnotherWay(dir, LAP_SET, few), "daniel");
       assert.equal(setAsideDir(dir, undefined), `${dir}-older`);
 
       const report = await renderLapClips({ dir, clips: few, render: async () => Buffer.from("new") });
-      assert.equal(report.setAside, `${dir}-older`);
+      assert.equal(report.setAside, `${dir}-daniel`);
       assert.equal(report.made, few.length);
     } finally {
       await rm(parent, { recursive: true, force: true });
@@ -259,12 +283,114 @@ describe("lap voice: making the clips", () => {
   it("an empty folder is nobody's, and is not moved", async () => {
     const dir = await mkdtemp(join(tmpdir(), "lapvoice-make-"));
     try {
-      assert.equal(await madeOnAnotherModel(dir, LAP_VOICE.modelId, few), false);
+      assert.equal(await madeAnotherWay(dir, LAP_SET, few), undefined);
       const report = await renderLapClips({ dir, clips: few.slice(0, 1), render: async () => Buffer.from("ok") });
       assert.equal(report.setAside, undefined);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  // 24 Nov 2026, Asher: the lap voice moves from Daniel to Finley. Clips are
+  // found by file name and only the model was checked, so the switch would
+  // have made nothing and phones would have kept playing Daniel.
+  describe("another voice is another set (24 Nov 2026)", () => {
+    const DANIEL = "onwK4e9ZLuTAKqWW03F9";
+    const FINLEY = "fnYMz3F5gMEDGMWcH1ex";
+    const finley = { model: "eleven_v4_turbo", voice: FINLEY };
+
+    it("the rule: same model and voice is this set; another voice is kept by its name, another model by the model", () => {
+      assert.equal(anotherSetTag({ model: "eleven_v4_turbo", voice: FINLEY }, finley), undefined);
+      assert.equal(anotherSetTag({ model: "eleven_v4_turbo", voice: DANIEL }, finley), "daniel");
+      assert.equal(anotherSetTag({ model: "eleven_v4_turbo", voice: "someOtherId42" }, finley), "someOtherId42");
+      assert.equal(anotherSetTag({ model: "eleven_v3", voice: FINLEY }, finley), "eleven_v3");
+      assert.equal(anotherSetTag({ model: undefined, voice: FINLEY }, finley), "older");
+      // Both changed: the voice is what somebody looking for the old set knows it by.
+      assert.equal(anotherSetTag({ model: "eleven_v3", voice: DANIEL }, finley), "daniel");
+    });
+
+    it("reads a folder with no VOICE file as Daniel's - the set made before it existed", async () => {
+      const dir = await mkdtemp(join(tmpdir(), "lapvoice-voice-"));
+      try {
+        assert.equal(await clipsVoice(dir), DANIEL);
+        await writeFile(join(dir, VOICE_FILE), `${FINLEY}\n`);
+        assert.equal(await clipsVoice(dir), FINLEY);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("LAP_VOICE is not Daniel, so today's folder (MODEL, no VOICE) is a set to make again", () => {
+      assert.equal(LAP_SET.voice, LAP_VOICE.voiceId);
+      assert.equal(anotherSetTag({ model: LAP_VOICE.modelId, voice: DANIEL }, LAP_SET), "daniel");
+    });
+
+    it("sets Daniel's set aside as lap-voice-daniel, says every clip is missing, makes them all in the new voice", async () => {
+      const parent = await mkdtemp(join(tmpdir(), "lapvoice-voice-"));
+      const dir = join(parent, "lap-voice");
+      try {
+        // relay/lap-voice/ as it is in git today: MODEL, the README, the clips, no VOICE.
+        await mkdir(dir);
+        await writeFile(join(dir, MODEL_FILE), "eleven_v4_turbo\n");
+        await writeFile(join(dir, "README.md"), "# The lap voice's clips\n");
+        for (const clip of few) await writeFile(join(dir, `${clip.name}.mp3`), "daniel");
+
+        // What "count" reports: all of them.
+        assert.equal((await missingClips(dir, few, finley)).length, few.length);
+
+        const asked: string[] = [];
+        const report = await renderLapClips({ dir, clips: few, ...finley, render: async (text) => { asked.push(text); return Buffer.from("finley"); } });
+
+        assert.equal(report.setAside, join(parent, "lap-voice-daniel"));
+        assert.equal(report.made, few.length);
+        assert.equal(report.kept, 0);
+        assert.equal(asked.length, few.length);
+        assert.equal(await readFile(join(dir, `${few[0]!.name}.mp3`), "utf8"), "finley");
+        assert.equal(await clipsVoice(dir), FINLEY);
+        assert.equal(await clipsModel(dir), "eleven_v4_turbo");
+        assert.equal(await readFile(join(parent, "lap-voice-daniel", `${few[0]!.name}.mp3`), "utf8"), "daniel");
+        // The folder's README stays with the folder (it is in git).
+        assert.equal(await readFile(join(dir, "README.md"), "utf8"), "# The lap voice's clips\n");
+
+        // And the next run is this set: nothing more to make, nothing moved.
+        const again = await renderLapClips({ dir, clips: few, ...finley, render: async () => assert.fail("nothing left to make") });
+        assert.equal(again.setAside, undefined);
+        assert.equal(again.kept, few.length);
+      } finally {
+        await rm(parent, { recursive: true, force: true });
+      }
+    });
+
+    it("a run cut off part way carries on in the new voice rather than starting again", async () => {
+      const parent = await mkdtemp(join(tmpdir(), "lapvoice-voice-"));
+      const dir = join(parent, "lap-voice");
+      try {
+        await mkdir(dir);
+        await writeFile(join(dir, MODEL_FILE), "eleven_v4_turbo\n");
+        for (const clip of few) await writeFile(join(dir, `${clip.name}.mp3`), "daniel");
+
+        let made = 0;
+        const first = await renderLapClips({
+          dir,
+          clips: few,
+          ...finley,
+          together: 1,
+          render: async () => {
+            if (++made > 2) throw new VoiceUpstreamError(402, "spent");
+            return Buffer.from("finley");
+          },
+        });
+        assert.equal(first.made, 2);
+        assert.notEqual(first.stopped, undefined);
+
+        const second = await renderLapClips({ dir, clips: few, ...finley, render: async () => Buffer.from("finley") });
+        assert.equal(second.setAside, undefined, "the half-made Finley set is not moved aside");
+        assert.equal(second.kept, 2);
+        assert.equal(second.made, few.length - 2);
+      } finally {
+        await rm(parent, { recursive: true, force: true });
+      }
+    });
   });
 
   it("waits and asks again when ElevenLabs is busy", async () => {
@@ -395,7 +521,7 @@ function withClips(p: FakePage, clips: Clips | null): void {
   `);
   const listed = clips === null ? [] : clips.listed ?? NAMES;
   p.eval(`
-    this.__manifest = ${JSON.stringify({ ok: true, voice: "Daniel", v: listed.length > 0 ? "abc123abc123" : "", clips: listed })};
+    this.__manifest = ${JSON.stringify({ ok: true, voice: "Finley", v: listed.length > 0 ? "abc123abc123" : "", clips: listed })};
     this.__slow = ${JSON.stringify(clips?.slow ?? [])};
     this.__broken = ${JSON.stringify(clips?.broken ?? [])};
     const __realFetch = fetch;
