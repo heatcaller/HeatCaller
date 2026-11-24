@@ -179,6 +179,60 @@ public sealed class NativeScrollBarFlashTests : IDisposable
         Assert.True(found.Count(f => !f.StartsWith("    ", StringComparison.Ordinal)) == 0, "A native scroll bar showed with no slim bar over it:\n" + string.Join("\n", found));
     }
 
+    /// <summary>
+    /// Practice's Expand and Restore (24 Nov 2026, Asher: "when restoring the
+    /// screen on practice I see native scroll bars flash during the
+    /// animation"): setting the fold up lays the page out at its start and
+    /// its end, and at its end the page's scrolling panel turned Windows' own
+    /// bar on, drawn on screen. Pressed twice each way, nothing flashes.
+    /// </summary>
+    [Fact]
+    public void Practice_s_Expand_and_Restore_show_no_native_scroll_bar()
+    {
+        Seed();
+
+        var found = StaThread.Run(() =>
+        {
+            var window = new MainForm { LayoutCheckMode = true, StartPosition = FormStartPosition.Manual, Location = new System.Drawing.Point(-20000, -20000) };
+            using var watch = new NativeBarWatch();
+
+            try
+            {
+                window.Show();
+                window.ClientSize = new System.Drawing.Size(1280, 800);
+                StaThread.Settle();
+                typeof(MainForm).GetMethod("GoToPage", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { "Practice" });
+                Pump();
+
+                var page = All(window).OfType<PracticeModeControl>().First();
+                var expand = (Button)typeof(PracticeModeControl).GetField("_btnExpand", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(page)!;
+
+                watch.Start();
+
+                foreach (var round in new[] { "first", "second" })
+                {
+                    watch.Where = "Practice, Expand, " + round + " time";
+                    expand.PerformClick();
+                    Pump();
+                    watch.Where = "Practice, Restore, " + round + " time";
+                    expand.PerformClick();
+                    Pump();
+                }
+
+                return watch.Found.ToList();
+            }
+            finally
+            {
+                watch.Stop();
+                window.Close();
+                window.Dispose();
+                StaThread.Settle();
+            }
+        }, TimeSpan.FromMinutes(3), () => "Practice's Expand and Restore");
+
+        Assert.True(found.Count(f => !f.StartsWith("    ", StringComparison.Ordinal)) == 0, "A native scroll bar showed with no slim bar over it:\n" + string.Join("\n", found));
+    }
+
     private static void Call(object on, string method) =>
         on.GetType().GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.Invoke(on, null);
 

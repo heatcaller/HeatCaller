@@ -57,8 +57,9 @@ public sealed class InboxDockButtonTests
     {
         Assert.Contains("_btnFormat, _btnExpandBoard, _btnDockInbox);", Source("RaceControlControl.Layout.cs"), StringComparison.Ordinal);
 
-        var desk = Source("RaceControlControl.Desk.cs");
-        Assert.Contains("DockInboxRequested?.Invoke(InboxDockButton.DockOnPress(_inboxDockedOnScreen));", desk, StringComparison.Ordinal);
+        // The button is DockInboxSquare since 24 Nov 2026, shared with Practice.
+        Assert.Contains("Click += (_, _) => DockRequested?.Invoke(InboxDockButton.DockOnPress(_dockedOnScreen));", Source("DockInboxSquare.cs"), StringComparison.Ordinal);
+        Assert.Contains("_btnDockInbox.DockRequested += dock => DockInboxRequested?.Invoke(dock);", Source("RaceControlControl.Desk.cs"), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -89,11 +90,11 @@ public sealed class InboxDockButtonTests
     [Fact]
     public void It_is_a_picture_named_by_its_tooltip_and_the_name_changes_when_told()
     {
-        var desk = Source("RaceControlControl.Desk.cs");
+        var square = Source("DockInboxSquare.cs");
 
-        Assert.Contains("AccessibleName = InboxDockButton.Caption(dockedOnScreen: false),", desk, StringComparison.Ordinal);
-        Assert.Contains("var caption = InboxDockButton.Caption(dockedOnScreen);", desk, StringComparison.Ordinal);
-        Assert.Contains("_dockInboxTip.SetToolTip(_btnDockInbox, InboxDockButton.Tip(dockedOnScreen));", desk, StringComparison.Ordinal);
+        Assert.Contains("AccessibleName = InboxDockButton.Caption(dockedOnScreen: false);", square, StringComparison.Ordinal);
+        Assert.Contains("var caption = InboxDockButton.Caption(dockedOnScreen);", square, StringComparison.Ordinal);
+        Assert.Contains("_tip.SetToolTip(this, InboxDockButton.Tip(dockedOnScreen));", square, StringComparison.Ordinal);
 
         Assert.StartsWith("Dock Inbox - ", InboxDockButton.Tip(dockedOnScreen: false), StringComparison.Ordinal);
         Assert.StartsWith("Undock Inbox - ", InboxDockButton.Tip(dockedOnScreen: true), StringComparison.Ordinal);

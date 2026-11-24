@@ -95,6 +95,71 @@ public sealed class StartNextHoldTests
         Assert.True(clicks.ClickActs());
     }
 
+    /// <summary>
+    /// Let go before the demo, nothing happens (23 Nov 2026, Asher: "when
+    /// clicking and holding the start button on race day if you release it
+    /// prior to it starting as a demo it should go back to it's unpressed
+    /// state and not the popup window"). It used to be a click however long
+    /// it was held, and the start's popup came up.
+    /// </summary>
+    [Theory]
+    [InlineData(80, true)]
+    [InlineData(299, true)]
+    [InlineData(300, false)]
+    [InlineData(700, false)]
+    [InlineData(990, false)]
+    public void A_press_held_past_a_click_and_let_go_before_the_demo_does_nothing(long heldMs, bool starts)
+    {
+        var now = 10_000L;
+        var clicks = new HeldClickFilter(() => now);
+
+        clicks.Down();
+        now += heldMs;
+
+        Assert.Equal(starts, clicks.ClickActs());
+
+        // Whatever that press came to, the next click is a click.
+        clicks.Down();
+        now += 100;
+        Assert.True(clicks.ClickActs());
+    }
+
+    [Fact]
+    public void Space_or_Enter_with_no_mouse_press_is_always_a_click()
+    {
+        var now = 10_000L;
+        var clicks = new HeldClickFilter(() => now);
+
+        // A long press that went nowhere (a dialog took the mouse), then the let-go was handled.
+        clicks.Down();
+        now += 5_000;
+        clicks.Pressed();
+
+        Assert.True(clicks.ClickActs());
+    }
+
+    [Fact]
+    public void Both_Start_buttons_time_the_press()
+    {
+        static string Source(string file)
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "check.cmd")))
+            {
+                dir = dir.Parent;
+            }
+
+            return File.ReadAllText(Path.Combine(dir!.FullName, "HeatCaller", "HeatCaller", file));
+        }
+
+        Assert.Contains("_startNextClicks.Down();", Source("RaceControlControl.Layout.cs"), StringComparison.Ordinal);
+
+        // Race Day's Start only while it offers a demo: on any other step it is a plain button.
+        var today = Source("TodayControl.cs");
+        Assert.Contains("_heldClicks.Down();", today, StringComparison.Ordinal);
+        Assert.True(today.IndexOf("if (DemoRound() is not null)", StringComparison.Ordinal) < today.IndexOf("_heldClicks.Down();", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Start_Next_holds_for_as_long_as_the_other_holds()
     {

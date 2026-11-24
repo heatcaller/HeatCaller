@@ -702,36 +702,10 @@ public sealed partial class PracticeModeControl : UserControl
         // built again (RebuildColumns).
         _textSize.Keep(() => Pieces.KeepHeadingsWhole(_grid));
 
-        var btnColumns = new Button { Text = "Choose Columns..." };
-        btnColumns.Click += (_, _) =>
-        {
-            using var form = new KpiPickerForm("Practice", _settings.PracticeKpis, KpiCatalog.DefaultPractice);
-            if (form.ShowDialog(this) == DialogResult.OK)
-            {
-                // The picker's Restore Defaults lands here too, so the old
-                // list is kept for Undo. This page lives as long as the app.
-                var before = _settings.PracticeKpis.ToList();
-                if (!before.SequenceEqual(form.SelectedKeys))
-                {
-                    _undo?.Capture("Change the Practice columns", () =>
-                    {
-                        _settings.PracticeKpis = before.ToList();
-                        _settings.Save();
-
-                        if (!IsDisposed)
-                        {
-                            RebuildColumns();
-                            RefreshGrid();
-                        }
-                    });
-                }
-
-                _settings.PracticeKpis = form.SelectedKeys;
-                _settings.Save();
-                RebuildColumns();
-                RefreshGrid();
-            }
-        };
+        // The columns are chosen by right-clicking the table, and Dock Inbox
+        // stands beside Expand (24 Nov 2026) - see PracticeModeControl.Columns.
+        // The Choose Columns button that stood here is gone.
+        BuildColumnsAndDock();
 
         // No laps yet: what fills the table, in the table itself.
         EmptyNote.For(_grid, () => _active
@@ -742,7 +716,7 @@ public sealed partial class PracticeModeControl : UserControl
 
         session.Add(_lblStatus);
         session.AddFill(_grid, () => _grid.ColumnHeadersHeight + GridLeastRows * _grid.RowTemplate.Height);
-        session.Add(new ButtonBar().With(btnColumns, _btnExpand), gapBelow: 0);
+        session.Add(new ButtonBar().With(_btnExpand, _btnDockInbox), gapBelow: 0);
 
         top.AddFill(session, session.LeastHeight);
 

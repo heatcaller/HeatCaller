@@ -320,10 +320,7 @@ public sealed partial class RaceControlControl
         BuildDockInboxButton();
         var footer = new ButtonBar(tight: true).With(_chkStartWithOnAir, _swWarmUpFirst, _swAutoStart, _btnFormat, _btnExpandBoard, _btnDockInbox);
 
-        // After the row's own sizing of it, which runs first: a picture, so square.
-        SquareDockInboxButton();
-        _btnDockInbox.FontChanged += (_, _) => SquareDockInboxButton();
-        _btnDockInbox.SizeChanged += (_, _) => SquareDockInboxButton();
+        // It squares itself after the row's own sizing of it: see DockInboxSquare.
 
         // The switches are shorter than the buttons beside them; the bar lines
         // everything up along the top, so they are brought down to their middle.
@@ -1629,7 +1626,9 @@ public sealed partial class RaceControlControl
         {
             if (e.Button == MouseButtons.Left)
             {
-                _startNextClicks.Pressed();
+                // Timed from here: held past a click and let go early, the
+                // click does nothing (23 Nov 2026) - see HeldClickFilter.
+                _startNextClicks.Down();
             }
         };
 

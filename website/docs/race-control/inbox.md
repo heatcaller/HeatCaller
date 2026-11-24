@@ -177,7 +177,7 @@ Its columns are **Sent**, **Kind**, **From**, **What**, **Answer** and **Ref**. 
 
 ## Docking it in the main window
 
-Tick **Dock in the main window** and the Inbox moves into a panel down the right of the main window, beside Race Control. The small button beside **Expand** at the foot of Race Control's leaderboard does the same in one press, and opens the Inbox first if it's closed. It has a picture of a window with a panel down its right-hand side, and its tooltip reads **Dock Inbox**. Drag the splitter between them to make it wider or narrower; the width is remembered.
+Tick **Dock in the main window** and the Inbox moves into a panel down the right of the main window, beside Race Control. The small button beside **Expand** at the foot of Race Control's leaderboard, and the same button beside **Expand** under Practice's **This session** table, does the same in one press, and opens the Inbox first if it's closed. It has a picture of a window with a panel down its right-hand side, and its tooltip reads **Dock Inbox**. Drag the splitter between them to make it wider or narrower; the width is remembered.
 
 Narrower than about 760 pixels, it rearranges itself to fit:
 

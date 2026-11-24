@@ -171,8 +171,15 @@ public partial class MainForm
     private bool InboxDockedOnScreen =>
         _inboxForm is { IsDisposed: false } open && InboxDockButton.DockedOnScreen(open: true, inItsOwnWindow: open.TopLevel);
 
-    /// <summary>Race Control's Dock Inbox button reads Undock Inbox while the inbox is docked on screen.</summary>
-    private void ShowInboxDockedOnRaceControl() => _raceControlControl?.ShowInboxDocked(InboxDockedOnScreen);
+    /// <summary>
+    /// Race Control's Dock Inbox button reads Undock Inbox while the inbox is
+    /// docked on screen - and Practice's (24 Nov 2026), the same button.
+    /// </summary>
+    private void ShowInboxDockedOnRaceControl()
+    {
+        _raceControlControl?.ShowInboxDocked(InboxDockedOnScreen);
+        _practiceControl?.ShowInboxDocked(InboxDockedOnScreen);
+    }
 
     /// <summary>
     /// Race Control's Dock Inbox button (22 Nov 2026, asked for by Asher):
