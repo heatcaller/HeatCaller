@@ -1273,8 +1273,10 @@ function meMoment() {
     const seen = meSeen();
     // Each one a way to fix what it says (7 Nov 2026, Asher): the pack to
     // the quick pack change, the transponder to its check on Tonight.
-    // Tiles, not chips, since the same day.
-    row.appendChild(meAct('pack', 'Pack', pack !== '' ? pack : 'None set', pack !== '',
+    // Tiles, not chips, since the same day. "Battery Pack" since 23 Nov
+    // 2026 (Asher: "add battery to the label on the pack chip") - "Pack"
+    // alone did not say what kind of pack.
+    row.appendChild(meAct('pack', 'Battery Pack', pack !== '' ? pack : 'None set', pack !== '',
       pack !== '' ? pack + ' in the car' : 'No pack set', mePackSheet));
     row.appendChild(meAct('tp', 'Transponder', Number.isFinite(seen) ? 'Heard ' + hm(seen) : 'Not heard', Number.isFinite(seen),
       Number.isFinite(seen) ? 'Transponder heard' : 'Transponder not heard', meToTransponder));

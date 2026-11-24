@@ -78,7 +78,8 @@ describe("Me tonight: Alerts, and qualifying on the moment card", () => {
     page.button(hero, /^TransponderNot heard$/)!.click();
     assert.equal(page.eval("document.body.getAttribute('data-me')"), "tonight");
 
-    page.button(hero, /^PackNone set$/)!.click();
+    // "Battery Pack" since 23 Nov 2026 (Asher: "add battery to the label on the pack chip").
+    page.button(hero, /^Battery PackNone set$/)!.click();
     assert.equal(page.get("me-sheet").hidden, false, "the quick pack change");
   });
 
