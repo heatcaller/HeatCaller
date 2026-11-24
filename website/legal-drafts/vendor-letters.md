@@ -54,6 +54,8 @@ The first version of this letter (15 Nov 2026, ten questions) is in git history;
 
 ## 2. Anthropic
 
+**Sent 24 Nov 2026:** Asher asked Anthropic for zero data retention through its general "Contact us" form, not the sales form. If no answer comes, or the reply says it has to go through sales, ask again at anthropic.com/contact-sales. The other questions below are still to send.
+
 **To:** Anthropic sales, through the form at anthropic.com/contact-sales (no public sales address was found on 24 Nov 2026). (Checked 16 Nov 2026: Anthropic's API docs say zero data retention is not self-serve; sales reviews it and turns it on for one organization at a time, so ask for it by name in question 1. If sales doesn't answer questions 4-6, send them to the privacy contact in Anthropic's privacy policy.)
 **Subject:** Data retention, training and minors for an API product used by youth sports clubs
 
