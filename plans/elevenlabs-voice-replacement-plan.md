@@ -1,6 +1,6 @@
 # ElevenLabs voice replacement plan (24 Nov 2026)
 
-ElevenLabs is retiring all 19 of its Default voices: "All our Default voices will expire on December 31, 2026, and they will no longer be accessible after this date" ([help centre](https://elevenlabs.io/docs/help-center/product/voices/my-voices/what-are-default-voices)). Asher asked for a plan to move every voice HeatCaller uses onto new ones, keeping the set small. This plan is not started.
+ElevenLabs is retiring all 19 of its Default voices: "All our Default voices will expire on December 31, 2026, and they will no longer be accessible after this date" ([help centre](https://elevenlabs.io/docs/help-center/product/voices/my-voices/what-are-default-voices)). Asher asked for a plan to move every voice HeatCaller uses onto new ones, keeping the set small. Asher picked the six voices by ear on 24 Nov 2026 (section 4); the build is under way.
 
 ## 1. What HeatCaller uses today
 
@@ -68,6 +68,19 @@ One voice per speaking seat, so the cast never shares a voice, plus the lap clip
 | Recap host | Warren - Effortless and Cool | Relaxed after-the-flag tone (Will's replacement) | Sawyer, Darian |
 
 The HeatCaller voice (relay catalogue) offers three of these to clubs (the design is "two or three"): the announcer pick, one contrasting male and one female voice, chosen in step A.
+
+**Picked 24 Nov 2026 (audition page, 18 voices heard; Callum's id in ElevenLabs' table answered "voice not found"):**
+
+| Seat | Voice | Id |
+|---|---|---|
+| Announcer, lap clips, video narrator | Finley - Articulate Anchor | fnYMz3F5gMEDGMWcH1ex |
+| Co-host | Alicia - Polished Global Anchor | BFd5oBc2DDna33pSi4Gf |
+| Technical Lead | Wyatt - Seasoned Mentor | FrS6cKLB1wg4WYgPa9GW |
+| Team Principal | Darian - Warm Grounded Storyteller | gOupLcAkjEnguROwi4oS |
+| Achievements reader | Elowen - Upbeat Modern Narrator | dvbL7qkNGZY1IqPGZAjM |
+| Recap host | Baxter - Dry Calm Aussie | jSuBIjxMKhqIfb0wCK1F |
+
+The HeatCaller voice's three, when it is turned on: Finley, Alicia and Baxter.
 
 ## 5. Build steps
 
