@@ -20,7 +20,7 @@ The original steps, for the record:
 
 ## 2. Sign the founder IP assignment (founder-ip-assignment.md) - READY TO SIGN
 
-Filled in 23 Nov 2026: both addresses ("506 Pinyon Dr, Schenectady, NY 12303"), formed 26 September 2026 (New York DOS ID 8031449), title Managing Member, Porkbun for the domain and Google for email (confirm it is Google Workspace), no payment or app-store accounts yet, and no employer claims anything. Left: the consideration (ask counsel, or use "US$1 and other good and valuable consideration"), then date and sign both copies.
+Filled in 23 Nov 2026: both addresses ("506 Pinyon Dr, Schenectady, NY 12303"), formed 26 September 2026 (New York DOS ID 8031449), title Managing Member, Porkbun for the domain and Google for email, no payment or app-store accounts yet, and no employer claims anything. 24 Nov 2026: the consideration is the US$500 opening deposit as Asher's capital contribution, for his membership interest (the assignment goes in with it); the email is a plain Gmail account, not Google Workspace. Print founder-ip-assignment.pdf twice, then date and sign both copies (once as Founder, once as Managing Member) and keep one with the company records.
 
 The original steps, for the record:
 
@@ -29,7 +29,7 @@ The repositories and the main accounts are already listed. You fill in:
 
 - **your address and the company's address.** The company's can be the registered address from the New York filing.
 - **the date the LLC was formed**, from the New York Articles of Organization.
-- **the consideration.** "US$1 and other good and valuable consideration" is the usual short form. Ask counsel whether it should be a capital contribution under your operating agreement.
+- **the consideration.** Decided 24 Nov 2026: part of the capital contribution with the US$500 opening deposit, for the membership interest. Counsel can confirm it matches the operating agreement.
 - **past employers.** Does any current or past employer's contract claim things you make in your own time? If one might, show that clause to counsel before signing.
 - **the accounts still missing:** domain registrar, email provider, payment or app-store accounts.
 - **your title.** "Managing Member" if the LLC is member-managed.
