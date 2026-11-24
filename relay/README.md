@@ -1139,8 +1139,9 @@ commercial licence):
     lap-voice-render.cmd count     what it would make and cost; spends nothing
     lap-voice-render.cmd           makes the missing ones, after you type yes
 
-They land in `lap-voice/`, which git ignores - all but `lap6.mp3`, a recut
-take force-added so a fresh copy keeps it. Run it again any time: clips
+They land in `lap-voice/`, which git ignores - all but `lap6.mp3` (force-added
+when Daniel's take was recut; Finley's replaced it on 24 Nov 2026) and the
+`MODEL` and `VOICE` files. Run it again any time: clips
 already there are never asked for twice. `lap-voice/MODEL` and
 `lap-voice/VOICE` say which model and voice made the set. A set made on
 another model or in another voice (a folder with `MODEL` and no `VOICE` is
