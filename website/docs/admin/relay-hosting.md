@@ -333,7 +333,7 @@ fly secrets set RELAY_VOICE_KEY=sk_...
 
 Restrict the key in ElevenLabs to the text-to-speech endpoints and **Speech history** (write), and give it a credit limit. That limit is the circuit breaker behind the per-club allowances: the allowances are what a club sees, the credit limit is what stops a mistake costing you a month's budget.
 
-The relay asks ElevenLabs not to keep each line. On plans below Enterprise, ElevenLabs accepts that request and keeps the line anyway, so the relay also deletes each line from the key's ElevenLabs history as soon as it has the audio. That is what the **Speech history** permission is for. A key without it still speaks every line, and the log says once: `[voice] This ElevenLabs key can't remove lines from its history (403); give it the Speech history permission.` Setting `RELAY_VOICE_NO_LOGGING=0` turns off both the request and the delete.
+The relay asks ElevenLabs not to keep each line. On plans below Enterprise, ElevenLabs accepts that request and keeps the line anyway, so the relay also deletes each line from the key's ElevenLabs history as soon as it has the audio. That is what the **Speech history** permission is for. A key without it still speaks every line, and the log says once: `[voice] This ElevenLabs key can't remove lines from its history (403); give it the Speech history permission. ...` (or `401`). Setting `RELAY_VOICE_NO_LOGGING=0` turns off both the request and the delete.
 
 Without the secret the relay starts and simply does not offer the voice, whatever the catalog says. The startup log tells you which you have:
 
@@ -891,7 +891,7 @@ Put the key on the first line of a file called `voice-test.key` in the `relay` f
 voice-test.cmd
 ```
 
-The first run builds, writes `relay.config.voice-test.json` with a catalog of HeatCaller's three voices (Finley, Alicia and Baxter), mints a club token, and prints the three values to paste into HeatCaller. Later runs just start it.
+The first run builds, writes `relay.config.voice-test.json` with a catalog of HeatCaller's three voices (Finley, Alicia and Baxter; these are Voice Library voices, so the key needs a paid ElevenLabs plan), mints a club token, and prints the three values to paste into HeatCaller. Later runs just start it.
 
 Those three go into **Voice → Voice**, in the **Voice relay:**, **Club:** and **Token:** boxes under the HeatCaller voice — not the **Club Website** page. Only the voice moves; results, check-in and the race-day manager keep going to the hosted relay. See [Sending the voice to a different relay](../announcer/voice.md#sending-the-voice-to-a-different-relay).
 
