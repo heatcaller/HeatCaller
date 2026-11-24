@@ -75,8 +75,11 @@ public sealed class InboxDockButtonTests
         var moved = press.IndexOf("HostInbox(open, dock);", StringComparison.Ordinal);
         Assert.True(saved > 0 && opened > saved && moved > opened);
 
-        // A minimised window is put back before it goes in the dock.
-        Assert.Contains("open.WindowState = FormWindowState.Normal;", press, StringComparison.Ordinal);
+        // A minimised or maximised window is put back before it goes in the
+        // dock - on the way through HostInbox, for the inbox's own tick too
+        // (23 Nov 2026, see DeskInboxDockTests).
+        Assert.Contains("PutInDock(form, _inboxDock!);", host, StringComparison.Ordinal);
+        Assert.Contains("form.WindowState = FormWindowState.Normal;", host, StringComparison.Ordinal);
 
         // The caption follows every move, and the inbox closing.
         Assert.Contains("form.ShowDocked(docked);\n        ShowInboxDockedOnRaceControl();", host, StringComparison.Ordinal);

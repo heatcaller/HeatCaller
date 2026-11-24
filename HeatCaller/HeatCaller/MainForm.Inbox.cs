@@ -97,15 +97,10 @@ public partial class MainForm
             }
 
             EnsureInboxDock();
-            form.Hide();
             _inboxLeast = form.MinimumSize;
-            form.MinimumSize = Size.Empty;
-            form.TopLevel = false;
-            form.FormBorderStyle = FormBorderStyle.None;
-            form.Dock = DockStyle.Fill;
-            _inboxDock!.Controls.Add(form);
+            PutInDock(form, _inboxDock!);
             _inboxSplit!.Visible = true;
-            _inboxDock.Visible = true;
+            _inboxDock!.Visible = true;
             form.Show();
         }
         else
@@ -129,6 +124,35 @@ public partial class MainForm
 
         form.ShowDocked(docked);
         ShowInboxDockedOnRaceControl();
+    }
+
+    /// <summary>
+    /// The inbox, hidden, made a part of <paramref name="dock"/> that fills
+    /// it. The caller shows it.
+    ///
+    /// WHY (23 Nov 2026, Asher: "when redocking a floating inbox it doesn't
+    /// go to the proper format"): a maximised inbox window went into the
+    /// dock still maximised, and a maximised window keeps its full-screen
+    /// size whatever it is docked in - 1516 wide in a 520 dock, so it kept
+    /// the wide three-column layout and ran off the right of the window.
+    /// Only Race Control's Dock Inbox button put the window back to normal
+    /// first; the tick at the inbox's foot did not. Both come through here
+    /// now, and it is put back to normal (from minimised too) before it
+    /// moves.
+    /// </summary>
+    internal static void PutInDock(Form form, Control dock)
+    {
+        if (form.TopLevel && form.WindowState != FormWindowState.Normal)
+        {
+            form.WindowState = FormWindowState.Normal;
+        }
+
+        form.Hide();
+        form.MinimumSize = Size.Empty;
+        form.TopLevel = false;
+        form.FormBorderStyle = FormBorderStyle.None;
+        form.Dock = DockStyle.Fill;
+        dock.Controls.Add(form);
     }
 
     /// <summary>The inbox is open and in the dock, not a window of its own.</summary>
@@ -165,14 +189,8 @@ public partial class MainForm
             return;
         }
 
-        // The tick could never be pressed on a minimised window; this
-        // button can. Docked as it stood, it would go in the dock still
-        // minimised - a strip with nothing in it.
-        if (dock && open.TopLevel && open.WindowState != FormWindowState.Normal)
-        {
-            open.WindowState = FormWindowState.Normal;
-        }
-
+        // A minimised or maximised window is put back to normal on its way
+        // into the dock - see PutInDock.
         HostInbox(open, dock);
     }
 
