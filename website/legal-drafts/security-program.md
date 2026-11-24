@@ -55,7 +55,19 @@ The first assessment is the DPIA (website/legal-drafts/dpia.md).
 ## 5. Safeguards
 
 **Access.**
-- Only the coordinator and named people have admin access to Fly.io, R2, the relay's admin pages, the ElevenLabs and Anthropic accounts, and the code repositories. List them: ______________________.
+- Only the coordinator and named people have admin access to Fly.io, R2, the relay's admin pages, the ElevenLabs and Anthropic accounts, and the code repositories. The list (24 Nov 2026): **Asher Kent only**, on every account below. Nobody else has a login, a key or a seat.
+
+  | Account | What it holds | Who has access | Checked |
+  |---|---|---|---|
+  | GitHub, account `heatcaller` | The four private repositories (HeatCaller, HeatCaller-releases, heatcaller-site, HeatCaller-Admin) | Asher Kent (the account's owner); each repository's only collaborator is `heatcaller`, as admin | Checked 24 Nov 2026 through GitHub's API |
+  | Fly.io, organization "personal" | The relay app `heatcaller-relay`, its data volume and its secrets (RELAY_CONFIG_JSON, RELAY_BRAIN_KEY); the relay's admin commands run over `fly ssh`, so this is also admin access to the relay | Asher Kent, the one member (admin) | Checked 24 Nov 2026 with `fly orgs show` |
+  | Cloudflare | R2 video storage and the heatcaller.com site (Pages) | Asher Kent | [CHECK: Asher to confirm no other members under Manage Account → Members] |
+  | Porkbun | The domain heatcaller.com and its DNS | Asher Kent | [CHECK: Asher to confirm] |
+  | Google (Gmail) | The support@heatcaller.com mail | Asher Kent | [CHECK: Asher to confirm no delegated access or forwarding to anyone else] |
+  | ElevenLabs, the HeatCaller account and Asher's development account | Speech; the development key is `relay/voice-test.key` on Asher's PC (not in git) | Asher Kent | [CHECK: Asher to confirm no workspace members or shared keys] |
+  | Anthropic | The commentary API; its key is RELAY_BRAIN_KEY on Fly | Asher Kent | [CHECK: Asher to confirm no other organization members] |
+
+  **AI coding assistants.** Claude Code sessions run on Asher's PC and act through his own logins there (the GitHub CLI, the Fly CLI and the development key file). They have no accounts of their own; Asher approves what they run, and they never print or copy keys. A session that is no longer needed is closed, and the logins are Asher's to revoke.
 - Every such account uses a unique password and two-factor authentication.
 - Relay secrets (API keys, signing keys) live in the host's secret store, never in the code. Checked 16 Nov 2026: Fly.io holds two secrets, RELAY_CONFIG_JSON (the clubs' token hashes and settings) and RELAY_BRAIN_KEY. Neither is in git.
 - Access is removed the same day someone no longer needs it.
