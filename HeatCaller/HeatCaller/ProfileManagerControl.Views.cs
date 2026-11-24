@@ -409,6 +409,18 @@ public sealed partial class ProfileManagerControl
             _tabs.Selected = _tabOrder.IndexOf(tab);
         }
 
+        // WHY (24 Nov 2026, Asher: "i see a native scroll bar when first
+        // clicking onto a screen ... in driver hub under the card tab"):
+        // each tab's panel is built hidden, so on its first show it was laid
+        // out at its made size, 150x150, and Windows drew its white scroll
+        // bar for a frame before the card gave it its real size. Painting is
+        // held on the card's body through the swap - see ShowWithoutFlash.
+        ShowWithoutFlash.Hold(_cardBody, () => ShowCardTab(tab));
+    }
+
+    /// <summary>The swap itself, for SelectCardTab: the tab's part shown and the others hidden.</summary>
+    private void ShowCardTab(CardTab tab)
+    {
         var painted = tab is CardTab.Profile or CardTab.Stats;
         _cardScroll.Visible = painted;
         _hubGarage!.Visible = tab == CardTab.Garage;
@@ -641,7 +653,17 @@ public sealed partial class ProfileManagerControl
         }
 
         _view = view;
-        ApplyView();
+
+        // Painting held through the swap, as for the card's tabs: the Garage
+        // view's first show is its first layout (24 Nov 2026).
+        if (_driversView.Parent is { } views)
+        {
+            ShowWithoutFlash.Hold(views, ApplyView);
+        }
+        else
+        {
+            ApplyView();
+        }
 
         // The Card view is about one driver: coming back to the Garage
         // view from it shows theirs.

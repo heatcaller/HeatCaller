@@ -81,9 +81,17 @@ public sealed partial class RaceDayEventControl : IPagedControl
             FlushPendingEdits();
         }
 
-        _templatesPage.Visible = _tabs.SelectedIndex == TemplatesTab;
-        _tonightPage.Visible = _tabs.SelectedIndex == TonightTab;
-        _clubPage.Visible = _tabs.SelectedIndex == ClubRulesTab;
+        // With painting held on the three pages' place (24 Nov 2026): each
+        // is built hidden, so its first show is its first layout - see
+        // ShowWithoutFlash.
+        var place = _templatesPage.Parent ?? (Control)this;
+
+        ShowWithoutFlash.Hold(place, () =>
+        {
+            _templatesPage.Visible = _tabs.SelectedIndex == TemplatesTab;
+            _tonightPage.Visible = _tabs.SelectedIndex == TonightTab;
+            _clubPage.Visible = _tabs.SelectedIndex == ClubRulesTab;
+        });
     }
 
     /// <summary>Shows one of the three pages - for a door elsewhere that means one of them (Next Steps' Start a Race Day: Templates).</summary>

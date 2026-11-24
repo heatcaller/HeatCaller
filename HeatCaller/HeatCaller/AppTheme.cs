@@ -3349,6 +3349,9 @@ public static class AppTheme
     /// </summary>
     public static void StyleTabControl(TabControl tabs)
     {
+        // Painting held through every tab change - see ShowWithoutFlash.HoldTabChanges.
+        ShowWithoutFlash.HoldTabChanges(tabs);
+
         tabs.DrawMode = TabDrawMode.OwnerDrawFixed;
         tabs.Font = BoldFont;
 
