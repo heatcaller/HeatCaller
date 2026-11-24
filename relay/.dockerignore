@@ -14,6 +14,10 @@ data-voice-test
 voice-test.key*
 voice-test-setup.mjs
 
+# Old lap-voice sets kept beside the live one (lap-voice-daniel and the like):
+# the image takes lap-voice/ only.
+lap-voice-*
+
 *.cmd
 README.md
 .gitignore

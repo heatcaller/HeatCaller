@@ -18,7 +18,8 @@ import type { CatalogueVoice } from "./voice.js";
  * goes anywhere.
  *
  * ONE VOICE FOR EVERY CLUB, whatever announcer a club picked in its Cast
- * tab: Daniel, ElevenLabs' "Steady Broadcaster". One set of clips is about
+ * tab: Finley, ElevenLabs' "Articulate Anchor" (Daniel, "Steady
+ * Broadcaster", until 24 Nov 2026 - see LAP_VOICE). One set of clips is about
  * a dollar; one per voice would be a dollar per voice and a choice nobody
  * asked for. A stock voice, never a clone - the clips are heard by every
  * club, and a cloned voice is somebody's likeness (see CatalogueVoice).
@@ -35,12 +36,26 @@ import type { CatalogueVoice } from "./voice.js";
  * always did.
  */
 
-/** The one voice. The id is ElevenLabs' own, from its voice list on 29 Oct 2026. */
+/**
+ * The one voice.
+ *
+ * WHY (24 Nov 2026, Asher: Finley is HeatCaller's announcer and lap voice):
+ * this was Daniel (onwK4e9ZLuTAKqWW03F9), one of ElevenLabs' "Default"
+ * voices, and ElevenLabs retires every Default voice on 31 Dec 2026 - after
+ * that no clip could ever be made again in it, so one new clip (a new
+ * lap-call word) or one recut would have been in a different voice from the
+ * rest. Finley is ElevenLabs' own named replacement for Daniel, an
+ * "Infinity" voice that can't be withdrawn. The id slug moved with it
+ * ("lap-daniel" to "lap-finley"); nothing reads it but this file - the
+ * manifest carries only the name. Model and settings are unchanged.
+ * lapvoicerender.ts notices the new voice (its VOICE file) and makes the
+ * whole set again, keeping Daniel's in lap-voice-daniel.
+ */
 export const LAP_VOICE: CatalogueVoice = Object.freeze({
-  id: "lap-daniel",
-  name: "Daniel",
-  what: "Steady Broadcaster",
-  voiceId: "onwK4e9ZLuTAKqWW03F9",
+  id: "lap-finley",
+  name: "Finley",
+  what: "Articulate Anchor",
+  voiceId: "fnYMz3F5gMEDGMWcH1ex",
   // v4 Turbo (10 Nov 2026, was v3 from 8 Nov, Flash before): the
   // announcer's model since HeatCaller moved to it, $0.04 per 1,000
   // characters. Like v3 it ignores the speed below. No clip carries an audio
@@ -64,6 +79,32 @@ export const LAP_VOICE: CatalogueVoice = Object.freeze({
 
 /** The folder name, relative to the relay folder (and to /app in the image). */
 export const LAP_VOICE_DIR = "lap-voice";
+
+/** The file in the clips folder that says which ElevenLabs voice made them (its voice id); lapvoicerender writes it. */
+export const VOICE_FILE = "VOICE";
+
+/** The voice every set was made in before VOICE_FILE existed (24 Nov 2026): Daniel, "Steady Broadcaster". */
+export const VOICE_BEFORE_VOICE_FILE = "onwK4e9ZLuTAKqWW03F9";
+
+/** The voices a set has been made in, by ElevenLabs voice id. */
+export const LAP_VOICE_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  onwK4e9ZLuTAKqWW03F9: "Daniel",
+  fnYMz3F5gMEDGMWcH1ex: "Finley",
+});
+
+/**
+ * The name of the voice a folder's clips are in, from its VOICE file -
+ * Daniel's when there is none, "" for a voice not on the list.
+ *
+ * WHY (24 Nov 2026, Asher: the lap voice moves to Finley): the manifest and
+ * the start-up log named LAP_VOICE, whatever the clips were. A relay
+ * deployed with Finley in LAP_VOICE before the clips were made again would
+ * have said "in the Finley voice" over Daniel's clips.
+ */
+export function clipsVoiceName(voiceFileText: string | undefined): string {
+  const id = (voiceFileText ?? "").trim() || VOICE_BEFORE_VOICE_FILE;
+  return id === LAP_VOICE.voiceId ? LAP_VOICE.name : (LAP_VOICE_NAMES[id] ?? "");
+}
 
 /** Lap times with a clip, in hundredths: 3.00 to 19.99. Anything else is the phone's voice. */
 export const LAP_TIME_MIN_CS = 300;
@@ -293,7 +334,8 @@ export class LapVoiceLibrary {
   private readonly clips: ReadonlyMap<string, Buffer>;
   readonly manifest: LapVoiceManifest;
 
-  constructor(clips: ReadonlyMap<string, Buffer>) {
+  /** voice: the name of the voice the clips are in (clipsVoiceName) - LAP_VOICE's unless the folder says otherwise. */
+  constructor(clips: ReadonlyMap<string, Buffer>, voice: string = LAP_VOICE.name) {
     this.clips = clips;
     const names = lapClips().map((c) => c.name).filter((name) => clips.has(name));
     const hash = createHash("sha256");
@@ -303,7 +345,7 @@ export class LapVoiceLibrary {
     }
     this.manifest = Object.freeze({
       ok: true,
-      voice: LAP_VOICE.name,
+      voice,
       v: names.length > 0 ? hash.digest("hex").slice(0, 12) : "",
       clips: Object.freeze(names),
     });
@@ -334,10 +376,20 @@ export class LapVoiceLibrary {
       }
     }
 
-    const library = new LapVoiceLibrary(found);
+    let said: string | undefined;
+    try {
+      said = readFileSync(join(dir, VOICE_FILE), "utf8");
+    } catch {
+      // No VOICE file: the set made before it existed, Daniel's.
+    }
+    const voice = clipsVoiceName(said);
+
+    const library = new LapVoiceLibrary(found, voice);
     log(found.size === 0
       ? `[lap voice] No clips in ${dir}, so spoken laps use the phone's voice.`
-      : `[lap voice] ${found.size} of ${wanted.size} clips in the ${LAP_VOICE.name} voice.`);
+      : voice === LAP_VOICE.name
+        ? `[lap voice] ${found.size} of ${wanted.size} clips in the ${LAP_VOICE.name} voice.`
+        : `[lap voice] ${found.size} of ${wanted.size} clips, in ${voice === "" ? "another" : `the ${voice}`} voice, not ${LAP_VOICE.name}: run lap-voice-render.cmd to make them again.`);
     return library;
   }
 

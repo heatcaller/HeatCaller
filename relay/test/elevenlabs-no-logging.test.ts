@@ -12,6 +12,10 @@ import {
 // 15 Nov 2026, children's privacy (plan 2.3): ElevenLabs is asked not to keep
 // the relay's lines (enable_logging=false), and a plan that turns that down
 // still gets its lines - asked again without it, once, and remembered.
+// (24 Nov 2026: tried on a real non-enterprise key, the flag is accepted and
+// ignored rather than turned down, so each line is also deleted from the
+// history - see elevenlabs-history-delete.test.ts. The fallback is kept for a
+// plan that does refuse it.)
 
 const voice = {
   id: "clubhouse",

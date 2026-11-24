@@ -280,10 +280,10 @@ Add a `"voice"` block beside `"clubs"` in `relay.config.json`. Each entry is one
   "maxChars": 600,
   "voices": [
     {
-      "id": "clubhouse",
-      "name": "Clubhouse",
-      "what": "Warm and clear, easy over a PA",
-      "voiceId": "<the ElevenLabs voice id>",
+      "id": "finley",
+      "name": "Finley",
+      "what": "Articulate Anchor",
+      "voiceId": "fnYMz3F5gMEDGMWcH1ex",
       "modelId": "eleven_v4_turbo",
       "stability": 0.5,
       "similarity": 0.75,
@@ -295,6 +295,8 @@ Add a `"voice"` block beside `"clubs"` in `relay.config.json`. Each entry is one
   ]
 }
 ```
+
+HeatCaller's own catalog has three voices: Finley (`fnYMz3F5gMEDGMWcH1ex`), Alicia, "Polished Global Anchor" (`BFd5oBc2DDna33pSi4Gf`), and Baxter, "Dry Calm Aussie" (`jSuBIjxMKhqIfb0wCK1F`). They're ElevenLabs' own voices from its Voice Library, which it says will stay available, and `relay.config.example.json` lists all three. You can use others. A Library voice works by its id without being saved to your ElevenLabs account, but not on ElevenLabs' free plan.
 
 A club is only ever told a voice's `id`, `name` and `what`. The ElevenLabs voice id, the model and the settings stay on the relay and are never served — that is what keeps every club's night sounding the way it was designed to, and the bill predictable.
 
@@ -317,7 +319,7 @@ Clubs start with no voice. Give each one its own `"voice"` entry:
 }
 ```
 
-`monthlyChars` is optional and falls back to the catalog's. Add `"voices": ["clubhouse", "paddock"]` to hold a club to part of the catalog; leave it out, or empty, and the club may use all of it. The relay refuses to start if a club names a voice the catalog doesn't have.
+`monthlyChars` is optional and falls back to the catalog's. Add `"voices": ["finley", "alicia"]` to hold a club to part of the catalog; leave it out, or empty, and the club may use all of it. The relay refuses to start if a club names a voice the catalog doesn't have.
 
 Then `fly-set-config.cmd`, and the relay restarts with it.
 
@@ -329,7 +331,9 @@ The ElevenLabs key is a Fly secret of its own, never written into the config:
 fly secrets set RELAY_VOICE_KEY=sk_...
 ```
 
-Restrict the key in ElevenLabs to the text-to-speech endpoints, and give it a credit limit. That limit is the circuit breaker behind the per-club allowances: the allowances are what a club sees, the credit limit is what stops a mistake costing you a month's budget.
+Restrict the key in ElevenLabs to the text-to-speech endpoints and **Speech history** (write), and give it a credit limit. That limit is the circuit breaker behind the per-club allowances: the allowances are what a club sees, the credit limit is what stops a mistake costing you a month's budget.
+
+The relay asks ElevenLabs not to keep each line. On plans below Enterprise, ElevenLabs accepts that request and keeps the line anyway, so the relay also deletes each line from the key's ElevenLabs history as soon as it has the audio. That is what the **Speech history** permission is for. A key without it still speaks every line, and the log says once: `[voice] This ElevenLabs key can't remove lines from its history (403); give it the Speech history permission. ...` (or `401`). Setting `RELAY_VOICE_NO_LOGGING=0` turns off both the request and the delete.
 
 Without the secret the relay starts and simply does not offer the voice, whatever the catalog says. The startup log tells you which you have:
 
@@ -435,11 +439,15 @@ Lines are counted per club, a calendar month (UTC) at a time, in `dataDir/.brain
 **Lap times in my ear**, on the club's **Live** page and a driver's own night (see [Lap times in my ear](../online/index.md#lap-times-in-my-ear)), plays short clips in one ElevenLabs voice for every club. The clips aren't rendered on the fly: you make them once, on your own PC, and they go into the relay's image.
 
 1. Put an ElevenLabs key (on a paid plan, for the commercial license) on the first line of `voice-test.key` in the relay folder.
-2. `lap-voice-render.cmd count` says what it would make and what it would cost, and spends nothing. The full set is 2,744 clips and 45,755 characters: lap times, lap numbers, positions, places gained and lost, the gaps to the car ahead, the car behind and the leader, laps or time left, the target words, "off your best", and "Lap times on" and "Lap times off".
+2. `lap-voice-render.cmd count` says what it would make and what it would cost, and spends nothing. The full set is 2,745 clips and 45,768 characters: lap times, lap numbers, positions, places gained and lost, the gaps to the car ahead, the car behind and the leader, laps or time left, the target words, "off your best", and "Lap times on" and "Lap times off".
 3. `lap-voice-render.cmd` makes the missing clips, after you type `yes`. They land in the `lap-voice` folder. Clips already there are never asked for twice.
 4. `fly deploy --ha=false` carries the folder into the image.
 
-The relay's start-up log says how many it has: `[lap voice] N of M clips in the Daniel voice.` Without them it says `... so spoken laps use the phone's voice.`, and phones read the laps in their own voice. Deploying from a copy of the relay folder without the clips does the same, so keep the clips in the `lap-voice` folder safe: Git leaves them out, all but one recut clip (`lap6.mp3`).
+The voice is Finley (ElevenLabs' "Articulate Anchor"). It was Daniel until 24 November 2026, and ElevenLabs stops offering Daniel on 31 December. The `MODEL` and `VOICE` files in the `lap-voice` folder say which model and voice made the clips there. When either is different from the lap voice's, `lap-voice-render.cmd count` reports every clip as still to make, and a run moves the old set beside the folder (`lap-voice-daniel` for Daniel's) and makes the whole set again. A folder with no `VOICE` file holds Daniel's clips, so the first run after the switch makes all of them, for about $1.83.
+
+The renderer also deletes each clip from the key's ElevenLabs history as it's made, the same as the relay does for the HeatCaller voice's lines (see [The key](#the-key)). Without the **Speech history** permission it says so once and carries on.
+
+The relay's start-up log says how many it has: `[lap voice] N of M clips in the Finley voice.` Clips in another voice, such as a set made before the switch, give `[lap voice] N of M clips, in the Daniel voice, not Finley: run lap-voice-render.cmd to make them again.` Without them it says `... so spoken laps use the phone's voice.`, and phones read the laps in their own voice. Deploying from a copy of the relay folder without the clips does the same, so keep the clips in the `lap-voice` folder safe: Git leaves them out, all but one recut clip (`lap6.mp3`).
 
 ## Push alerts
 
@@ -883,7 +891,7 @@ Put the key on the first line of a file called `voice-test.key` in the `relay` f
 voice-test.cmd
 ```
 
-The first run builds, writes `relay.config.voice-test.json` with a catalog made from the voices that ElevenLabs account already has, mints a club token, and prints the three values to paste into HeatCaller. Later runs just start it.
+The first run builds, writes `relay.config.voice-test.json` with a catalog of HeatCaller's three voices (Finley, Alicia and Baxter; these are Voice Library voices, so the key needs a paid ElevenLabs plan), mints a club token, and prints the three values to paste into HeatCaller. Later runs just start it.
 
 Those three go into **Voice → Voice**, in the **Voice relay:**, **Club:** and **Token:** boxes under the HeatCaller voice — not the **Club Website** page. Only the voice moves; results, check-in and the race-day manager keep going to the hosted relay. See [Sending the voice to a different relay](../announcer/voice.md#sending-the-voice-to-a-different-relay).
 

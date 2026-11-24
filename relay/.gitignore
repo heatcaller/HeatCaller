@@ -15,3 +15,6 @@ lap-voice/*.mp3
 lap-voice/*.part
 # The Flash set, kept to go back to (8 Nov 2026).
 lap-voice-flash/
+# Any set lapvoicerender moves aside for a new model or voice (24 Nov
+# 2026: lap-voice-daniel, when the lap voice moved to Finley).
+lap-voice-*/
