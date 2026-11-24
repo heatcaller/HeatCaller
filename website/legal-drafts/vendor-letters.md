@@ -25,7 +25,7 @@ Read on 24 Nov 2026: the Terms of Use (non-EEA version, last updated 9 Oct 2026)
 **To do now, without waiting for an answer:**
 
 1. ~~Opt out of training~~ Done 24 Nov 2026: Asher turned off Data use (Terms and Privacy settings) on the HeatCaller account and his development account. Uses before that date aren't affected (Terms 4(i)). Clubs on their own keys should do the same.
-2. Check the voices: any Default voice stops working on 31 Dec 2026. The lap clips are already rendered, so they keep playing, but any new line in a Default voice, and any new clip, will fail. Pick replacements from the Voice Library.
+2. ~~Check the voices~~ Done 24 Nov 2026: HeatCaller moved to six of ElevenLabs' permanent Infinity voices, picked by Asher (plans/elevenlabs-voice-replacement-plan.md, merged as #318), and the lap clips were made again in Finley (relay v181). Kept for the record: any Default voice stops working on 31 Dec 2026. The lap clips are already rendered, so they keep playing, but any new line in a Default voice, and any new clip, will fail. Pick replacements from the Voice Library.
 
 ### The letter (shortened 24 Nov 2026 to what the terms leave open)
 
