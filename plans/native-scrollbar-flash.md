@@ -127,7 +127,13 @@ Built on `claude/native-scrollbar-flash`. The full app suite passed, 9212 of 921
 ### Not done, or not checked
 
 - **Not looked at by eye.** Every check was the paint hook on an off-screen window. Nobody has opened the real app to look for it yet.
-- **Not reached by the sweep:** Championship's view chips and the first-run wizard (both wrapped, but not swept), other windows (Inbox, Mission Control, Big Screen, dialogs), and a list that grows a scroll bar mid-race. B narrows that last one, but nothing tests it.
-- **Not checked whether the test data alone catches the tab control case.** That case was only seen on Asher's data. If `HoldTabChanges` were taken out, the seeded sweep might still pass; `ShowWithoutFlashTests` checks the hold itself, but not a real page.
+- **Not reached by the sweep:** Championship's view chips, the first-run wizard (both wrapped, but not swept), and windows that open as dialogs (`ShowDialog`), which the test thread closes as they open.
 - **Not measured: A and B on their own.** They went in together, so whether B alone would have been enough anywhere isn't known.
 - **`NoRedraw.End`, used by page switching, still redraws with a plain `Refresh`, not with frames.** The sweep found no case it causes, so it was left as it was.
+
+### Followed up the same day
+
+Asher asked for the two gaps the first lookback left open.
+
+- **Other windows, and lists that grow on screen.** A second sweep, `No_native_scroll_bar_shows_uncovered_when_a_window_is_first_opened`, opens the Inbox, Mission Control, the Announcer screen, Broadcast, Big Screen and Photo Finish for the first time, goes through their tabs and the Inbox's filters, and docks and undocks the Inbox. Every window opened clean. Docking was not: the dock taking its room laid the whole window out again on screen, and Race Control's page, a grid on it and the Inbox each turned a native bar on for a frame. `MainForm.HostInbox` now holds painting on the main window through the move. A throwaway probe also grew a grid, a list box and a text box one row at a time on screen. None of them flashed, with B or without it: a control that is already laid out and turns its bar on is covered in time anyway. So nothing was changed for mid-race lists, and B is not what protects them.
+- **Whether test data catches a missing tab-change hold.** With `HoldTabChanges` taken out, the sweep with the warm-up caught it in one run of three. So the sweep now also runs without the warm-up, as on a busy PC where it gives up early. That run caught the missing hold every time (Championship → Calendar, Race Analytics → Lap Times and Head to Head, Sounds → Imaging, Ambience and Music), and passed every time with the hold back in.

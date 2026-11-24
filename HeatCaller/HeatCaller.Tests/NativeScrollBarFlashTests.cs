@@ -30,8 +30,18 @@ public sealed class NativeScrollBarFlashTests : IDisposable
 
     public void Dispose() => _data.Dispose();
 
-    [Fact]
-    public void No_native_scroll_bar_shows_uncovered_on_a_first_visit_to_any_page_or_tab()
+    /// <summary>
+    /// With the startup warm-up, as on an idle PC - and without it, as on a
+    /// busy one, where the warm-up gives up after a slow step (WarmStepTooSlow)
+    /// and every tab has its windows made as it is first picked. That second
+    /// case is what the tab-change hold is for: with the warm-up alone, a
+    /// build without that hold failed one run in three; without the warm-up,
+    /// every run (24 Nov 2026 lookback).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void No_native_scroll_bar_shows_uncovered_on_a_first_visit_to_any_page_or_tab(bool warmUp)
     {
         Seed();
 
@@ -48,9 +58,13 @@ public sealed class NativeScrollBarFlashTests : IDisposable
 
                 // The warm-up the real window runs from Shown (LayoutCheckMode
                 // skips it): without it pages flash that a user never sees flash.
-                var warmed = false;
-                typeof(MainForm).GetMethod("WarmPagesInTurn", BindingFlags.Instance | BindingFlags.NonPublic)!
+                var warmed = !warmUp;
+
+                if (warmUp)
+                {
+                    typeof(MainForm).GetMethod("WarmPagesInTurn", BindingFlags.Instance | BindingFlags.NonPublic)!
                     .Invoke(window, new object[] { new Action<TimeSpan, string, string?>((_, _, _) => warmed = true) });
+                }
 
                 var until = DateTime.UtcNow.AddMinutes(3);
                 while (!warmed && DateTime.UtcNow < until)
@@ -76,6 +90,97 @@ public sealed class NativeScrollBarFlashTests : IDisposable
 
         Assert.True(found.Count(f => !f.StartsWith("    ", StringComparison.Ordinal)) == 0, "A native scroll bar showed with no slim bar over it:\n" + string.Join("\n", found));
     }
+
+    /// <summary>
+    /// The windows the app opens on their own - the Inbox, Mission Control,
+    /// the Announcer screen, Broadcast, Big Screen and Photo Finish - each
+    /// opened for the first time and gone through: their tabs, the Inbox's
+    /// filters, and the Inbox docked and made a window again (24 Nov 2026
+    /// lookback: the page sweep never reached them).
+    /// </summary>
+    [Fact]
+    public void No_native_scroll_bar_shows_uncovered_when_a_window_is_first_opened()
+    {
+        Seed();
+
+        var found = StaThread.Run(() =>
+        {
+            var window = new MainForm { LayoutCheckMode = true, StartPosition = FormStartPosition.Manual, Location = new System.Drawing.Point(-20000, -20000) };
+            using var watch = new NativeBarWatch();
+
+            try
+            {
+                window.Show();
+                window.ClientSize = new System.Drawing.Size(1280, 800);
+                StaThread.Settle();
+                Pump();
+                watch.Start();
+
+                var raceControl = (RaceControlControl)typeof(MainForm).GetField("_raceControlControl", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+                var opens = new (string Name, Action Open)[]
+                {
+                    ("Inbox", () => window.ShowInbox(InboxFilter.All)),
+                    ("Mission Control", window.ShowMissionControl),
+                    ("Announcer screen", () => Call(window, "OpenAnnouncerWindow")),
+                    ("Broadcast", () => Call(raceControl, "ShowBroadcastWindow")),
+                    ("Big Screen", raceControl.TriggerOpenBigScreen),
+                    ("Photo Finish", window.ShowPhotoFinish),
+                };
+
+                foreach (var (name, open) in opens)
+                {
+                    var before = Application.OpenForms.Cast<Form>().ToHashSet();
+                    watch.Where = name;
+                    open();
+                    Pump();
+
+                    foreach (var opened in Application.OpenForms.Cast<Form>().Where(f => !before.Contains(f)).ToList())
+                    {
+                        // Off screen, as the main window is, before anything is picked in it.
+                        opened.Location = new System.Drawing.Point(-20000, -20000);
+                        SweepInside(opened, name, watch);
+                    }
+
+                    if (name == "Inbox")
+                    {
+                        foreach (var filter in Enum.GetValues<InboxFilter>())
+                        {
+                            watch.Where = "Inbox > " + filter;
+                            window.ShowInbox(filter);
+                            Pump();
+                        }
+
+                        watch.Where = "Inbox docked";
+                        window.DockInboxFromRaceControl(true);
+                        Pump();
+                        watch.Where = "Inbox a window again";
+                        window.DockInboxFromRaceControl(false);
+                        Pump();
+                    }
+                }
+
+                return watch.Found.ToList();
+            }
+            finally
+            {
+                watch.Stop();
+
+                foreach (var open in Application.OpenForms.Cast<Form>().Where(f => !ReferenceEquals(f, window)).ToList())
+                {
+                    open.Close();
+                }
+
+                window.Close();
+                window.Dispose();
+                StaThread.Settle();
+            }
+        }, TimeSpan.FromMinutes(5), () => "opening each window for an uncovered native scroll bar");
+
+        Assert.True(found.Count(f => !f.StartsWith("    ", StringComparison.Ordinal)) == 0, "A native scroll bar showed with no slim bar over it:\n" + string.Join("\n", found));
+    }
+
+    private static void Call(object on, string method) =>
+        on.GetType().GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.Invoke(on, null);
 
     /// <summary>
     /// Enough to make the lists scroll: forty drivers. Or, with
