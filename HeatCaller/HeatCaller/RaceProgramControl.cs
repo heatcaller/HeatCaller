@@ -4965,9 +4965,20 @@ public sealed partial class RaceProgramControl : UserControl
             () =>
             {
                 RestoreRounds(removed, owners);
+
+                // WHY (24 Nov 2026, bug hunt 24 #269): a Pole Shootout run
+                // put back is counted again, and its driver is no longer
+                // left out - see LeaveOutOfShootouts below.
+                RecountShootoutsAfterUndo(removed);
                 alsoUndo?.Invoke();
                 RefreshAll();
             });
+
+        // WHY (24 Nov 2026, bug hunt 24 #269): a Pole Shootout run deleted
+        // here is written onto the runs left as its driver left out, before
+        // it goes. Without that the next filed race built it again, and the
+        // director had to delete it again after every race.
+        var shootoutWords = LeaveOutOfShootouts(removed);
 
         foreach (var round in removed)
         {
@@ -4977,8 +4988,14 @@ public sealed partial class RaceProgramControl : UserControl
 
         RefreshAll();
 
-        return new ProgramAnswer(true, "Deleted",
-            removed.Count == 1 ? $"Deleted {removed[0].RoundLabel} from the program." : $"Deleted {removed.Count} rounds from the program.");
+        var deletedWords = removed.Count == 1 ? $"Deleted {removed[0].RoundLabel} from the program." : $"Deleted {removed.Count} rounds from the program.";
+
+        if (shootoutWords.Length > 0)
+        {
+            _lblStatus.Text = shootoutWords;
+        }
+
+        return new ProgramAnswer(true, "Deleted", shootoutWords.Length > 0 ? $"{deletedWords} {shootoutWords}" : deletedWords);
     }
 
     /// <summary>

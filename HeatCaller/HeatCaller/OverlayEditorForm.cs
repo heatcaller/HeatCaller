@@ -166,21 +166,15 @@ public sealed class OverlayEditorForm : Form
     /// and how far in it sits there - the page's own CSS for it, in vw. A
     /// graphic moved from its usual place starts from here.
     /// </summary>
-    internal static (OverlayAnchor Anchor, double X, double Y) UsualPlace(OverlayElementKind kind) => kind switch
-    {
-        OverlayElementKind.Tower => (OverlayAnchor.TopLeft, 2, 3),
-        OverlayElementKind.Champ => (OverlayAnchor.TopLeft, 2, 3),
-        OverlayElementKind.Battle => (OverlayAnchor.Bottom, 0, 3),
-        OverlayElementKind.Fastest => (OverlayAnchor.BottomRight, 2, 3),
-        OverlayElementKind.Moment => (OverlayAnchor.Top, 0, 3),
-        OverlayElementKind.Grid or OverlayElementKind.Podium or OverlayElementKind.Schedule => (OverlayAnchor.Middle, 0, 0),
-        OverlayElementKind.Captions => (OverlayAnchor.Bottom, 0, 1),
-        OverlayElementKind.Ticker => (OverlayAnchor.Bottom, 0, 2),
-        OverlayElementKind.Basics => (OverlayAnchor.Bottom, 0, 3),
-        OverlayElementKind.ClubLogo => (OverlayAnchor.TopLeft, 2, 2),
-        OverlayElementKind.Mark => (OverlayAnchor.BottomRight, 2, 2),
-        _ => (OverlayAnchor.TopRight, 2, 2),
-    };
+    // WHY (24 Nov 2026, bug hunt 24 #218): the editor kept its own copy of
+    // this table, and it had the championship box at the pylon's own corner
+    // (TopLeft 2,3) while the page draws it under the pylon (OverlayOverlap
+    // has TopLeft 2,28). So nudging the championship box by Across, Down or
+    // Size saved 2,3 and on a points night it jumped up on top of the
+    // pylon's first rows, covering the leaders. Now the editor reads the one
+    // table the overlap check uses, so the two cannot drift apart again (it
+    // also puts the captions at the page's own 0.8 up, not 1).
+    internal static (OverlayAnchor Anchor, double X, double Y) UsualPlace(OverlayElementKind kind) => OverlayOverlap.UsualPlace(kind);
 
     private static readonly (OverlayDuring Part, string Name, string At)[] PartsOfTheNight =
     {

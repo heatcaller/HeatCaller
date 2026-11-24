@@ -9028,10 +9028,14 @@ public sealed partial class RaceControlControl
             // flag carried whatever start time and track were here before -
             // so a second crash before the next crossing came back with the
             // wrong ones.
-            WriteJournal(force: true);
-
+            // WHY (24 Nov 2026, bug hunt 24 #88): a restored race's lead change
+            // count started again from zero, so the next change was called
+            // "the second" when it was the sixth. The journal now carries the
+            // tally; it is handed to the announcer before the journal is
+            // written again, so a second crash under the red keeps it too.
             // See SeedAnnouncerFromRace.
-            SeedAnnouncerFromRace();
+            SeedAnnouncerFromRace(entry.Leads());
+            WriteJournal(force: true);
             RenderLeaderboard();
             UpdateClockDisplay(force: true);
 

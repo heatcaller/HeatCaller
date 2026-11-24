@@ -364,6 +364,25 @@ public sealed class RaceJournal
         public bool? LastLapAnnounced { get; set; }
         public bool? FinalMinuteAnnounced { get; set; }
 
+        // WHY (24 Nov 2026, bug hunt 24 #88, Asher): the announcer's count of
+        // lead changes, and how many times each driver has led. An undone
+        // Stage or Reset already put it back, but a race picked up after a
+        // crash started the count from nothing, so the fifth lead change was
+        // called "the first". Null in an older journal, and before the green:
+        // the count starts from nothing, as it did before.
+        public int? LeadChanges { get; set; }
+        public Dictionary<string, int>? TimesLed { get; set; }
+
+        /// <summary>
+        /// The lead change tally this journal carries, in the shape the
+        /// announcer takes it back in (AnnouncementService.SeedStandings), or
+        /// null when it carries none.
+        /// </summary>
+        public (int Changes, IReadOnlyDictionary<string, int> TimesLed)? Leads() =>
+            LeadChanges is { } changes
+                ? (Math.Max(0, changes), new Dictionary<string, int>(TimesLed ?? new Dictionary<string, int>(), StringComparer.OrdinalIgnoreCase))
+                : null;
+
         public int LapCount => Standings.Sum(s => s.Laps);
 
         public string Describe()
@@ -396,6 +415,7 @@ public sealed class RaceJournal
     /// <param name="roundId">The round the race is being run for, or null when none is picked.</param>
     /// <param name="raceLabel">The race name typed on Race Control, or null to leave it unrecorded.</param>
     /// <param name="isRerun">The race is a re-run of a round already recorded - see Entry.IsRerun.</param>
+    /// <param name="leads">The announcer's lead change tally, or null for none - see Entry.LeadChanges.</param>
     public void Record(
         RaceTiming race,
         DateTime? sessionStartedAtUtc,
@@ -403,11 +423,12 @@ public sealed class RaceJournal
         bool force = false,
         string? roundId = null,
         string? raceLabel = null,
-        bool isRerun = false)
+        bool isRerun = false,
+        (int Changes, IReadOnlyDictionary<string, int> TimesLed)? leads = null)
     {
         lock (_gate)
         {
-            RecordLocked(race, sessionStartedAtUtc, trackLayoutName, force, roundId, raceLabel, isRerun);
+            RecordLocked(race, sessionStartedAtUtc, trackLayoutName, force, roundId, raceLabel, isRerun, leads);
         }
     }
 
@@ -419,7 +440,8 @@ public sealed class RaceJournal
         bool force,
         string? roundId,
         string? raceLabel,
-        bool isRerun)
+        bool isRerun,
+        (int Changes, IReadOnlyDictionary<string, int> TimesLed)? leads)
     {
         // Nothing to protect: an idle session, or a rehearsal.
         //
@@ -520,6 +542,8 @@ public sealed class RaceJournal
                 HeardThisRace = snapshot.HeardThisRace?.ToList(),
                 LastLapAnnounced = snapshot.LastLapAnnounced,
                 FinalMinuteAnnounced = snapshot.FinalMinuteAnnounced,
+                LeadChanges = leads?.Changes,
+                TimesLed = leads?.TimesLed.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase),
                 Standings = snapshot.Standings.Select(s => new StandingRecord
                 {
                     TransponderId = s.TransponderId,

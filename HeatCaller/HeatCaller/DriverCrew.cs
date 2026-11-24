@@ -447,6 +447,42 @@ internal static class DriverCrew
     }
 
     /// <summary>
+    /// Saves a held goal as tonight's once the commentary has been given it
+    /// (see <see cref="LandHeldGoal"/>). UI thread only: it reads the driver
+    /// as now on file, so a goal sent or changed since the commentary read
+    /// it is left alone, and calling it twice saves once. Returns whether
+    /// anything was saved.
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Nov 2026, bug hunt 24 #163, Asher): LandHeldGoal was worked
+    /// out but nothing saved it, so a held goal was still quoted on every race
+    /// night in the eight days after it. The commentary gives the goal on the
+    /// thread pool, where the profile store cannot be written, so it says so
+    /// (CommentaryService.HeldGoalGiven) and the window saves it here.
+    /// </remarks>
+    public static bool SaveLandedGoal(ProfileStore profiles, string transponder, DateTime nowLocal)
+    {
+        if (string.IsNullOrWhiteSpace(transponder) || profiles.Get(transponder) is not { CrewGoalHeld: true } onFile)
+        {
+            return false;
+        }
+
+        var (night, held) = LandHeldGoal(onFile, nowLocal);
+
+        // Still held: not given tonight (the same night, or past the window).
+        if (held)
+        {
+            return false;
+        }
+
+        var landed = ProfileStore.Snapshot(onFile);
+        landed.CrewGoalNight = night;
+        landed.CrewGoalHeld = false;
+        profiles.Upsert(landed);
+        return true;
+    }
+
+    /// <summary>
     /// The night a goal sent at <paramref name="askedLocal"/> is for: that
     /// night, or - sent after its last race - the next night announced, or
     /// held for whichever race night comes next (plan 2.4).

@@ -739,8 +739,9 @@ public sealed partial class RaceControlControl
     /// <param name="leads">
     /// The lead change tally taken with the undo snapshot (23 Nov 2026, bug hunt
     /// 24), so an undone Stage or Reset does not start the race's count of lead
-    /// changes again from nothing. Null for a crash restore: the journal does
-    /// not carry it.
+    /// changes again from nothing. A crash restore passes the tally the race
+    /// journal kept (RaceJournal.Entry.Leads); a journal from before 24 Nov
+    /// 2026 has none, so that restore starts from nothing as before.
     /// </param>
     private void SeedAnnouncerFromRace((int Changes, IReadOnlyDictionary<string, int> TimesLed)? leads = null)
     {

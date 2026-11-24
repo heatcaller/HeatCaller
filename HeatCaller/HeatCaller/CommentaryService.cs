@@ -282,6 +282,18 @@ public sealed class CommentaryService
             && OfferNote(transponder, CrewNote.Goal, segment, now))
         {
             lines.Add($"{driver}'s goal for tonight, {OwnWordsLead}\"{goal}\"");
+
+            // WHY (24 Nov 2026, bug hunt 24 #163, Asher): a goal held for the
+            // next night was never saved as the night it was first said on,
+            // so it was quoted on every race night for eight days - twice at
+            // a club racing Wednesday and Saturday. This runs on the thread
+            // pool, where the profile store cannot be written, so the window
+            // is told and saves it (DriverCrew.SaveLandedGoal). Once a night
+            // per driver here; the save itself is safe to repeat.
+            if (profile.CrewGoalHeld && HeldGoalGiven is { } given && FirstLandingTonight(profile.Transponder, now))
+            {
+                given(profile.Transponder, now);
+            }
         }
 
         if (wanted.HasFlag(CrewNote.Thanks)
@@ -347,6 +359,30 @@ public sealed class CommentaryService
         }
 
         Log?.Invoke("[commentary] " + said);
+    }
+
+    /// <summary>
+    /// Told, on whatever thread wrote the interview, when a driver's goal
+    /// held for the next night has just been given to the commentary: the
+    /// driver's main transponder and the club's clock it was given at. The
+    /// handler saves it as tonight's goal on the UI thread
+    /// (DriverCrew.SaveLandedGoal) - see CrewNoteLines. Null: nothing is saved.
+    /// </summary>
+    public Action<string, DateTime>? HeldGoalGiven { get; set; }
+
+    /// <summary>The drivers whose held goal HeldGoalGiven has been raised for tonight, by "night|transponder".</summary>
+    private readonly HashSet<string> _goalsLanded = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Whether this is the first time tonight a held goal of this driver's has been given. Under the notes lock.</summary>
+    private bool FirstLandingTonight(string transponder, DateTime nowLocal)
+    {
+        var night = $"{TonightAtTheTrack.NightOf(nowLocal):yyyy-MM-dd}|";
+
+        lock (_notesGate)
+        {
+            _goalsLanded.RemoveWhere(k => !k.StartsWith(night, StringComparison.Ordinal));
+            return _goalsLanded.Add(night + transponder.Trim());
+        }
     }
 
     /// <summary>Which segment each driver's note went to tonight, by "night|transponder|note" - see CrewNoteLines.</summary>

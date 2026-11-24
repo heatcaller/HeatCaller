@@ -31,8 +31,12 @@ internal static class OverlayOverlap
         _ => (10, 5),
     };
 
-    /// <summary>Where a graphic left where it usually goes sits, as the broadcast page puts it.</summary>
-    private static (OverlayAnchor Anchor, double X, double Y) UsualPlace(OverlayElementKind kind) => kind switch
+    /// <summary>
+    /// Where a graphic left where it usually goes sits, as the broadcast page
+    /// puts it. The Stream overlays editor reads this same table for where a
+    /// graphic moved by a number starts from (bug hunt 24 #218).
+    /// </summary>
+    internal static (OverlayAnchor Anchor, double X, double Y) UsualPlace(OverlayElementKind kind) => kind switch
     {
         OverlayElementKind.Tower => (OverlayAnchor.TopLeft, 2, 3),
         OverlayElementKind.Champ => (OverlayAnchor.TopLeft, 2, 28),

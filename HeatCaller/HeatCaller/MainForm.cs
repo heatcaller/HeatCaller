@@ -1087,6 +1087,13 @@ public partial class MainForm : Form
         // says so in the console, as a segment the director drops does.
         _commentary.Log = line => OnClientRawMessage($"{AppTime.LogStampNow()}  {line}");
 
+        // WHY (24 Nov 2026, bug hunt 24 #163, Asher): a goal held for the
+        // next night is saved as tonight's the first time the commentary is
+        // given it, so it is not quoted again on the next race night. Told on
+        // the thread pool; the profile store is written here, on this thread.
+        _commentary.HeldGoalGiven = (transponder, givenAt) =>
+            TryPost(() => DriverCrew.SaveLandedGoal(_profiles, transponder, givenAt));
+
         // Read live, so switching the model on the Voice Settings page takes
         // effect immediately rather than needing a restart.
         _commentary.VoiceSupportsAudioTagsProvider = () => _voiceStore.Current.SupportsAudioTags;

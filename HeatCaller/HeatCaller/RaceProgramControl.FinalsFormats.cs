@@ -149,8 +149,16 @@ public sealed partial class RaceProgramControl
                 _lblStatus.Text = $"{PoleShootout.Name} for {className} follows the new qualifying order.";
                 break;
 
-            case PoleShootout.RefreshResult.Rebuild when field.Count >= PoleShootout.MinDrivers:
+            // WHY (24 Nov 2026, bug hunt 24 #269): the drivers the director
+            // left out by deleting their run stay out of a rebuild, and are
+            // carried on to the new runs. Built from the whole field, they
+            // came back. And when too few would be left to run, the runs
+            // are left as they are rather than all taken away.
+            case PoleShootout.RefreshResult.Rebuild
+                when field.Count - PoleShootout.LeftOutOf(runs, field).Count >= PoleShootout.MinDrivers:
             {
+                var leftOut = PoleShootout.LeftOut(runs);
+
                 // In the place the old runs had: in front of whatever came after them.
                 var lastOrder = runs.Max(r => r.Order);
                 var after = _rounds.All.FirstOrDefault(r => r.Order > lastOrder && runs.All(x => x.Id != r.Id))?.Id;
@@ -165,7 +173,7 @@ public sealed partial class RaceProgramControl
                 // first build has it - a class following the app default has
                 // a null Format, and a rebuild raced under the built-in 3 s
                 // min lap and automatic start instead of the club's default.
-                var built = PoleShootout.BuildRuns(className, field, PoleShootout.TimedLapsFor(raceClass), raceClass.Format, DayTrack(), RaceFormat.FromSettings(_settings));
+                var built = PoleShootout.BuildRuns(className, field, PoleShootout.TimedLapsFor(raceClass), raceClass.Format, DayTrack(), RaceFormat.FromSettings(_settings), leftOut);
 
                 foreach (var run in built)
                 {
@@ -176,6 +184,79 @@ public sealed partial class RaceProgramControl
                 _rounds.MoveBefore(built.Select(r => r.Id).ToList(), after);
                 _lblStatus.Text = $"{PoleShootout.Name} for {className} built again for the new qualifying order: {Plural.Of(built.Count, "run")}.";
                 break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Before <paramref name="removed"/> are deleted from the programme: for
+    /// each Pole Shootout one of them is a run of, writes onto the runs
+    /// left that its driver is left out and how many runs there are now
+    /// (PoleShootout.LeaveOut). Returns what the director is told, or
+    /// nothing when no shootout run is among them (or none of its runs is left).
+    /// </summary>
+    /// <remarks>
+    /// WHY (24 Nov 2026, bug hunt 24 #269): without it the deleted run came
+    /// back after the next filed race, with "built again for the new
+    /// qualifying order" though qualifying had not changed.
+    /// </remarks>
+    private string LeaveOutOfShootouts(IReadOnlyList<RoundDefinition> removed)
+    {
+        var ids = removed.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
+        var words = new List<string>();
+
+        foreach (var className in removed.Where(r => r.Kind == RoundKind.Shootout).Select(r => r.ClassName).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var runs = ShootoutRunsToday(className);
+            var deleted = runs.Where(r => ids.Contains(r.Id)).ToList();
+            var left = runs.Where(r => !ids.Contains(r.Id)).ToList();
+
+            if (deleted.Count == 0 || left.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var run in PoleShootout.LeaveOut(left, deleted))
+            {
+                _rounds.Update(run);
+            }
+
+            var names = deleted
+                .Select(PoleShootout.SlotDriver)
+                .Where(t => t.Length > 0)
+                .Select(t => _profiles.Get(t)?.DriverName is { Length: > 0 } name ? name : t)
+                .ToList();
+
+            words.Add($"{(names.Count == 0 ? "That driver is" : string.Join(" and ", names) + (names.Count == 1 ? " is" : " are"))} left out of the {PoleShootout.Name} for {className}. "
+                      + (left.Count == 1 ? "The one run left sets" : $"The {left.Count} runs left set") + " the front of the A-Main.");
+        }
+
+        return string.Join(" ", words);
+    }
+
+    /// <summary>
+    /// After an undo has put deleted rounds back: each Pole Shootout one of
+    /// them was a run of counts its runs and who is left out again, from the
+    /// runs there now. Not when the shootout has been built again since -
+    /// the run put back is then not one of its runs, and the new runs
+    /// already know who is left out.
+    /// </summary>
+    private void RecountShootoutsAfterUndo(IReadOnlyList<RoundDefinition> restored)
+    {
+        var ids = restored.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var className in restored.Where(r => r.Kind == RoundKind.Shootout).Select(r => r.ClassName).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var runs = ShootoutRunsToday(className);
+
+            if (!runs.Any(r => ids.Contains(r.Id)))
+            {
+                continue;
+            }
+
+            foreach (var run in PoleShootout.LeaveOut(runs, Array.Empty<RoundDefinition>()))
+            {
+                _rounds.Update(run);
             }
         }
     }
