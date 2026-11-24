@@ -126,10 +126,13 @@ describe("My Night on race night: the jobs in one row", () => {
     assert.deepEqual(asks[0], { id: CODE, kind: "pack", f: { pack: PACK_B } });
   });
 
-  it("leaves the pack in Your details on a night with no live entry", async () => {
+  // WHY (23 Nov 2026, Asher: "remove the pack section on the your details
+  // card"): with no live entry the pack used to drop into Your details.
+  it("has no pack in Your details on a night with no live entry", async () => {
     const { page } = await open({ live: null });
 
-    assert.match(page.get("yd").textContent, /Your battery pack/);
+    assert.doesNotMatch(page.get("yd").textContent, /Your battery pack/);
+    assert.match(page.get("yd").textContent, /Change my details/);
     assert.equal(page.get("lv").find((n) => n.className.includes("lc-pack")).length, 0);
   });
 

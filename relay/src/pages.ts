@@ -17648,11 +17648,11 @@ function drawAsks(message) {
   // file, in four groups; the sheet behind its one button has a tab for
   // each and one Send for all of it. A page without the sheet keeps the
   // same tabs in a fold below.
-  const packsNow = live ? null : packBox();
-  if (packsNow) {
-    packsNow.className = 'su';
-    sec.appendChild(packsNow);
-  }
+  // WHY (23 Nov 2026, Asher: "remove the pack section on the your details
+  // card"): the card used to take the pack box back whenever there was no
+  // live card, so off race night Your details opened on a pack picker that
+  // had nothing to do with the details on file. The pack is only on the
+  // Right now card now.
 
   if (ydSheetCan()) {
     sec.appendChild(ydSummary());
