@@ -8689,7 +8689,15 @@ public sealed partial class RaceControlControl
 
             ClearRaceSummary = () => _commentary?.ClearRaceSummary(),
             SignalBroadcastOver = SignalSessionAudioFinishedAfterFinishCall,
-            DemoOver = () => DemoRound = null,
+            DemoOver = () =>
+            {
+                // A demo of a program race that wasn't saved still opens Auto
+                // start's gap - see AutoStartFollows.
+                (_autoStartAfter, _autoStartAsDemo) = AutoStartFollows(isDemo: true, notScored: true, roundId: null, demoOfARound: DemoRound is not null) is (true, var asDemo)
+                    ? (_race.SessionGeneration, asDemo)
+                    : ((int?)null, false);
+                DemoRound = null;
+            },
 
             NoteGhostsBeaten = ordered =>
             {
@@ -8762,12 +8770,13 @@ public sealed partial class RaceControlControl
                 _filedSession = record.IsDemo ? null : (record.Id, record.Label,
                     _race.DeliveringFinishedRace is { } finished ? finished.RaceStartUtc : _race.RaceStartUtc);
 
-                // Auto start counts a gap only after a real program race
-                // (11 Nov 2026): never after a demo, a Quick Race, or a race
-                // kept on its own.
-                _autoStartAfter = !record.IsNotScored() && record.RoundId is not null
-                    ? _race.SessionGeneration
-                    : null;
+                // Auto start counts a gap only after a program race (11 Nov
+                // 2026): never after a Quick Race or a race kept on its own.
+                // A demo of a program race counts too now, and its next race
+                // goes out as a demo - see AutoStartFollows.
+                (_autoStartAfter, _autoStartAsDemo) = AutoStartFollows(record.IsDemo, record.IsNotScored(), record.RoundId, DemoRound is not null) is (true, var asDemo)
+                    ? (_race.SessionGeneration, asDemo)
+                    : ((int?)null, false);
 
                 // WHY (23 Nov 2026, bug hunt 24): which round this race was
                 // filed under, so the gap passes over only that round in the
