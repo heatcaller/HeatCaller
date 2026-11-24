@@ -258,7 +258,7 @@ All paths are in the repository.
 4. `website/legal-drafts/security-program.md`: COPPA §312.8-style security program.
 5. `website/legal-drafts/founder-ip-assignment.md`: assignment from Asher Kent to the LLC.
 6. `website/legal-drafts/copyright-takedown-policy.md`: DMCA §512 policy and agent checklist.
-7. `website/legal-drafts/vendor-letters.md`: letters to ElevenLabs and Anthropic. Zero data retention was requested from Anthropic on 24 Nov 2026 (through its "Contact us" form); no answer yet, and the rest of both letters is not sent yet.
+7. `website/legal-drafts/vendor-letters.md`: letters to ElevenLabs and Anthropic. Zero data retention was requested from Anthropic on 24 Nov 2026 (through its "Contact us" form), and ElevenLabs was asked the same day to get in touch; no answers yet.
 8. `HeatCaller/HeatCaller/About.cs` (the header comment) and `Assets/Licences/LibVLC-plugins.txt`: open-source compliance.
 9. The cookie policy, on branch `claude/inbox-themes-followups`:
    - `relay/src/cookies.ts`, the text served at `/c/<club>/cookies`;
