@@ -243,7 +243,15 @@ internal static class DriverImport
         // The Unicode minus (U+2212) is what sv/nb/fi Windows and their
         // spreadsheets write for a negative number; the parse below is
         // invariant and only knows '-' (17 Oct 2026, Bug Hunt 8, A26-2).
-        var value = (text ?? string.Empty).Trim().Replace('\u2212', '-');
+        // WHY (23 Nov 2026, bug hunt 24): fr/sv/nb/fi spreadsheets group
+        // thousands with a non-breaking space (U+00A0) or a narrow one
+        // (U+202F, U+2009), not an ordinary space. The old code only knew
+        // the ordinary space, so a CSV file's "1 234" was called "not a
+        // number" and that driver carried no points in. They are turned
+        // into an ordinary space here, before anything else looks.
+        var value = (text ?? string.Empty)
+            .Replace('\u00a0', ' ').Replace('\u202f', ' ').Replace('\u2009', ' ')
+            .Trim().Replace('\u2212', '-');
 
         // "45 pts", "45 points".
         var end = value.Length;

@@ -241,6 +241,30 @@ public sealed partial class AnnouncerControl : UserControl
                 Keep();
             }
         };
+
+        // WHY (23 Nov 2026, bug hunt 24, F304): the sponsor logo time and the
+        // "presented by" graphic counts on the stream lived in memory only, so
+        // a restart mid-evening sent a sponsor report with only the logo time
+        // since. Kept with the night's settings, as the mentions gate above is.
+        SponsorStream.Restore(settings.SponsorStreamNight, DateTime.UtcNow);
+
+        SponsorStream.Changed = saved =>
+        {
+            void Keep()
+            {
+                settings.SponsorStreamNight = saved;
+                settings.Save();
+            }
+
+            if (_uiContext is { } ui && Environment.CurrentManagedThreadId != _uiThreadId)
+            {
+                ui.Post(_ => Keep(), null);
+            }
+            else
+            {
+                Keep();
+            }
+        };
     }
 
     /// <summary>The page's own face changed - handed the body face at a new text size - so everything else it keeps in step follows. See TextSize.</summary>
@@ -1181,9 +1205,13 @@ public sealed partial class AnnouncerControl : UserControl
         _lblClock.Text = $"{(int)elapsed.TotalMinutes:00}:{elapsed.Seconds:00}";
 
         var next = _schedule.All.FirstOrDefault(e => !e.IsComplete);
+
+        // WHY (23 Nov 2026, bug hunt 24): the stored "HH:mm" was shown as it is
+        // kept, so a 12-hour club read "ON DECK:  19:30" here beside 7:30 PM on
+        // the Schedule page. Shown in the club's clock, as the Schedule page does.
         _lblOnDeck.Text = next is null
             ? string.Empty
-            : $"ON DECK:  {next.ScheduledTime}  {next.ClassName}  {next.Description}".TrimEnd();
+            : $"ON DECK:  {DayScheduleControl.ShownTime(next.ScheduledTime)}  {next.ClassName}  {next.Description}".TrimEnd();
 
         RefreshOrder();
         RefreshTalkingPoints();

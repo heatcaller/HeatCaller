@@ -38,7 +38,10 @@ internal sealed class RaceCalendar : Control
     public bool EmptyNightsPickable { get; init; }
 
     /// <summary>The first day of the month on show.</summary>
-    private DateTime _month = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    // WHY (23 Nov 2026, bug hunt 24): the month of tonight's race night, not
+    // the calendar day's - opened at 00:30 on the 1st it used to start on the
+    // new month, away from the night still being raced.
+    private DateTime _month = new(TonightAtTheTrack.NightOf(DateTime.Now).Year, TonightAtTheTrack.NightOf(DateTime.Now).Month, 1);
 
     private DateTime? _hover;
 
@@ -226,7 +229,11 @@ internal sealed class RaceCalendar : Control
                 g.FillPath(fill, path);
             }
 
-            if (day == DateTime.Today && !picked)
+            // WHY (23 Nov 2026, bug hunt 24): tonight is the race night (6am
+            // to 6am). On the calendar day the outline jumped to tomorrow's
+            // square at midnight while the page still labelled tonight's
+            // night "Tonight".
+            if (day == TonightAtTheTrack.NightOf(DateTime.Now) && !picked)
             {
                 using var path = Rounded(box, 8);
                 using var ring = new Pen(AppTheme.Border, 1.2f);

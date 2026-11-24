@@ -198,9 +198,13 @@ internal sealed partial class DeskInboxForm
         "Battery packs, cars, photos and setups sent from phones are applied by themselves - they never wait here."
         + (tonight > 0 ? $" {Plural.Of(tonight, "change")} handled for you tonight." : string.Empty);
 
-    /// <summary>How many changes from phones were applied by themselves today (the club's day, on this PC's clock).</summary>
+    /// <summary>How many changes from phones were applied by themselves tonight (the race night, 6am to 6am, on this PC's clock).</summary>
+    // WHY (23 Nov 2026, bug hunt 24): counted by the race night, as the words
+    // say "tonight". It used the calendar date, so after midnight the count
+    // started again from nothing although the evening's changes were tonight's.
     internal static int HandledToday(IEnumerable<DriverRequest> all, DateTime nowLocal) =>
-        all.Count(r => DriverAsk.IsWrite(r.Kind) && r.Kind != DriverAsk.Cover && !r.IsWaiting && (r.AnsweredUtc ?? r.FiledUtc).ToLocalTime().Date == nowLocal.Date);
+        all.Count(r => DriverAsk.IsWrite(r.Kind) && r.Kind != DriverAsk.Cover && !r.IsWaiting
+            && DriverRequestStore.NightOf(r.AnsweredUtc ?? r.FiledUtc) == TonightAtTheTrack.NightOf(nowLocal));
 
     /// <summary>The rules' ticks again from their desks - another window may have changed one.</summary>
     private void RefreshRules()

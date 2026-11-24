@@ -502,17 +502,22 @@ internal sealed class ThinScrollBar : Control
 
         if (_grid is not null)
         {
-            var rows = _grid.RowCount;
+            // WHY (23 Nov 2026, bug hunt 24): counted in VISIBLE rows. This
+            // took RowCount, which counts hidden rows too, against a page of
+            // rows on screen, which does not - so the Race Day run sheet, with
+            // its recorded races folded away (hidden rows), showed a bar with
+            // nothing to scroll, and its thumb was the wrong length and jumped
+            // by the hidden rows. The position is the first displayed row's
+            // place among the visible rows, in the same units.
+            var rows = GridVisibleRows(_grid);
 
             // DisplayedRowCount(false) counts only rows fully on screen,
             // which is the page size a wheel notch or a page-down moves by.
             var shown = Math.Max(1, _grid.DisplayedRowCount(false));
 
             min = 0;
-            max = Math.Max(0, rows - 1);
             page = shown;
-            pos = Math.Max(0, _grid.FirstDisplayedScrollingRowIndex);
-            scrollable = rows > shown;
+            (max, pos, scrollable) = GridRange(rows, shown, GridVisibleBefore(_grid, _grid.FirstDisplayedScrollingRowIndex));
         }
         else if (_gridAcross is not null)
         {
@@ -792,14 +797,135 @@ internal sealed class ThinScrollBar : Control
         // The pointer is over the bar, not the control, so the wheel would
         // otherwise do nothing at all.
         var lines = Math.Max(1, SystemInformation.MouseWheelScrollLines);
-        var steps = Math.Abs(e.Delta) / 120 * lines;
 
-        for (var i = 0; i < steps && i < 40; i++)
+        // WHY (23 Nov 2026, bug hunt 24): small turns add up. This was
+        // Math.Abs(Delta) / 120 * lines, whole-number division, so a touchpad
+        // or free-spinning wheel - which sends turns of under 120 - gave no
+        // lines at all, and two-finger scrolling stopped dead whenever the
+        // pointer drifted onto the bar. The part of a turn not yet worth a
+        // line is kept for the next one.
+        var steps = WheelSteps(e.Delta, lines, ref _wheelLeft);
+
+        for (var i = 0; i < Math.Abs(steps) && i < 40; i++)
         {
-            Send(e.Delta > 0 ? SB_LINEUP : SB_LINEDOWN, 0);
+            Send(steps > 0 ? SB_LINEUP : SB_LINEDOWN, 0);
         }
 
         Refresh(fromTimer: false);
+    }
+
+    /// <summary>The part of the wheel's turns not yet worth a whole line - see WheelSteps.</summary>
+    private int _wheelLeft;
+
+    /// <summary>
+    /// How many lines a wheel turn moves - positive up, negative down - with
+    /// <paramref name="left"/> holding what is not yet a whole line, carried
+    /// to the next turn. A turn the other way drops what was left. 120 is one
+    /// notch, which moves <paramref name="lines"/> lines.
+    /// </summary>
+    internal static int WheelSteps(int delta, int lines, ref int left)
+    {
+        lines = Math.Max(1, lines);
+
+        if (delta == 0)
+        {
+            return 0;
+        }
+
+        if (left != 0 && Math.Sign(left) != Math.Sign(delta))
+        {
+            left = 0;
+        }
+
+        left += delta;
+
+        // Truncates toward zero, either way.
+        var steps = (int)((long)left * lines / 120);
+
+        left -= (int)((long)steps * 120 / lines);
+        return steps;
+    }
+
+    /// <summary>
+    /// The themed bar's range for a grid, in visible rows: the last place,
+    /// the first displayed row's place, and whether there is anything to
+    /// scroll. Hidden rows are not counted - see Refresh.
+    /// </summary>
+    internal static (int Max, int Pos, bool Scrollable) GridRange(int visibleRows, int shown, int firstVisibleBefore) =>
+        (Math.Max(0, visibleRows - 1), Math.Max(0, firstVisibleBefore), visibleRows > shown);
+
+    /// <summary>
+    /// Where a scroll code moves a grid to, as a place among its visible rows
+    /// (0 is the first visible row), kept to where a whole page still fills.
+    /// </summary>
+    internal static int GridWantedPlace(int code, int current, int shown, int visibleRows, int position)
+    {
+        var last = Math.Max(0, visibleRows - shown);
+
+        var wanted = code switch
+        {
+            SB_LINEUP => current - 1,
+            SB_LINEDOWN => current + 1,
+            SB_PAGEUP => current - shown,
+            SB_PAGEDOWN => current + shown,
+            SB_THUMBTRACK or SB_THUMBPOSITION => position,
+            _ => current,
+        };
+
+        return Math.Clamp(wanted, 0, last);
+    }
+
+    /// <summary>The grid's visible rows, hidden ones left out.</summary>
+    internal static int GridVisibleRows(DataGridView grid) =>
+        grid.Rows.GetRowCount(DataGridViewElementStates.Visible);
+
+    /// <summary>How many visible rows come before the row at <paramref name="rowIndex"/> - its place among them. 0 for no row.</summary>
+    internal static int GridVisibleBefore(DataGridView grid, int rowIndex)
+    {
+        if (rowIndex <= 0)
+        {
+            return 0;
+        }
+
+        // Nothing hidden (nearly every grid): the index is the place.
+        if (GridVisibleRows(grid) == grid.RowCount)
+        {
+            return Math.Min(rowIndex, grid.RowCount);
+        }
+
+        var count = 0;
+
+        for (var row = grid.Rows.GetFirstRow(DataGridViewElementStates.Visible);
+             row >= 0 && row < rowIndex;
+             row = grid.Rows.GetNextRow(row, DataGridViewElementStates.Visible))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>The index of the visible row at <paramref name="place"/> among the visible rows, or -1 when there is none.</summary>
+    internal static int GridRowAtPlace(DataGridView grid, int place)
+    {
+        if (place < 0)
+        {
+            return -1;
+        }
+
+        if (GridVisibleRows(grid) == grid.RowCount)
+        {
+            return place < grid.RowCount ? place : -1;
+        }
+
+        var row = grid.Rows.GetFirstRow(DataGridViewElementStates.Visible);
+
+        for (var i = 0; i < place && row >= 0; i++)
+        {
+            row = grid.Rows.GetNextRow(row, DataGridViewElementStates.Visible);
+        }
+
+        return row;
     }
 
     private void Send(int code, int position)
@@ -904,30 +1030,31 @@ internal sealed class ThinScrollBar : Control
             return;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): steps among the VISIBLE rows, then
+        // turns the place back into a row index. This stepped by raw index,
+        // so on the run sheet with its recorded races folded away a line or
+        // page down from the top asked for a hidden row, the grid refused it
+        // (caught below) and the wheel and track clicks over the bar did
+        // nothing. Positions are in the same visible-row units as Refresh.
         var shown = Math.Max(1, _grid.DisplayedRowCount(false));
-        var last = Math.Max(0, _grid.RowCount - shown);
-        var current = Math.Max(0, _grid.FirstDisplayedScrollingRowIndex);
-
-        var wanted = code switch
-        {
-            SB_LINEUP => current - 1,
-            SB_LINEDOWN => current + 1,
-            SB_PAGEUP => current - shown,
-            SB_PAGEDOWN => current + shown,
-            SB_THUMBTRACK or SB_THUMBPOSITION => position,
-            _ => current,
-        };
-
-        wanted = Math.Clamp(wanted, 0, last);
+        var current = GridVisibleBefore(_grid, _grid.FirstDisplayedScrollingRowIndex);
+        var wanted = GridWantedPlace(code, current, shown, GridVisibleRows(_grid), position);
 
         if (wanted == current)
         {
             return;
         }
 
+        var row = GridRowAtPlace(_grid, wanted);
+
+        if (row < 0)
+        {
+            return;
+        }
+
         try
         {
-            _grid.FirstDisplayedScrollingRowIndex = wanted;
+            _grid.FirstDisplayedScrollingRowIndex = row;
         }
         catch (ArgumentOutOfRangeException)
         {

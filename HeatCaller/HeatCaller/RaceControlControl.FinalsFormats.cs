@@ -68,7 +68,9 @@ public sealed partial class RaceControlControl
                 return null;
             }
 
-            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] {Invitational.ShortName} after main {table.MainsRun} of {table.Mains}: "
+            // WHY (23 Nov 2026, bug hunt 24): said MainsRun, so with a main skipped the log
+            // read "after main 2 of 5" for main 3 - the same wrong number the call had.
+            StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [program] {Invitational.ShortName} after main {table.MainNumber} of {table.Mains}: "
                                   + $"{table.Leader.DriverName}, {table.Leader.Words()}.");
 
             return new FinalsFormatRead(

@@ -1235,7 +1235,11 @@ public sealed partial class RaceProgramControl
 
         if (changes.Count == 0)
         {
-            return (false, "Nothing to change - those fixes are already in tonight's plan.", string.Empty);
+            // WHY (23 Nov 2026, bug hunt 24): "a minute shorter" ticked on
+            // heats that can't lose one (run to laps, or already at 3
+            // minutes) used to answer "already in tonight's plan", which
+            // was not true - nothing had been, or could be, taken off.
+            return (false, NothingToChangeWords(ticked), string.Empty);
         }
 
         _previewDropRound = null;
@@ -1251,6 +1255,16 @@ public sealed partial class RaceProgramControl
 
         return (true, message, announcement);
     }
+
+    /// <summary>
+    /// What Apply says when none of the ticked fixes changed anything
+    /// (23 Nov 2026, bug hunt 24): a shorter run ticked alone means the
+    /// qualifiers still to run can't be cut any further.
+    /// </summary>
+    internal static string NothingToChangeWords(IReadOnlyList<RunSheet.Choice> ticked) =>
+        ticked.Count > 0 && ticked.All(c => c.Kind == NightPlan.FixKind.ShorterQualifiers)
+            ? "Nothing to change - the qualifiers still to run are already as short as they go."
+            : "Nothing to change - those fixes are already in tonight's plan.";
 
     /// <summary>"Tell the drivers": says the last change on the PA and the screens, as "We're done after this round" does.</summary>
     internal void Announce(string text)

@@ -302,7 +302,10 @@ public sealed class DayScheduleControl : UserControl
             var round = entry.IsGenerated ? _rounds.Get(entry.RoundId) : null;
             var status = StatusFor(entry, round, entry.Id == firstPendingId, ScheduleExpected.Words(entries, entry, dayLate, next, now));
 
-            var rowIndex = _grid.Rows.Add(entry.IsComplete, entry.ScheduledTime, entry.ClassName, entry.Description, status.Text);
+            // WHY (23 Nov 2026, bug hunt 24): the stored time was shown raw,
+            // so on a 12-hour club Fill In the Times' "19:40" sat beside a
+            // hand-typed "7:30 PM". The store keeps HH:mm; the cell follows the tick.
+            var rowIndex = _grid.Rows.Add(entry.IsComplete, ShownTime(entry.ScheduledTime), entry.ClassName, entry.Description, status.Text);
             var row = _grid.Rows[rowIndex];
             row.Tag = entry.Id;
 
@@ -428,7 +431,9 @@ public sealed class DayScheduleControl : UserControl
         var parts = new List<string>();
         if (!string.IsNullOrWhiteSpace(entry.ScheduledTime))
         {
-            parts.Add(entry.ScheduledTime);
+            // WHY (23 Nov 2026, bug hunt 24): Up Next and the undo and delete
+            // wording follow the 24-hour tick, not the stored HH:mm.
+            parts.Add(ShownTime(entry.ScheduledTime));
         }
         if (!string.IsNullOrWhiteSpace(entry.ClassName))
         {
@@ -439,6 +444,36 @@ public sealed class DayScheduleControl : UserControl
             parts.Add(entry.Description);
         }
         return parts.Count > 0 ? string.Join(" - ", parts) : "(untitled entry)";
+    }
+
+    /// <summary>
+    /// A line's stored time as a person should read it. Fill In the Times
+    /// stores "HH:mm" whatever the clock setting (the relay and the drift
+    /// sums read it), so an exact H:mm or HH:mm is shown in the club's clock;
+    /// anything else - "7:30 PM", "~10:15", "TBD", blank - is shown as it was
+    /// typed. The same rule as the relay's hcHm.
+    /// </summary>
+    internal static string ShownTime(string stored)
+    {
+        if (string.IsNullOrWhiteSpace(stored))
+        {
+            return stored;
+        }
+
+        var parts = stored.Trim().Split(':');
+
+        if (parts.Length != 2
+            || parts[0].Length is < 1 or > 2
+            || parts[1].Length != 2
+            || !int.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var hour)
+            || !int.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var minute)
+            || hour > 23
+            || minute > 59)
+        {
+            return stored;
+        }
+
+        return AppTime.TimeOfDay(new TimeSpan(hour, minute, 0));
     }
 
     /// <summary>
@@ -658,7 +693,10 @@ public sealed class DayScheduleControl : UserControl
         {
             Title = "Save run sheet",
             Filter = "PNG image (*.png)|*.png",
-            FileName = $"run-sheet-{DateTime.Now:yyyy-MM-dd}.png",
+            // WHY (23 Nov 2026, bug hunt 24): named for the race night (6am
+            // to 6am), as the sheet's own date line is. On the calendar day a
+            // sheet saved at 00:30 on Saturday night was named for Sunday.
+            FileName = $"run-sheet-{TonightAtTheTrack.NightOf(DateTime.Now):yyyy-MM-dd}.png",
         };
 
         if (dialog.ShowDialog(this) != DialogResult.OK)
@@ -761,11 +799,40 @@ public sealed class DayScheduleControl : UserControl
 
     private ScheduleEntry? SelectedEntry()
     {
-        if (_grid.CurrentRow?.Tag is not string id)
+        // WHY (23 Nov 2026, bug hunt 24): this used to read CurrentRow alone.
+        // Ctrl-clicking a second line and then Ctrl-clicking it again leaves
+        // only the first highlighted but the cursor on the second, so Edit,
+        // Move Up, Move Down and Add Entry acted on a line that was not
+        // highlighted while Delete in the same menu acted on the one that was.
+        var selectedIds = _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Tag as string).ToList();
+        var current = _grid.CurrentRow;
+
+        if (LineIdToActOn(selectedIds, current?.Tag as string, current?.Selected == true) is not { } id)
         {
             return null;
         }
         return _schedule.All.FirstOrDefault(e => e.Id == id);
+    }
+
+    /// <summary>
+    /// Which line a one-line command (Edit, Move Up, Move Down, where Add
+    /// Entry goes) works on: the highlighted line when exactly one is
+    /// highlighted; the cursor's line when it is itself highlighted, or when
+    /// nothing is highlighted at all; otherwise none.
+    /// </summary>
+    internal static string? LineIdToActOn(IReadOnlyList<string?> selectedIds, string? currentId, bool currentSelected)
+    {
+        if (selectedIds.Count == 1)
+        {
+            return selectedIds[0];
+        }
+
+        if (selectedIds.Count == 0 || currentSelected)
+        {
+            return currentId;
+        }
+
+        return null;
     }
 
     private void EditSelected()

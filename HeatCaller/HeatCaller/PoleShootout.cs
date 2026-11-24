@@ -52,11 +52,20 @@ public static class PoleShootout
     /// changed - every car's clock from its own first crossing (the out lap
     /// is free), a lap limit of the timed laps plus that first crossing, and
     /// a time limit only as a stop for a car that never comes round.
+    /// <para>A class with no format of its own (null) follows the app
+    /// default, so <paramref name="appDefault"/> is what the run starts from
+    /// then; the built-in values only when neither is given.</para>
     /// </summary>
-    public static RaceFormat RunFormat(RaceFormat? classFormat, int timedLaps)
+    public static RaceFormat RunFormat(RaceFormat? classFormat, int timedLaps, RaceFormat? appDefault = null)
     {
         var laps = Math.Clamp(timedLaps, 1, MaxTimedLaps);
-        var format = (classFormat ?? new RaceFormat()).Clone();
+
+        // WHY (23 Nov 2026, bug hunt 24): a class that follows the app default
+        // has a null Format, and this used to fall straight to the built-in
+        // values (3 s min lap, automatic 15 s + 5 s start), not the club's own
+        // default - so at a club with a lower min lap no timed lap counted and
+        // nobody took pole, while the same class's heats and mains raced fine.
+        var format = (classFormat ?? appDefault ?? new RaceFormat()).Clone();
 
         format.StartType = RaceStartType.Qualifier;
         format.LapLimit = laps + 1;
@@ -79,7 +88,7 @@ public static class PoleShootout
     /// slowest of the field first, the top qualifier last. Fewer than two
     /// drivers is no shootout at all, and builds nothing.
     /// </summary>
-    public static List<RoundDefinition> BuildRuns(string className, IReadOnlyList<string> field, int timedLaps, RaceFormat? classFormat, string trackLayoutName)
+    public static List<RoundDefinition> BuildRuns(string className, IReadOnlyList<string> field, int timedLaps, RaceFormat? classFormat, string trackLayoutName, RaceFormat? appDefault = null)
     {
         var runs = new List<RoundDefinition>();
 
@@ -102,7 +111,11 @@ public static class PoleShootout
                 ShootoutQualifyingPlace = place,
                 TrackLayoutName = trackLayoutName,
                 AssignedTransponders = new List<string> { field[place - 1] },
-                FormatOverride = RunFormat(classFormat, timedLaps),
+                FormatOverride = RunFormat(classFormat, timedLaps, appDefault),
+
+                // The field the runs were built for, so Refresh can tell a
+                // hand change from a change in qualifying (bug hunt 24).
+                ShootoutField = field.ToList(),
             });
         }
 
@@ -144,6 +157,21 @@ public static class PoleShootout
             return RefreshResult.Frozen;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): qualifying is what the runs follow,
+        // not the runs themselves. When the field is the one they were built
+        // for, nothing in qualifying moved, so a run the director gave
+        // another driver by hand stands. This used to read that hand change
+        // as a new qualifying order and put the qualifier back after every
+        // filed race. Runs built before the field was kept fall through to
+        // the old comparison. A run deleted by hand is still built again:
+        // the runs left still count the deleted one (ShootoutRunCount), so
+        // the shootout would never finish and the A-Main grid never be set.
+        if (runs.Count == field.Count
+            && runs.Any(r => r.ShootoutField is { } built && built.SequenceEqual(field, StringComparer.OrdinalIgnoreCase)))
+        {
+            return RefreshResult.Unchanged;
+        }
+
         if (runs.Count != field.Count)
         {
             return RefreshResult.Rebuild;
@@ -170,6 +198,15 @@ public static class PoleShootout
                 run.ShootoutQualifyingPlace = place;
                 run.ShootoutRunCount = field.Count;
                 changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            // The field the runs now follow (bug hunt 24), on every run.
+            foreach (var run in runs)
+            {
+                run.ShootoutField = field.ToList();
             }
         }
 

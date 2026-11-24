@@ -128,10 +128,28 @@ public sealed partial class CheckInControl
     }
 
     /// <summary>Whether a driver's name or transponder has the search in it.</summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): any of their transponders, not just
+    /// the main one. A driver's second car's number, typed off the car at the
+    /// desk, filtered the roster to nobody and was answered "No driver".
+    /// </remarks>
     private static bool Matches(DriverProfile profile, string search) =>
         search.Length == 0
         || (profile.DriverName ?? string.Empty).Contains(search, StringComparison.OrdinalIgnoreCase)
-        || profile.Transponder.Contains(search, StringComparison.OrdinalIgnoreCase);
+        || profile.Transponder.Contains(search, StringComparison.OrdinalIgnoreCase)
+        || profile.ExtraTransponders.Any(t => t.Id.Contains(search, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Whether tonight still has a chip for this gate, for the class picked -
+    /// the same tests RefreshCounts builds the chips by.
+    /// </summary>
+    private bool ShowIsOffered(RosterShow show) => show switch
+    {
+        RosterShow.NeedsTech => _tech is not null && InClass().Any(p => ReadinessOf(p).Tech != Gate.NotRun),
+        RosterShow.Owes => _payments is not null && TonightsFees() is { Charges: true },
+        RosterShow.Papers => ChecksPapers,
+        _ => true,
+    };
 
     // ------------------------------------------------------------ the filters
 
@@ -367,6 +385,18 @@ public sealed partial class CheckInControl
         if (_grid.Columns["driver"] is { } driver)
         {
             row.Cells[driver.Index].Style.ForeColor = r.Here ? AppTheme.TextDark : AppTheme.TextMuted;
+
+            // WHY (23 Nov 2026, bug hunt 24): the name, and the "first night"
+            // badge that goes with being here, follow the tick. The badge was
+            // only written when the whole list was rebuilt, so a newcomer
+            // ticked in, checked in from the menu or from their phone showed
+            // as a plain name - and one checked out kept the badge.
+            var name = RosterName(profile, r.Here, _racedBefore?.Now(DateTime.Now));
+
+            if (!string.Equals(row.Cells[driver.Index].Value as string, name, StringComparison.Ordinal))
+            {
+                row.Cells[driver.Index].Value = name;
+            }
         }
 
         if (_tech is not null && _grid.Columns["tech"] is { } techColumn)

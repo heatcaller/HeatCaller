@@ -496,8 +496,21 @@ public sealed class ProfileForm : Form
 
         // A new driver's main transponder is typed after the form opens; the
         // list's first line follows it.
+        // WHY (23 Nov 2026, bug hunt 24): an extra transponder typed in the
+        // drop-down but not yet Added is put back after the refill. This
+        // used to refill with only the picked line, so the first keystroke
+        // in the main box blanked the typed one and Save, which counts a
+        // typed-but-not-Added transponder, saved the driver without it.
         _txtTransponder.TextChanged += (_, _) =>
-            RefillTransponders((_cmbTransponders.SelectedItem as TransponderChoice)?.Id);
+        {
+            var typed = TypedTransponder();
+            RefillTransponders(typed.Length == 0 ? (_cmbTransponders.SelectedItem as TransponderChoice)?.Id : null);
+
+            if (typed.Length > 0)
+            {
+                _cmbTransponders.Text = typed;
+            }
+        };
         _cmbTransponders.TextChanged += (_, _) => UpdateTransponderButtons();
         UpdateTransponderButtons();
 
@@ -1455,6 +1468,26 @@ public sealed class ProfileForm : Form
             return;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): a crew name or "said as" the
+        // announcer can't say is refused here, as the two crew approval
+        // paths refuse it. Save used to keep "Coach D2" without a word, and
+        // on race night the club's own name was said instead.
+        foreach (var (box, had, saidAs) in new[]
+                 {
+                     (_txtCrewPrincipal, Result.CrewPrincipalName, false),
+                     (_txtCrewPrincipalSay, Result.CrewPrincipalSaidAs, true),
+                     (_txtCrewTech, Result.CrewTechName, false),
+                     (_txtCrewTechSay, Result.CrewTechSaidAs, true),
+                 })
+        {
+            if (CrewWordProblem(box.Text, had, saidAs) is { } problem)
+            {
+                AppDialog.Show(this, problem, "Crew name", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                box.Focus();
+                return;
+            }
+        }
+
         // One typed but not yet Added counts, as a typed car does - and the
         // old Alt transponder box saved whatever was in it. Refused (too
         // long, somebody else's), the form stays open.
@@ -1609,6 +1642,39 @@ public sealed class ProfileForm : Form
             JuniorOffStream = OnStreamOffChosen,
             StreamConsent = _chkStreamConsent.Checked,
         };
+    }
+
+    /// <summary>
+    /// Why a crew name or "said as" box can't be saved as typed, in plain
+    /// words - or null when it can. Blank is fine (the club's own is used),
+    /// and so is an unchanged box, so a name saved before this check never
+    /// blocks an edit to something else (bug hunt 24).
+    /// </summary>
+    internal static string? CrewWordProblem(string? typed, string? had, bool saidAs)
+    {
+        if (string.Equals(typed ?? string.Empty, had ?? string.Empty, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var text = DriverCrew.Clean(typed);
+
+        if (text.Length == 0)
+        {
+            return null;
+        }
+
+        if (saidAs)
+        {
+            return DriverCrew.IsASaidAs(text)
+                ? null
+                : $"\"{text}\" can't be read out - letters, spaces, hyphens and apostrophes only. Fix it, or leave it blank.";
+        }
+
+        return DriverCrew.IsAName(text)
+            ? null
+            : $"\"{text}\" isn't a name the announcer can say - letters, spaces, hyphens and apostrophes only. "
+              + "Fix it, or leave it blank for the club's own.";
     }
 
     /// <summary>A crew or notes box as it is kept: unchanged keeps the profile's own text; changed is cleaned onto one line and capped.</summary>

@@ -83,7 +83,7 @@ Changes save as soon as you make them.
 **Last backup:** shows when the most recent backup (manual or automatic) was made, or `never`.
 
 !!! tip
-    Point **Folder:** at a folder your cloud storage app syncs (OneDrive, Google Drive, Dropbox), and every automatic backup is copied off the laptop without you doing anything.
+    Point **Folder:** at a folder your cloud storage app syncs (OneDrive, Google Drive, iCloud Drive), and every automatic backup is copied off the laptop without you doing anything. [Set a backup password](#the-backup-password) first: backups hold every driver's details, so only locked ones go to the cloud. With no password, a backup meant for a folder inside OneDrive, Google Drive or iCloud Drive is made on this PC instead, in `%AppData%\HeatCaller Backups (this PC only)`. That includes the default `Documents\HeatCaller Backups` when OneDrive backs up your Documents folder.
 
 ## Copies in the cloud
 
@@ -126,7 +126,7 @@ Below the light, a line for each service says where its copies go on this PC. Au
 To restore from a cloud copy, use **Restore from File** and pick the zip in the **HeatCaller Backups** folder (on a new PC, install and sign in to the service's app first).
 
 !!! tip "Set a backup password"
-    Your keys, tokens and PINs are only in a backup, locked, when a backup password is set. Without one, a cloud copy holds your drivers, results and settings but no keys. See [The backup password](#the-backup-password).
+    Backups only go to the cloud when a backup password is set, and then they carry your keys, tokens and PINs, locked. Without one, nothing is copied to the cloud and backups stay on this PC. See [The backup password](#the-backup-password).
 
 ## The backup password
 
@@ -283,6 +283,8 @@ A restore never touches:
 - the decoder's connection and port
 - your backup settings
 - the crowd your soundscape set
+- the words you wrote for your club website and announcer: the club's tagline, short name, short address and social links, its first-night guide, club updates and New here? card, the Inbox quick replies, and the stream's New to RC racing? cards and its own between-race lines
+- your children's-privacy choices: **Unpublish results older than (years):** on the **Club Website** page, and **Offline voices for juniors** on **Voice → Voice**
 
 It's not offered while a race or practice is running, because it restarts the app.
 
@@ -325,6 +327,7 @@ The card says where to send it: **support@heatcaller.com**. Clicking the address
 Before anything goes in, HeatCaller replaces:
 
 - each driver's **Driver name:** and **Announcer name:** from **Driver Hub**, whole and word by word, with `[driver 1]`, `[driver 2]` and so on. The same driver keeps the same number all the way through, so one driver can still be followed through the night;
+- the other people named on a driver's profile in **Driver Hub** (their crew's Team Principal and Technical Lead, a mentor, and a parent or guardian), numbered on after the drivers. Someone who is also a driver, or named on two profiles, keeps the one number;
 - email addresses with `[email]`, and each driver's **Contact:** with `[contact]`;
 - your Windows user name in folder paths with `[user]`.
 

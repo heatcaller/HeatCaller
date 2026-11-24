@@ -154,6 +154,15 @@ public sealed partial class RelaySettingsControl : UserControl
     private readonly Button _btnClearUpdates = new();
     private readonly Label _lblUpdatesState = new();
 
+    /// <summary>
+    /// The saved guide and club updates each box was last filled from or
+    /// sent as (null before the first load) - so a reload of the page keeps
+    /// a draft being written unless the saved words themselves changed
+    /// (bug hunt 24, see KeepDraft).
+    /// </summary>
+    private string? _guideLoadedFrom;
+    private string? _updatesLoadedFrom;
+
     /// <summary>One box per RelaySocial platform, keyed by its key.</summary>
     private readonly Dictionary<string, TextBox> _socialBoxes = new(StringComparer.OrdinalIgnoreCase);
 
@@ -228,6 +237,9 @@ public sealed partial class RelaySettingsControl : UserControl
 
     /// <summary>What the relay said about it - a taken one is never printed on the poster.</summary>
     private RelayPublisher.AliasState _aliasState = RelayPublisher.AliasState.Unknown;
+
+    /// <summary>The relay check the short address box's Leave started last, for Show Poster to wait on (bug hunt 24).</summary>
+    private Task _aliasCheck = Task.CompletedTask;
 
     /// <summary>Says when the club's name is cut short under the icon.</summary>
     private readonly Label _lblIconNameCut = new();
@@ -1357,7 +1369,8 @@ public sealed partial class RelaySettingsControl : UserControl
         _txtClubAlias.Leave += async (_, _) =>
         {
             _settings.Save();
-            await CheckAliasAsync();
+            _aliasCheck = CheckAliasAsync();
+            await _aliasCheck;
         };
         tagline.AddRow("Short address:", _txtClubAlias);
 
@@ -1578,6 +1591,7 @@ public sealed partial class RelaySettingsControl : UserControl
     {
         var parts = RelayDocuments.GuideParts(text);
         _settings.RelayFirstNightGuide = parts.Count == 0 || RelayDocuments.IsStandardGuide(text) ? string.Empty : text.Trim();
+        _guideLoadedFrom = _settings.RelayFirstNightGuide;
         _settings.Save();
 
         if (parts.Count == 0)
@@ -1588,14 +1602,30 @@ public sealed partial class RelaySettingsControl : UserControl
         RefreshGuideState();
     }
 
+    /// <summary>Whether the guide in the box is the one sent (the standard one when the club sent none).</summary>
+    internal static bool GuideIsSent(string box, string sent) =>
+        string.IsNullOrWhiteSpace(sent)
+            ? RelayDocuments.IsStandardGuide(box)
+            : RelayDocuments.GuideParts(box).SequenceEqual(RelayDocuments.GuideParts(sent));
+
+    /// <summary>Whether the club updates in the box are the ones sent.</summary>
+    internal static bool UpdatesAreSent(string box, string sent) =>
+        RelayDocuments.UpdateParts(box).SequenceEqual(RelayDocuments.UpdateParts(sent));
+
+    /// <summary>
+    /// Whether a reload of the page leaves a held-till-Send box alone: only
+    /// when it holds an unsent draft and the saved words are still the ones
+    /// the box was filled from. Never on the first load (nothing filled yet).
+    /// </summary>
+    internal static bool KeepDraft(string? loadedFrom, string? saved, bool boxIsSent) =>
+        !boxIsSent && loadedFrom is not null && loadedFrom == (saved ?? string.Empty);
+
     /// <summary>Whether what is in the box has gone to the club's pages, and what they show.</summary>
     private void RefreshGuideState()
     {
         var sent = _settings.RelayFirstNightGuide;
         var box = _txtGuide.Text;
-        var same = string.IsNullOrWhiteSpace(sent)
-            ? RelayDocuments.IsStandardGuide(box)
-            : RelayDocuments.GuideParts(box).SequenceEqual(RelayDocuments.GuideParts(sent));
+        var same = GuideIsSent(box, sent);
 
         _btnSendGuide.Enabled = !same;
         _btnStandardGuide.Enabled = !string.IsNullOrWhiteSpace(sent) || !RelayDocuments.IsStandardGuide(box);
@@ -1655,6 +1685,7 @@ public sealed partial class RelaySettingsControl : UserControl
     private void SendUpdates(string text)
     {
         _settings.RelayClubUpdates = RelayDocuments.UpdateParts(text).Count == 0 ? string.Empty : text.Trim();
+        _updatesLoadedFrom = _settings.RelayClubUpdates;
         _settings.Save();
         RefreshUpdatesState();
     }
@@ -1664,7 +1695,7 @@ public sealed partial class RelaySettingsControl : UserControl
     {
         var sent = RelayDocuments.UpdateParts(_settings.RelayClubUpdates);
         var box = RelayDocuments.UpdateParts(_txtUpdates.Text);
-        var same = box.SequenceEqual(sent);
+        var same = UpdatesAreSent(_txtUpdates.Text, _settings.RelayClubUpdates);
 
         _btnSendUpdates.Enabled = !same;
         _btnClearUpdates.Enabled = sent.Count > 0 || box.Count > 0;
@@ -1777,6 +1808,11 @@ public sealed partial class RelaySettingsControl : UserControl
         }
 
         _aliasAsked = alias;
+
+        // WHY (23 Nov 2026, bug hunt 24): the last answer was about another
+        // address, so it is forgotten while this one is asked - the poster
+        // (PosterAlias) must never pair an old "yours" with a new address.
+        _aliasState = RelayPublisher.AliasState.Unknown;
         var state = await _publisher.CheckAliasAsync(alias);
 
         // The box may have changed, or the page gone, while the relay answered.
@@ -3242,7 +3278,7 @@ public sealed partial class RelaySettingsControl : UserControl
         _btnCopyPage.Click += (_, _) => CopyClubPage();
 
         _btnPoster.Text = "Show Poster";
-        _btnPoster.Click += (_, _) => ShowClubPoster();
+        _btnPoster.Click += async (_, _) => await ShowClubPoster();
 
         var lblShareHint = HintLabel(
             "The club's home page: what's on now, the schedule, results, standings, achievements and tracks, "
@@ -3330,7 +3366,7 @@ public sealed partial class RelaySettingsControl : UserControl
         }
     }
 
-    private void ShowClubPoster()
+    private async Task ShowClubPoster()
     {
         var url = ClubPageUrl();
 
@@ -3339,12 +3375,37 @@ public sealed partial class RelaySettingsControl : UserControl
             return;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): the relay is asked about the short
+        // address before it is printed, when it hasn't been asked about this
+        // one yet. It used to be asked only when the box was left, so after
+        // a restart (or with the relay out of reach) "never asked" counted
+        // as fine, and a short address the relay had said was another
+        // club's was printed under the code for the pits wall. A check the
+        // box's Leave already started (Show Poster clicked straight from the
+        // box) is waited for first, so its answer is the one used.
+        await _aliasCheck;
+
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        if (NormaliseAlias(_settings.RelayClubAlias).Length > 0 && NormaliseAlias(_settings.RelayClubAlias) != _aliasAsked)
+        {
+            await CheckAliasAsync();
+
+            if (IsDisposed)
+            {
+                return;
+            }
+        }
+
         // FROM THE POSTER (19 Nov 2026, driver phone plan item 22): the code
         // opens Home with ?from=poster, so the club's counts say how many
         // came that way and the page greets them; the address printed under
         // it is the short one when the club has one, for typing.
         var (qr, printed) = PosterAddresses(url, RelayPublisher.NormaliseBaseUrl(_settings.RelayBaseUrl),
-            _aliasState is RelayPublisher.AliasState.Taken or RelayPublisher.AliasState.Bad ? string.Empty : _settings.RelayClubAlias);
+            PosterAlias(_aliasState, _aliasAsked, _settings.RelayClubAlias));
 
         // Non-modal, like the Wi-Fi posters: it is meant to sit open on a
         // second screen while the meeting carries on behind it.
@@ -3362,6 +3423,28 @@ public sealed partial class RelaySettingsControl : UserControl
     /// page with ?from=poster) and the one printed under it (the short
     /// address when the club has one, else the page itself).
     /// </summary>
+    internal static string NormaliseAlias(string? alias) => (alias ?? string.Empty).Trim().ToLowerInvariant();
+
+    /// <summary>
+    /// The short address the poster may print: the saved one only when the
+    /// relay's last answer was about that same address and said it is this
+    /// club's (or free, which the next publish claims). Taken, bad, never
+    /// asked, or asked about a different one prints nothing short, and the
+    /// poster prints the club's own page instead, which is always right.
+    /// WHY (23 Nov 2026, bug hunt 24): it used to blank only Taken and Bad,
+    /// so the Unknown of every fresh start printed a taken address.
+    /// </summary>
+    internal static string PosterAlias(RelayPublisher.AliasState state, string askedAlias, string savedAlias)
+    {
+        var saved = NormaliseAlias(savedAlias);
+
+        return saved.Length > 0
+            && saved == NormaliseAlias(askedAlias)
+            && state is RelayPublisher.AliasState.Yours or RelayPublisher.AliasState.Free
+            ? saved
+            : string.Empty;
+    }
+
     internal static (string Qr, string Printed) PosterAddresses(string clubPage, string root, string alias)
     {
         var shortAlias = (alias ?? string.Empty).Trim().ToLowerInvariant();
@@ -3454,8 +3537,27 @@ public sealed partial class RelaySettingsControl : UserControl
             _txtNewcomerWhere.Text = _settings.RelayNewcomerWhere;
             _txtNewcomerWhen.Text = _settings.RelayNewcomerWhen;
             _txtNewcomerJoin.Text = _settings.RelayNewcomerJoin;
-            ShowGuide(_settings.RelayFirstNightGuide);
-            _txtUpdates.Text = _settings.RelayClubUpdates;
+            // WHY (23 Nov 2026, bug hunt 24): these two boxes are held until
+            // Send, so they are the only ones on the page whose words are not
+            // in settings yet. The reload on every return to the page (a tab
+            // change, another page, an undo) used to put the last sent words
+            // back over them, throwing a half-written guide or club news away
+            // without a word. A draft now stays, unless the saved words
+            // themselves changed since the box was filled (an undo, a restore).
+            if (!KeepDraft(_guideLoadedFrom, _settings.RelayFirstNightGuide, GuideIsSent(_txtGuide.Text, _settings.RelayFirstNightGuide)))
+            {
+                ShowGuide(_settings.RelayFirstNightGuide);
+            }
+
+            _guideLoadedFrom = _settings.RelayFirstNightGuide;
+            RefreshGuideState();
+
+            if (!KeepDraft(_updatesLoadedFrom, _settings.RelayClubUpdates, UpdatesAreSent(_txtUpdates.Text, _settings.RelayClubUpdates)))
+            {
+                _txtUpdates.Text = _settings.RelayClubUpdates;
+            }
+
+            _updatesLoadedFrom = _settings.RelayClubUpdates;
             RefreshUpdatesState();
 
             foreach (var (key, box) in _socialBoxes)

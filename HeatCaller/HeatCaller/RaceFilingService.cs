@@ -148,6 +148,48 @@ public sealed class RaceFilingService
     private void StatusMessage(string message) => Log?.Invoke(message);
 
     /// <summary>
+    /// The session-log line for a saved demo race.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): it always said the demo "is not linked
+    /// to a heat" - but on a demo night (DemoFillsTheProgramme) with a round
+    /// picked, RaceFiling.Commit goes on to link the round and logs "Linked
+    /// round ... IsRecorded=True" on the very next line, so the log
+    /// contradicted itself. Then this line leaves the linking to Commit's own
+    /// line (which also says when the link is refused).
+    /// </remarks>
+    internal static string DemoSavedLine(bool demoMayFillTheProgramme, bool hasRound) =>
+        demoMayFillTheProgramme && hasRound
+            ? "[session] Demo race - kept in Race History marked [DEMO]. It earns no points, achievements, "
+              + "personal bests or records."
+            : "[session] Demo race - kept in Race History marked [DEMO] only. It is not linked to a heat and "
+              + "earns no points, achievements, personal bests or records.";
+
+    /// <summary>
+    /// The log for a late save of a race whose round was withheld because
+    /// that heat has been filed by another race (or removed) since.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): FileUnfiledRaces says why the race is
+    /// not going on its heat, then RaceFiling.Commit (which cannot tell a
+    /// retry from a first filing) added its own "Saved to history, but NOT
+    /// tied to a heat" line blaming the Round box, auto-start or an empty
+    /// program - two different reasons in a row, the second one false. When
+    /// the round was withheld, that one line of Commit's is dropped; every
+    /// other line passes through.
+    /// </remarks>
+    internal static Action<string> LateSaveLog(Action<string> log, bool roundWithheld) =>
+        roundWithheld
+            ? message =>
+            {
+                if (!message.StartsWith("[session] Saved to history, but NOT tied to a heat", StringComparison.Ordinal))
+                {
+                    log(message);
+                }
+            }
+            : log;
+
+    /// <summary>
     /// Whether finishing a race should arm the next one.
     ///
     /// The open race day's own answer, falling back to the club-wide
@@ -370,7 +412,11 @@ public sealed class RaceFilingService
             SessionType = RaceSessionType.Race,
 
             // A demo keeps the round's name in its label (so it is clear
-            // what was being rehearsed) but is never linked to the round.
+            // what was being rehearsed) but the record carries no RoundId.
+            // WHY (23 Nov 2026, bug hunt 24): this used to say a demo is
+            // "never linked to the round" - on a demo night
+            // (DemoFillsTheProgramme) RaceFiling.Commit still marks the round
+            // as run from it, so seeding can be rehearsed.
             RoundId = currentRaceIsDemo ? null : round?.Id,
             IsDemo = currentRaceIsDemo,
             TrackLayoutName = input.TrackLayoutName,
@@ -508,9 +554,7 @@ public sealed class RaceFilingService
                     // the plan never runs.
                     input.NoBadgesForDemo?.Invoke();
 
-                    StatusMessage(
-                        "[session] Demo race - kept in Race History marked [DEMO] only. It is not linked to a heat and "
-                        + "earns no points, achievements, personal bests or records.");
+                    StatusMessage(DemoSavedLine(_settings.DemoFillsTheProgramme, round is not null));
                 }
                 else
                 {
@@ -724,7 +768,9 @@ public sealed class RaceFilingService
                         refreshPages();
                     }
                 },
-                log: message => StatusMessage(message),
+                // WHY (23 Nov 2026, bug hunt 24): the reason was given just
+                // above - see LateSaveLog.
+                log: LateSaveLog(message => StatusMessage(message), roundWithheld: unfiled.Round is not null && round is null),
                 raceDayOpen: RoundPicker.RaceDayOpen(_events),
                 demoMayFillTheProgramme: _settings.DemoFillsTheProgramme);
 

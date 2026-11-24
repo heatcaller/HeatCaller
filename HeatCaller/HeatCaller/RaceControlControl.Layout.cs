@@ -1347,6 +1347,11 @@ public sealed partial class RaceControlControl
                 var sessionStart = _sessionStartedAtUtc;
                 var prompted = _promptedTransponders.ToList();
 
+                // WHY (23 Nov 2026, bug hunt 24): the race's lead change tally, which the
+                // announcer's reset clears. Put back without it, the next lead change was
+                // called the first and the broadcast tower went back to one leader.
+                var leadsBefore = _announcer.Leads.Snapshot();
+
                 // What kind of race it was, cleared below. Put back without
                 // it, a Quick Race (or a re-run of a recorded round) came
                 // back looking like any freeform race, and auto-advance
@@ -1440,7 +1445,7 @@ public sealed partial class RaceControlControl
                     WriteJournal(force: true);
 
                     // See SeedAnnouncerFromRace.
-                    SeedAnnouncerFromRace();
+                    SeedAnnouncerFromRace(leadsBefore);
                     RenderLeaderboard();
                     UpdateClockDisplay();
 

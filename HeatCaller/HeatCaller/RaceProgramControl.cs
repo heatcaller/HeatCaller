@@ -1348,7 +1348,13 @@ public sealed partial class RaceProgramControl : UserControl
                 raceDay.Breaks,
                 keepPromises && _settings.AutoStartNeverEarly && _settings.AutoStartBetweenRaces,
                 nextStart,
-                HeatSize());
+                HeatSize(),
+                // WHY (23 Nov 2026, bug hunt 24): without each round's format
+                // the plan priced "qualifiers a minute shorter" from the slot
+                // length, so 3-minute and lap-count heats were offered a
+                // minute off that Apply could never take, and Apply then said
+                // the fix was "already in tonight's plan".
+                formatOf: round => NightPlan.FormatOf(round, ClassNamed(round.ClassName), appDefault));
         }
         catch (Exception ex)
         {
@@ -1806,12 +1812,16 @@ public sealed partial class RaceProgramControl : UserControl
             // DataGridView column's Visible is its own state and not
             // effective visibility, so this is safe to read back, unlike
             // Control.Visible.
+            // WHY (23 Nov 2026, bug hunt 24): the Due column showed the stored
+            // time as stored, and Fill In the Times stores "HH:mm", so a
+            // 12-hour club read "19:40" here and "7:40 PM" on the timetable.
+            // It is only shown, so it reads the way the timetable shows it.
             var due = _schedule is null
                 ? new Dictionary<string, string>(StringComparer.Ordinal)
                 : _schedule.All
                     .Where(e => !string.IsNullOrWhiteSpace(e.RoundId) && !string.IsNullOrWhiteSpace(e.ScheduledTime))
                     .GroupBy(e => e.RoundId, StringComparer.Ordinal)
-                    .ToDictionary(g => g.Key, g => g.First().ScheduledTime.Trim(), StringComparer.Ordinal);
+                    .ToDictionary(g => g.Key, g => DayScheduleControl.ShownTime(g.First().ScheduledTime.Trim()), StringComparer.Ordinal);
 
             if (_grid.Columns["due"] is { } dueColumn)
             {
@@ -3183,7 +3193,12 @@ public sealed partial class RaceProgramControl : UserControl
                 PoleShootout.Field(ranked, PoleShootout.DriversFor(raceClass)),
                 PoleShootout.TimedLapsFor(raceClass),
                 raceClass.Format,
-                DayTrack()));
+                DayTrack(),
+                // WHY (23 Nov 2026, bug hunt 24): a class following the app
+                // default has a null Format, so the runs used to race under
+                // the built-in 3 s min lap and automatic start instead of the
+                // club's default.
+                RaceFormat.FromSettings(_settings)));
         }
 
         var runsBuilt = created.Count;
@@ -3402,6 +3417,17 @@ public sealed partial class RaceProgramControl : UserControl
 
     private void StartRound(RoundDefinition round)
     {
+        // WHY (23 Nov 2026, bug hunt 24): the only action here with no
+        // closed-day refusal. With last week's closed day picked to look at,
+        // Start on its leftover heat raced tonight's race and filed it into
+        // last week's meeting - counted in that night's report and standings,
+        // missing from tonight's.
+        if (ClosedDayRefusal() is { } shut)
+        {
+            AppDialog.Show(this, shut.Message, shut.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
         if (round.AssignedTransponders.Count == 0
             && AppDialog.Show(this,
                 $"\"{round.RoundLabel}\" has no drivers assigned. Start it anyway?",
@@ -3535,6 +3561,31 @@ public sealed partial class RaceProgramControl : UserControl
             return;
         }
 
+        var saved = SaveRoundRoster(round, form.Result);
+
+        if (!saved.Ok)
+        {
+            AppDialog.Show(this, saved.Message, saved.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+    }
+
+    /// <summary>
+    /// Edit Drivers' save, once its window has closed with OK: gives
+    /// <paramref name="round"/> <paramref name="drivers"/>, under one undo.
+    /// </summary>
+    internal ProgramAnswer SaveRoundRoster(RoundDefinition round, List<string> drivers)
+    {
+        // WHY (23 Nov 2026, bug hunt 24): checked again now the window has
+        // closed. Edit Drivers checked the heat on track only before it
+        // opened, so a heat Auto start put on track while it was open had
+        // its drivers on file changed mid-race, and the run sheet, marshal
+        // list and report then disagreed with the result saved for it.
+        if (OnTrackRound(new[] { round }) is not null)
+        {
+            return new ProgramAnswer(false, "Round on track",
+                $"\"{round.RoundLabel}\" is on track - change its drivers when it has finished. Nothing was changed.");
+        }
+
         // By id, onto the round as it is on file now - a round deleted since
         // stays deleted - and only if it has not been run since and still
         // holds the drivers this edit gave it (see CheckRosterRestore): the
@@ -3542,7 +3593,7 @@ public sealed partial class RaceProgramControl : UserControl
         // the old drivers back then made its roster disagree with its
         // result. A round that had already run when it was edited (the
         // question above allows that) can still be put back.
-        var restore = new RosterRestore(round.Id, round.LinkedSessionId, form.Result.ToList(), round.AssignedTransponders.ToList());
+        var restore = new RosterRestore(round.Id, round.LinkedSessionId, drivers.ToList(), round.AssignedTransponders.ToList());
         var label = $"Edit drivers in {round.RoundLabel}";
 
         Action? undoEdit = null;
@@ -3568,11 +3619,12 @@ public sealed partial class RaceProgramControl : UserControl
 
         _undo.Capture(label, undoEdit);
 
-        round.AssignedTransponders = form.Result;
+        round.AssignedTransponders = drivers;
         _rounds.Update(round);
         RefreshGrid();
 
-        _lblStatus.Text = $"{round.RoundLabel} now has {Plural.Of(form.Result.Count, "driver")}.";
+        _lblStatus.Text = $"{round.RoundLabel} now has {Plural.Of(drivers.Count, "driver")}.";
+        return new ProgramAnswer(true, "Drivers changed", _lblStatus.Text);
     }
 
     /// <summary>
@@ -3874,7 +3926,13 @@ public sealed partial class RaceProgramControl : UserControl
             // Current cell FIRST. Assigning it resets the selection to that
             // one row, so doing it afterwards would collapse a multi-row
             // move back down to a single row.
-            _grid.CurrentCell = first.Cells[0];
+            //
+            // WHY (23 Nov 2026, bug hunt 24): the first SHOWN cell, not
+            // Cells[0] - the "order" column has been hidden since the 17 Nov
+            // run sheet, and setting a hidden cell as current throws, so the
+            // dragged rounds were never selected again and the "Moved ..."
+            // line was never written.
+            _grid.CurrentCell = first.Cells.Cast<DataGridViewCell>().FirstOrDefault(c => c.Visible) ?? first.Cells[0];
             _grid.ClearSelection();
 
             foreach (DataGridViewRow row in _grid.Rows)
@@ -4200,7 +4258,13 @@ public sealed partial class RaceProgramControl : UserControl
 
             // Closer than tonight's races off between a driver's races?
             // Asked at Save (12 Nov 2026, setup plan step 8).
-            restCheck: RosterRestWarning);
+            restCheck: RosterRestWarning,
+
+            // WHY (23 Nov 2026, bug hunt 24): Save asks what is on track at
+            // that moment. Given only the heat on track when the window
+            // opened, it let a heat Auto start put on track meanwhile be
+            // changed under the running race.
+            onTrackNow: () => RoundOnTrackId?.Invoke());
 
         // Late check-ins wait until the form's changes are saved (or
         // dropped): it shows the heats as they were when it opened.
@@ -4219,7 +4283,14 @@ public sealed partial class RaceProgramControl : UserControl
                 return;
             }
 
-            ApplyRosterChanges(className, form.Changes.ToList(), string.Empty);
+            // A heat that went on track while the form was open is refused
+            // (23 Nov 2026, bug hunt 24) - say so rather than nothing.
+            var moved = ApplyRosterChanges(className, form.Changes.ToList(), string.Empty);
+
+            if (!moved.Ok)
+            {
+                AppDialog.Show(this, moved.Message, moved.Title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
         finally
         {
@@ -4429,6 +4500,17 @@ public sealed partial class RaceProgramControl : UserControl
             return new ProgramAnswer(false, "Nothing changed", "No heat's drivers changed.");
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): checked at the moment of writing.
+        // Move Drivers Between Heats locked the heat on track only when it
+        // opened, so a heat Auto start put on track while it was open had
+        // its drivers changed mid-race, and the program then disagreed with
+        // the result saved for it.
+        if (OnTrackRound(changes.Select(c => _rounds.Get(c.RoundId)).OfType<RoundDefinition>()) is { } busy)
+        {
+            return new ProgramAnswer(false, "Round on track",
+                $"\"{busy.RoundLabel}\" is on track - change its drivers when it has finished. Nothing was changed.");
+        }
+
         // Captured before the change is made, the way every other undoable
         // command on this page does it.
         //
@@ -4545,9 +4627,12 @@ public sealed partial class RaceProgramControl : UserControl
         {
             if (row.Tag as string == round.Id)
             {
-                _grid.ClearSelection();
-                row.Selected = true;
-                _grid.CurrentCell = row.Cells[0];
+                // WHY (23 Nov 2026, bug hunt 24): this set the current cell
+                // to Cells[0], the "order" column, hidden since the 17 Nov
+                // run sheet - and a hidden cell can't be the current cell, so
+                // every Move Up / Move Down ended in an "Unexpected error" box
+                // after the move was saved. SelectOnly uses the first shown cell.
+                SelectOnly(row);
                 break;
             }
         }
@@ -4717,6 +4802,12 @@ public sealed partial class RaceProgramControl : UserControl
 
         var foldOwner = _events?.EventForRound(fold.Id)?.Id;
 
+        // WHY (23 Nov 2026, bug hunt 24): read again now the question is
+        // answered. The heat on track was read before it, so a heat Auto
+        // start put on track while the question was open was joined to
+        // another class's heat mid-race.
+        onTrack = RoundOnTrackId?.Invoke();
+
         if (MixedHeats.RunTogetherIn(_rounds, keep, fold, _profiles, onTrack, out var refusal) is not { } undo)
         {
             AppDialog.Show(this, refusal ?? "These heats cannot run together.", "Can't run these together",
@@ -4726,11 +4817,20 @@ public sealed partial class RaceProgramControl : UserControl
 
         _events?.RemoveRound(fold.Id);
 
-        _undo.Capture($"Run together: {keep.RoundLabel} + {fold.RoundLabel}", () =>
+        var togetherLabel = $"Run together: {keep.RoundLabel} + {fold.RoundLabel}";
+
+        Action? undoTogether = null;
+        undoTogether = () =>
         {
+            // WHY (23 Nov 2026, bug hunt 24): the only roster undo here
+            // that skipped the on-track guard, so Undo could take a shared
+            // heat apart while it raced. Refused now, and left on the stack
+            // to undo once the race is saved, as the other roster undos are.
+            RefuseRosterUndoWhileOnTrack(togetherLabel, undoTogether!, new[] { keep.Id });
+
             // Refused the way every undo here refuses: by throwing, which
             // the undo stack shows the director, with nothing changed.
-            if (!MixedHeats.UndoRunTogether(_rounds, undo, out var notUndone))
+            if (!MixedHeats.UndoRunTogether(_rounds, undo, RoundOnTrackId?.Invoke(), out var notUndone))
             {
                 throw new InvalidOperationException((notUndone ?? "The heats could not be taken apart.") + " Nothing was changed.");
             }
@@ -4741,7 +4841,9 @@ public sealed partial class RaceProgramControl : UserControl
             }
 
             RefreshAll();
-        });
+        };
+
+        _undo.Capture(togetherLabel, undoTogether);
 
         _lblStatus.Text = $"\"{keep.RoundLabel}\" now runs {classes} together. Undo takes them apart.";
         RefreshAll();
@@ -4812,7 +4914,15 @@ public sealed partial class RaceProgramControl : UserControl
             return;
         }
 
-        DeleteRounds(removed, string.Empty);
+        // WHY (23 Nov 2026, bug hunt 24): DeleteRounds checks the heat on
+        // track again, as it is after the questions above - Auto start can
+        // put one of these out while they are open - and refuses then.
+        var deleted = DeleteRounds(removed, string.Empty);
+
+        if (!deleted.Ok)
+        {
+            AppDialog.Show(this, deleted.Message, deleted.Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     /// <summary>
@@ -4827,6 +4937,16 @@ public sealed partial class RaceProgramControl : UserControl
         if (removed.Count == 0)
         {
             return new ProgramAnswer(false, "Nothing to delete", "No rounds were given to delete.");
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): checked here, at the moment of
+        // deleting. The desk checked only before its two questions, so a
+        // heat Auto start put on track while they were open was deleted
+        // mid-race and its result had nothing to be saved against.
+        if (OnTrackRound(removed) is { } busy)
+        {
+            return new ProgramAnswer(false, "Round on track",
+                $"\"{busy.RoundLabel}\" is on track - its result would have nothing to be saved against. Delete it when it has finished.");
         }
 
         // Which race day each round belonged to, captured BEFORE the delete
@@ -5133,7 +5253,13 @@ public sealed partial class RaceProgramControl : UserControl
         // Shown again after each swap, so the roster on screen is the new one.
         while (true)
         {
-            var assignments = MarshalAssigner.Assign(rounds, layout, _profiles);
+            // WHY (23 Nov 2026, bug hunt 24): a heat shared with another
+            // class gets its host class's marshals, as the announcer and the
+            // phones give them - see AssignForClassSheet. Opened for the
+            // second class, it named that class's own earlier heat instead.
+            var assignments = layout is null
+                ? MarshalAssigner.Assign(rounds, layout, _profiles)
+                : AssignForClassSheet(className, n => DayRoundsForClass(n), LayoutOf, _profiles);
 
             using var form = new MarshalAssignmentsForm(className, assignments, SwapMarshal);
 
@@ -5415,6 +5541,15 @@ public sealed partial class RaceProgramControl : UserControl
     /// </summary>
     public ProgramAnswer ApplyBumpUpsInto(RoundDefinition target, string undoPrefix)
     {
+        // WHY (23 Nov 2026, bug hunt 24): checked here, after the question.
+        // The desk checked only before asking "move them up now?", so a
+        // main put on track while the question was open had drivers added
+        // to it as it raced.
+        if (OnTrackRound(new[] { target }) is not null)
+        {
+            return new ProgramAnswer(false, "Round on track", $"{target.RoundLabel} is on track - bump-ups have to happen before it runs.");
+        }
+
         var mains = DayMainsForClass(target.ClassName);
 
         if (MainsBuilder.DescribeBumpUpBlocker(target, mains, _sessionHistory) is { } blocker)

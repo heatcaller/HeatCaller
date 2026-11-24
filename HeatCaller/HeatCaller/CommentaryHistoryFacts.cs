@@ -97,11 +97,26 @@ public readonly record struct HeadToHead(
 /// again in the next heat. See CommentaryHistoryFacts.ForIntro for what
 /// that cost once the race intro started carrying this history itself.
 /// </param>
+/// <param name="NightsOnFile">
+/// How many race nights (6am to 6am) of these races were on file BEFORE
+/// tonight, when the caller counted them. Null means not counted, and is
+/// read as a history old enough to know.
+///
+/// WHY (23 Nov 2026, bug hunt 24): the intro's "first ever start at this
+/// club" and the recap's "first ever win / podium here" were said on a
+/// zero alone, and on a club's first night or two with the app nearly
+/// everyone has a zero - so members of fifteen years were announced as
+/// debutants and every winner as a first-time winner. The sign-off's own
+/// debut count already refuses to speak under
+/// CommentaryShowFacts.LeastDaysOnFile nights for exactly this reason; see
+/// CommentaryHistoryFacts.KnowsFirsts for the same bar here.
+/// </param>
 public sealed record RaceForm(
     IReadOnlyList<DriverForm> Grid,
     IReadOnlyList<HeadToHead> Rivalries,
     string? Scope = null,
-    string? NightKey = null);
+    string? NightKey = null,
+    int? NightsOnFile = null);
 
 /// <summary>
 /// A race day the club ran on this date in another year, as the session
@@ -273,11 +288,27 @@ public static class CommentaryHistoryFacts
     }
 
     /// <summary>
+    /// Whether the history on file is old enough for a zero to mean "never".
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a "first ever" line is only true
+    /// when the app's records go back further than the driver's career
+    /// here. With fewer than CommentaryShowFacts.LeastDaysOnFile nights
+    /// filed, a zero says how young the database is, not that the driver
+    /// is new - the old code read it out as club history ("is making their
+    /// first ever start at this club" about a long-time member). Null is a
+    /// caller that did not count, which keeps the old behaviour.
+    /// </summary>
+    /// <param name="nightsOnFile">Race nights on file before tonight, or null when not counted.</param>
+    public static bool KnowsFirsts(int? nightsOnFile) =>
+        nightsOnFile is not int nights || nights >= CommentaryShowFacts.LeastDaysOnFile;
+
+    /// <summary>
     /// Somebody's first ever start at this club.
     ///
     /// The highest payload per character in the whole layer: it costs one
-    /// integer to know, it is never not true when it is true, and it is
-    /// the line the driver's family remembers.
+    /// integer to know, and it is the line the driver's family remembers.
+    /// True only when the history goes back far enough to know - see
+    /// <see cref="KnowsFirsts"/>; ForIntro asks before calling this.
     /// </summary>
     public static FactBlock? Debut(DriverForm driver, string raceKey, string? scope = null)
     {
@@ -511,8 +542,17 @@ public static class CommentaryHistoryFacts
     /// </summary>
     /// <param name="driver">Their record BEFORE this race. The caller must not have counted tonight in yet, or every win is their first.</param>
     /// <param name="finishPosition">Where they came. One is a win.</param>
-    public static FactBlock? ResultInContext(DriverForm driver, int finishPosition, string raceKey, string? scope = null)
+    /// <param name="nightsOnFile">Race nights on file before tonight (RaceForm.NightsOnFile); null when not counted.</param>
+    public static FactBlock? ResultInContext(DriverForm driver, int finishPosition, string raceKey, string? scope = null, int? nightsOnFile = null)
     {
+        // WHY (23 Nov 2026, bug hunt 24): a zero in a history only a night
+        // or two old is not a "first ever". The old code called every
+        // winner on a club's first nights with the app a first-time winner
+        // here, and every P2 and P3 a first podium. Those lines now stay
+        // silent until the history can know; "Nth win here" still speaks,
+        // because it only counts what is on file.
+        var knows = KnowsFirsts(nightsOnFile);
+
         var name = CommentaryFacts.Clean(driver.Name);
 
         if (name.Length == 0 || finishPosition <= 0)
@@ -526,6 +566,11 @@ public static class CommentaryHistoryFacts
         {
             if (driver.WinsHere == 0)
             {
+                if (!knows)
+                {
+                    return null;
+                }
+
                 return new FactBlock(key, driver.RacesHere > 1
                     ? $"That is {name}'s first ever {Of(scope)}win here, at the {CommentaryFacts.Ordinal(driver.RacesHere + 1)} attempt."
                     : $"That is {name}'s first ever {Of(scope)}win here.");
@@ -540,7 +585,7 @@ public static class CommentaryHistoryFacts
             return new FactBlock(key, $"{name}'s {CommentaryFacts.Ordinal(driver.WinsHere + 1)} {Of(scope)}win here.");
         }
 
-        if (finishPosition <= Podium && driver.PodiumsHere == 0)
+        if (finishPosition <= Podium && driver.PodiumsHere == 0 && knows)
         {
             return new FactBlock(key, $"{name}'s first ever {Of(scope)}podium here.");
         }
@@ -639,7 +684,8 @@ public static class CommentaryHistoryFacts
         string raceKey,
         string? scope = null,
         int most = 4,
-        string? nightKey = null)
+        string? nightKey = null,
+        int? nightsOnFile = null)
     {
         // One decision for all four builders below, because all four are
         // true for the night rather than for the race. See the remarks.
@@ -648,7 +694,15 @@ public static class CommentaryHistoryFacts
         var names = grid.ToDictionary(d => d.DriverId, d => d.Name, StringComparer.Ordinal);
         var found = new List<FactBlock>();
 
-        foreach (var driver in grid)
+        // WHY (23 Nov 2026, bug hunt 24): no debuts from a history too
+        // young to know one. The old code announced every long-time member
+        // missing from the one race on file as "making their first ever
+        // start at this club" - up to four of them, first in the intro.
+        // See KnowsFirsts. Rivalries, droughts and streaks still speak:
+        // they need many races on file before they say anything at all.
+        var knowsFirsts = KnowsFirsts(nightsOnFile);
+
+        foreach (var driver in knowsFirsts ? grid : Array.Empty<DriverForm>())
         {
             if (Debut(driver, key, scope) is { } debut)
             {
@@ -903,7 +957,8 @@ public static class CommentaryHistoryFacts
         string raceKey,
         string? scope = null,
         int most = RecapFacts,
-        string? nightKey = null)
+        string? nightKey = null,
+        int? nightsOnFile = null)
     {
         var found = new List<FactBlock>();
 
@@ -934,7 +989,10 @@ public static class CommentaryHistoryFacts
         foreach (var (driverId, position) in order)
         {
             if (form.TryGetValue(driverId, out var driver)
-                && ResultInContext(driver, position, raceKey, scope) is { } result)
+                // WHY (23 Nov 2026, bug hunt 24): the nights on file go
+                // through, so a young history does not turn every result
+                // into a "first ever" - see ResultInContext.
+                && ResultInContext(driver, position, raceKey, scope, nightsOnFile) is { } result)
             {
                 // THE WINNER'S LINE CARRIES NO THEME AND EVERY OTHER ONE
                 // DOES, and the difference is the whole of FactBlock.Theme.

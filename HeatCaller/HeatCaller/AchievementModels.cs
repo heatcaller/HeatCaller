@@ -301,7 +301,12 @@ public static class AchievementCatalogue
             AchievementCategory.Race, "✔", AchievementTier.Silver, "shield"),
         new(DistanceRunner, "Distance Runner", "Thirty laps or more in a single race.",
             AchievementCategory.Race, "∞", AchievementTier.Bronze, "infinity"),
-        new(CleanFifty, "Machine", "Fifty consecutive clean laps in one race.",
+        // WHY (23 Nov 2026, bug hunt 24): this was "Machine", the same name as
+        // the Consistent badge, so a driver who earned both heard "Machine"
+        // called twice and saw two Machine medals with different rules. The
+        // user guide's "Machine" is the Consistent one, so this one is renamed.
+        // The id is unchanged, so nobody's earned badge is lost.
+        new(CleanFifty, "Untouchable", "Fifty consecutive clean laps in one race.",
             AchievementCategory.Race, "◉", AchievementTier.Legend, "gear"),
         new(Double, "The Double", "Won a race and set its fastest lap.",
             AchievementCategory.Race, "◆", AchievementTier.Gold, "trophy"),
@@ -359,7 +364,10 @@ public static class AchievementCatalogue
             AchievementCategory.Milestone, "▦", AchievementTier.Silver, "calendar"),
         new(NightOwl, "Night Owl", "Raced after ten at night.",
             AchievementCategory.Milestone, "☾", AchievementTier.Bronze, "moon"),
-        new(TwentyFiveRaces, "Regular", "Twenty-five races finished.",
+        // WHY (23 Nov 2026, bug hunt 24): this was "Regular", the same name as
+        // the ten-race badge, so "Regular" was called a second time at 25
+        // races and the wall showed two Regular medals. The id is unchanged.
+        new(TwentyFiveRaces, "Seasoned", "Twenty-five races finished.",
             AchievementCategory.Milestone, "\u2690", AchievementTier.Silver, "medal"),
         new(FiftyWins, "Half a Century", "Fifty race wins.",
             AchievementCategory.Milestone, "\u2605", AchievementTier.Legend, "trophy"),

@@ -405,10 +405,28 @@ public sealed class ChassisTemplateStore
                     field.Unit ??= string.Empty;
                     field.Options ??= new List<string>();
                     field.Options.RemoveAll(o => o is null);
+
+                    // WHY (23 Nov 2026, bug hunt 24): the four diagram
+                    // positions were taken from the file as they were. Only
+                    // the editor's drag clamps them, so a hand-edited or
+                    // restored file with "X": 1e30 reached GDI+ as a point
+                    // a billion billion pixels away, and the chassis diagram
+                    // (in the editor and on the Setup Sheet) threw on every
+                    // paint with nothing in the app able to mend the sheet.
+                    // Put back into the ranges the drag allows; a value that
+                    // is not a number at all goes back to a new field's.
+                    field.X = KeepIn(field.X, 0f, 1f, 0.5f);
+                    field.Y = KeepIn(field.Y, 0f, 1f, 0.5f);
+                    field.LabelOffsetX = KeepIn(field.LabelOffsetX, -1f, 1f, 0.20f);
+                    field.LabelOffsetY = KeepIn(field.LabelOffsetY, -1f, 1f, -0.06f);
                 }
             }
         }
     }
+
+    /// <summary>A diagram position from the file, inside min..max; the fallback when it is not a number.</summary>
+    internal static float KeepIn(float value, float min, float max, float fallback) =>
+        float.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
 
     public void Save()
     {
@@ -557,7 +575,14 @@ public sealed class ChassisTemplateStore
 
             // Prefixed with the template id so two chassis can use
             // similarly-named files without colliding.
-            var fileName = StoredImageName(template.Id[..8], null, Path.GetFileName(sourcePath), extension);
+            // WHY (23 Nov 2026, bug hunt 24): the prefix was template.Id[..8]
+            // taken as it was, and the id comes from the templates file. A
+            // short one ("mr03") threw, so that sheet could never be given a
+            // picture; one holding "..\" made the stored name a path, and the
+            // picture was copied outside the ChassisImages folder. The prefix
+            // is now letters and digits only - see ImagePrefix.
+            var prefix = ImagePrefix(template.Id);
+            var fileName = StoredImageName(prefix, null, Path.GetFileName(sourcePath), extension);
 
             // Never over a file that is already there. The diagram editor
             // works on a copy with the SAME id as the sheet it edits, and
@@ -578,7 +603,14 @@ public sealed class ChassisTemplateStore
                     return false;
                 }
 
-                fileName = StoredImageName(template.Id[..8], Guid.NewGuid().ToString("N")[..6], Path.GetFileName(sourcePath), extension);
+                fileName = StoredImageName(prefix, Guid.NewGuid().ToString("N")[..6], Path.GetFileName(sourcePath), extension);
+            }
+
+            // The belt to ImagePrefix's braces: never copy to a name that is
+            // not a plain file name inside the images folder.
+            if (!PlainFileName.IsSafeLeaf(fileName))
+            {
+                return false;
             }
 
             // overwrite: false - the name was just checked to be free, and
@@ -594,6 +626,21 @@ public sealed class ChassisTemplateStore
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// The 8-character start of a stored diagram's name: the ASCII letters
+    /// and digits of the sheet's id, topped up with fresh hex characters
+    /// when the id has fewer than 8 of them. An app-made id (32 hex) gives
+    /// its own first 8, as before.
+    /// </summary>
+    internal static string ImagePrefix(string? id)
+    {
+        var kept = new string((id ?? string.Empty).Where(char.IsAsciiLetterOrDigit).Take(8).ToArray());
+
+        return kept.Length >= 8
+            ? kept
+            : kept + Guid.NewGuid().ToString("N")[..(8 - kept.Length)];
     }
 
     /// <summary>
@@ -621,8 +668,9 @@ public sealed class ChassisTemplateStore
             // outcome the fallback exists to avoid. The allow-list in
             // SetImage now keeps that extension short, so this is the belt
             // to its braces rather than the fix; the two are independent and
-            // both cheap. Hex characters and an underscore alone are safe by
-            // construction.
+            // both cheap. Letters, digits and an underscore alone are safe by
+            // construction - true only since ImagePrefix (bug hunt 24); a
+            // prefix sliced straight from a planted id was not.
             if (!PlainFileName.IsSafeLeaf(fileName))
             {
                 fileName = prefix;

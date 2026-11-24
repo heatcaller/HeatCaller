@@ -68,13 +68,36 @@ public sealed partial class AnnouncementService
         var extras = new Dictionary<string, (string Spoken, string Display)>(StringComparer.OrdinalIgnoreCase)
         {
             ["previous"] = (FormatSecondsForSpeech(said.Previous), FormatSecondsForDisplay(said.Previous)),
-            ["margin"] = (RaceNumbers.MarginSpoken(margin), $"{margin:0.000}s"),
+            ["margin"] = (RaceNumbers.MarginSpoken(margin), MarginShown(margin)),
         };
 
         EnqueueVoice(said.Type, standing, null, lapMs, extras: extras);
 
         return true;
     }
+
+    /// <summary>
+    /// The margin as the screens show it: "0.213s", with a point whatever
+    /// the PC's region.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): it was written with the PC's own
+    /// number format, so on a PC set to a region that writes a decimal comma
+    /// the line read "by 0,213s" beside a lap time shown as "6.935s" - which
+    /// FormatSecondsForDisplay was fixed for on 17 Oct 2026 (Bug Hunt 8,
+    /// A06-8), and this was left behind.
+    /// </summary>
+    internal static string MarginShown(double marginSeconds) =>
+        marginSeconds.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + "s";
+
+    /// <summary>
+    /// A milestone as the screens show it: "1,000th lap", "50th race".
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the thousands were grouped the PC's
+    /// own way, so a region that groups with a point showed a thousandth lap
+    /// as "1.000th lap" - which reads as a lap time.
+    /// </summary>
+    internal static string MilestoneShown(int count, string what) =>
+        count.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + "th " + what;
 
     // ---------------------------------------------------------------- milestones
 
@@ -149,7 +172,7 @@ public sealed partial class AnnouncementService
             {
                 key = $"lap|{crossed.Transponder}|{laps}";
                 spoken = $"{MilestoneOrdinal(laps)} lap";
-                shown = $"{laps:N0}th lap";
+                shown = MilestoneShown(laps, "lap");
 
                 // About this lap, so said while it is.
                 sayBy = TimingClock.NowMs + SayWithinMsFor(AnnouncementEventType.FastLap);
@@ -159,7 +182,7 @@ public sealed partial class AnnouncementService
                 var race = career.Races + 1;
                 key = $"race|{crossed.Transponder}";
                 spoken = $"{MilestoneOrdinal(race)} race";
-                shown = $"{race:N0}th race";
+                shown = MilestoneShown(race, "race");
             }
 
             if (key is null)

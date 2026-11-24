@@ -374,24 +374,53 @@ public sealed class TrendChartControl : UserControl
                 continue;
             }
 
-            // Ghosts skipped here as well as in the list: a ghost named
-            // after the driver would otherwise be picked up as them.
-            var result = session.Results.FirstOrDefault(r =>
-                !GhostService.IsGhost(r.Transponder)
-                && string.Equals(r.DriverName, driver, StringComparison.OrdinalIgnoreCase));
+            var best = SessionBest(session, driver);
 
-            if (result is null || result.FastLapMs <= 0)
+            if (best is null)
             {
                 continue;
             }
 
             points.Add(new TrendPoint(
                 session.StartedAtUtc.ToLocalTime(),
-                result.FastLapMs,
+                best.Value,
                 DayLabel(session.StartedAtUtc.ToLocalTime(), System.Globalization.CultureInfo.CurrentCulture)));
         }
 
         return points;
+    }
+
+    /// <summary>
+    /// The driver's quickest lap in one session, across every row saved under
+    /// their name, or null when none of those rows has a lap.
+    /// </summary>
+    internal static long? SessionBest(SessionRecord session, string driver)
+    {
+        // Ghosts skipped here as well as in the list: a ghost named
+        // after the driver would otherwise be picked up as them.
+        // WHY (23 Nov 2026, bug hunt 24): when two of a driver's transponders
+        // are timed as separate cars in one session, both rows carry their
+        // name. The old code took the first such row - the higher finisher -
+        // so the point was slower than the lap they actually did, and the
+        // session vanished if that row had no lap. Now the quickest lap
+        // among all their rows is used.
+        long? best = null;
+        foreach (var r in session.Results)
+        {
+            if (GhostService.IsGhost(r.Transponder)
+                || !string.Equals(r.DriverName, driver, StringComparison.OrdinalIgnoreCase)
+                || r.FastLapMs <= 0)
+            {
+                continue;
+            }
+
+            if (best is null || r.FastLapMs < best.Value)
+            {
+                best = r.FastLapMs;
+            }
+        }
+
+        return best;
     }
 
     /// <summary>
@@ -453,9 +482,10 @@ public sealed class TrendChartControl : UserControl
 
         _reading = reading;
         _headline.Text = RaceCoach.TrendHeadline(reading);
-        _lblWhere.Text = reading.Stage is null
-            ? $"It takes {RaceCoach.TrendLeastSessions} sessions over more than a week to place you."
-            : $"From your last {Plural.Of(reading.RecentSessions, "session")} here.";
+        // WHY (23 Nov 2026, bug hunt 24): a driver getting slower is on no
+        // stage, and this said "It takes 4 sessions over more than a week to
+        // place you" to a driver who had them. RaceCoach.WhereNote says why.
+        _lblWhere.Text = RaceCoach.WhereNote(reading);
         ShowStage(reading.Stage);
         _lblRecord.Text = RecordGap(track, Driver!, points.Min(p => p.BestLapMs));
         _drill.Say(RaceCoach.TrendDrill(reading));

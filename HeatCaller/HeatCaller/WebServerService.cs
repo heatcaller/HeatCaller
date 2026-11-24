@@ -157,6 +157,10 @@ public sealed partial class WebServerService
     /// names and all: the LAN pages are in the room, where the PA has
     /// already said it. Never in the relay's copy - that has its own,
     /// redacted, captions document.
+    /// WHY (23 Nov 2026, bug hunt 24): but these captions are read only by
+    /// the stream's pages, so juniors are put in them by the junior rule
+    /// before they go out (ShortenJuniorsInCaptions) - whole lines, real and
+    /// Announcer names alike.
     /// </summary>
     public Func<IReadOnlyList<CaptionLine>>? Captions { get; set; }
 
@@ -806,7 +810,10 @@ public sealed partial class WebServerService
     {
         try
         {
-            System.Net.IPAddress? withGateway = null;
+            // WHY (23 Nov 2026, bug hunt 24): every address with a gateway is
+            // kept, not just the first, so the route can only pick among
+            // them (PickLanAddress).
+            var withGateway = new List<string>();
             System.Net.IPAddress? withoutGateway = null;
 
             foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
@@ -835,7 +842,7 @@ public sealed partial class WebServerService
 
                     if (hasGateway)
                     {
-                        withGateway ??= address;
+                        withGateway.Add(address.ToString());
                     }
                     else
                     {
@@ -847,9 +854,9 @@ public sealed partial class WebServerService
             // With several private adapters up (Wi-Fi plus a VM switch,
             // say), the one with a gateway is the one the route agrees
             // with - ask the route first in that case, then fall back.
-            if (withGateway is not null)
+            if (withGateway.Count > 0)
             {
-                return RoutedIPv4() ?? withGateway.ToString();
+                return PickLanAddress(withGateway, RoutedIPv4());
             }
 
             if (withoutGateway is not null)
@@ -865,6 +872,25 @@ public sealed partial class WebServerService
 
         return RoutedIPv4();
     }
+
+    /// <summary>
+    /// Which of the venue addresses to show: the one the route agrees with
+    /// when it is one of them, otherwise the first.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the route's answer used to be taken
+    /// whatever it was. With a VPN (or a 4G dongle) holding the default
+    /// route, that was the VPN's own address - one the adapter list had
+    /// left out on purpose - so the Web Server page and the check-in poster
+    /// showed an address no phone on the venue Wi-Fi could reach. The route
+    /// is only ever a tie-break between the addresses already found.
+    /// </remarks>
+    /// <param name="withGateway">The private addresses of adapters that have a gateway, in the order found. Not empty.</param>
+    /// <param name="routed">The address Windows would route out through, or null when it cannot say.</param>
+    internal static string PickLanAddress(IReadOnlyList<string> withGateway, string? routed) =>
+        routed is not null && withGateway.Contains(routed, StringComparer.Ordinal)
+            ? routed
+            : withGateway[0];
 
     /// <summary>10/8, 172.16/12 and 192.168/16 - the addresses a venue router hands out.</summary>
     private static bool IsPrivateIPv4(IPAddress address)
@@ -1125,6 +1151,34 @@ public sealed partial class WebServerService
     }
 
     /// <summary>
+    /// Who may put the page at <paramref name="path"/> in a frame: this
+    /// server's own pages for a stream overlay picture (/overlay and
+    /// /overlay/&lt;layout&gt;), nobody for anything else.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): every answer said "never in a frame",
+    /// this server's own pages included. But Pick a look draws each layout
+    /// as a small live frame of its overlay page, and the phone view frames
+    /// the overlay inside itself, so both showed empty boxes. The overlay
+    /// pictures are look-only - nothing on them can be pressed - so letting
+    /// this server (and only this server) frame them gives nothing away.
+    /// The remote, the manager, check-in and the rest stay unframeable.
+    /// </remarks>
+    internal static (string XFrameOptions, string FrameAncestors) FramePolicyFor(string? path)
+    {
+        var p = (path ?? string.Empty).TrimEnd('/').ToLowerInvariant();
+
+        return p == OverlayPath || p.StartsWith(OverlayPath + "/", StringComparison.Ordinal)
+            ? ("SAMEORIGIN", "'self'")
+            : ("DENY", "'none'");
+    }
+
+    /// <summary>The Content-Security-Policy every answer carries, ending with who may frame it (<see cref="FramePolicyFor"/>).</summary>
+    internal static string ContentSecurityPolicy(string frameAncestors) =>
+        "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+        + "img-src 'self' data:; connect-src 'self'; frame-ancestors " + frameAncestors;
+
+    /// <summary>
     /// On every answer: nothing may frame these pages (a remote laid under
     /// a decoy page is a remote somebody else is pressing), nothing is
     /// cached, and a response is only ever what its type says it is.
@@ -1142,9 +1196,7 @@ public sealed partial class WebServerService
         // not load a script from elsewhere, or send the roster or a PIN
         // anywhere but back here. 'unsafe-inline' is needed by the pages'
         // own inline script and handlers; nothing here uses eval.
-        response.Headers["Content-Security-Policy"] =
-            "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
-            + "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'";
+        response.Headers["Content-Security-Policy"] = ContentSecurityPolicy("'none'");
     }
 
     /// <summary>
@@ -1752,6 +1804,17 @@ public sealed partial class WebServerService
         }
 
         var path = context.Request.Url?.AbsolutePath.TrimEnd('/').ToLowerInvariant() ?? "/";
+
+        // WHY (23 Nov 2026, bug hunt 24): the overlay pictures may be framed
+        // by this server's own pages - Pick a look and the phone view were
+        // empty boxes under the blanket "never" above. See FramePolicyFor.
+        var (xFrame, ancestors) = FramePolicyFor(path);
+
+        if (xFrame != "DENY")
+        {
+            context.Response.Headers["X-Frame-Options"] = xFrame;
+            context.Response.Headers["Content-Security-Policy"] = ContentSecurityPolicy(ancestors);
+        }
 
         // A sponsor's logo (14 Nov 2026, stream overlay plan section 1), for
         // the stream's graphics: /sponsor-logo/sponsor-logo-<12 hex>.png. Only
@@ -3129,7 +3192,13 @@ public sealed partial class WebServerService
                     // can say "Leader behind" once. See LeaderBehind. Only
                     // when it is so; never on the leader. Against the first
                     // real car, never a ghost - see LeaderBehind.Approach.
-                    if (i > 0 && LeaderBehind.Approach(car, ordered, startType, staggerClock) is { } lapping)
+                    //
+                    // WHY (23 Nov 2026, bug hunt 24, F153): the race's flag
+                    // state is passed in. Without it a leader who had taken
+                    // the checkered flag still counted as closing in, so a
+                    // backmarker's phone said "Leader behind" for a car that
+                    // had stopped racing.
+                    if (i > 0 && LeaderBehind.Approach(car, ordered, startType, staggerClock, _race.HasTakenFlag) is { } lapping)
                     {
                         row["lapping"] = lapping;
                     }
@@ -3204,10 +3273,17 @@ public sealed partial class WebServerService
         var node = JsonSerializer.SerializeToNode(document)!.AsObject();
         node["race"] = race;
 
+        // WHY (23 Nov 2026, bug hunt 24): the state and flag in words for
+        // the overlay's and the remote's heading, which printed the enum
+        // names ("Idle - None flag", "Idle - WarmUp flag"). LAN copy only.
+        node["stateWords"] = StateWords(view?.State ?? _race.State, view?.Flag ?? _race.Flag);
+
         // 22 Oct 2026 (driver experience, item 9): the last few lines the
         // announcer said, for the captions strip (?captions=1). Left out
         // when nothing has been said. Guarded: the board must not go stale
         // for the sake of a caption.
+        IReadOnlyList<CaptionLine> captionLines = Array.Empty<CaptionLine>();
+
         try
         {
             var said = Captions?.Invoke() ?? Array.Empty<CaptionLine>();
@@ -3215,6 +3291,7 @@ public sealed partial class WebServerService
 
             if (last.Count > 0)
             {
+                captionLines = last;
                 node["captions"] = new System.Text.Json.Nodes.JsonArray(last
                     .Select(l => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
                     {
@@ -3274,7 +3351,17 @@ public sealed partial class WebServerService
             // The board without the broadcast extras, rather than no board.
         }
 
-        AddJuniorsNamedInText(node);
+        // WHY (23 Nov 2026, bug hunt 24): the junior rule needs the name map
+        // to work from, and when the extras above could not be built there
+        // was none - so the captions went out as heard. An empty one lets the
+        // juniors named in them be found and swapped all the same.
+        if (captionLines.Count > 0 && node["streamNames"] is not System.Text.Json.Nodes.JsonObject)
+        {
+            node["streamNames"] = new System.Text.Json.Nodes.JsonObject();
+        }
+
+        AddJuniorsNamedInText(node, captionLines);
+        ShortenJuniorsInCaptions(node, captionLines);
 
         return node.ToJsonString();
     }
@@ -3618,7 +3705,8 @@ public sealed partial class WebServerService
     /// stream in full. Only juniors whose name is in the text are added, so
     /// the club's whole junior list never goes out in the document.
     /// </remarks>
-    private void AddJuniorsNamedInText(System.Text.Json.Nodes.JsonObject node)
+    /// <param name="captions">The caption pieces node["captions"] was made from; each is judged by the whole line it came from (WHY, 23 Nov 2026, bug hunt 24: a piece cut inside a name held neither half as the name, so the junior was never added).</param>
+    private void AddJuniorsNamedInText(System.Text.Json.Nodes.JsonObject node, IReadOnlyList<CaptionLine> captions)
     {
         try
         {
@@ -3654,14 +3742,30 @@ public sealed partial class WebServerService
             Take(node["moment"]?["line"]);
             TakeEach(node["captions"], "t");
 
+            foreach (var line in captions)
+            {
+                if (!string.IsNullOrWhiteSpace(line.Said))
+                {
+                    texts.Add(line.Said);
+                }
+            }
+
             if (texts.Count == 0)
             {
                 return;
             }
 
+            // WHY (23 Nov 2026, bug hunt 24): a caption says the name the
+            // voice was given - a junior's Announcer name ("Meeya Kent") -
+            // and only the real name was looked for, so that junior never
+            // made the map and went out on the stream as said. Whole words
+            // for the Announcer name, so a short nickname inside another
+            // word does not put a junior's name in the document.
             var namedJuniors = _profiles.AllIncludingGhostsForAnyThread
                 .Where(p => p.IsJunior && !string.IsNullOrWhiteSpace(p.DriverName))
-                .Where(p => !map.ContainsKey(p.DriverName.Trim()) && texts.Any(t => t.Contains(p.DriverName.Trim(), StringComparison.Ordinal)))
+                .Where(p => !map.ContainsKey(p.DriverName.Trim()) && texts.Any(t =>
+                    t.Contains(p.DriverName.Trim(), StringComparison.Ordinal)
+                    || (!string.IsNullOrWhiteSpace(p.AnnouncerName) && NamedAsAWord(t, p.AnnouncerName.Trim()))))
                 .ToList();
             var named = namedJuniors.Select(p => p.DriverName.Trim()).ToList();
 
@@ -3705,9 +3809,187 @@ public sealed partial class WebServerService
     }
 
     /// <summary>
+    /// Puts the junior rule into the caption pieces on the laptop, before
+    /// they go out: each piece of node["captions"] becomes the same piece of
+    /// its WHOLE line with the juniors' stream names in it.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the captions went out as heard and
+    /// only the stream's page swapped names, one piece at a time and real
+    /// names only. A line over 140 characters (a running order, the driver
+    /// introductions) is captioned in pieces cut at its words, and a cut
+    /// between "...Mia" and "Kent..." held the name in neither piece, so
+    /// nothing was swapped; and a junior with an Announcer name was
+    /// captioned by it, which no swap knew. Either way a child's surname -
+    /// or the name of a child kept off the stream altogether - went out on
+    /// the club's stream. The public captions had the cut fixed on 6 Nov
+    /// (MainForm.PublicPiece); this does the same for the stream. Only the
+    /// stream's pages read these captions; the room's Big Screen reads its
+    /// own.
+    /// </remarks>
+    private void ShortenJuniorsInCaptions(System.Text.Json.Nodes.JsonObject node, IReadOnlyList<CaptionLine> captions)
+    {
+        try
+        {
+            if (captions.Count == 0
+                || node["captions"] is not System.Text.Json.Nodes.JsonArray
+                || node["streamNames"] is not System.Text.Json.Nodes.JsonObject map
+                || map.Count == 0)
+            {
+                return;
+            }
+
+            var streamNames = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (var kv in map)
+            {
+                if (kv.Value is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var shown))
+                {
+                    streamNames[kv.Key] = shown;
+                }
+            }
+
+            var swaps = StreamCaptionSwaps(streamNames, _profiles.AllIncludingGhostsForAnyThread);
+
+            // A piece the shortened line no longer reaches is left out, as
+            // the public captions do, rather than shown as an empty strip.
+            node["captions"] = new System.Text.Json.Nodes.JsonArray(captions
+                .Select(l => (N: l.N, T: StreamCaptionPiece(l, swaps)))
+                .Where(p => p.T.Length > 0)
+                .Select(p => (System.Text.Json.Nodes.JsonNode)new System.Text.Json.Nodes.JsonObject
+                {
+                    ["n"] = p.N,
+                    ["t"] = p.T,
+                })
+                .ToArray());
+        }
+        catch
+        {
+            // Never the captions as heard when the swap could not be made:
+            // a child's name is not worth a caption.
+            node.Remove("captions");
+        }
+    }
+
+    /// <summary>
+    /// What each name in a caption becomes on the stream: every junior in
+    /// <paramref name="streamNames"/> by their real name AND their Announcer
+    /// name, and everyone else's names as themselves - so a junior's
+    /// nickname that is a word of someone else's name ("Sam" in "Sam
+    /// Jones") is not swapped inside it.
+    /// </summary>
+    /// <param name="streamNames">Each junior's full name and what the stream calls them (node["streamNames"]).</param>
+    internal static IReadOnlyDictionary<string, string> StreamCaptionSwaps(
+        IReadOnlyDictionary<string, string> streamNames,
+        IEnumerable<DriverProfile> profiles)
+    {
+        var swaps = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (full, shown) in streamNames)
+        {
+            if (!string.IsNullOrWhiteSpace(full))
+            {
+                swaps.TryAdd(full.Trim(), shown);
+            }
+        }
+
+        var all = profiles.ToList();
+
+        foreach (var p in all)
+        {
+            if (p.IsJunior
+                && !string.IsNullOrWhiteSpace(p.DriverName)
+                && !string.IsNullOrWhiteSpace(p.AnnouncerName)
+                && streamNames.TryGetValue(p.DriverName.Trim(), out var shown))
+            {
+                swaps.TryAdd(p.AnnouncerName.Trim(), shown);
+            }
+        }
+
+        foreach (var p in all)
+        {
+            foreach (var name in new[] { p.DriverName, p.AnnouncerName })
+            {
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    swaps.TryAdd(name.Trim(), name.Trim());
+                }
+            }
+        }
+
+        return swaps;
+    }
+
+    /// <summary>
+    /// A line with each name in <paramref name="swaps"/> swapped, in one
+    /// pass, whole words only and longest first - the boundary rule
+    /// AnnouncementService.WithScreenNames uses, so "Mia Kent's" is a name
+    /// and the O of O'Brien is not.
+    /// </summary>
+    internal static string ForStreamCaption(string text, IReadOnlyDictionary<string, string> swaps)
+    {
+        if (string.IsNullOrEmpty(text) || swaps.Count == 0)
+        {
+            return text;
+        }
+
+        var present = swaps
+            .Where(kv => text.Contains(kv.Key, StringComparison.Ordinal))
+            .ToList();
+
+        if (present.All(kv => string.Equals(kv.Key, kv.Value, StringComparison.Ordinal)))
+        {
+            return text;
+        }
+
+        var choices = string.Join("|", present
+            .Select(kv => kv.Key)
+            .OrderByDescending(k => k.Length)
+            .ThenBy(k => k, StringComparer.Ordinal)
+            .Select(System.Text.RegularExpressions.Regex.Escape));
+
+        return System.Text.RegularExpressions.Regex.Replace(
+            text,
+            $@"(?<![\w'])(?:{choices})(?!\w|'(?![sS]\b))",
+            m => swaps[m.Value]);
+    }
+
+    /// <summary>
+    /// One caption piece as the stream shows it: the piece at the same place
+    /// in its whole line with the names swapped (<see cref="ForStreamCaption"/>)
+    /// and cut again by CaptionLog's own rule - as MainForm.PublicPiece does
+    /// for the public captions. Empty when the shortened line no longer
+    /// reaches this piece; the line's last piece carries whatever is left.
+    /// </summary>
+    internal static string StreamCaptionPiece(CaptionLine line, IReadOnlyDictionary<string, string> swaps)
+    {
+        var whole = line.WholeText is null ? null : CaptionLog.Pieces(line.WholeText);
+
+        if (whole is null || whole.Count <= 1)
+        {
+            return ForStreamCaption(line.Text, swaps);
+        }
+
+        var cut = CaptionLog.Pieces(ForStreamCaption(line.WholeText!, swaps));
+        var i = line.PieceIndex;
+
+        return i >= cut.Count || i >= whole.Count
+            ? string.Empty
+            : i == whole.Count - 1 ? string.Join(" ", cut.Skip(i)) : cut[i];
+    }
+
+    /// <summary>Whether <paramref name="name"/> is in <paramref name="text"/> as whole words (a possessive counts).</summary>
+    private static bool NamedAsAWord(string text, string name) =>
+        name.Length > 0
+        && text.Contains(name, StringComparison.Ordinal)
+        && System.Text.RegularExpressions.Regex.IsMatch(
+            text,
+            $@"(?<![\w']){System.Text.RegularExpressions.Regex.Escape(name)}(?!\w|'(?![sS]\b))");
+
+    /// <summary>
     /// THE NEXT THREE RACES (14 Nov 2026, stream overlay plan 6.7), for the
     /// Between races screen: each race's title, its rough start ("about
-    /// 19:40", this laptop's clock), who drives it, and who marshals it -
+    /// 7:40 PM", this laptop's clock - see UpNextWhen), who drives it, and who marshals it -
     /// what the pits and the people at home both look for between races.
     /// The race on track is left out: it is not one to wait for.
     /// </summary>
@@ -3742,16 +4024,49 @@ public sealed partial class WebServerService
                 })
                 .ToArray());
 
+            var (etaWords, etaInstant) = UpNextWhen(race.EtaUtc);
+
             list.Add(new System.Text.Json.Nodes.JsonObject
             {
                 ["title"] = race.Title,
-                ["eta"] = race.EtaUtc is { } eta ? "about " + eta.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : string.Empty,
+                ["eta"] = etaWords,
+                ["etaUtc"] = etaInstant,
                 ["drivers"] = drivers,
                 ["marshals"] = marshals,
             });
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// A race's rough start for the Between races screen, two ways: the
+    /// words a viewer reads ("about 7:40 PM", or "about 19:40" with the
+    /// 24-hour box on Themes ticked) and the moment itself, for the page to
+    /// count the minutes to. Both empty when nobody can say.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the words were always 24-hour
+    /// ("about 19:40") whatever the club chose on Themes, while the heat
+    /// sheet and the phones said "about 7:40 PM" for the same race. And the
+    /// words were all the page had: it read the hour and minute back out of
+    /// them onto today's date, so at 23:50 a race due at 00:05 looked like
+    /// one from 23 hours ago and the "New to RC racing?" cards were held
+    /// back for the whole break. The page now counts from the moment.
+    /// </remarks>
+    internal static (string Eta, string EtaUtc) UpNextWhen(DateTime? etaUtc)
+    {
+        if (etaUtc is not { } eta)
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        // A time of no stated kind is UTC here, as it always was (the old
+        // ToLocalTime read it so): said once, so the words and the moment agree.
+        var utc = eta.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(eta, DateTimeKind.Utc) : eta.ToUniversalTime();
+
+        return ("about " + AppTime.TimeOfDay(utc.ToLocalTime()),
+            utc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture));
     }
 
     /// <summary>
@@ -4025,6 +4340,78 @@ public sealed partial class WebServerService
         + HeatCallerMark.PageFooterStyle;
 
     /// <summary>
+    /// The stream pages' snText: a line of words with every junior's name in
+    /// SN (d.streamNames) swapped for what the stream calls them ("Mia K",
+    /// "Car 4"). Shared by the OBS overlay and the stream page. Each page
+    /// declares SN and calls snKeepNames(d) after setting it on each poll.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the swap was split/join on the bare
+    /// text, so a junior's name was swapped inside any longer word or name
+    /// that held it: with a junior kept off the stream called "Al" (Car 7),
+    /// "Alan Reed" on the board read "Car 7an Reed" and a caption "Almost
+    /// there" read "Car 7most there"; and junior "Tom Baker" made his father
+    /// "Tom Baker Sr" read "Tom B Sr". Now a name is swapped only as a whole
+    /// name (no letter or digit either side), in one pass, longest first,
+    /// and the names of everyone else the page knows (the board's rows and
+    /// d.people) are kept as themselves, as StreamCaptionSwaps does for the
+    /// captions on the laptop. If the browser cannot build the pattern, the
+    /// old swap is used: too much swapped is the safe side for a child.
+    /// </remarks>
+    internal const string StreamNameSwapScript = """
+        let SN_SELF = [];
+        function snKeepNames(d){
+          const own = [];
+          ((d && d.people) || []).forEach(p => { if (p && p.name) own.push(String(p.name)); });
+          ((d && d.standings) || []).forEach(s => { if (s && s.name) own.push(String(s.name)); });
+          SN_SELF = own;
+        }
+        function snText(text){
+          const t = String(text == null ? '' : text);
+          const keys = Object.keys(SN).filter(k => k);
+          if (!keys.length) return t;
+          try {
+            const has = k => Object.prototype.hasOwnProperty.call(SN, k);
+            const all = keys.concat(SN_SELF.filter(k => k && !has(k)));
+            const choices = all.sort((a, b) => b.length - a.length)
+              .map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+            const re = new RegExp('(?:' + choices + ')(?![\\p{L}\\p{N}])', 'gu');
+            const word = /[\p{L}\p{N}]/u;
+            return t.replace(re, (m, at) => word.test(t.charAt(at - 1)) || !has(m) ? m : String(SN[m]));
+          } catch (e) {
+            let s = t;
+            keys.sort((a, b) => b.length - a.length).forEach(full => { s = s.split(full).join(String(SN[full])); });
+            return s;
+          }
+        }
+        """;
+
+    /// <summary>
+    /// The race's state and flag as the OBS overlay and the phone remote
+    /// put them in their heading: "Racing - Green flag", "Not racing",
+    /// "Warm-up - not counted". Sent as stateWords in the LAN document; the
+    /// state and flag fields stay the enum names the pages work from.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): both pages printed the enum names as
+    /// they were, so between races the stream's heading read "Idle - None
+    /// flag", and during a warm-up - which leaves the race Idle or Finished
+    /// by design - "Idle - WarmUp flag" while cars were plainly on track.
+    /// The relay's flag card already had words for these.
+    /// </remarks>
+    internal static string StateWords(RaceState state, FlagState flag)
+    {
+        if (flag == FlagState.WarmUp)
+        {
+            return "Warm-up - not counted";
+        }
+
+        var words = state == RaceState.Idle ? "Not racing" : state.ToString();
+
+        return flag == FlagState.None ? words : $"{words} - {FlagText.Name(flag)} flag";
+    }
+
+    /// <summary>
     /// THE OBS OVERLAY (/overlay, and the old /?overlay=1): the results
     /// table on a see-through background, for an OBS browser source.
     ///
@@ -4088,13 +4475,10 @@ public sealed partial class WebServerService
         function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g, function(c){
           return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
-        // A junior's name as the stream shows it, "Mia K" (overlay plan 7.5).
+        // A junior's name as the stream shows it, "Mia K" (overlay plan 7.5),
+        // whole names only (bug hunt 24 - see StreamNameSwapScript).
         let SN = {};
-        function snText(text){
-          let t = String(text == null ? '' : text);
-          Object.keys(SN).sort((a, b) => b.length - a.length).forEach(full => { t = t.split(full).join(String(SN[full])); });
-          return t;
-        }
+        {{StreamNameSwapScript}}
 
         // One poll at a time, and none left hanging: on poor Wi-Fi an older
         // answer could arrive after a newer one, and hung requests used up
@@ -4108,11 +4492,13 @@ public sealed partial class WebServerService
             const r = await fetch('/api/state', { signal: stop.signal }); const d = await r.json();
             // Juniors' names as the stream shows them (overlay plan 7.5).
             SN = d.streamNames && typeof d.streamNames === 'object' ? d.streamNames : {};
+            snKeepNames(d);
             showCaptions(d.captions);
             // PROVISIONAL until the protest window closes (overlay plan 6.9).
             const until = Date.parse(d.provisionalUntil || '');
             const prov = d.state === 'Finished' && Number.isFinite(until) && Date.now() < until ? ' - PROVISIONAL' : '';
-            document.getElementById('state').textContent = d.state + ' - ' + d.flag + ' flag' + prov;
+            // Words, never the enum names (bug hunt 24 - see StateWords).
+            document.getElementById('state').textContent = (d.stateWords || '-') + prov;
             document.getElementById('countdown').textContent = d.countdown || '';
 
             const od = document.getElementById('ondeck');
@@ -4629,7 +5015,8 @@ public sealed partial class WebServerService
           const stop = new AbortController(), timer = setTimeout(() => stop.abort(), 3000);
           try{
             const r = await fetch('/api/state', { signal: stop.signal }); const d = await r.json();
-            document.getElementById('state').textContent = d.state + ' - ' + d.flag;
+            // Words, never the enum names (bug hunt 24 - see StateWords).
+            document.getElementById('state').textContent = d.stateWords || '-';
             // As text, never markup: a race name is whatever was typed.
             const race = document.getElementById('race');
             race.textContent = d.race || '-';
@@ -5435,9 +5822,10 @@ public sealed partial class WebServerService
             }
           });
         }
-        function handLap(id, delta){
+        function handLap(id, delta, onAnswer){
           var b = document.getElementById('hand-' + id);
           call('race.handLap', { driverId: id, delta: delta }).then(function(d){
+            if (onAnswer) { onAnswer(d); }
             if (!d.ok) {
               sayFailure(d);
               if (b) { b.className = 'handCar miss'; setTimeout(function(){ b.className = 'handCar'; }, 400); }
@@ -5464,8 +5852,41 @@ public sealed partial class WebServerService
           if (!id) { say('Pick the car to add first.'); return; }
           doOp('race.handAdd', { driverId: id }, refreshHand);
         });
+        // WHY (23 Nov 2026, bug hunt 24): Undo used to pop the tap before the
+        // laptop had answered, and nothing put it back when the -1 was never
+        // run - the laptop too busy to get to it in ten seconds, or the PIN
+        // turned away - so pressing Undo again, as the message says, took a
+        // lap off the car tapped BEFORE it, and the mis-tap stayed. Now the
+        // tap is only looked at, and taken off the list once the laptop has
+        // taken the lap back - or refused it for good, or the connection
+        // went mid-way and it may have landed. One undo at a time, so a
+        // double press does not send two -1s for the same car.
+        var handUndoBusy = false;
+        // Whether a failed -1 was certainly never run on the laptop: an
+        // answer that was not a 200 (the PIN gate, the laptop not ready,
+        // a body too big - all turned away before anything runs), one the
+        // laptop marks notRun, or its own words for a request it withdrew
+        // or never reached ("... - nothing was changed.", "closing or still
+        // starting"). A refusal from the op itself (that car isn't on the
+        // board, no lap by hand to take back) drops the tap: kept, it would
+        // stand in front of every earlier one.
+        function handUndoNotRun(d){
+          if (!d || d.ok) { return false; }
+          if (d.notRun === true) { return true; }
+          if (typeof d._status === 'number' && d._status !== 200) { return true; }
+          return /nothing was changed|is closing|still starting/i.test(String(d.error || ''));
+        }
         document.getElementById('btnHandUndo').addEventListener('click', function(){
-          if (handTaps.length) { handLap(handTaps.pop(), -1); }
+          if (handUndoBusy || !handTaps.length) { return; }
+          var taps = handTaps, at = taps.length - 1, id = taps[at];
+          handUndoBusy = true;
+          handLap(id, -1, function(d){
+            handUndoBusy = false;
+            // The same list and the same tap still there: refreshHand starts
+            // a new list for another race, and a tap made meanwhile goes on
+            // the end, after this one.
+            if (!handUndoNotRun(d) && taps === handTaps && taps[at] === id) { taps.splice(at, 1); }
+          });
         });
 
         // --- Results -----------------------------------------------------------------

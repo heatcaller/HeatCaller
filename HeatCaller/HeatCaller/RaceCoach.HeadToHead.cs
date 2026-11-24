@@ -202,8 +202,13 @@ public static partial class RaceCoach
         // Each name once, spelt as it was last raced.
         var spelling = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var races = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var hidden = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // WHY (23 Nov 2026, bug hunt 24): a name seen even once on a rental
+        // or excluded transponder went into a "hidden" set and was dropped
+        // from the grid for good, so a regular with dozens of races on their
+        // own transponder vanished for one night on a loaner. Cars are left
+        // out by transponder, race by race, as the summary says: only shown
+        // results are counted here, and Tally skips the rest the same way.
         foreach (var field in fields)
         {
             if (field.Finishers.Count < 2)
@@ -215,7 +220,6 @@ public static partial class RaceCoach
             {
                 if (!Shown(f))
                 {
-                    hidden.Add(f.Name);
                     continue;
                 }
 
@@ -225,7 +229,7 @@ public static partial class RaceCoach
         }
 
         var regulars = races
-            .Where(kv => kv.Value >= RegularRaces && !hidden.Contains(kv.Key))
+            .Where(kv => kv.Value >= RegularRaces)
             .Select(kv => spelling[kv.Key])
             .ToList();
 

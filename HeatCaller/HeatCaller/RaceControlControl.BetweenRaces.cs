@@ -51,6 +51,9 @@ public sealed partial class RaceControlControl
     /// <summary>What the Broadcast window last said about the gap, so it is only redrawn on a change.</summary>
     private string? _gapSaid;
 
+    /// <summary>The round the last filed race was run for, and that race's generation (bug hunt 24, see RoundJustRun).</summary>
+    private (string? RoundId, int Generation)? _gapFiled;
+
     /// <summary>Hold Talk is on, from the flag row, F10, the phone or the Broadcast window's Hold.</summary>
     internal bool TalkHeld => _talkHeld || _announcerStrip.Holding;
 
@@ -147,7 +150,9 @@ public sealed partial class RaceControlControl
 
         if (Gap.MarkDue(rules, now, facts, held) is { } mark)
         {
-            Gap.SaidMark(mark, now);
+            // WHY (23 Nov 2026, bug hunt 24): the due passed explicitly, so the mark is tied
+            // to the race time MarkDue was just asked about rather than relying on its fallback.
+            Gap.SaidMark(mark, now, facts.DueUtc);
             SayGapLine(GapWords.Mark(mark, facts.Round), "Countdown");
             return;
         }
@@ -236,6 +241,28 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>
+    /// The round in the Round box to pass over as the race just run, or null.
+    /// Passed over while the finished race is not filed yet (its result can
+    /// take a moment to be linked), while a race is waiting to be filed, or
+    /// when it is the round the filed race was run for. A different round
+    /// picked by hand after filing is still to run, so it is not passed over.
+    /// </summary>
+    /// <param name="filedThisRace">The round the finished race was filed under, or null when this race is not filed yet.</param>
+    internal static string? RoundJustRun(string? boxRoundId, (string? RoundId, int Generation)? filedThisRace, bool raceWaitingToBeFiled)
+    {
+        if (boxRoundId is null)
+        {
+            return null;
+        }
+
+        return filedThisRace is not { } filed
+               || raceWaitingToBeFiled
+               || string.Equals(boxRoundId, filed.RoundId, StringComparison.Ordinal)
+            ? boxRoundId
+            : null;
+    }
+
+    /// <summary>
     /// The next race as the gap needs it: its name and class, its drivers,
     /// marshals and who has not checked in, the race after it, and when it
     /// is due by the run sheet (pushed back by the race director). The same
@@ -260,7 +287,18 @@ public sealed partial class RaceControlControl
         // drivers to the stand the phone says is someone else's turn.
         // The round just run is passed over, as NextRound passes it: its
         // result can take a moment to be linked to it after the flag.
-        var justRun = _activeRound?.Invoke()?.Id;
+        //
+        // WHY (23 Nov 2026, bug hunt 24): ANY round in the Round box was
+        // passed over here. A round picked by hand after the last race was
+        // filed is still to run - the phones show it as next - but it was
+        // dropped from both sides, so the PA called up, and Auto start
+        // started, the race after it. Now the box's round is passed over
+        // only while it is the race just run (see RoundJustRun); a picked
+        // round makes the two disagree and the call-up is held.
+        var justRun = RoundJustRun(
+            _activeRound?.Invoke()?.Id,
+            _gapFiled is { } filed && filed.Generation == _race.SessionGeneration ? filed : null,
+            HasUnfiledRaces);
         var upcoming = UpcomingRaces(4)
             .Where(r => !r.OnTrack && !string.Equals(r.RoundId, justRun, StringComparison.Ordinal))
             .ToList();
@@ -510,7 +548,10 @@ public sealed partial class RaceControlControl
         // from the automatic one (both are "[gap] Call-up:" lines).
         StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [gap] Call Up pressed{(_runningRemoteCommand ? " on the phone" : string.Empty)} - calling up {facts.Round}.");
 
-        var repeat = Gap.CallUps > 0;
+        // WHY (23 Nov 2026, bug hunt 24): read CallUps > 0, which a Skip Next Call-up
+        // also counts, so the first call-up the room heard after a skip was worded as
+        // a reminder for a race it had never been told about. Read before Said below.
+        var repeat = Gap.CallUpSaid;
         Gap.Said(GapLine.CallUp, now);
         SayGapLine(GapWords.CallUp(facts, rules, repeat, now), "Call-up");
 

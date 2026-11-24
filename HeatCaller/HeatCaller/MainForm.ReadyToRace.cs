@@ -26,7 +26,9 @@ public partial class MainForm
             : null;
 
         var heard = _race.IsDemoMode
-                    || TonightsSightings.InSessions(_sessionHistory.All, TonightsSightings.NightStartUtc(DateTime.Now)).Count > 0
+                    // WHY (23 Nov 2026, bug hunt 24): a demo race saved tonight
+                    // used to count as the decoder having heard a car.
+                    || TonightsSightings.InSessions(RacesThatProveALoopCrossing(_sessionHistory.All), TonightsSightings.NightStartUtc(DateTime.Now)).Count > 0
                     || _transponderWatch.Recent().Count > 0;
 
         return new ReadyFacts(

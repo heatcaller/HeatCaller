@@ -7,7 +7,19 @@ public sealed class RivalryStore
 {
     private readonly List<RivalryLine> _rivalries;
 
-    public IReadOnlyList<RivalryLine> All => _rivalries.ToList();
+    /// <summary>
+    /// The rivalries as of the last change, safe to read from any thread.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): All was _rivalries.ToList() over the
+    /// live list the UI thread edits, and the Team Principal interviews read
+    /// it on the thread pool - so a rivalry added or deleted at that moment
+    /// could throw and lose the interview that was being written ahead. Now
+    /// every change swaps in a fresh copy and All hands that copy out.
+    /// </remarks>
+    public IReadOnlyList<RivalryLine> All => _snapshot;
+
+    private volatile RivalryLine[] _snapshot;
 
     private static string FilePath => Path.Combine(
         AppPaths.Root,
@@ -16,7 +28,10 @@ public sealed class RivalryStore
     private RivalryStore(List<RivalryLine> rivalries)
     {
         _rivalries = rivalries;
+        _snapshot = rivalries.ToArray();
     }
+
+    private void Refresh() => _snapshot = _rivalries.ToArray();
 
     public static RivalryStore Load()
     {
@@ -97,12 +112,14 @@ public sealed class RivalryStore
         {
             _rivalries.Add(rivalry);
         }
+        Refresh();
         Save();
     }
 
     public void Delete(string id)
     {
         _rivalries.RemoveAll(r => r.Id == id);
+        Refresh();
         Save();
     }
 
@@ -118,6 +135,7 @@ public sealed class RivalryStore
         }
 
         _rivalries.Insert(Math.Clamp(index, 0, _rivalries.Count), rivalry);
+        Refresh();
         Save();
     }
 }

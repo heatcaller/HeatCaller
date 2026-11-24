@@ -420,19 +420,35 @@ public sealed class GarageControl : UserControl
     /// read as an empty garage next to a count of the cars in it.
     /// </summary>
     private string EmptyWallText() =>
-        ShowingGroup
-            ? _shownKey == ClubKey
-                ? _cars.ClubCars.Count == 0
+        EmptyWallWords(_forOneDriver, _shownKey, _cars.All.Count, _cars.ClubCars.Count, _chkRetired.Checked);
+
+    /// <summary>
+    /// The rule behind EmptyWallText, away from the window so it can be
+    /// tested: whether this is a driver's page, whose cars it was told to
+    /// show (null for nobody), how many cars there are in all and of the
+    /// club's own, and whether Include retired is ticked.
+    /// </summary>
+    internal static string EmptyWallWords(bool forOneDriver, string? shownKey, int allCars, int clubCars, bool includeRetired) =>
+        // WHY (23 Nov 2026, bug hunt 24): a driver's page showing nobody - no
+        // drivers on file yet, or the shown driver just deleted - fell through
+        // to "No cars yet. Click Add a Car", while ShowDriver(null) greys Add a
+        // Car out, and it read as an empty garage even with club cars in it.
+        // Now it says a driver has to be picked first.
+        forOneDriver && shownKey is null
+            ? "Pick a driver to see their cars."
+            : forOneDriver && shownKey is EveryoneKey or ClubKey
+            ? shownKey == ClubKey
+                ? clubCars == 0
                     ? "The club has no cars of its own yet. Click Add a Car, and it appears here."
                     : "The club's own cars are all retired."
-                : _cars.All.Count == 0
+                : allCars == 0
                     ? "No cars yet. Click Add a Car, and it appears here."
                     : "Every car in the garage is retired."
-            : _forOneDriver
+            : forOneDriver
             ? "No cars yet. Click Add a Car, and it appears here."
-            : _cars.All.Count == 0
+            : allCars == 0
             ? "No cars yet. Add one, and it appears here under its class."
-            : _chkRetired.Checked
+            : includeRetired
                 ? "No cars to show - pick another in Show."
                 : "No cars to show - pick another in Show, or tick Include retired.";
 

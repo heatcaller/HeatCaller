@@ -51,6 +51,19 @@ internal static class WarmStandby
     /// <summary>The header the copy's time (UTC, round-trip format) comes back in.</summary>
     public const string TakenAtHeader = "X-HeatCaller-Snapshot-Utc";
 
+    /// <summary>
+    /// The header saying how old the copy already is when it is sent, in
+    /// whole milliseconds on the timing PC's own clock - see CopyTakenOnThisClock.
+    /// </summary>
+    public const string AgeHeader = "X-HeatCaller-Snapshot-Age-Ms";
+
+    /// <summary>
+    /// The longest age the AgeHeader may say and still be believed. The
+    /// timing PC reuses a copy for a few seconds only; anything more is a
+    /// broken answer, and the stamp is used instead.
+    /// </summary>
+    public static readonly TimeSpan MostBelievableServedAge = TimeSpan.FromMinutes(1);
+
     /// <summary>The header the timing PC's name comes back in, for the standby to show.</summary>
     public const string PrimaryNameHeader = "X-HeatCaller-Primary";
 
@@ -82,17 +95,41 @@ internal static class WarmStandby
     public static string MirrorFolder => Path.Combine(BackupService.DefaultBackupFolder, "Standby Copies");
 
     /// <summary>
+    /// The music and sound lists: settings that name audio files in this
+    /// PC's own folders (Music, the soundscapes, the club's imaging), which
+    /// are never copied. Part of MachineOwnFiles.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): these were handed out and put in place
+    /// on Take Over like the club's stores, but the files they point at never
+    /// travel. So after Take Over the music list showed the timing PC's own
+    /// tracks as missing, the standby's own added tracks dropped off it, and
+    /// a soundscape made on the standby was gone from its list - on the one
+    /// night it mattered, with nothing saying why. They now stay as the
+    /// standby has them, like its voice. Sponsors still travel: their names
+    /// are the club's and are read out and shown on the phones.
+    /// </summary>
+    public static readonly IReadOnlyCollection<string> MachineOwnSoundLists = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "music.json",
+        "themes.json",
+        "ambience.json",
+        "imaging.json",
+        "sound-effects.json",
+    };
+
+    /// <summary>
     /// Files at the top of the data folder that belong to this PC, not to
     /// the club, so are neither handed out nor replaced on Take Over: the
     /// settings (decoder port, voice choice, sealed keys), the voice files,
-    /// this PC's own metering and licence acceptance, the restore record,
-    /// and the taken-over marker itself.
+    /// the music and sound lists (MachineOwnSoundLists), this PC's own
+    /// metering and licence acceptance, the restore record, and the
+    /// taken-over marker itself.
     ///
     /// The window of published results is a setting too, but it is no use
     /// without relay-results.json, which IS copied - so that file carries
     /// the window with it (RelayResultsIndex.Ledger.From).
     /// </summary>
-    public static readonly IReadOnlyCollection<string> MachineOwnFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    public static readonly IReadOnlyCollection<string> MachineOwnFiles = new HashSet<string>(MachineOwnSoundLists, StringComparer.OrdinalIgnoreCase)
     {
         "settings.json",
         "voice-settings.json",
@@ -285,7 +322,15 @@ internal static class WarmStandby
 
             foreach (var entry in archive.Entries)
             {
-                if (!IsMirroredFile(entry.FullName))
+                // WHY (23 Nov 2026, bug hunt 24): a timing PC on an older
+                // HeatCaller still sends the music and sound lists, which are
+                // now this PC's own. Refusing the whole copy for one of them
+                // would stop the standby copying at all until both PCs were
+                // updated, so they are let through (their bytes still count
+                // towards the size cap) and not counted as club stores.
+                var soundList = MachineOwnSoundLists.Contains(entry.FullName);
+
+                if (!soundList && !IsMirroredFile(entry.FullName))
                 {
                     return new Check(false, 0, $"The copy has a file it shouldn't (\"{entry.FullName}\"). It was not kept.");
                 }
@@ -301,6 +346,11 @@ internal static class WarmStandby
                             return new Check(false, 0, "The copy unpacks to far more than race data could. It was not kept.");
                         }
                     }
+                }
+
+                if (soundList)
+                {
+                    continue;
                 }
 
                 hasProfiles |= entry.FullName.Equals("profiles.json", StringComparison.OrdinalIgnoreCase);
@@ -386,6 +436,46 @@ internal static class WarmStandby
         DateTime? TakenOverUtc)
     {
         public static readonly MirrorStatus Off = new(false, null, null, 0, null, null, null);
+    }
+
+    /// <summary>
+    /// The AgeHeader's value, worked out on the timing PC: how long ago,
+    /// by its own clock, the copy it is sending was taken. Never negative.
+    /// </summary>
+    public static string ServedAgeHeaderValue(DateTime takenUtc, DateTime nowUtc)
+    {
+        var ms = (long)Math.Max(0, (nowUtc - takenUtc).TotalMilliseconds);
+        return ms.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// When a copy that just arrived was taken, on THIS PC's clock - the
+    /// value MirrorStatus.LastCopyUtc holds, and every age shown is worked
+    /// out from. With the AgeHeader (a number from 0 up to
+    /// MostBelievableServedAge) it is the moment it arrived less that age;
+    /// without it (a timing PC on an older HeatCaller) the timing PC's stamp,
+    /// never later than the moment it arrived.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the age was this PC's clock less the
+    /// timing PC's stamp - one PC's clock against another's. Two offline
+    /// track laptops a few minutes apart, or one set to the wrong time zone,
+    /// made a copy that arrived a second ago read "7 min ago" (or "2 h") all
+    /// night, "BEHIND" after one missed ask, and Take Over said the newest
+    /// copy was hours old - enough to talk a director out of a good copy.
+    /// An age measured on one clock and added on the other cancels the
+    /// difference out.
+    /// </summary>
+    public static DateTime CopyTakenOnThisClock(DateTime receivedUtc, string? servedAgeHeader, DateTime? stampUtc)
+    {
+        if (long.TryParse(servedAgeHeader?.Trim(), System.Globalization.NumberStyles.None,
+                          System.Globalization.CultureInfo.InvariantCulture, out var ms)
+            && ms <= MostBelievableServedAge.TotalMilliseconds)
+        {
+            return receivedUtc - TimeSpan.FromMilliseconds(ms);
+        }
+
+        var taken = stampUtc ?? receivedUtc;
+        return taken > receivedUtc ? receivedUtc : taken;
     }
 
     /// <summary>How long ago, in the fewest words: "12 s", "3 min", "2 h".</summary>

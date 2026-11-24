@@ -40,7 +40,7 @@ internal static class RaceDayDeleter
     /// days can ask its question once, over the totals, instead of putting
     /// the same dialog up five times - see AskMany.
     /// </summary>
-    private sealed record Gathered(
+    internal sealed record Gathered(
         RaceEvent Day,
         List<RoundDefinition> Rounds,
         List<string> SessionIds,
@@ -137,6 +137,11 @@ internal static class RaceDayDeleter
 
         int removed = 0;
 
+        // WHY (23 Nov 2026, bug hunt 24): races that could not be deleted
+        // used to stay in Race History without a word - see Remove. Every
+        // day's are told once, at the end.
+        var notDeleted = new List<SessionRecord>();
+
         foreach (var d in fresh)
         {
             if (events.Get(d.Id) is not { } now)
@@ -144,10 +149,12 @@ internal static class RaceDayDeleter
                 continue;
             }
 
-            Remove(Gather(now, roundStore, history, seasonStore, layouts), events, roundStore, history, seasonStore, layouts, undo,
-                ask.DeleteHistory, ask.ClearRecords, ask.ClearSeasons, ask.ClearBadges, onChanged);
+            notDeleted.AddRange(Remove(Gather(now, roundStore, history, seasonStore, layouts), events, roundStore, history, seasonStore, layouts, undo,
+                ask.DeleteHistory, ask.ClearRecords, ask.ClearSeasons, ask.ClearBadges, onChanged));
             removed++;
         }
+
+        ShowNotDeleted(owner, notDeleted);
 
         return removed;
     }
@@ -206,8 +213,11 @@ internal static class RaceDayDeleter
             return false;
         }
 
-        Remove(Gather(now, roundStore, history, seasonStore, layouts), events, roundStore, history, seasonStore, layouts, undo,
+        var notDeleted = Remove(Gather(now, roundStore, history, seasonStore, layouts), events, roundStore, history, seasonStore, layouts, undo,
             ask.DeleteHistory, ask.ClearRecords, ask.ClearSeasons, ask.ClearBadges, onChanged);
+
+        // WHY (23 Nov 2026, bug hunt 24): told now - see Remove.
+        ShowNotDeleted(owner, notDeleted);
 
         return true;
     }
@@ -253,7 +263,7 @@ internal static class RaceDayDeleter
     }
 
     /// <summary>Reads everything a day would take with it. Changes nothing.</summary>
-    private static Gathered Gather(
+    internal static Gathered Gather(
         RaceEvent day,
         RoundDefinitionStore roundStore,
         SessionHistoryStore history,
@@ -330,7 +340,7 @@ internal static class RaceDayDeleter
     /// undo entry, the ordering and the reasoning are exactly as they were
     /// when this was the tail of Ask.
     /// </summary>
-    private static void Remove(
+    internal static IReadOnlyList<SessionRecord> Remove(
         Gathered gathered,
         RaceEventStore events,
         RoundDefinitionStore roundStore,
@@ -567,6 +577,41 @@ internal static class RaceDayDeleter
 
         // --- Remove, working back out from the traces to the day itself ---
 
+        // WHY (23 Nov 2026, bug hunt 24): the saved races are deleted FIRST
+        // now, and only the ones that really went have their badges, season
+        // entries and records taken away. Since bug hunt 15 (B24) a delete
+        // that cannot be written (race-history.json held open, a full disk)
+        // leaves the race listed, but this used to ignore that: it had
+        // already stripped the race's records, championship entries and
+        // achievements, then went on to delete the day, and said nothing -
+        // so a race still in Race History read as setting no record and
+        // counting for no championship, and the director had no reason to
+        // press Undo. A race that stays keeps all of it, and Ask and AskMany
+        // name what stayed.
+        var notDeleted = new List<SessionRecord>();
+
+        if (deleteHistory)
+        {
+            foreach (var session in sessions)
+            {
+                // Still listed after a false: on disk and kept. One that was
+                // never filed goes regardless (SessionHistoryStore.Delete).
+                if (!history.Delete(session.Id) && history.Get(session.Id) is not null)
+                {
+                    notDeleted.Add(session);
+                }
+            }
+
+            if (notDeleted.Count > 0)
+            {
+                var kept = notDeleted.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
+
+                sessionIds = sessionIds.Where(id => !kept.Contains(id)).ToList();
+                sessions = sessions.Where(s => !kept.Contains(s.Id)).ToList();
+                recordTracks = TracksWithRecordsFrom(layouts, sessions);
+            }
+        }
+
         if (clearBadges)
         {
             // A fresh read, at the moment of removal, for the reason given in
@@ -624,14 +669,6 @@ internal static class RaceDayDeleter
             }
         }
 
-        if (deleteHistory)
-        {
-            foreach (var session in sessions)
-            {
-                history.Delete(session.Id);
-            }
-        }
-
         foreach (var round in rounds)
         {
             roundStore.Delete(round.Id);
@@ -643,6 +680,43 @@ internal static class RaceDayDeleter
         events.Delete(dayId);
 
         onChanged();
+
+        return notDeleted;
+    }
+
+    /// <summary>
+    /// What to tell the director when some saved races could not be deleted
+    /// with their day, or null when every one went. Pure, so it can be
+    /// tested without a window. The wording follows Race History's own.
+    /// </summary>
+    internal static string? NotDeletedMessage(IReadOnlyList<SessionRecord> notDeleted)
+    {
+        if (notDeleted.Count == 0)
+        {
+            return null;
+        }
+
+        var which = notDeleted.Count == 1
+            ? $"The race \"{notDeleted[0].Label}\" was"
+            : $"{notDeleted.Count} of the races were";
+
+        return $"{which} not deleted - the race history file couldn't be written. Something else on this PC may have it "
+            + "open, or the disk may be full.\r\n\r\nThe race day has gone, but "
+            + (notDeleted.Count == 1 ? "that race is" : "those races are")
+            + " still in Race History, with "
+            + (notDeleted.Count == 1 ? "its" : "their")
+            + " records, championship points and achievements kept. Close anything that might be reading the HeatCaller "
+            + "folder and delete "
+            + (notDeleted.Count == 1 ? "it" : "them")
+            + " from Race History.";
+    }
+
+    private static void ShowNotDeleted(IWin32Window owner, IReadOnlyList<SessionRecord> notDeleted)
+    {
+        if (NotDeletedMessage(notDeleted) is { } message)
+        {
+            AppDialog.Show(owner, message, "Races not deleted", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     /// <summary>

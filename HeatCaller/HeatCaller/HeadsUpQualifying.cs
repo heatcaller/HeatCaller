@@ -69,7 +69,11 @@ public static class HeadsUpQualifying
                     continue;
                 }
 
-                var (run, _) = QualifyingCalculator.BestFlyingWindow(result.LapTimesMs, PracticeLaps);
+                // WHY (23 Nov 2026, bug hunt 24): skips both start entries for
+                // a car credited with the start lap. Only the first was
+                // skipped, so the short dash after a credited start could be
+                // picked as the driver's best practice run.
+                var (run, _) = QualifyingCalculator.BestFlyingWindow(result.LapTimesMs, PracticeLaps, result.StartSlots(result.LapTimesMs));
 
                 if (run <= 0)
                 {

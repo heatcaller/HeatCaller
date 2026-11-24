@@ -19,6 +19,12 @@ public sealed class ChassisCanvas : Control
     private DragKind _dragKind = DragKind.None;
     private string? _dragPointId;
 
+    // WHY (23 Nov 2026, bug hunt 24): how far from the label's kept middle
+    // the press landed, so a drag carries the label by the spot that was
+    // grabbed. Without it the label's middle was put under the mouse on the
+    // first move, so a long label grabbed by its end leapt half its width.
+    private PointF _dragGrab;
+
     /// <summary>Values keyed by point id. The editor leaves this empty; the entry form fills it in.</summary>
     public Dictionary<string, string> Values { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -863,6 +869,15 @@ public sealed class ChassisCanvas : Control
                 KeepLabelAt(point, shown);
             }
 
+            // WHY (23 Nov 2026, bug hunt 24): remember where in the label the
+            // press landed (see _dragGrab); an anchor drag keeps none.
+            _dragGrab = PointF.Empty;
+            if (anchorHit is null && _template?.DiagramFields.FirstOrDefault(p => p.Id == hit) is { } grabbed)
+            {
+                var kept = LabelPixel(grabbed);
+                _dragGrab = new PointF(e.X - kept.X, e.Y - kept.Y);
+            }
+
             _dragKind = anchorHit is not null ? DragKind.Anchor : DragKind.Label;
             _dragPointId = hit;
         }
@@ -898,11 +913,29 @@ public sealed class ChassisCanvas : Control
         }
         else
         {
-            point.LabelOffsetX = Math.Clamp(nx - point.X, -1f, 1f);
-            point.LabelOffsetY = Math.Clamp(ny - point.Y, -1f, 1f);
+            // WHY (23 Nov 2026, bug hunt 24): the grab offset is taken off the
+            // mouse first. The old code set the offset from the mouse alone,
+            // which put the label's middle under the cursor and made it jump.
+            var (ox, oy) = LabelDragOffset(e.X, e.Y, _dragGrab, b, point.X, point.Y);
+            point.LabelOffsetX = ox;
+            point.LabelOffsetY = oy;
         }
 
         Invalidate();
+    }
+
+    /// <summary>
+    /// The label offset a drag gives: the label's middle goes where the mouse
+    /// is less <paramref name="grab"/> (how far from the middle the press
+    /// landed), as a fraction of <paramref name="bounds"/> measured from the
+    /// point at (<paramref name="pointX"/>, <paramref name="pointY"/>),
+    /// clamped to -1..1 as before.
+    /// </summary>
+    internal static (float X, float Y) LabelDragOffset(float mouseX, float mouseY, PointF grab, Rectangle bounds, float pointX, float pointY)
+    {
+        var nx = (mouseX - grab.X - bounds.Left) / Math.Max(1, bounds.Width);
+        var ny = (mouseY - grab.Y - bounds.Top) / Math.Max(1, bounds.Height);
+        return (Math.Clamp(nx - pointX, -1f, 1f), Math.Clamp(ny - pointY, -1f, 1f));
     }
 
     protected override void OnMouseUp(MouseEventArgs e)

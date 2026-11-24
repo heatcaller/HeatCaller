@@ -15,8 +15,18 @@ public sealed partial class CheckInControl
     private bool ChecksPapers => _settings.AskForWaivers || _settings.CheckMemberships;
 
     /// <summary>What's not in order for a driver tonight.</summary>
-    internal List<string> PapersProblems(DriverProfile profile) =>
-        DeskPapers.Problems(profile, _settings.AskForWaivers, _settings.WaiverMonths, _settings.CheckMemberships, DateTime.Today);
+    internal List<string> PapersProblems(DriverProfile profile) => PapersProblemsAt(profile, _settings, DateTime.Now);
+
+    /// <summary>What's not in order for a driver on the race night of <paramref name="nowLocal"/>.</summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): judged against the night (6am to
+    /// 6am, TonightAtTheTrack.NightOf), not the calendar day. On DateTime.Today
+    /// a membership good to the race date, or a waiver whose months ended the
+    /// day after it, turned into a problem at midnight - mid-night, before
+    /// the mains - and the driver dropped out of "Ready to race".
+    /// </remarks>
+    internal static List<string> PapersProblemsAt(DriverProfile profile, AppSettings settings, DateTime nowLocal) =>
+        DeskPapers.Problems(profile, settings.AskForWaivers, settings.WaiverMonths, settings.CheckMemberships, TonightAtTheTrack.NightOf(nowLocal));
 
     /// <summary>Fills a row's Papers cell.</summary>
     private void ShowPapers(DataGridViewRow row)

@@ -1582,7 +1582,7 @@ public partial class MainForm : Form
             try
             {
                 Clipboard.SetText(text);
-                OnClientRawMessage($"{AppTime.LogStampNow()}  [console] Copied {Plural.Of(text.Split('\n').Length, "visible line")}.");
+                OnClientRawMessage($"{AppTime.LogStampNow()}  [console] Copied {Plural.Of(ConsoleLineCount(text), "visible line")}.");
             }
             catch
             {
@@ -1640,11 +1640,22 @@ public partial class MainForm : Form
         // A class scored on handicap, with a credit to apply, names no winner
         // at the flag (bug hunt 20): the recap says who won on handicap. As
         // the recap has it, a pursuit start spent the credits on track.
+        //
+        // WHY (23 Nov 2026, bug hunt 24): per class, through
+        // HandicapNamesNoWinner. It asked the round's main class only and
+        // looked at every car's credit, so in a shared heat a guest class on
+        // handicap had its first car home called as its winner (the night
+        // report then gave the win to somebody else), and a guest driver's
+        // credit silenced the flag for a main class with no credit to apply.
         _announcer.ScoredOnHandicap = transponders =>
             _race.StartType != RaceStartType.StaggeredHandicap
             && _activeRound is { } round
-            && _handicaps.ModeFor(round.ClassName) != HandicapMode.None
-            && transponders.Any(t => _handicaps.Get(t) is { HasAny: true });
+            && HandicapNamesNoWinner(
+                round,
+                _handicaps.ModeFor,
+                MixedHeats.ClassMapFor(round, _profiles.AnyThread),
+                t => _handicaps.Get(t) is { HasAny: true },
+                transponders);
 
         // THE BROADCAST FEATURES (18 Oct 2026). The sponsors who present a
         // moment ("the fastest lap, presented by"), read fresh each time so
@@ -3081,6 +3092,17 @@ public partial class MainForm : Form
             return true;
         }, whenGone: false);
 
+        // WHY (23 Nov 2026, bug hunt 24): an "Update now" that failed after
+        // the freeze above was told to the console and the Updates card only
+        // - and the quiet check shows neither - so the director carried on in
+        // a run that could not save anything. Said in a window now. Through
+        // TryAsk like the rest: it comes from the updater's own thread.
+        AppUpdates.TellInstallFailed = words => TryAsk(() =>
+        {
+            AppDialog.Show(this, words, "Update not installed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return true;
+        }, whenGone: false);
+
         // The secrets have to be taken on this thread (BackupSecrets.Capture
         // reads the live settings, which this thread is free to be changing);
         // the zip itself is then free to run wherever it was called from, and
@@ -3299,12 +3321,20 @@ public partial class MainForm : Form
         Task.Run(() =>
             {
                 var path = BackupService.CreateBackup(folder, true, secrets);
-                BackupService.PruneOldBackups(folder, keep);
+
+                // WHY (23 Nov 2026, bug hunt 24): pruned where the backup
+                // really went, with the club's own keep. An unlocked backup
+                // whose folder is inside a cloud sync folder is kept on this
+                // PC instead (BackupService.FolderForBackup), and this pruned
+                // the folder asked for - so the club's "keep" never applied
+                // to the backups that were really being made.
+                var wentTo = Path.GetDirectoryName(path) ?? folder;
+                BackupService.PruneOldBackups(wentTo, keep);
 
                 // After the local backup is safely made: a cloud copy that
                 // fails is reported, but never undoes or blocks that.
                 var cloudResults = CloudBackup.Copy(path, clouds, keep);
-                return (Path: path, Cloud: cloudResults);
+                return (Path: path, Cloud: cloudResults, KeptOnThisPcIn: BackupWentElsewhere(folder, wentTo) ? wentTo : null);
             })
             .ContinueWith(task =>
             {
@@ -3340,12 +3370,85 @@ public partial class MainForm : Form
 
                 OnClientRawMessage($"{AppTime.LogStampNow()}  [backup] Automatic backup created: {Path.GetFileName(task.Result.Path)}");
 
+                // WHY (23 Nov 2026, bug hunt 24): the automatic pass said
+                // nothing when its backup was kept off the cloud folder.
+                if (task.Result.KeptOnThisPcIn is { } keptIn)
+                {
+                    OnClientRawMessage(
+                        $"{AppTime.LogStampNow()}  [backup] The backup folder is inside a cloud sync folder and there is no backup password, "
+                        + $"so backups are being kept on this PC only, in {keptIn}, until a backup password is set.");
+                }
+
                 foreach (var outcome in task.Result.Cloud)
                 {
                     OnClientRawMessage($"{AppTime.LogStampNow()}  [backup] {outcome.Line}");
                 }
             },
             uiThread);
+    }
+
+    /// <summary>
+    /// Whether a backup was written somewhere other than the folder asked
+    /// for - kept on this PC by BackupService.FolderForBackup. Compared as
+    /// full paths, ignoring case and a trailing separator, so a setting
+    /// typed with a trailing backslash is not taken for a different folder.
+    /// Pure.
+    /// </summary>
+    internal static bool BackupWentElsewhere(string askedFor, string wentTo)
+    {
+        static string Tidy(string path) =>
+            Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        try
+        {
+            return !string.Equals(Tidy(askedFor), Tidy(wentTo), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception)
+        {
+            // A path that cannot be read as one is not worth a warning line.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether the flag should name no winner because a class in the race is
+    /// scored on handicap with a credit to apply (bug hunt 20): true when any
+    /// car on track has a credit AND its own class (from
+    /// <paramref name="classOf"/>, MixedHeats.ClassMapFor; the round's main
+    /// class for a car with no entry, or for a one-class race whose map is
+    /// null) has a handicap mode. The pursuit start is the caller's test.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): the old check asked the main class's
+    /// mode only and any car's credit, so a shared heat's guest class on
+    /// handicap was given a winner at the flag who was not its winner, and a
+    /// guest driver's credit silenced the main class's winner call.
+    /// </remarks>
+    internal static bool HandicapNamesNoWinner(
+        RoundDefinition round,
+        Func<string, HandicapMode> modeFor,
+        IReadOnlyDictionary<string, string>? classOf,
+        Func<string, bool> hasCredit,
+        IEnumerable<string> transponders)
+    {
+        foreach (var transponder in transponders)
+        {
+            if (string.IsNullOrWhiteSpace(transponder) || !hasCredit(transponder))
+            {
+                continue;
+            }
+
+            var className = classOf is not null && classOf.TryGetValue(transponder.Trim(), out var own) && !string.IsNullOrWhiteSpace(own)
+                ? own
+                : round.ClassName;
+
+            if (modeFor(className) != HandicapMode.None)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

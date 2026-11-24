@@ -223,7 +223,7 @@ internal sealed class PackChartControl : UserControl
 
         foreach (var at in dates)
         {
-            var text = at.ToLocalTime().ToString("M/d");
+            var text = DateLabel(at.ToLocalTime(), System.Globalization.CultureInfo.CurrentCulture);
             var width = g.MeasureString(text, AppTheme.SmallFont).Width;
             var x = DateLabelLeft(XFor(at), width, plot.Left, plot.Right);
             g.DrawString(text, AppTheme.SmallFont, labelBrush, x, plot.Bottom + labelGap);
@@ -254,6 +254,14 @@ internal sealed class PackChartControl : UserControl
             }
         }
     }
+
+    // WHY (23 Nov 2026, bug hunt 24): the Trend dates were a fixed "M/d", so
+    // on a PC that writes the day first 3 November showed as "11/3" - read
+    // there as 11 March. They now follow the PC's own day/month order, the
+    // same rule as the Trend chart next door (TrendChartControl.DayLabel).
+    /// <summary>A Trend date label for a local time, day and month in the order this PC writes dates.</summary>
+    internal static string DateLabel(DateTime local, System.Globalization.CultureInfo culture) =>
+        TrendChartControl.DayLabel(local, culture);
 
     /// <summary>Five gridlines with their values down the left, and the axes.</summary>
     /// <summary>

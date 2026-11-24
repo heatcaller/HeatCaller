@@ -172,9 +172,26 @@ internal sealed class ClubNotes
                     // keep; the rest only need an Id and From filled.
                     file.Notes.RemoveAll(one => string.IsNullOrWhiteSpace(one.Text));
 
+                    // WHY (23 Nov 2026, bug hunt 24): the old `one.Id ??=`
+                    // only caught an explicit "Id": null. A note with no
+                    // "Id" at all (or "Id": "") kept the property's default
+                    // "", and the announcer will not mark a note said by an
+                    // empty id - so, approved and unsaid, ToSay handed it out
+                    // first all night, every later note sat behind it, and
+                    // Remove refused it so the window could not take it off.
+                    // A second note repeating an earlier Id stalled the same
+                    // way: Said matches the first, already said, and returns.
+                    // Each gets a fresh Id instead.
+                    var seenIds = new HashSet<string>(StringComparer.Ordinal);
+
                     foreach (var one in file.Notes)
                     {
-                        one.Id ??= Guid.NewGuid().ToString("N");
+                        if (string.IsNullOrWhiteSpace(one.Id) || !seenIds.Add(one.Id))
+                        {
+                            one.Id = Guid.NewGuid().ToString("N");
+                            seenIds.Add(one.Id);
+                        }
+
                         one.From ??= string.Empty;
                     }
 

@@ -227,9 +227,23 @@ public static class Sectors
     public static string Line(long[] sectors) => string.Join(" / ", sectors.Select(Format));
 
     /// <summary>A sector time on the board: seconds to the hundredth - the split loop's clock tie is good to about that, not to the thousandth.</summary>
-    public static string Format(long ms) => ms > 0 ? (ms / 1000.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : "-";
+    public static string Format(long ms) => ms > 0 ? Hundredths(ms) : "-";
 
     /// <summary>A gap at a split: "-0.08" (up) or "+0.12" (down).</summary>
     public static string FormatDelta(long ms) =>
-        (ms < 0 ? "-" : ms > 0 ? "+" : string.Empty) + (Math.Abs(ms) / 1000.0).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        (ms < 0 ? "-" : ms > 0 ? "+" : string.Empty) + Hundredths(ms);
+
+    // WHY (23 Nov 2026, bug hunt 24): Format and FormatDelta printed
+    // "0.00" on ms / 1000.0, so whether a 12.315 sector read 12.32 (as the
+    // voice says it and its caption shows it) or 12.31 hung on how the
+    // runtime rounds the double 12.3149999... - the same trap bug hunt 16
+    // took the split call out of. Now whole hundredths, half up, from the
+    // milliseconds: the arithmetic of RaceNumbers.HundredthsOf (which lives
+    // in the app layer, so it is repeated here), and the board, the Big
+    // Screen banner and the voice can't disagree by a hundredth.
+    private static string Hundredths(long ms)
+    {
+        var c = (Math.Abs(ms) + 5) / 10;
+        return $"{c / 100}.{c % 100:00}";
+    }
 }

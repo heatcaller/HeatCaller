@@ -332,12 +332,18 @@ public sealed class OverlayEditorForm : Form
         Spinner(_numRows, 0, 20, 1, 0);
         Spinner(_numGlass, 40, 100, 5, 0);
         Spinner(_numTextScale, 80, 160, 5, 0);
-        _numX.ValueChanged += (_, _) => EditElement(e => { OutOfUsualPlace(e); e.X = (double)_numX.Value; });
-        _numY.ValueChanged += (_, _) => EditElement(e => { OutOfUsualPlace(e); e.Y = (double)_numY.Value; });
-        _numScale.ValueChanged += (_, _) => EditElement(e => { OutOfUsualPlace(e); e.Scale = (double)_numScale.Value / 100; });
-        _numRows.ValueChanged += (_, _) => EditElement(e => e.Rows = (int)_numRows.Value);
-        _numGlass.ValueChanged += (_, _) => Edit(layout => layout.Glass = (double)_numGlass.Value / 100);
-        _numTextScale.ValueChanged += (_, _) => Edit(layout => layout.TextScale = (double)_numTextScale.Value / 100);
+        // WHY (23 Nov 2026, bug hunt 24): each box's value is read BEFORE Edit
+        // runs. The old lambdas read the box inside the change, but on a
+        // preset's first change Edit makes the club's copy and refills every
+        // box from it first - so the change then read the preset's old number
+        // back and wrote that: the strip said the change went into a copy,
+        // and the copy was unchanged.
+        _numX.ValueChanged += (_, _) => { var v = (double)_numX.Value; EditElement(e => { OutOfUsualPlace(e); e.X = v; }); };
+        _numY.ValueChanged += (_, _) => { var v = (double)_numY.Value; EditElement(e => { OutOfUsualPlace(e); e.Y = v; }); };
+        _numScale.ValueChanged += (_, _) => { var v = (double)_numScale.Value / 100; EditElement(e => { OutOfUsualPlace(e); e.Scale = v; }); };
+        _numRows.ValueChanged += (_, _) => { var v = (int)_numRows.Value; EditElement(e => e.Rows = v); };
+        _numGlass.ValueChanged += (_, _) => { var v = (double)_numGlass.Value / 100; Edit(layout => layout.Glass = v); };
+        _numTextScale.ValueChanged += (_, _) => { var v = (double)_numTextScale.Value / 100; Edit(layout => layout.TextScale = v); };
         _pillsShows.SetPills(new[] { new TogglePills.Pill(AutoPill, "Auto") }
             .Concat(PartsOfTheNight.Select(p => new TogglePills.Pill(p.Name, PartWords(p.Part)))).ToList());
         _pillsShows.Clicked += ShowsPillClicked;

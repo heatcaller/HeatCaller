@@ -35,7 +35,7 @@ The lap count never goes below zero.
 ### Time penalties
 
 - **+5s** and **+10s** add that much to the driver's total time. The board orders drivers on the same lap by total time, so a penalty drops the driver behind anyone they're now slower than.
-- **Penalty...** opens the **Time penalty** dialog. Enter any amount in **Seconds to add:** (in half-second steps, from −600 to 600) and press **Apply**. A negative number takes time off.
+- **Penalty...** opens the **Time penalty** dialog. Enter any amount in **Seconds to add:** (in half-second steps, from −600 to 600) and press **Apply**. A negative number gives back penalty time the driver has already been given, never more than they carry: it can't take time off a driver with no penalty. The dialog says so: "Added to the driver's race time. Less than 0 gives back penalty time."
 - The **Penalty** column shows each driver's total penalty. It stays applied for the rest of the race.
 - **Clear Penalties** (drawer) or **Clear penalty** (menu, which shows the current total, for example "Clear penalty (10.0s)") removes all of that driver's penalty time, including any automatic jump-start penalty, and takes back their warnings too. With nothing to clear, the log says the driver "has no penalties or warnings to clear."
 

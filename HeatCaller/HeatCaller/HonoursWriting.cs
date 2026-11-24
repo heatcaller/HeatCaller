@@ -238,6 +238,17 @@ internal static class HonoursWriting
             return null;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): two namesakes are two picks with the
+        // same name, and the who-got-what table below threw on the second -
+        // caught by the caller, which sent the built-in read out but logged it
+        // as an error. A read that says the same name twice cannot be held to
+        // who got what anyway, so it is turned down plainly instead.
+        if (picks.GroupBy(p => p.Driver, StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1))
+        {
+            notes?.Add("two drivers being read out share a name");
+            return null;
+        }
+
         var text = Brackets.Replace(reply, " ");
         text = Whitespace.Replace(text, " ").Trim();
         text = Label.Replace(text, string.Empty, 1);
@@ -526,12 +537,186 @@ internal static class HonoursWriting
             }
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): the claims above were only held to
+        // the facts of the WHOLE race - so once any one driver's block said
+        // "first achievement ever", or any one badge was a club first, the
+        // read could say it of anybody. "Billy Bob takes Hat-Trick, his first
+        // ever achievement" went out about a driver with ten, because Jane's
+        // block carried the fact. Now each claim is tied to who or what it is
+        // said of, and that driver or badge must carry the fact itself.
+        if (!ClaimsTiedToTheirFacts(said, walk, picks, facts, firstEver, clubFirst, notes))
+        {
+            return null;
+        }
+
         if (text[^1] is not ('.' or '!' or '?'))
         {
             text += ".";
         }
 
         return text;
+    }
+
+    /// <summary>
+    /// Bug hunt 24 (23 Nov 2026), F147: every "first achievement", "club
+    /// first" and "first ever" in the read, tied to who or what it is said
+    /// of, and held to THAT driver's or badge's own fact. A first-achievement
+    /// claim is about the drivers being talked about at that point (or, said
+    /// before anybody's name, the next driver named); a club-first claim is
+    /// about the last badge said up to it (or, said first, the next one). A
+    /// bare "first ever" stands on either. False, with a note, when a claim
+    /// is said of somebody or something the facts do not give it to.
+    /// </summary>
+    /// <param name="said">The normalised read.</param>
+    /// <param name="walk">The drivers and badges as found in <paramref name="said"/>.</param>
+    private static bool ClaimsTiedToTheirFacts(
+        string said,
+        List<(int At, int Length, string Kind, string Key)> walk,
+        IReadOnlyList<HonoursPick> picks,
+        string facts,
+        bool firstEver,
+        bool clubFirst,
+        List<string>? notes)
+    {
+        var ordered = walk.Where(w => w.Kind is "driver" or "badge").OrderBy(w => w.At).ToList();
+
+        // Whose the first-achievement facts are: Facts writes "This is Jane
+        // Doe's first achievement ever." Facts written some other way, naming
+        // nobody, fall back to the whole race, as before.
+        var firstEverDrivers = picks
+            .Select(p => p.Driver)
+            .Where(d => Regex.IsMatch(facts, Regex.Escape(d) + @"'s first achievements? ever", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (firstEver && firstEverDrivers.Count == 0)
+        {
+            firstEverDrivers = picks.Select(p => p.Driver).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        // Which badges are club firsts: Facts writes the fact on the badge's
+        // own "- Hat-Trick: ..." line.
+        var badges = picks.SelectMany(p => p.Badges).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var clubFirstBadges = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var raw in facts.Split('\n'))
+        {
+            var line = raw.Trim();
+
+            if (!line.StartsWith("- ", StringComparison.Ordinal)
+                || !line.Contains("Nobody at the club had earned it before tonight", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var badge = badges
+                .Where(b => line.Length > b.Length + 2
+                            && string.Compare(line, 2, b, 0, b.Length, StringComparison.OrdinalIgnoreCase) == 0
+                            && (line[b.Length + 2] == ':' || line[b.Length + 2] == '.'))
+                .OrderByDescending(b => b.Length)
+                .FirstOrDefault();
+
+            if (badge is not null)
+            {
+                clubFirstBadges.Add(badge);
+            }
+        }
+
+        if (clubFirst && clubFirstBadges.Count == 0)
+        {
+            clubFirstBadges = badges.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        // The drivers being talked about at a point in the read - the same
+        // rule as the who-got-what walk: those named since the last badge.
+        HashSet<string> SubjectAt(int at)
+        {
+            var subject = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var lastWasBadge = false;
+
+            foreach (var mention in ordered.Where(m => m.At < at))
+            {
+                if (mention.Kind == "driver")
+                {
+                    if (lastWasBadge)
+                    {
+                        subject.Clear();
+                    }
+
+                    subject.Add(mention.Key);
+                    lastWasBadge = false;
+                }
+                else
+                {
+                    lastWasBadge = true;
+                }
+            }
+
+            if (subject.Count == 0)
+            {
+                var next = ordered.FirstOrDefault(m => m.Kind == "driver" && m.At >= at);
+
+                if (next.Key is not null)
+                {
+                    subject.Add(next.Key);
+                }
+            }
+
+            return subject;
+        }
+
+        string? BadgeAt(int at, int end)
+        {
+            var before = ordered.LastOrDefault(m => m.Kind == "badge" && m.At < end);
+
+            if (before.Key is not null)
+            {
+                return before.Key;
+            }
+
+            var after = ordered.FirstOrDefault(m => m.Kind == "badge" && m.At >= at);
+            return after.Key;
+        }
+
+        bool AllFirstEver(HashSet<string> people) => people.Count > 0 && people.All(p => firstEverDrivers.Contains(p));
+
+        foreach (Match claim in FirstAchievementClaim.Matches(said))
+        {
+            var who = SubjectAt(claim.Index);
+
+            if (!AllFirstEver(who))
+            {
+                notes?.Add(who.Count == 0
+                    ? "it called a badge somebody's first achievement without saying whose"
+                    : $"it called a badge {string.Join(" and ", who)}'s first achievement, which the facts do not");
+                return false;
+            }
+        }
+
+        foreach (Match claim in ClubFirstClaim.Matches(said))
+        {
+            var badge = BadgeAt(claim.Index, claim.Index + claim.Length);
+
+            if (badge is null || !clubFirstBadges.Contains(badge))
+            {
+                notes?.Add(badge is null
+                    ? "it called a badge a club first without saying which"
+                    : $"it called \"{badge}\" a club first, which the facts do not");
+                return false;
+            }
+        }
+
+        for (var at = said.IndexOf(" first ever ", StringComparison.Ordinal); at >= 0; at = said.IndexOf(" first ever ", at + 1, StringComparison.Ordinal))
+        {
+            var badge = BadgeAt(at, at + " first ever ".Length);
+
+            if (!AllFirstEver(SubjectAt(at)) && (badge is null || !clubFirstBadges.Contains(badge)))
+            {
+                notes?.Add("it said \"first ever\" of somebody or something the facts do not");
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

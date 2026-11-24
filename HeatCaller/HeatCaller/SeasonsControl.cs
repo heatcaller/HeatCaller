@@ -614,13 +614,18 @@ public sealed class SeasonsControl : UserControl
     /// <summary>
     /// How many race days the races were run on: the meeting each one's round
     /// is filed under, or - for a race placed on no meeting, ticked in by
-    /// hand - the local date it was run.
+    /// hand - the race night it was run (6 AM to 6 AM).
     /// </summary>
+    // WHY (23 Nov 2026, bug hunt 24): a race on no meeting was keyed by its
+    // calendar date, so a night whose counted races fell either side of
+    // midnight (11:40 pm and 12:20 am) came to two rounds - the card read a
+    // round ahead all season and said "finished" and "Champion" a night
+    // early. Keyed by the race night, the same 6 AM rule AnyOnAnOpenDay uses.
     private static int RaceDaysOf(IReadOnlyList<SessionRecord> counted, RaceEventStore? events) =>
         counted
             .Select(s => s.RoundId is { Length: > 0 } roundId && events?.EventForRound(roundId) is { } day
                 ? "event:" + day.Id
-                : "date:" + s.StartedAtUtc.ToLocalTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))
+                : "date:" + s.StartedAtUtc.ToLocalTime().AddHours(-6).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture))
             .Distinct(StringComparer.Ordinal)
             .Count();
 
@@ -1194,6 +1199,20 @@ public sealed class SeasonsControl : UserControl
         SessionHistoryStore history)
     {
         var forcedIn = new List<string>();
+
+        // WHY (23 Nov 2026, bug hunt 24): when race-history.json could not be
+        // read at launch (a backup or sync tool holding it), the history is
+        // empty this session, so Races counted lists nothing. Rebuilt from the
+        // ticks alone, the next points edit wrote an empty list over every
+        // race the director had ticked in by hand. While the history is
+        // unreadable, a hand-ticked race that is not in the list is kept, as
+        // exclusions are below; a race really deleted from a readable history
+        // still drops its tick.
+        if (history.LoadedUnreadable)
+        {
+            var listed = rows.Select(r => r.Session.Id).ToHashSet(StringComparer.Ordinal);
+            forcedIn.AddRange(season.IncludedSessionIds.Where(id => !listed.Contains(id)));
+        }
 
         // The races already taken out by hand stay out until one is ticked
         // back in. Rebuilt from the ticks alone, an exclusion was thrown

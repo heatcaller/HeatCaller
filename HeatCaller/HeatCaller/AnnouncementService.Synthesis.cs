@@ -1374,24 +1374,54 @@ public sealed partial class AnnouncementService
         }
 
         var spent = ElevenLabsMeterSpent();
-        bool say;
+        string? words;
 
         lock (_voiceHealthLock)
         {
-            say = spent != _meterSpentSaid;
-            _meterSpentSaid = spent;
+            (_meterSpentSaid, words) = MeterEdgeWords(_meterSpentSaid, spent, StandInAllowed(profile));
         }
 
-        if (say)
+        if (words is not null)
         {
-            StatusMessage?.Invoke(spent
-                ? "[voice] The ElevenLabs allowance is at 100% on the usage chip - the free Kokoro voice is speaking from here, each of "
-                  + "the cast in their own Kokoro voice, and saved ElevenLabs lines are held back so the night is in one set of voices. "
-                  + "ElevenLabs speaks again once the chip is under 100% (a new month or a bigger plan)."
-                : "[voice] The ElevenLabs allowance is under 100% again - ElevenLabs and its saved lines speak from the next line.");
+            StatusMessage?.Invoke(words);
         }
 
         return spent || _voiceQuotaExceeded;
+    }
+
+    /// <summary>
+    /// What the console says as the usage chip's ElevenLabs meter crosses
+    /// 100%: whether the takeover is now said, and the words, or null for
+    /// nothing to say.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): it said "the free Kokoro voice is
+    /// speaking from here ... saved ElevenLabs lines are held back" whatever
+    /// the stand-in setting. With the stand-in unticked, or no Kokoro on the
+    /// PC, nothing had changed - ElevenLabs was still asked for every line and
+    /// its saved lines still played. The takeover is said only when Kokoro
+    /// really takes over; the stand-in going off at 100% says so truthfully.
+    /// </remarks>
+    internal static (bool Said, string? Words) MeterEdgeWords(bool wasSaid, bool spent, bool standingIn)
+    {
+        var said = spent && standingIn;
+
+        if (said == wasSaid)
+        {
+            return (said, null);
+        }
+
+        if (said)
+        {
+            return (true, "[voice] The ElevenLabs allowance is at 100% on the usage chip - the free Kokoro voice is speaking from here, each of "
+                + "the cast in their own Kokoro voice, and saved ElevenLabs lines are held back so the night is in one set of voices. "
+                + "ElevenLabs speaks again once the chip is under 100% (a new month or a bigger plan).");
+        }
+
+        return (false, spent
+            ? "[voice] The ElevenLabs allowance is at 100% on the usage chip, but the Kokoro voice is no longer standing in - "
+              + "ElevenLabs is asked for each line again, and its saved lines play."
+            : "[voice] The ElevenLabs allowance is under 100% again - ElevenLabs and its saved lines speak from the next line.");
     }
 
     /// <summary>

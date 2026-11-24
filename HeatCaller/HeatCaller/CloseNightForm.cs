@@ -155,6 +155,23 @@ internal sealed class CloseNightForm : Form
         Reload();
     }
 
+    /// <summary>
+    /// Reads the list once more as the window loads, before it is sized and
+    /// shown.
+    /// </summary>
+    protected override void OnLoad(EventArgs e)
+    {
+        // WHY (23 Nov 2026, bug hunt 24): the constructor's Reload runs before
+        // the caller's object initializer sets PaceLine, so the night's pace
+        // line was left empty and hidden, and only popped in at the first
+        // two-second tick, pushing the hint and the list down while the
+        // director was reading them. Read again here, by when PaceLine is set,
+        // and before base.OnLoad so DialogFit sizes the window with the line
+        // in it. An unchanged list is not rebuilt.
+        Reload();
+        base.OnLoad(e);
+    }
+
     /// <summary>Reads the list again and, if anything changed, redraws it.</summary>
     internal void Reload()
     {

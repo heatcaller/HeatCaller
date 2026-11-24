@@ -335,7 +335,16 @@ public partial class MainForm
         var sessions = PrivacySessionsToRepublish(
             _sessionHistory.Saved,
             _privacyBatch,
-            s => _relayPublisher.ResultIsOnRelay(s.Id, RelayResultsIndex.EffectiveStart(s)));
+            // WHY (23 Nov 2026, bug hunt 24): only results the relay had
+            // already taken went again. One still waiting in the queue (the
+            // internet down, on a relay that had taken nothing yet) was
+            // built with the old names, was skipped here, and then went out
+            // as it was - a full name the driver had asked to keep off the
+            // page, with the console saying the page was up to date. A
+            // waiting result counts too now; the fresh copy replaces it.
+            s => PrivacyCountsAsOnRelay(
+                listed: _relayPublisher.ResultIsOnRelay(s.Id, RelayResultsIndex.EffectiveStart(s)),
+                owed: _relayPublisher.ResultIsOwed(s.Id)));
 
         _privacySessionsToSend = new Queue<string>(sessions.Select(s => s.Id));
         _privacyYears = RelayResultsIndex.YearsOf(sessions);
@@ -397,8 +406,16 @@ public partial class MainForm
     }
 
     /// <summary>
+    /// Whether a privacy change must send a saved session again: it is on
+    /// the relay already, or waiting in the queue to go there (bug hunt 24 -
+    /// see StartPrivacyBatch).
+    /// </summary>
+    internal static bool PrivacyCountsAsOnRelay(bool listed, bool owed) => listed || owed;
+
+    /// <summary>
     /// The saved sessions to send again for these drivers: not demos, with
-    /// one of them in the results, and already on the relay - one it was
+    /// one of them in the results, and already on the relay or waiting to
+    /// go to it - one it was
     /// never given (raced while publishing was off, or before the club's
     /// "from" date) is not this change's to publish. Oldest first, so they
     /// land in the order they were raced.

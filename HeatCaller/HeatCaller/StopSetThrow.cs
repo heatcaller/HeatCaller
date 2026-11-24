@@ -126,11 +126,19 @@ internal static class StopSetThrow
     internal static string RecapPhrase(Names names) =>
         (names.Show.Length > 0, names.Host.Length > 0) switch
         {
-            (true, true) => $"the {names.Show} race recap with {names.Host}",
-            (true, false) => $"the {names.Show} race recap",
+            (true, true) => $"{TheShow(names.Show)} race recap with {names.Host}",
+            (true, false) => $"{TheShow(names.Show)} race recap",
             (false, true) => $"the race recap with {names.Host}",
             _ => "the race recap",
         };
+
+    // WHY (23 Nov 2026, bug hunt 24): RecapPhrase always put its own "the" in
+    // front of the show name, so a club whose show is "The Friday Night Show"
+    // heard "the The Friday Night Show race recap" every time the built-in
+    // throw was said. A name that already starts with "the " keeps its own
+    // article and gets no second one; "Theatre of Speed" still gets "the".
+    private static string TheShow(string show) =>
+        show.StartsWith("the ", StringComparison.OrdinalIgnoreCase) ? show : $"the {show}";
 
     private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
 

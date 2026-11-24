@@ -659,11 +659,8 @@ public sealed partial class WebServerService
         // and the same inside a line of words - a moment, a caption.
         let SN = {};
         function sn(name){ const n = String(name == null ? '' : name); return Object.prototype.hasOwnProperty.call(SN, n) ? String(SN[n]) : n; }
-        function snText(text){
-          let t = String(text == null ? '' : text);
-          Object.keys(SN).sort((a, b) => b.length - a.length).forEach(full => { t = t.split(full).join(String(SN[full])); });
-          return t;
-        }
+        // Whole names only (23 Nov 2026, bug hunt 24 - see StreamNameSwapScript).
+        {{StreamNameSwapScript}}
         // Only an address the laptop makes is ever put in an img (section 5).
         const LOGO_URL = /^\/sponsor-logo\/sponsor-logo-[0-9a-f]{12}\.png$/;
         // The presenting sponsor's logo beside their name, or nothing.
@@ -735,6 +732,7 @@ public sealed partial class WebServerService
         const DEMO_HOLD = { between: [0, 20], staging: [20, 35], racing: [35, 140], finished: [140, 160] }[params.get('hold') || ''] || null;
         // "about 19:40", that many minutes from now, as the laptop writes it.
         function demoAbout(minutes){ const t = new Date(Date.now() + minutes * 60000); return 'about ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0'); }
+        function demoAt(minutes){ return new Date(Date.now() + minutes * 60000).toISOString(); }
         function demoState(){
           const loop = 160, run = (Date.now() - DEMO_START) / 1000;
           const t = DEMO_HOLD ? DEMO_HOLD[0] + (((run - DEMO_HOLD[0]) % (DEMO_HOLD[1] - DEMO_HOLD[0])) + (DEMO_HOLD[1] - DEMO_HOLD[0])) % (DEMO_HOLD[1] - DEMO_HOLD[0]) : run % loop;
@@ -742,9 +740,9 @@ public sealed partial class WebServerService
           const base = { sponsorUp: { name: 'Hobby Hut', logo: '' }, race: 'Junior - Heat 2', people, presented: {}, presentedLogos: {}, improved: { name: 'Sam Tr', line: '0.42 s quicker than in Junior - Heat 1' }, champ: null, ratings: {}, captions: [], pylon: { changes: 0, leaders: 1, cars: {} } };
           if (t < 20) return Object.assign(base, { state: 'Idle', flag: 'None', countdown: '', standings: [], cards: {}, onDeck: '19:40  •  Junior  •  Heat 2',
             upNext: [
-              { title: 'Heat 2 (Junior)', eta: demoAbout(8), drivers: DEMO_NAMES.slice(0, 6), marshals: [{ name: 'Rob Otics', post: 'Turn 1' }, { name: 'Cy Clone', post: 'Turn 3' }] },
-              { title: 'Heat 2 (Stock)', eta: demoAbout(16), drivers: [], marshals: [] },
-              { title: 'Heat 2 (Mod Buggy)', eta: demoAbout(24), drivers: [], marshals: [] },
+              { title: 'Heat 2 (Junior)', eta: demoAbout(8), etaUtc: demoAt(8), drivers: DEMO_NAMES.slice(0, 6), marshals: [{ name: 'Rob Otics', post: 'Turn 1' }, { name: 'Cy Clone', post: 'Turn 3' }] },
+              { title: 'Heat 2 (Stock)', eta: demoAbout(16), etaUtc: demoAt(16), drivers: [], marshals: [] },
+              { title: 'Heat 2 (Mod Buggy)', eta: demoAbout(24), etaUtc: demoAt(24), drivers: [], marshals: [] },
             ] });
           if (t < 35) {
             const callups = {}; people.forEach((p, i) => { callups[p.id] = { now: true, slot: i + 1 }; });
@@ -789,6 +787,7 @@ public sealed partial class WebServerService
             finally { clearTimeout(timer); }
           }
           SN = d.streamNames && typeof d.streamNames === 'object' ? d.streamNames : {};
+          snKeepNames(d);
           showCaptions(d.captions);
           PART = partOf(d.state);
           const racing = d.state === 'Racing', finished = d.state === 'Finished';
@@ -962,6 +961,14 @@ public sealed partial class WebServerService
           // among real cars - the same places the ratings are worked out
           // for. A field of nothing but ghosts shows no podium.
           const podiumRows = rows.filter(s => !s.ghost);
+          // WHY (23 Nov 2026, bug hunt 24): the last result's top three was
+          // remembered all night, so the next race with the same name (two
+          // practices, "Freeform race", a re-run) and a different top three
+          // went out as "Corrected" - and never "Provisional" - though
+          // nobody had touched it. Each finish now starts its own record.
+          // On the race no longer being finished, not on the podium being
+          // hidden, so a real correction made meanwhile is still marked.
+          if (!finished) podiumSeen = null;
           if (want('podium') && finished && podiumRows.length){
             const ratings = d.ratings || {};
             const by = presentedBy(d, 'RaceResult');
@@ -1085,9 +1092,14 @@ public sealed partial class WebServerService
           if (sched) sched.classList.toggle('show', !!next || over);
 
           // The basics, a card at a time (7.6), only with time to read them.
-          const firstEta = up.length && /about (\d{1,2}):(\d{2})/.exec(up[0].eta || '');
+          // WHY (23 Nov 2026, bug hunt 24): the minutes used to be read back
+          // out of the words ("about 00:05") onto today's date, so a race
+          // due just after midnight looked 23 hours gone and the cards were
+          // held back all break. The laptop now sends the moment itself
+          // (etaUtc) and the words are only for reading.
+          const firstAt = up.length ? Date.parse(up[0].etaUtc || '') : NaN;
           let minutesToGo = 99;
-          if (firstEta){ const at = new Date(); at.setHours(Number(firstEta[1]), Number(firstEta[2]), 0, 0); minutesToGo = (at - Date.now()) / 60000; }
+          if (Number.isFinite(firstAt)) minutesToGo = (firstAt - Date.now()) / 60000;
           const basics = want('basics') && PART === 'between' && !over && minutesToGo >= 2;
           if (basics){
             // Tonight's bests (7.3) join the turns once there are some:

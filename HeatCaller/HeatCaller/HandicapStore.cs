@@ -484,6 +484,30 @@ public sealed class HandicapStore
     }
 
     /// <summary>
+    /// The sessions run on the same layout as the newest one, in the order
+    /// given (newest first). Lap times are only comparable on one layout.
+    /// A session with no layout name counts as its own layout, so a club
+    /// that never names layouts keeps every session.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): handicap suggestions mixed layouts -
+    /// see Suggest.
+    /// </summary>
+    internal static IEnumerable<SessionRecord> OnNewestLayout(IEnumerable<SessionRecord> sessions)
+    {
+        var list = sessions.ToList();
+
+        if (list.Count == 0)
+        {
+            return list;
+        }
+
+        var newest = list.OrderByDescending(s => s.StartedAtUtc).First();
+        var layout = (newest.TrackLayoutName ?? string.Empty).Trim();
+
+        return list.Where(s => string.Equals((s.TrackLayoutName ?? string.Empty).Trim(), layout, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Suggests time credits from recent pace.
     ///
     /// The reference is the FASTEST driver in the group, and everyone else
@@ -506,7 +530,12 @@ public sealed class HandicapStore
         string? className = null,
         RoundDefinitionStore? rounds = null)
     {
-        var sessions = SessionsFor(history, rounds, className).ToList();
+        // WHY (23 Nov 2026, bug hunt 24): only races on one layout. Each
+        // driver's own newest races were averaged whatever layout they ran
+        // on, so after a change to a quicker layout a driver who had missed
+        // the new nights was compared on old-layout laps and handed a credit
+        // that was the layout difference, not a pace difference.
+        var sessions = OnNewestLayout(SessionsFor(history, rounds, className)).ToList();
 
         var pace = new Dictionary<string, (string Name, double AvgBest, int Count)>(StringComparer.OrdinalIgnoreCase);
 

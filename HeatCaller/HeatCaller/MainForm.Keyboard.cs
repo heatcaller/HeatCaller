@@ -286,6 +286,22 @@ public partial class MainForm
             return;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): docked, the inbox is a child of
+        // this window, so an answer key it could not use (nothing picked,
+        // or a pick with no Noted answer) came on here - and N, the inbox's
+        // "Noted", is Race Control's Start now: one N too many while
+        // clearing the inbox started the next race at once. A is Approve
+        // there and opened the announcer screen here. The inbox's own keys
+        // now stop at the inbox while the keyboard is in it.
+        if (KeyBelongsToDockedInbox(
+                inboxDockedWithFocus: InboxDockedOnScreen && _inboxForm is { TopLevel: false, ContainsFocus: true },
+                e.KeyCode,
+                e.Shift))
+        {
+            MarkHandled(e);
+            return;
+        }
+
         // --- Letters and symbols: Race Control and the selected driver ---
         var handled = true;
 
@@ -361,6 +377,16 @@ public partial class MainForm
             _raceControlControl?.OnAirKeyUp();
         }
     }
+
+    /// <summary>
+    /// Whether a key pressed with the keyboard in the docked inbox is one of
+    /// the inbox's own answer keys (A Approve, N Noted, D Decline, S Later,
+    /// Delete), and so must stop there rather than run Race Control's key
+    /// of the same letter. See the bug hunt 24 note in MainForm_KeyDown.
+    /// Race Control's other keys (W, P, 0...) still work from the dock.
+    /// </summary>
+    internal static bool KeyBelongsToDockedInbox(bool inboxDockedWithFocus, Keys code, bool shift) =>
+        inboxDockedWithFocus && !shift && code is Keys.A or Keys.N or Keys.D or Keys.S or Keys.Delete;
 
     private static void MarkHandled(KeyEventArgs e)
     {

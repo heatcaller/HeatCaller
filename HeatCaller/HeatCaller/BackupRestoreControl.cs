@@ -62,6 +62,9 @@ public sealed partial class BackupRestoreControl : UserControl
     private readonly Button _btnBackupNow = new();
 
     private readonly Label _lblLastBackup = new();
+
+    /// <summary>Under the Folder box, when backups are kept somewhere else - see WhereBackupsGo.</summary>
+    private readonly Label _lblFolderNote = new();
     private readonly CheckBox _chkAutoBackupEnabled = new ThemedCheckBox();
     private readonly NumericUpDown _numIntervalDays = new();
     private readonly NumericUpDown _numKeepCount = new();
@@ -571,6 +574,19 @@ public sealed partial class BackupRestoreControl : UserControl
         card.Add(FieldGrid.Inline(_chkAutoBackupEnabled, lblEvery, _numIntervalDays, lblDays));
         card.Add(FieldGrid.Inline(lblKeep, _numKeepCount, lblKeepSuffix));
         card.Add(folderRow);
+
+        // WHY (23 Nov 2026, bug hunt 24, F058): says why the Folder box shows
+        // a folder on this PC rather than the one chosen. Hidden otherwise.
+        _lblFolderNote.AutoSize = true;
+        _lblFolderNote.ForeColor = AppTheme.Warning;
+        _lblFolderNote.UseMnemonic = false;
+        _textSize.Wear(_lblFolderNote, () => AppTheme.SmallFont);
+        var folderNote = WhereBackupsGo(_settings.AutoBackupFolder, !string.IsNullOrEmpty(_settings.BackupPassword),
+            BackupService.LocalOnlyBackupFolder, BackupService.SyncRootOverride).Note;
+        _lblFolderNote.Text = folderNote ?? string.Empty;
+        _lblFolderNote.Visible = folderNote is not null;
+        card.Add(_lblFolderNote, gapBelow: UiLayout.HintGap);
+
         card.Add(_lblLastBackup, gapBelow: 0);
 
         return card;
@@ -625,8 +641,17 @@ public sealed partial class BackupRestoreControl : UserControl
                     return;
                 }
 
-                CloudBackup.SetEnabled(_settings, captured, check.Checked);
-                CloudBackupStatus.ServiceSwitched(_settings, check.Checked);
+                // WHY (23 Nov 2026, bug hunt 24): the refusal above unticks
+                // the box itself, which runs this handler again with nothing
+                // switched. That pass used to go on to ServiceSwitched(false)
+                // as if a service had been switched off, wiping the recorded
+                // "Copy failed" problem and turning the light amber "Not yet"
+                // although, with no password, no copy would be made either.
+                if (!ApplyCloudTick(_settings, captured, check.Checked))
+                {
+                    return;
+                }
+
                 _settings.Save();
                 RefreshCloudStatus();
             };
@@ -939,6 +964,9 @@ public sealed partial class BackupRestoreControl : UserControl
         _txtBackupPasswordConfirm.Clear();
         RefreshPasswordStatus();
 
+        // A password lets backups go back to a folder in the cloud (F058).
+        RefreshWhereBackupsGo();
+
         if (SessionOnlyPasswordMessage(_settings) is { } sessionOnly)
         {
             AppDialog.Show(this, sessionOnly, "Backup password set for now", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -977,7 +1005,8 @@ public sealed partial class BackupRestoreControl : UserControl
         var confirm = AppDialog.Show(this,
             "Remove the backup password?\n\n" +
             "Backups made from now on won't be locked or carry the keys and tokens. Restored on another PC, they'd need entering again and QR check-ins reprinting. Backups already made keep the password they were made with."
-            + (CloudBackup.EnabledTargets(_settings).Count > 0 ? "\n\nCopies to the cloud stop until a password is set again." : string.Empty),
+            + (CloudBackup.EnabledTargets(_settings).Count > 0 ? "\n\nCopies to the cloud stop until a password is set again." : string.Empty)
+            + RemovePasswordFolderNote(CloudBackup.ServiceHolding(BackupService.SafeBackupFolder(_settings.AutoBackupFolder), BackupService.SyncRootOverride)),
             "Remove backup password", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
         if (confirm != DialogResult.Yes)
@@ -990,7 +1019,21 @@ public sealed partial class BackupRestoreControl : UserControl
         _settings.BackupPassword = string.Empty;
         _settings.Save();
         RefreshPasswordStatus();
+        RefreshWhereBackupsGo();
     }
+
+    /// <summary>
+    /// What Remove Password adds to its question when the backup folder is
+    /// inside a cloud service: backups stop going there. Empty otherwise.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24, F058): taking the password off now
+    /// moves every backup to a folder on this PC (BackupService.FolderForBackup),
+    /// and the question said nothing about it.
+    /// </summary>
+    internal static string RemovePasswordFolderNote(string? service) =>
+        service is null
+            ? string.Empty
+            : $"\n\nThe backup folder is in {service}, so backups will be kept on this PC instead until a password is set again.";
 
     /// <summary>
     /// Puts the backup password back as it is now. Settings first; the
@@ -1027,6 +1070,7 @@ public sealed partial class BackupRestoreControl : UserControl
             if (!IsDisposed)
             {
                 RefreshPasswordStatus();
+                RefreshWhereBackupsGo();
             }
         });
     }
@@ -1095,7 +1139,54 @@ public sealed partial class BackupRestoreControl : UserControl
     private string CurrentFolder() =>
         // The guarded answer, so the page shows where backups will REALLY
         // go rather than echoing a setting that is about to be overruled.
-        BackupService.SafeBackupFolder(_settings.AutoBackupFolder);
+        WhereBackupsGo(_settings.AutoBackupFolder, !string.IsNullOrEmpty(_settings.BackupPassword),
+            BackupService.LocalOnlyBackupFolder, BackupService.SyncRootOverride).Folder;
+
+    /// <summary>
+    /// The folder backups really go to, and the line the page shows under
+    /// the Folder box when that is not the folder the club chose (null when
+    /// it is).
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24, F058): BackupService now keeps a
+    /// backup with no password out of a folder inside OneDrive, Google Drive
+    /// or iCloud Drive, but this page still showed, opened and listed the
+    /// chosen folder. The director saw no new backups there, with nothing to
+    /// say where they had gone or why. The same rule as the backup itself
+    /// (BackupService.FolderForBackup), so the two can never disagree.
+    /// </summary>
+    internal static (string Folder, string? Note) WhereBackupsGo(
+        string? configured, bool locked, string localFolder, Func<CloudService, string?>? syncRoot = null)
+    {
+        var chosen = BackupService.SafeBackupFolder(configured);
+        var folder = BackupService.FolderForBackup(chosen, locked, localFolder, syncRoot);
+
+        if (string.Equals(folder, chosen, StringComparison.OrdinalIgnoreCase))
+        {
+            return (folder, null);
+        }
+
+        var service = CloudBackup.ServiceHolding(chosen, syncRoot) ?? "the cloud";
+
+        return (folder,
+            $"Backups are being kept on this PC only: the backup folder is in {service}, and only locked backups go to the cloud."
+            + Environment.NewLine + "Set a backup password to send them there.");
+    }
+
+    /// <summary>
+    /// The Folder box, the line under it and the backup list, after anything
+    /// that changes where backups go - the folder, or the password.
+    /// </summary>
+    private void RefreshWhereBackupsGo()
+    {
+        var (folder, note) = WhereBackupsGo(_settings.AutoBackupFolder, !string.IsNullOrEmpty(_settings.BackupPassword),
+            BackupService.LocalOnlyBackupFolder, BackupService.SyncRootOverride);
+
+        _txtFolder.Text = folder;
+        _lblFolderNote.Text = note ?? string.Empty;
+        _lblFolderNote.Visible = note is not null;
+        SizeFolderBox();
+        RefreshBackupList();
+    }
 
     private void SaveAutoBackupSettings()
     {
@@ -1107,7 +1198,9 @@ public sealed partial class BackupRestoreControl : UserControl
 
     private void BtnChangeFolder_Click(object? sender, EventArgs e)
     {
-        using var dialog = new FolderBrowserDialog { SelectedPath = CurrentFolder(), Description = "Choose a folder for backups" };
+        // The folder the club chose, not the one on this PC backups may be
+        // kept in instead (WhereBackupsGo): this picks the choice itself.
+        using var dialog = new FolderBrowserDialog { SelectedPath = BackupService.SafeBackupFolder(_settings.AutoBackupFolder), Description = "Choose a folder for backups" };
         if (dialog.ShowDialog(this) != DialogResult.OK)
         {
             return;
@@ -1125,9 +1218,7 @@ public sealed partial class BackupRestoreControl : UserControl
 
         _settings.AutoBackupFolder = dialog.SelectedPath;
         _settings.Save();
-        _txtFolder.Text = CurrentFolder();
-        SizeFolderBox();
-        RefreshBackupList();
+        RefreshWhereBackupsGo();
     }
 
     /// <summary>
@@ -1350,9 +1441,12 @@ public sealed partial class BackupRestoreControl : UserControl
         }
 
         // Again: the app kept running while the question was on screen, so
-        // the automatic backup or a race can have started meanwhile. From
-        // here to the restart everything runs on this thread, so nothing
-        // else can start before the restore is done.
+        // the automatic backup or a race can have started meanwhile. Checked
+        // here so nobody types a password only to be refused; when the
+        // password is asked for, FinishRestore checks once more after it,
+        // as that prompt keeps the app running too. From the last check to
+        // the restart everything runs on this thread, so nothing else can
+        // start before the restore is done.
         if (!CanRestoreNow())
         {
             return;
@@ -1362,17 +1456,76 @@ public sealed partial class BackupRestoreControl : UserControl
         // password needs it to restore. This laptop's own password is
         // tried first, so restoring one of this laptop's backups asks
         // nothing; otherwise the password is asked for.
-        string? password = null;
-        if (BackupService.IsLocked(zipPath))
+        FinishRestore(
+            BackupService.IsLocked(zipPath),
+            () => SavedPasswordThatOpens(zipPath, _settings.BackupPassword),
+            () => AskForBackupPassword(zipPath),
+            CanRestoreNow,
+            password => RunRestore(zipPath, keepAsTheyAre: null, refused: null, password: password));
+    }
+
+    /// <summary>
+    /// A cloud service's box ticked or unticked: switches the service and
+    /// keeps the cloud light's written-down result true - but only when the
+    /// box really changed the service. False, touching nothing, when the
+    /// service is already as the box says (the box unticked by a refusal).
+    /// Does NOT save the settings; the caller does.
+    /// </summary>
+    internal static bool ApplyCloudTick(AppSettings settings, CloudService service, bool nowChecked)
+    {
+        if (CloudBackup.IsEnabled(settings, service) == nowChecked)
         {
-            password = SavedPasswordThatOpens(zipPath, _settings.BackupPassword) ?? AskForBackupPassword(zipPath);
+            return false;
+        }
+
+        CloudBackup.SetEnabled(settings, service, nowChecked);
+        CloudBackupStatus.ServiceSwitched(settings, nowChecked);
+        return true;
+    }
+
+    /// <summary>
+    /// The end of a restore once the director has said yes, in order:
+    /// the password for a locked backup (this PC's saved one first, else
+    /// asked for), then the last check that nothing has started, then the
+    /// restore. False when it stopped short.
+    /// </summary>
+    internal static bool FinishRestore(
+        bool isLocked,
+        Func<string?> savedPasswordThatOpens,
+        Func<string?> askForPassword,
+        Func<bool> canRestoreNow,
+        Action<string?> runRestore)
+    {
+        string? password = null;
+        var asked = false;
+        if (isLocked)
+        {
+            password = savedPasswordThatOpens();
             if (password is null)
             {
-                return;
+                asked = true;
+                password = askForPassword();
+            }
+
+            if (password is null)
+            {
+                return false;
             }
         }
 
-        RunRestore(zipPath, keepAsTheyAre: null, refused: null, password: password);
+        // WHY (23 Nov 2026, bug hunt 24): the password prompt added on 15
+        // Nov 2026 is a dialog that keeps the app running for as long as it
+        // takes to type the password, and it sat after the last check that
+        // no race or backup has started - so the hourly automatic backup or
+        // a race started from the phone could begin while it was open, and
+        // the restore then went ahead anyway. Checked again once it closes.
+        if (asked && !canRestoreNow())
+        {
+            return false;
+        }
+
+        runRestore(password);
+        return true;
     }
 
     /// <summary>The saved backup password when it opens this locked backup, otherwise null.</summary>

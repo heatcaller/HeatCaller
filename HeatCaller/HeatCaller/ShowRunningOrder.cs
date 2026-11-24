@@ -163,10 +163,19 @@ internal readonly record struct ShowDrama(double? WinningMarginSeconds, int Laps
         double? margin = null;
         var lapsDown = 0;
 
-        if (ordered.Count >= 2)
+        // WHY (23 Nov 2026, bug hunt 24): the margin is measured between
+        // classified finishers only, as DescribeMargin has done since 8 Nov.
+        // The old code took ordered[0] and ordered[1] straight off the
+        // results, so in a field of two where the second car was thrown out
+        // or retired within half a second of the winner, the show took its
+        // bigger open for a "photo finish" while the recap's words were told
+        // there was no finishing margin at all.
+        var classified = ordered.Where(CommentaryService.Classified).ToList();
+
+        if (classified.Count >= 2)
         {
-            var winner = ordered[0];
-            var second = ordered[1];
+            var winner = classified[0];
+            var second = classified[1];
 
             var gap = RaceGaps.Compute(
                 second.Laps, second.ElapsedMs, winner.Laps, winner.ElapsedMs,

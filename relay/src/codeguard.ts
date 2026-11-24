@@ -244,6 +244,29 @@ export class CodeGuard {
     }
   }
 
+  /**
+   * Drops every address whose wrong codes are all outside the window.
+   *
+   * WHY (23 Nov 2026, bug hunt 24, F339): an address was only dropped when
+   * it sent another code, so one wrong code and gone kept that address in
+   * memory until the relay restarted - longer than the ten minutes the
+   * cookie policy promises. The relay's listen() calls this every minute.
+   */
+  sweep(): void {
+    const cutoff = this.clock() - ADDRESS_FAIL_WINDOW_MS;
+
+    for (const [key, times] of this.addressFails) {
+      if ((times[times.length - 1] ?? 0) <= cutoff) {
+        this.addressFails.delete(key);
+      }
+    }
+  }
+
+  /** How many addresses it is holding. For tests. */
+  get addressCount(): number {
+    return this.addressFails.size;
+  }
+
   private recentFrom(key: string): number[] {
     const cutoff = this.clock() - ADDRESS_FAIL_WINDOW_MS;
     const kept = (this.addressFails.get(key) ?? []).filter((t) => t > cutoff);

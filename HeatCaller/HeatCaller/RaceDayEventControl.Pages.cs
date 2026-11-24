@@ -100,7 +100,7 @@ public sealed partial class RaceDayEventControl : IPagedControl
     /// </summary>
     private void ChooseTabForTonight()
     {
-        var open = _events.Active is { IsLegacy: false, IsOpen: true } day ? day.Id : string.Empty;
+        var open = TabNightId(_events.Active, _events.Real);
 
         if (string.Equals(open, _tabChosenFor, StringComparison.Ordinal))
         {
@@ -110,4 +110,20 @@ public sealed partial class RaceDayEventControl : IPagedControl
         _tabChosenFor = open;
         ShowTab(open.Length == 0 ? TemplatesTab : TonightTab);
     }
+
+    /// <summary>
+    /// The night the tab is chosen for: the current day when it is open, or
+    /// else tonight's open night (OpenNightOf); empty when no night is open.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): this used to read only the current
+    /// day. Picking last week's closed night in the Race day box on Tonight
+    /// makes that day current, so the open night seemed to have gone and the
+    /// page was thrown over to Templates - away from the day just picked.
+    /// Tonight's night is still open then, so nothing has changed to choose
+    /// the tab again for.
+    /// </summary>
+    internal static string TabNightId(RaceEvent? active, IEnumerable<RaceEvent> real) =>
+        active is { IsLegacy: false, IsOpen: true }
+            ? active.Id
+            : OpenNightOf(active, real)?.Id ?? string.Empty;
 }

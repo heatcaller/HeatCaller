@@ -390,6 +390,20 @@ public sealed partial class WebServerControl : UserControl
     private Label Hint(string text) =>
         _textSize.Wear(new Label { Text = text, AutoSize = true, ForeColor = AppTheme.TextMuted }, () => AppTheme.SmallFont);
 
+    /// <summary>
+    /// What the Remote PIN tile says, and whether that is good news: "Set"
+    /// only for a PIN the remote will take (WebServerService.IsUsableRemotePin),
+    /// "Not set" when there is none, "Too short" for under four digits, and
+    /// "Digits only" for one with anything but digits in it.
+    /// </summary>
+    internal static (string Text, bool Ok) RemotePinTile(string? pin)
+    {
+        var trimmed = (pin ?? string.Empty).Trim();
+        if (trimmed.Length == 0) return ("Not set", false);
+        if (WebServerService.IsUsableRemotePin(trimmed)) return ("Set", true);
+        return trimmed.All(char.IsAsciiDigit) ? ("Too short", false) : ("Digits only", false);
+    }
+
     /// <summary>The tiles over the cards - see _tiles. Run with UpdateUi, and when the overlays are listed again.</summary>
     private void ShowTiles()
     {
@@ -403,9 +417,13 @@ public sealed partial class WebServerControl : UserControl
         var address = running ? _server.LocalUrl().Replace("http://", string.Empty).TrimEnd('/') : "-";
         _tiles[1].Set(address, TileCaptions[1]);
 
-        var pin = (_settings.WebServerPin ?? string.Empty).Trim();
-        _tiles[2].Set(pin.Length >= 4 ? "Set" : "Not set", TileCaptions[2]);
-        _tiles[2].Value.ForeColor = pin.Length >= 4 ? AppTheme.TextDark : AppTheme.Warning;
+        // WHY (23 Nov 2026, bug hunt 24): the tile used to read "Set" for any
+        // PIN of four or more characters, so "race1" or "12 34" showed Set in
+        // the normal colour while the remote refused every command from the
+        // phone. It now uses the server's own rule (RemotePinTile).
+        var (pinText, pinOk) = RemotePinTile(_settings.WebServerPin);
+        _tiles[2].Set(pinText, TileCaptions[2]);
+        _tiles[2].Value.ForeColor = pinOk ? AppTheme.TextDark : AppTheme.Warning;
 
         var yours = _cmbStreamOverlay.Items.OfType<StreamOverlayItem>().Count(i => !i.Layout.BuiltIn);
         var all = _cmbStreamOverlay.Items.Count;

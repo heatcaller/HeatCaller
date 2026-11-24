@@ -518,6 +518,11 @@ public sealed class CommentaryBudget
     private string _dayId = string.Empty;
     private int _roundsRun;
     private int _roundsTotal;
+
+    // WHY (23 Nov 2026, bug hunt 24): true once NightShape has counted
+    // tonight's programme, so "no rounds on it" can be told apart from
+    // "not counted yet" - see ProgressThroughNight.
+    private bool _programmeCounted;
     private double _spentTonight;
     private double _entitledHighWater;
 
@@ -921,9 +926,7 @@ public sealed class CommentaryBudget
                     return double.PositiveInfinity;
                 }
 
-                var progress = _roundsTotal <= 0
-                    ? 0
-                    : Math.Clamp((double)_roundsRun / _roundsTotal, 0, 1);
+                var progress = ProgressThroughNight(_roundsRun, _roundsTotal, _programmeCounted);
 
                 // The opening share is the dial's (3 Nov 2026): Non-stop
                 // releases the whole night at once - see ShowChatter.
@@ -933,6 +936,30 @@ public sealed class CommentaryBudget
                 return Math.Max(_entitledHighWater, released);
             }
         }
+    }
+
+    /// <summary>
+    /// How far through tonight the budget treats the night as being, 0 to 1,
+    /// for releasing the night's allotment.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a club that races without a programme
+    /// (freeform races, no rounds on the day) was counted as 0 rounds of 0,
+    /// which read as "nothing has run yet" all evening. The night was held at
+    /// the opening share (15% at Standard), so after the first few races the
+    /// battle watch, record calls and every extra went quiet for the rest of
+    /// the night while the other 85% of the night's lines were never used.
+    /// With no programme there is nothing to save lines for, so the whole
+    /// night is released. A programme not yet counted (a night just opened,
+    /// before the first count comes in) still starts at the opening share.
+    /// </summary>
+    internal static double ProgressThroughNight(int roundsRun, int roundsTotal, bool programmeCounted)
+    {
+        if (roundsTotal <= 0)
+        {
+            return programmeCounted ? 1 : 0;
+        }
+
+        return Math.Clamp((double)roundsRun / roundsTotal, 0, 1);
     }
 
     /// <summary>What is left of the night's entitlement, after what is settled and what is reserved.</summary>
@@ -992,6 +1019,18 @@ public sealed class CommentaryBudget
         {
             _roundsRun = Math.Max(0, roundsRun);
             _roundsTotal = Math.Max(0, roundsTotal);
+            _programmeCounted = true;
+
+            // WHY (23 Nov 2026, bug hunt 24): a night with no programme is
+            // released in full (see ProgressThroughNight), but that release
+            // must not be kept in the high water mark, which never falls. A
+            // day opened before its heats are built would otherwise keep the
+            // whole night's share once the rounds arrived, and have nothing
+            // saved for the mains.
+            if (_roundsTotal <= 0)
+            {
+                return;
+            }
 
             // Read once here so the high water mark keeps up as the night runs,
             // rather than only when something asks to be written.
@@ -1024,6 +1063,7 @@ public sealed class CommentaryBudget
         _dayId = dayId ?? string.Empty;
         _roundsRun = 0;
         _roundsTotal = 0;
+        _programmeCounted = false;
 
         // A fresh night knows nothing about what is on it yet. Without
         // this, a new day opened straight after an A-main would pace its

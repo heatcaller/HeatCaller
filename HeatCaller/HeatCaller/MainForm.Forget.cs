@@ -54,9 +54,10 @@ public partial class MainForm
     /// </summary>
     internal DriverForget.Outcome ForgetDriverEverywhere(DriverProfile profile)
     {
-        // Their name as the club's pages show it - initials, or shortened -
-        // read before the profile goes, since that is what a follower's
-        // phone followed them by.
+        // Their initials, when the club's pages show them by initials - read
+        // before the profile goes, since that is what a follower's phone
+        // followed them by. The shortened forms ("Sam P") are added by
+        // RelayForgetNames; PublicName never shortens.
         var shown = PublicPrivacy.Current.PublicName(profile.DriverName, profile.Transponder);
 
         var outcome = DriverForget.Forget(profile, DriverDataSourcesNow());
@@ -68,12 +69,18 @@ public partial class MainForm
 
         // Their published results are sent again, now under the
         // placeholder - the same batch a privacy change uses.
-        _settings.PrivacyRepublishOwed = MergePrivacyOwed(_settings.PrivacyRepublishOwed, profile.AllTransponderIds.ToList());
+        //
+        // WHY (23 Nov 2026, bug hunt 24): with the transponders Forget also
+        // renamed results on (Outcome.AlsoRepublish) - ones the driver no
+        // longer holds. Only their current ones were sent again, so the
+        // published copy of those older results kept their name.
+        _settings.PrivacyRepublishOwed = MergePrivacyOwed(
+            _settings.PrivacyRepublishOwed, profile.AllTransponderIds.Concat(outcome.AlsoRepublish).ToList());
         _privacyBatch = null;
 
         if (_relayPublisher.Status.Configured)
         {
-            var names = outcome.Names.Append(shown).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var names = RelayForgetNames(outcome.Names, shown);
             _settings.RelayForgetsOwed.Add(new RelayForgetOwed { Badges = outcome.Badges.ToList(), Names = names });
         }
 
@@ -83,6 +90,41 @@ public partial class MainForm
 
         OnClientRawMessage($"[privacy] A driver was forgotten; their results now read \"{outcome.Placeholder}\".");
         return outcome;
+    }
+
+    /// <summary>
+    /// The names the relay is told to forget a driver's follower sign-ups
+    /// by: their names in full, their initials when they are shown by
+    /// initials, and then each name as the club's pages shorten it - "Sam P",
+    /// "Sam Pa", "Sam Par" - shortest first, up to what one call carries.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): only the full names and the initials
+    /// were sent. With "Shorten published names" on (the default) a phone
+    /// follows "Sam P", the name the Schedule page lists, and the relay keeps
+    /// the sign-ups under exactly that. Asked to forget "Sam Parker" it found
+    /// nothing, said done, and kept the shortened name with the phones
+    /// following it. The shortest forms go first because they are the ones
+    /// the pages show; a longer one is only shown beside another driver with
+    /// the same first letters.
+    /// </remarks>
+    internal static List<string> RelayForgetNames(IEnumerable<string> fullNames, string? shown, int most = RelayPublisher.ForgetMaxNames)
+    {
+        var full = fullNames.Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var forms = full.Select(n => PublicPrivacy.PublicFormsOf(n)).ToList();
+        var longest = forms.Count == 0 ? 0 : forms.Max(f => f.Count);
+
+        // Turn about, so two names (their own and the announcer's) each get
+        // their shortest forms in before either gets its longest.
+        var shortened = Enumerable.Range(0, longest).SelectMany(i => forms.Where(f => i < f.Count).Select(f => f[i]));
+
+        return full
+            .Append(shown ?? string.Empty)
+            .Concat(shortened)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(Math.Max(0, most))
+            .ToList();
     }
 
     /// <summary>The export page for a driver.</summary>

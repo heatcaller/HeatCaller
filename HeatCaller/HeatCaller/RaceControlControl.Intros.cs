@@ -434,6 +434,23 @@ public sealed partial class RaceControlControl
         string Text,
         (string Name, Action Count)? Sponsor);
 
+    /// <summary>
+    /// What held introductions were written from, to tell whether they are
+    /// still true: the grid in order (WrittenAhead.Fingerprint) and each
+    /// driver's spoken name, screen name, number and home track. The form
+    /// lines are left out - they only move when a result is filed, which
+    /// throws the held words away anyway. Pure.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): this was the transponders alone, so a
+    /// name, announcer spelling, number or home track corrected on the desk
+    /// after the last result was filed was still read out the old way at
+    /// the next race, while the Big Screen's intro card showed the new one.
+    /// </summary>
+    internal static string IntroductionsFingerprint(IReadOnlyList<IntroDriver> grid) =>
+        WrittenAhead.Fingerprint(grid.Select(d => d.Transponder))
+        + "\u001D"
+        + string.Join("\u001E", grid.Select(d => string.Join("\u001F", d.SpokenName, d.ScreenName, d.Number, d.Hometown)));
+
     /// <summary>Guards the held introductions and their version: written from a pool thread, taken on the UI thread.</summary>
     private readonly object _introductionsAheadLock = new();
 
@@ -496,7 +513,7 @@ public sealed partial class RaceControlControl
             return;
         }
 
-        var grid = WrittenAhead.Fingerprint(facts.Grid.Select(d => d.Transponder));
+        var grid = IntroductionsFingerprint(facts.Grid);
         var label = next.RoundLabel;
 
         // Reserved now, counted when spoken. Once a race, so reserving it
@@ -577,7 +594,7 @@ public sealed partial class RaceControlControl
 
             _introductionsAhead = null;
 
-            return string.Equals(held.Grid, WrittenAhead.Fingerprint(grid.Select(d => d.Transponder)), StringComparison.Ordinal)
+            return string.Equals(held.Grid, IntroductionsFingerprint(grid), StringComparison.Ordinal)
                 ? held
                 : null;
         }

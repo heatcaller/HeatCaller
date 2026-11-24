@@ -105,7 +105,18 @@ export function privacyRulesFrom(body: unknown): PrivacyRules {
 
 /** Whether a published name is one of a junior's. Every name is, while the rules are unknown. */
 export function isJuniorName(rules: PrivacyRules, name: string): boolean {
-  return rules.unknown || rules.juniors.has(privacyNameKey(name));
+  if (rules.unknown) return true;
+  const key = privacyNameKey(name);
+  if (rules.juniors.has(key)) return true;
+
+  // WHY (23 Nov 2026, bug hunt 24): a junior shown by initials who shares
+  // them with another driver is published numbered - "M.K. 2". The old check
+  // looked only the whole name up, so a numbered sibling past the forms the
+  // laptop lists could be followed by name. A trailing " <number>" is now
+  // dropped and the name looked up again: matching too much costs a follower
+  // alert, never a child's name.
+  const unnumbered = key.replace(/ \d+$/, "");
+  return unnumbered !== key && unnumbered.length > 0 && rules.juniors.has(unnumbered);
 }
 
 /** Whether a document (any JSON) names a junior anywhere in it, as whole words. */
@@ -117,7 +128,13 @@ export function namesAJunior(rules: PrivacyRules, value: unknown): boolean {
   let text: string;
 
   try {
-    text = typeof value === "string" ? value : JSON.stringify(value);
+    // WHY (23 Nov 2026, bug hunt 24): JSON.stringify writes a line break as
+    // a backslash and the letter "n" (a tab as backslash "t", and so on), so
+    // a name typed straight after a line break - "Racing is off.\nMia Kent" -
+    // followed a letter, the whole-word check refused it, and the page was
+    // left open to search engines. Every escape is now read as a space, in
+    // one pass left to right, so an escaped backslash stays one escape.
+    text = typeof value === "string" ? value : (JSON.stringify(value) ?? "").replace(/\\(?:u[0-9a-fA-F]{4}|[\s\S])/g, " ");
   } catch {
     return false;
   }
@@ -139,6 +156,22 @@ export function yearTakenDown(rules: PrivacyRules, year: string): boolean {
 export function resultTakenDown(rules: PrivacyRules, body: unknown): boolean {
   if (rules.unknown || rules.fromYear === 0 || typeof body !== "object" || body === null) {
     return false;
+  }
+
+  // WHY (23 Nov 2026, bug hunt 24): the laptop files a result under its
+  // local 6am-to-6am race night and the index years are taken down by that
+  // year, but this judged a result by the UTC year of its start - so around
+  // New Year a result was kept after its year was unpublished, or refused
+  // while its year was still kept. A result now carries its own "year"
+  // ("2024"); only one from an older laptop, without it, falls back to UTC.
+  const filed = (body as Record<string, unknown>)["year"];
+  const filedYear = typeof filed === "string" && /^\d{4}$/.test(filed)
+    ? Number(filed)
+    : typeof filed === "number" && Number.isInteger(filed) && filed >= 1000 && filed <= 9999 ? filed : NaN;
+
+  if (Number.isFinite(filedYear)) {
+    // A year before 1990 is a session with no real start: unknown, not old.
+    return filedYear >= 1990 && filedYear < rules.fromYear;
   }
 
   const started = (body as Record<string, unknown>)["startedUtc"];

@@ -62,6 +62,7 @@ public partial class MainForm
             _garageOpen = open;
             _garageSent.Clear();
             _garageWaiting.Clear();
+            _garageTooBigSaid.Clear();
             _garageDirty = true;
         }
 
@@ -103,9 +104,29 @@ public partial class MainForm
             if (_relayPublisher.PublishDriverGarage(badge, json))
             {
                 _garageSent[badge] = json;
+                _garageTooBigSaid.Remove(badge);
+            }
+            else if (!RelayPublisher.GarageFits(json) && _garageTooBigSaid.Add(badge))
+            {
+                // WHY (23 Nov 2026, bug hunt 24): the publisher can only say
+                // "a driver's garage" is too big, which the director cannot
+                // act on. Only this window knows whose it is. Once per driver
+                // until it fits again.
+                var who = _garageOwner.TryGetValue(badge, out var name) && !string.IsNullOrWhiteSpace(name)
+                    ? $"{name}'s garage"
+                    : "A driver's garage";
+
+                OnClientRawMessage($"[relay] {who} is too big for their phone's Garage page, so it was not sent. "
+                                   + "Removing a few of their car photos or setup sheets will let it go.");
             }
         }
     }
+
+    /// <summary>Whose garage each badge is, from the last build - for the too-big line.</summary>
+    private readonly Dictionary<string, string> _garageOwner = new(StringComparer.Ordinal);
+
+    /// <summary>Badges whose garage was too big and has been named on the console - said once per driver.</summary>
+    private readonly HashSet<string> _garageTooBigSaid = new(StringComparer.Ordinal);
 
     /// <summary>Every driver with a badge, built; the ones that changed wait to be queued.</summary>
     private void BuildGarages(DateTime now)
@@ -131,6 +152,8 @@ public partial class MainForm
             {
                 continue;
             }
+
+            _garageOwner[badge] = profile.DriverName;
 
             string json;
 

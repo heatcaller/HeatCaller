@@ -366,6 +366,37 @@ internal static class AnnouncerDensity
 
         return $"{number} {(whole == 1 && !half ? "second" : "seconds")}";
     }
+
+    /// <summary>
+    /// How long since the last call, in words, for a line held back
+    /// because that time was shorter than <paramref name="gapSeconds"/>.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the held-line reason put both the
+    /// gap and the time since the last call through <see cref="Gap"/>,
+    /// which rounds to the NEAREST half second. A call 7.8 seconds after
+    /// the last one on an 8 second gap therefore read "leaves 8 seconds
+    /// between calls, and the last one was only 8 seconds before" - a
+    /// reason that contradicts itself - and two calls in the same burst
+    /// read "only no time at all before". This rounds DOWN to the half
+    /// second, says "under half a second" rather than "no time at all",
+    /// and says "just under" the gap if the two would still read the same.
+    /// <see cref="Gap"/> itself is left alone: the Commentary page's
+    /// summary wants the nearest half second.
+    /// </summary>
+    internal static string GapSince(double sinceSeconds, double gapSeconds)
+    {
+        var floored = Math.Floor(Math.Max(0, sinceSeconds) * 2) / 2;
+
+        if (floored <= 0)
+        {
+            return "under half a second";
+        }
+
+        var words = Gap(floored);
+        var gapWords = Gap(gapSeconds);
+
+        return words == gapWords ? "just under " + gapWords : words;
+    }
 }
 
 /// <summary>

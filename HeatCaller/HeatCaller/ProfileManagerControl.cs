@@ -540,6 +540,30 @@ public sealed partial class ProfileManagerControl : UserControl
     /// </summary>
     public void RefreshSetups() => _hubSetups?.ShowDriver(CardProfile()?.Transponder);
 
+    /// <summary>
+    /// Redraws what on the page reads tonight's check-ins - the "N in
+    /// tonight" count under the roster and the card's Tonight tile - for a
+    /// check-in or check-out made somewhere else (a phone, the desk) while
+    /// the page is open.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the page read check-ins only when it
+    /// was opened, so with Driver Hub left up at doors open a driver who
+    /// checked in on their phone stayed "Not in yet" and the count kept the
+    /// old number until the director left the page and came back. Only the
+    /// count and the header, not the whole roster, so the roster keeps its
+    /// scroll and selection under a run of phone taps. MainForm calls it
+    /// after each phone or desk check-in.
+    /// </summary>
+    public void RefreshCheckIns()
+    {
+        if (IsDisposed || !IsHandleCreated)
+        {
+            return;
+        }
+
+        RefreshHeader();
+    }
+
     public void RefreshAll()
     {
         InvalidateStats();
@@ -1279,6 +1303,22 @@ public sealed partial class ProfileManagerControl : UserControl
         return (int)Math.Ceiling(c.Y + CardPad);
     }
 
+    /// <summary>The Championships heading and up to five season lines, or nothing with none.</summary>
+    private void RenderChampionships(CardCursor c, DriverStats stats)
+    {
+        if (stats.Championships.Count == 0)
+        {
+            return;
+        }
+
+        Heading(c, stats.Championships.Count == 1 ? "Championship" : "Championships");
+
+        foreach (var line in stats.Championships.Take(5))
+        {
+            KeyValue(c, line.Season, $"P{line.Position} of {line.FieldSize}  ·  {Plural.Of(line.Points, "point")}");
+        }
+    }
+
     /// <summary>The numbers: headline tiles, podium split, recent form, then the career, bests, championships, rival and badges.</summary>
     private void RenderRecord(CardCursor c, DriverStats stats)
     {
@@ -1289,6 +1329,11 @@ public sealed partial class ProfileManagerControl : UserControl
 
             // A setup can be logged before they have raced.
             RenderActivity(c, stats);
+
+            // WHY (23 Nov 2026, bug hunt 24): a driver with only carried-in
+            // championship points and no saved session never reached the
+            // Championships block below, so the card hid their standing.
+            RenderChampionships(c, stats);
             return;
         }
 
@@ -1452,15 +1497,7 @@ public sealed partial class ProfileManagerControl : UserControl
         }
 
         // --- Championships ---
-        if (stats.Championships.Count > 0)
-        {
-            Heading(c, stats.Championships.Count == 1 ? "Championship" : "Championships");
-
-            foreach (var line in stats.Championships.Take(5))
-            {
-                KeyValue(c, line.Season, $"P{line.Position} of {line.FieldSize}  ·  {Plural.Of(line.Points, "point")}");
-            }
-        }
+        RenderChampionships(c, stats);
 
         // --- Rival ---
         if (stats.Rival is { } rival)

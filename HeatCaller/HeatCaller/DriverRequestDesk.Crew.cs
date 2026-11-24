@@ -99,6 +99,32 @@ internal sealed partial class DriverRequestDesk
     /// <summary>The field a crew request carries, once its voices are filed, when one of them could not be had.</summary>
     internal const string VoiceGoneMark = "voiceGone";
 
+    /// <summary>
+    /// The mark for one role's voice that could not be had ("pVoiceGone",
+    /// "tVoiceGone").
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): there was one mark for both roles, and
+    /// it was only ever set. A newer crew request takes in the older one's
+    /// fields, the mark with them, so a driver who picked a voice that was
+    /// gone and then picked one that works was still told "that voice isn't
+    /// available any more", and so was the desk. Now each role has its own
+    /// mark, and a voice applied for that role takes it off.
+    /// <see cref="VoiceGoneMark"/> is still read, for a request saved before.
+    /// </remarks>
+    internal static string VoiceGoneMarkOf(string voiceField) => voiceField + "Gone";
+
+    /// <summary>Whether a crew request carries a mark for a voice it could not have.</summary>
+    internal static bool VoiceGoneMarked(DriverRequest request) =>
+        request.Text(VoiceGoneMark).Length > 0 || CrewVoiceFields.Any(field => request.Text(VoiceGoneMarkOf(field)).Length > 0);
+
+    /// <summary>
+    /// Why the desk can't approve a crew request's words yet: its voice pick
+    /// is still waiting for the voices to be listed (23 Nov 2026, bug hunt 24).
+    /// </summary>
+    internal const string VoiceStillCheckedRefusal =
+        "Their voice pick can't be checked yet - the voices drivers can pick are still being listed. Try again in a minute.";
+
     /// <summary>Said to the phone for a voice it can no longer have.</summary>
     internal const string CrewVoiceGoneSaid = "That voice isn't available any more - pick another.";
 
@@ -151,7 +177,8 @@ internal sealed partial class DriverRequestDesk
 
         var updated = ProfileStore.Snapshot(profile);
         var applied = 0;
-        var gone = 0;
+        var goneFields = new List<string>();
+        var appliedFields = new List<string>();
 
         foreach (var field in asked)
         {
@@ -164,10 +191,12 @@ internal sealed partial class DriverRequestDesk
 
                 if (pick is null)
                 {
-                    gone++;
+                    goneFields.Add(field);
                     continue;
                 }
             }
+
+            appliedFields.Add(field);
 
             if (field == "pVoice")
             {
@@ -191,10 +220,21 @@ internal sealed partial class DriverRequestDesk
 
         // A VOICE THAT COULD NOT BE HAD, in a request with words still to
         // wait for the desk: marked, so the answer the phone gets when the
-        // desk approves the words says so (15 Nov 2026).
-        if (!_store.DropTexts(request.Id, asked, gone > 0 && CrewTextFields.Any(request.Texts.ContainsKey) ? VoiceGoneMark : null))
+        // desk approves the words says so (15 Nov 2026). Per role since 23
+        // Nov 2026 (bug hunt 24, see VoiceGoneMarkOf): a voice applied now
+        // takes off the mark an older request left for that role.
+        var words = CrewTextFields.Any(request.Texts.ContainsKey);
+        var marks = words ? goneFields.Select(VoiceGoneMarkOf).ToList() : new List<string>();
+        var dropped = asked.Concat(appliedFields.Select(VoiceGoneMarkOf)).ToList();
+
+        if (!_store.DropTexts(request.Id, dropped, marks.FirstOrDefault()))
         {
             return applied;
+        }
+
+        foreach (var mark in marks.Skip(1))
+        {
+            _store.DropTexts(request.Id, Array.Empty<string>(), mark);
         }
 
         // Nothing left for the desk to read: answered here.
@@ -224,7 +264,16 @@ internal sealed partial class DriverRequestDesk
 
             if (CrewVoiceFields.Contains(key))
             {
-                var name = proposed.Length == 0 ? "the club's own" : CrewVoiceOf?.Invoke(proposed)?.Name ?? "a voice no longer offered";
+                // WHY (23 Nov 2026, bug hunt 24): before the voices are
+                // listed a pick is not known, not gone - it said "a voice no
+                // longer offered" for one that may well be. Asked before the
+                // name is looked up: until the listing is in, CrewVoiceOf can
+                // answer from the last engine's list (CrewForPhoneNow gives
+                // what it has), so a name there is not yet one the pick will
+                // get - and FileCrewVoices will not apply it until it is.
+                var name = proposed.Length == 0 ? "the club's own"
+                    : CrewVoicesListed?.Invoke() == false ? "a voice still being checked"
+                    : CrewVoiceOf?.Invoke(proposed)?.Name ?? "a voice no longer offered";
                 lines.Add($"{CrewCaption(key)}: {name} (applies by itself)");
                 continue;
             }
@@ -259,7 +308,7 @@ internal sealed partial class DriverRequestDesk
             }
         }
 
-        if (request.Text(VoiceGoneMark).Length > 0)
+        if (VoiceGoneMarked(request))
         {
             yield return "A voice they picked isn't offered any more - their phone is told when you answer";
         }
@@ -289,7 +338,8 @@ internal sealed partial class DriverRequestDesk
 
     /// <summary>
     /// Applies a crew request's words to the driver's profile - the names
-    /// and notes; the voices have gone already - with an undo, as
+    /// and notes; the voices have gone already, or are filed first (23 Nov
+    /// 2026, bug hunt 24) - with an undo, as
     /// ApplyDetails does. A name that is not a name is refused, and so is any
     /// junior's note from a phone (the relay refuses it too).
     /// </summary>
@@ -319,6 +369,38 @@ internal sealed partial class DriverRequestDesk
         {
             refusal = "A crew request needs the driver's personal PIN, and this one came with the badge code only.";
             return false;
+        }
+
+        // A VOICE PICK STILL ON IT (23 Nov 2026, bug hunt 24): since bug hunt
+        // 21 a pick waits on the request while the engine's voices are not
+        // listed, but this only looked at the words and answered the whole
+        // request Approved - so the pick was never applied, and the phone
+        // was told yes. It is filed first now, as the roster tick would; if
+        // it still can't be checked, the words wait for it too.
+        if (CrewVoiceOf is not null && _settings.DriversPickCrew && CrewVoiceFields.Any(request.Texts.ContainsKey))
+        {
+            FileCrewVoices(request);
+
+            if (_store.Get(request.Id) is not { IsWaiting: true } filed)
+            {
+                // Only voices, and filing them answered it.
+                refusal = "Their voice pick has been answered by itself - there was nothing else in it to approve.";
+                return false;
+            }
+
+            request = filed;
+
+            // The profile as the voices left it, or saving the words would put the old voice back.
+            if (DriverOf(request) is { } refreshed)
+            {
+                profile = refreshed;
+            }
+
+            if (CrewVoiceFields.Any(field => request.Text(field).Trim().Length > 0))
+            {
+                refusal = VoiceStillCheckedRefusal;
+                return false;
+            }
         }
 
         // WHAT IS APPLIED (19 Nov 2026, per-field approve): the fields the
@@ -475,7 +557,7 @@ internal sealed partial class DriverRequestDesk
         // that only some of it went in, or went in reworded (19 Nov 2026),
         // then a goal kept for the next night.
         var partly = CrewTextFields.Any(k => request.Texts.ContainsKey(k) && !texts.ContainsKey(k));
-        var said = request.Text(VoiceGoneMark).Length > 0
+        var said = VoiceGoneMarked(request)
             ? WordsInVoiceGoneSaid
             : partly ? CrewPartlySaid
             : edited ? CrewEditedSaid

@@ -4,6 +4,49 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **Whole-codebase bug hunt (23 November): about 360 fixes.** Every shipped file of HeatCaller and the club relay was read, and each suspected bug was checked again by others before it was fixed. Each fix has a test. The ones a club is most likely to notice:
+  - **Privacy:**
+    - Automatic backups are no longer copied to the cloud unlocked when the backup folder itself is inside OneDrive, Google Drive or iCloud Drive. Without a backup password they are now made on this PC only.
+    - A junior's full name can no longer reach the stream captions, whether split across two captions or said by its announcer spelling.
+    - A junior who goes by initials and shares them with another driver ("M.K. 2") can't be followed by name.
+    - A junior's name straight after a line break still keeps the page out of search engines.
+    - The juniors' privacy rules are sent to the relay again if it loses them.
+    - **Restore Default Settings** no longer switches off the club's junior choices, or wipes the club's own words: the first-night guide, club updates and its own between-race lines.
+    - **Save Support Info** also hides crew, mentor and guardian names.
+    - **Forget this driver** no longer renames other drivers' results on a transponder that changed hands.
+    - The relay now forgets an internet address after ten minutes, as the cookie policy says.
+  - **Timing and results:**
+    - A pass held up on the decoder link is timed by when the car crossed, so two cars no longer swap places and a lap is no longer falsely short.
+    - A credited start lap's dash is no longer counted as a flying lap in best-consecutive qualifying, the badges, the lap window or the phone's lap stats.
+    - The live **Gained** column no longer counts no-shows and ghost cars.
+    - A race reset part-way through no longer shows on phones as finished with a winner.
+  - **Race night:**
+    - A mouse-clicked flag button lets go of the keyboard, so a stray Space or Enter no longer throws the yellow again.
+    - Hold now stops the clock while a race waits for the time drivers were given.
+    - Auto start adds planned breaks and the rest between back-to-back races.
+    - In the docked Inbox, N and A no longer start the race or open the announcer screen.
+    - Editing, moving or deleting a heat that Auto start has put on track is refused.
+    - A closed race day's leftover heats are no longer offered by **Start Next**.
+    - **Edit Result** after the flag no longer opens an earlier race.
+  - **The announcer:**
+    - AI battle calls stop under a red or yellow flag.
+    - A built-in-model line that runs out of time is no longer read out cut off.
+    - On a club's first nights with HeatCaller, long-time drivers are no longer called "first ever" starters or winners.
+    - Two drivers level on points are no longer both told they lead the championship.
+    - A disqualified driver is no longer named class winner, on provisional pole or quickest through a sector.
+  - **The program and the night plan:**
+    - **Get back on time** only offers "Qualifiers 1 min shorter" for heats that can lose a minute, and its saving stays up to date.
+    - Pole Shootout runs follow the club's default race format.
+    - The printed marshal list and the drivers' meeting sheet print at the right size.
+    - Sheets printed after midnight carry the race night's date.
+  - **Phones:**
+    - Home's **Racing tonight?** no longer says alerts are on when only follower alerts are.
+    - A night that ran past midnight is no longer "Today" all of the next day.
+    - With no signal, the footer no longer claims the page was just updated.
+    - Pages that lose a read keep polling instead of freezing.
+
+  Deploy the relay for the phone and privacy fixes, and update HeatCaller on the race PC. Two badges were renamed so no two share a name: fifty clean laps in a row is now **Untouchable**, and twenty-five races is **Seasoned**. Badges already earned are kept.
+
 - **Wrong family link codes, and wrong codes on crew picks, are limited (23 November).** The relay now counts wrong guesses at a family link's code, and at the QR check-in id a crew pick is sent with, the way it counts wrong PINs. Too many in ten minutes closes family links, or crew picks from phones, for the whole club for a while: 10 minutes the first time, longer each time after, up to 12 hours. A family page that has already opened keeps working through it, and so does a driver signed in with their personal PIN picking their crew. A stopped link left open on someone's phone counts once, not every time it checks. **Delete Everything Published** forgets the count. See [Family links and crew picks](admin/security-and-privacy.md#family-links-and-crew-picks). Deploy the relay for it.
 - **One item can be taken down after a copyright notice (23 November).** For whoever runs the relay: four commands find what a notice's address points at, take down one club's logo, sponsor, track picture, achievement artwork, race video, race clip, crew voice sample or garage photo within seconds, and put it back after a counter-notice. The rest of the club is untouched, the club's laptop keeps publishing as normal, and the item stays down when the club publishes again or deletes everything. Each club's uncountered notices over 12 months are counted, and three is flagged for you to decide on; nothing is closed by itself. See [Copyright takedowns](admin/relay-hosting.md#copyright-takedowns). Deploy the relay; nothing changes in HeatCaller.
 - **Phone times on a 12-hour clock read "6:08 PM", not "06:08 PM" (22 November).** A driver's **Up next** card on their phone said "about 6 min (06:08 PM)", and the same leading zero showed on the pages' "Updated" times, on Results and on Garage. A 12-hour clock now drops it; a 24-hour clock still reads "18:08". Nothing changes on the race PC; the relay needs updating.

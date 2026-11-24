@@ -107,7 +107,9 @@ public sealed class CommentaryService
 
         foreach (var transponder in transponders)
         {
-            var driverName = _profiles.Get(transponder)?.DriverName;
+            // Any-thread, as NameFor (23 Nov 2026, bug hunt 24): the Team
+            // Principal's rivalry lines are built on the thread pool.
+            var driverName = _profiles.GetForAnyThread(transponder)?.DriverName;
 
             if (!string.IsNullOrWhiteSpace(driverName))
             {
@@ -261,7 +263,9 @@ public sealed class CommentaryService
             return string.Empty;
         }
 
-        var profile = _profiles.Get(transponder);
+        // Any-thread, as NameFor (23 Nov 2026, bug hunt 24): the principal's
+        // interview asks for these on the thread pool.
+        var profile = _profiles.GetForAnyThread(transponder);
 
         if (profile is null || !DriverCrew.OwnWordsMayBeSaid(profile, StreamIsOn?.Invoke() == true, _settings.JuniorNotesOnStream))
         {
@@ -512,8 +516,10 @@ public sealed class CommentaryService
     /// another driver is a friendly one. Added on top of NeverHisOwnDriver,
     /// not instead of it. Empty for an adult.
     /// </summary>
+    // Any-thread, as NameFor (23 Nov 2026, bug hunt 24): the Team Principal's
+    // interviews ask for this on the thread pool.
     internal string JuniorRule(string? transponder) =>
-        !string.IsNullOrWhiteSpace(transponder) && _profiles.Get(transponder)?.IsJunior == true
+        !string.IsNullOrWhiteSpace(transponder) && _profiles.GetForAnyThread(transponder)?.IsJunior == true
             ? JuniorRuleLead + " - a child. Keep it warm and encouraging: nothing about pressure, disappointment, "
               + "mistakes or who is to blame, and any rivalry is a friendly one. "
             : string.Empty;
@@ -791,6 +797,14 @@ public sealed class CommentaryService
         var wasLocalOnly = FallbackCommentaryBrain.LocalOnly;
         string? written;
 
+        // WHY (23 Nov 2026, bug hunt 24): the tone the line was WRITTEN in,
+        // taken before the model is asked. The old code read Tone only after
+        // the answer came back, so a junior whose car was first timed while
+        // the line was being written switched Tone to Enthusiastic and the
+        // swear check below was skipped: a line written under the
+        // Sailor-mouth prompt went out with every swear in it.
+        var writtenAsSailor = Tone == CommentaryTone.SailorMouth;
+
         try
         {
             if (AboutAJuniorKeptHere(system, user))
@@ -822,20 +836,28 @@ public sealed class CommentaryService
         // The Sailor-mouth dial (15 Nov 2026): told to the model in the
         // prompt, and held to here - see ScreenWords.WithinSwears. A driver's
         // name is not counted (a driver called Dick), and nothing else is spared.
-        if (Tone == CommentaryTone.SailorMouth && !string.IsNullOrWhiteSpace(written))
+        //
+        // WHY (23 Nov 2026, bug hunt 24): checked whenever the line was
+        // written as Sailor-mouth, and held to no swears at all when a junior
+        // has joined the race (or the club has turned Sailor-mouth off) since.
+        if (writtenAsSailor && !string.IsNullOrWhiteSpace(written))
         {
-            var perLine = CommentaryTones.SwearsPerLine(_settings);
+            var stillSailor = Tone == CommentaryTone.SailorMouth;
+            var perLine = stillSailor ? CommentaryTones.SwearsPerLine(_settings) : 0;
             var within = ScreenWords.WithinSwears(written, perLine, DriverNameWords());
+            var why = stillSailor
+                ? $"to keep to the Sailor-mouth dial ({perLine} a line)"
+                : "as a junior joined the race, or Sailor-mouth was turned off, while it was being written";
 
             try
             {
                 if (within is null)
                 {
-                    Log?.Invoke($"Commentary line dropped - more swearing than the Sailor-mouth dial allows ({perLine} a line). Nothing was said.");
+                    Log?.Invoke($"Commentary line dropped - it had more swearing than it could lose {why}. Nothing was said.");
                 }
                 else if (!string.Equals(within, written, StringComparison.Ordinal))
                 {
-                    Log?.Invoke($"Sailor-mouth: took some swearing out of a line to keep to the dial ({perLine} a line).");
+                    Log?.Invoke($"Sailor-mouth: took some swearing out of a line {why}.");
                 }
             }
             catch
@@ -1351,6 +1373,25 @@ public sealed class CommentaryService
             return;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): a recap nobody heard did not say
+        // the winner's thank-you, so it goes back for a later segment - the
+        // Team Principal after the main - to have. The old code kept it spent.
+        (string Line, string Transponder, string Segment)? thanks = null;
+
+        lock (_notesGate)
+        {
+            if (_recapThanks is { } held && string.Equals(held.Line, line, StringComparison.Ordinal))
+            {
+                thanks = held;
+                _recapThanks = null;
+            }
+        }
+
+        if (thanks is { } dropped)
+        {
+            ReleaseNote(dropped.Transponder, CrewNote.Thanks, dropped.Segment);
+        }
+
         if (string.Equals(LastRaceSummary, line, StringComparison.Ordinal))
         {
             LastRaceSummary = null;
@@ -1435,7 +1476,11 @@ public sealed class CommentaryService
         const string noTagsLine =
             " Do not write any square-bracket tags or stage directions - delivery cues are added separately.";
 
-        var character = CommentaryTones.Find(Tone);
+        // WHY (23 Nov 2026, bug hunt 24): through the swear dial, here and in
+        // the recap, system and interview prompts. Find(Tone) alone carried
+        // Sailor-mouth's f-bomb coaching even at dial 0, under a rule saying
+        // "SWEARING: none at all", and the model swore.
+        var character = CommentaryTones.Find(Tone, _settings);
 
         var coaching = Tone switch
         {
@@ -1484,7 +1529,7 @@ public sealed class CommentaryService
         const string noTagsLine =
             " Do not write any square-bracket tags or stage directions - delivery cues are added separately.";
 
-        if (CommentaryTones.Find(Tone) is { } character)
+        if (CommentaryTones.Find(Tone, _settings) is { } character)
         {
             return basePrompt + character.Close +
                    " Never mention being an announcer and never address the drivers directly." +
@@ -1664,7 +1709,7 @@ public sealed class CommentaryService
     private string BuildSystemPrompt(int extraWords = 0, bool shared = false)
     {
         var tone = shared ? CommentaryTones.ForSharedWriting(_settings) : Tone;
-        var character = CommentaryTones.Find(tone);
+        var character = CommentaryTones.Find(tone, _settings);
 
         var toneLine = tone switch
         {
@@ -1841,7 +1886,8 @@ public sealed class CommentaryService
                 continue;
             }
 
-            var name = _profiles.Get(result.Transponder)?.DriverName;
+            // Any-thread, as NameFor (23 Nov 2026, bug hunt 24).
+            var name = _profiles.GetForAnyThread(result.Transponder)?.DriverName;
             if (!string.IsNullOrWhiteSpace(name))
             {
                 positions[name] = result.Position;
@@ -2064,7 +2110,11 @@ public sealed class CommentaryService
                 form?.Rivalries ?? Array.Empty<HeadToHead>(),
                 round.Id,
                 form?.Scope,
-                nightKey: form?.NightKey));
+                nightKey: form?.NightKey,
+                // WHY (23 Nov 2026, bug hunt 24): without the nights on file
+                // the young-history gate in ForIntro never fired, and a club's
+                // first night announced its members as debutants.
+                nightsOnFile: form?.NightsOnFile));
 
         var historyLines = HistoryLines(historyPack);
 
@@ -3146,10 +3196,38 @@ public sealed class CommentaryService
             return text;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): the end of a word a kept name
+        // starts - the 's of "SAM'S", the -POWERED of "SAM-POWERED". The
+        // whole word was left out of the words above with the name, so only
+        // the name was written back and the old code returned "Sam'S". When
+        // the name was shouted and the end is in capitals too, the end comes
+        // down with it. Not when another kept name starts inside that end:
+        // that one is written back as spelled.
+        var tails = new List<(int Start, int End, string Text)>();
+
+        foreach (Match w in ShoutWord.Matches(text))
+        {
+            var wordEnd = w.Index + w.Length;
+
+            foreach (var k in kept.Where(k => w.Index >= k.Start && w.Index < k.End && wordEnd > k.End))
+            {
+                var tail = text.Substring(k.End, wordEnd - k.End);
+
+                if (AllCapitals(text.Substring(k.Start, k.End - k.Start))
+                    && tail.Any(char.IsLetter)
+                    && tail.Where(char.IsLetter).All(char.IsUpper)
+                    && !kept.Any(other => other.Start >= k.End && other.Start < wordEnd))
+                {
+                    tails.Add((k.End, wordEnd, tail.ToLowerInvariant()));
+                }
+            }
+        }
+
         // Written back in order: the words as calmed, the kept names as
         // spelled, everything else as it was.
         var edits = words.Select((w, i) => (Start: w.Index, End: w.Index + w.Length, Text: replaced[i]))
             .Concat(kept.Select(k => (k.Start, k.End, Text: k.Name)))
+            .Concat(tails)
             .OrderBy(e => e.Start)
             .ToList();
 
@@ -3644,25 +3722,39 @@ public sealed class CommentaryService
             $"Championship after this race: {Field(swing.SeasonName)}, {Plural.Of(swing.RoundsCounted, "race")} counted",
         };
 
-        lines.AddRange(swing.Moves.Select(m => "  " + DescribeMove(m)));
+        // WHY (23 Nov 2026, bug hunt 24): level on points is level, whichever
+        // way the tie-break falls. The old lines said "leads the championship"
+        // for every driver on the top total, so a tie gave the model "P1 Bill
+        // - 61 points, leads the championship" and "P2 Sam - 61 points, leads
+        // the championship" one under the other. The leader who did not race
+        // is on the top total too, so they count as one of the level drivers.
+        var leaderAbsent = !swing.Moves.Any(m => m.Position == swing.Leader.Position);
+        var onTopTotal = swing.Moves.Count(m => m.PointsBehindLeader == 0) + (leaderAbsent ? 1 : 0);
+
+        // And level with somebody neither in Moves nor the leader (23 Nov
+        // 2026, bug hunt 24): P1 raced, the driver level with him did not,
+        // and the count above saw one driver on the top total.
+        var levelAtTop = onTopTotal > 1 || swing.LevelAtTop;
+
+        lines.AddRange(swing.Moves.Select(m => "  " + DescribeMove(m, levelAtTop: levelAtTop)));
 
         // The leader is named even when they were not in this race. A
         // result that closes on somebody is only a story if the somebody
         // has a name.
-        if (!swing.Moves.Any(m => m.Position == swing.Leader.Position))
+        if (leaderAbsent)
         {
-            lines.Add($"  Championship leader, who did not race here: {Field(swing.Leader.DriverName)} on {Plural.Of(swing.Leader.TotalPoints, "point")}");
+            lines.Add(onTopTotal > 1
+                ? $"  Level on points at the top with them, who did not race here: {Field(swing.Leader.DriverName)} on {Plural.Of(swing.Leader.TotalPoints, "point")}"
+                : $"  Championship leader, who did not race here: {Field(swing.Leader.DriverName)} on {Plural.Of(swing.Leader.TotalPoints, "point")}");
         }
 
         return lines;
     }
 
     /// <summary>One driver's line in that table, written out rather than tabulated.</summary>
-    private static string DescribeMove(ChampionshipMove move)
+    private static string DescribeMove(ChampionshipMove move, bool levelAtTop)
     {
-        var gap = move.PointsBehindLeader == 0
-            ? "leads the championship"
-            : $"{Plural.Of(move.PointsBehindLeader, "point")} behind the leader";
+        var gap = ChampionshipGapWords(move.Position, move.PointsBehindLeader, levelAtTop);
 
         var movement = move.PreviousPosition == 0
             ? "new to the standings"
@@ -3674,6 +3766,25 @@ public sealed class CommentaryService
 
         return $"P{move.Position} {Field(move.DriverName)} - {Plural.Of(move.TotalPoints, "point")}, {gap}, {movement}"
                + BehindTheTotal(move.DroppedRounds, move.DroppedPoints, move.CarriedIn, move.Dnfs);
+    }
+
+    /// <summary>
+    /// The gap part of a championship line, for the recap and the race intro
+    /// alike (23 Nov 2026, bug hunt 24). "Leads the championship" only for a
+    /// driver alone on the top total; a driver on the top total with somebody
+    /// else on it too - P1 on the tie-break included - is level at the top.
+    /// </summary>
+    /// <param name="levelAtTop">More than one driver is on the top total.</param>
+    internal static string ChampionshipGapWords(int position, int pointsBehindLeader, bool levelAtTop)
+    {
+        if (pointsBehindLeader > 0)
+        {
+            return $"{Plural.Of(pointsBehindLeader, "point")} behind the leader";
+        }
+
+        return levelAtTop || position != 1
+            ? "level on points at the top of the championship"
+            : "leads the championship";
     }
 
     /// <summary>
@@ -3758,6 +3869,15 @@ public sealed class CommentaryService
             $"Championship as it stands BEFORE this race: {season}, {Plural.Of(stake.RoundsCounted, "race")} counted so far",
         };
 
+        // WHY (23 Nov 2026, bug hunt 24): level on points is level - the same
+        // rule and the same reason as ChampionshipLines. The old line said
+        // "leads the championship" for every driver on the top total. The
+        // leader who is not in this race is on the top total too.
+        // A row the reader marked level at the top counts too, as the other
+        // driver on that total may not be on this grid.
+        var onTopTotal = stake.OnThisGrid.Count(r => r.BehindLeader == 0) + (stake.LeaderInThisRace ? 0 : 1)
+                         + (stake.OnThisGrid.Any(r => r.BehindLeader == 0 && r.LevelAtTopBefore) ? 1 : 0);
+
         foreach (var row in stake.OnThisGrid.Take(MostStakes))
         {
             var name = Field(row.Name);
@@ -3767,9 +3887,7 @@ public sealed class CommentaryService
                 continue;
             }
 
-            var gap = row.BehindLeader == 0
-                ? "leads the championship"
-                : $"{Plural.Of(row.BehindLeader, "point")} behind the leader";
+            var gap = ChampionshipGapWords(row.PositionNow, row.BehindLeader, levelAtTop: onTopTotal > 1);
 
             lines.Add($"  P{row.PositionNow} {name}, in this race - {Plural.Of(row.Points, "point")}, {gap}"
                       + BehindTheTotal(row.DroppedRounds, row.DroppedPoints, row.CarriedIn, row.Dnfs));
@@ -3785,7 +3903,9 @@ public sealed class CommentaryService
         // the same reason ChampionshipLines names them for the recap.
         if (!stake.LeaderInThisRace && Field(stake.LeaderName) is { Length: > 0 } leader)
         {
-            lines.Add($"  Championship leader, who is NOT in this race: {leader}");
+            lines.Add(onTopTotal > 1
+                ? $"  Level on points at the top with them, who is NOT in this race: {leader}"
+                : $"  Championship leader, who is NOT in this race: {leader}");
         }
 
         return lines;
@@ -4157,7 +4277,10 @@ public sealed class CommentaryService
                 // "that is his first ever win here" is true of this race
                 // and can honestly be said again about the next one he
                 // wins. See ForRecap.
-                nightKey: history.NightKey));
+                nightKey: history.NightKey,
+                // And the nights on file (23 Nov 2026, bug hunt 24), or every
+                // winner on a club's first night was a "first ever win here".
+                nightsOnFile: history.NightsOnFile));
 
         var historyLines = HistoryLines(historyPack);
 
@@ -4520,15 +4643,74 @@ public sealed class CommentaryService
                 .Append(context?.ShowName ?? string.Empty)
                 .Append(context?.AnnouncerName ?? string.Empty)
                 .Append(resultSponsor)
+                // WHY (23 Nov 2026, bug hunt 24): and the other names the
+                // facts carry - the championship and its drivers, the run of
+                // mains here, the classes of a shared race - the same fix the
+                // round intro got (StakeNames). Left off, a championship the
+                // club typed as "HFCC WINTER SERIES" came back "hfcc winter
+                // series" and the PA read the acronym as a word.
+                .Concat(RecapFactNames(
+                    championship,
+                    mainsLines.Count > 0 ? mains : null,
+                    MixedHeats.ClassWinnersFact(session.Results, PromptName) is null
+                        ? Enumerable.Empty<string?>()
+                        : session.Results.Select(result => result.ClassName)))
                 .ToList());
 
         // The credit goes on BEFORE the recap is recorded, so the recap
         // held as the last race summary - and compared by ForgetRaceSummary
         // - is the one that is spoken, credit and all.
-        return await RecordAndReturn(SummaryKind, resultSponsor.Length > 0
-            ? CreditFirstAsync(writing, () => SponsoredMoments.LeadIn(SponsoredMoment.RaceResult, resultSponsor, TaglineFor(presentedBy)))
-            : writing);
+        //
+        // WHY (23 Nov 2026, bug hunt 24): the winner's thank-you stays this
+        // recap's only when the recap came back and says it - as the intro's
+        // goal does (bug hunt 21). The old code spent it the moment the prompt
+        // was built, so a recap that failed, was refused, or left the note
+        // out used it up for the night and even the Team Principal after the
+        // main could not have it.
+        var recapSegment = "recap:" + session.Id;
+        string? recap;
+
+        try
+        {
+            recap = await RecordAndReturn(SummaryKind, resultSponsor.Length > 0
+                ? CreditFirstAsync(writing, () => SponsoredMoments.LeadIn(SponsoredMoment.RaceResult, resultSponsor, TaglineFor(presentedBy)))
+                : writing);
+        }
+        catch
+        {
+            if (recapNotes.Length > 0)
+            {
+                ReleaseNote(winner.Transponder, CrewNote.Thanks, recapSegment);
+            }
+
+            throw;
+        }
+
+        if (recapNotes.Length > 0)
+        {
+            if (GoalSaid(recap, PromptName(winner.Transponder), _profiles.Get(winner.Transponder)?.CrewThanks ?? string.Empty))
+            {
+                // Said - but a recap dropped unheard hands it back (ForgetRaceSummary).
+                lock (_notesGate)
+                {
+                    _recapThanks = (recap!, winner.Transponder, recapSegment);
+                }
+            }
+            else
+            {
+                ReleaseNote(winner.Transponder, CrewNote.Thanks, recapSegment);
+            }
+        }
+
+        return recap;
     }
+
+    /// <summary>
+    /// The last recap that said a winner's thank-you, with whose it was and
+    /// the segment holding it, so ForgetRaceSummary can hand the note back
+    /// when that recap is dropped unheard (23 Nov 2026, bug hunt 24).
+    /// </summary>
+    private (string Line, string Transponder, string Segment)? _recapThanks;
 
     /// <summary>
     /// A recap with its shouting put back into normal case (3 Nov 2026).
@@ -4545,6 +4727,41 @@ public sealed class CommentaryService
         var written = await writing.ConfigureAwait(false);
 
         return string.IsNullOrWhiteSpace(written) ? written : CalmRecap(written, names);
+    }
+
+    /// <summary>
+    /// The names in a recap's facts that are not the results' own (23 Nov
+    /// 2026, bug hunt 24), spelled as the facts spell them, for CalmRecap to
+    /// keep: the championship, its leader and the drivers in its table; the
+    /// layout, class and holder of a run of mains that is in the facts; the
+    /// classes of a shared race. Only names the facts carry, as a kept name
+    /// is written back as spelled wherever it appears.
+    /// </summary>
+    internal static IEnumerable<string> RecapFactNames(ChampionshipSwing? championship, MainsOnLayout? mainsSaid, IEnumerable<string?> classesSaid)
+    {
+        if (championship is not null)
+        {
+            yield return Field(championship.SeasonName);
+            yield return Field(championship.Leader.DriverName);
+
+            foreach (var move in championship.Moves)
+            {
+                yield return Field(move.DriverName);
+            }
+        }
+
+        if (mainsSaid is not null)
+        {
+            yield return Field(mainsSaid.LayoutName);
+            yield return Field(mainsSaid.ClassName);
+            yield return Field(mainsSaid.HolderName);
+        }
+
+        foreach (var cls in classesSaid)
+        {
+            // ClassWinnersFact writes the class trimmed, not through Field.
+            yield return (cls ?? string.Empty).Trim();
+        }
     }
 
     /// <summary>CalmRecapAsync's body, for the tests.</summary>
@@ -5602,7 +5819,8 @@ public sealed class CommentaryService
         var name = Field(principalName);
         var driver = PromptName(winner.Transponder);
         var car = Field(CarFor(winner));
-        var team = Field(_profiles.Get(winner.Transponder)?.Team);
+        // Any-thread, as NameFor (23 Nov 2026, bug hunt 24): this runs on the thread pool.
+        var team = Field(_profiles.GetForAnyThread(winner.Transponder)?.Team);
 
         if (driver.Length == 0)
         {
@@ -5614,14 +5832,21 @@ public sealed class CommentaryService
         var teammates = team.Length == 0
             ? new List<string>()
             : ordered.Skip(1)
-                .Where(r => string.Equals(Field(_profiles.Get(r.Transponder)?.Team), team, StringComparison.OrdinalIgnoreCase))
-                .Select(r => $"{PromptName(r.Transponder)} (P{r.Position})")
+                .Where(r => string.Equals(Field(_profiles.GetForAnyThread(r.Transponder)?.Team), team, StringComparison.OrdinalIgnoreCase))
+                // WHY (23 Nov 2026, bug hunt 24): a retired, black-flagged
+                // or lapless teammate is said as that, not as a place. The
+                // old line gave them "(P6)", and the principal was asked how
+                // they did - so the show could have a disqualified car
+                // "bringing it home in sixth". See TeammateLine.
+                .Select(r => TeammateLine(PromptName(r.Transponder), r))
                 .Where(line => !line.StartsWith(" ", StringComparison.Ordinal))
                 .Take(4)
                 .ToList();
 
         var rivalry = RivalryOutcomesFor(session)
-            .Where(line => line.Contains(driver, StringComparison.OrdinalIgnoreCase))
+            // WHY (23 Nov 2026, bug hunt 24): the driver's name as a whole word - "Sam"
+            // is not in "Samantha Lee", whose rivalry the old substring test handed over.
+            .Where(line => NamesDriver(line, driver))
             .Take(2)
             .ToList();
 
@@ -5829,12 +6054,20 @@ public sealed class CommentaryService
             return null;
         }
 
+        // WHY (23 Nov 2026, bug hunt 24): this is written ahead on the
+        // thread pool, so the grid is copied once here and every profile is
+        // read with GetForAnyThread (see NameFor). The old code walked the
+        // round's live list several times and read the live profile
+        // dictionary the UI thread edits, which could miss a driver who was
+        // there or throw and lose the written-ahead interview.
+        var assigned = round.AssignedTransponders.ToList();
+
         // Sailor-mouth plays clean around a junior (15 Nov 2026, children's privacy plan 4.1).
-        MarkJuniors(round.AssignedTransponders);
+        MarkJuniors(assigned);
 
         var name = Field(principalName);
         var driver = PromptName(focus);
-        var profile = _profiles.Get(focus);
+        var profile = _profiles.GetForAnyThread(focus);
         var car = Field(profile?.CarModel);
         var team = Field(profile?.Team);
 
@@ -5843,7 +6076,7 @@ public sealed class CommentaryService
             return null;
         }
 
-        var onTrack = IntroGrid(round.AssignedTransponders);
+        var onTrack = IntroGrid(assigned);
 
         var grid = onTrack
             .Select(PromptName)
@@ -5851,19 +6084,21 @@ public sealed class CommentaryService
             .ToList();
 
         // The size of the whole field, which is not the number named - see FieldSize.
-        var fieldSize = FieldSize(round.AssignedTransponders);
+        var fieldSize = FieldSize(assigned);
 
         var teammates = team.Length == 0
             ? new List<string>()
             : onTrack
                 .Where(t => !string.Equals(t, focus, StringComparison.OrdinalIgnoreCase)
-                            && string.Equals(Field(_profiles.Get(t)?.Team), team, StringComparison.OrdinalIgnoreCase))
+                            && string.Equals(Field(_profiles.GetForAnyThread(t)?.Team), team, StringComparison.OrdinalIgnoreCase))
                 .Select(PromptName)
                 .Where(n => n.Length > 0)
                 .ToList();
 
         var rivalries = RivalryLinesFor(onTrack)
-            .Where(line => line.Contains(driver, StringComparison.OrdinalIgnoreCase))
+            // WHY (23 Nov 2026, bug hunt 24): the driver's name as a whole word - "Sam"
+            // is not in "Samantha Lee", whose rivalry the old substring test handed over.
+            .Where(line => NamesDriver(line, driver))
             .Take(2)
             .ToList();
 
@@ -6052,7 +6287,7 @@ public sealed class CommentaryService
 
     private string BuildInterviewSystemPrompt()
     {
-        var character = CommentaryTones.Find(Tone);
+        var character = CommentaryTones.Find(Tone, _settings);
 
         var hostTone = Tone switch
         {
@@ -7066,6 +7301,34 @@ public sealed class CommentaryService
     // CarFor, which had no summary of its own.
 
     /// <summary>
+    /// Whether a fact line names this driver as a whole word, in any case (23
+    /// Nov 2026, bug hunt 24) - for the Team Principal's rivalry lines, where
+    /// "Sam" must not pick up "Samantha Lee"'s rivalry.
+    /// </summary>
+    internal static bool NamesDriver(string line, string driver)
+    {
+        var name = (driver ?? string.Empty).Trim();
+
+        return name.Length > 0
+               && Regex.IsMatch(line ?? string.Empty, $@"(?<![\p{{L}}\p{{N}}]){Regex.Escape(name)}(?![\p{{L}}\p{{N}}])",
+                   RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    /// <summary>
+    /// A teammate in the Team Principal's facts (23 Nov 2026, bug hunt 24):
+    /// "Bob (P2)" for a classified finisher, otherwise what happened in the
+    /// words the recap's result lines use - "Bob (disqualified)", "Bob (did
+    /// not finish)" - with no place, as a car out of the race keeps one on
+    /// the record that is not a result.
+    /// </summary>
+    internal static string TeammateLine(string name, SessionResultEntry entry) =>
+        Classified(entry)
+            ? $"{name} (P{entry.Position})"
+            : ResultEditor.NormaliseOutcome(entry.Outcome) == ResultEditor.Dq
+                ? $"{name} (disqualified)"
+                : $"{name} (did not finish)";
+
+    /// <summary>
     /// Whether a result row is a classified finisher - laps on the board, and
     /// neither a DNF nor a DQ. The rule the recap's placings go by.
     /// </summary>
@@ -7325,13 +7588,23 @@ public sealed class CommentaryService
             return result.CarModel.Trim();
         }
 
-        var profile = _profiles.Get(result.Transponder);
+        // Any-thread, as NameFor (23 Nov 2026, bug hunt 24).
+        var profile = _profiles.GetForAnyThread(result.Transponder);
         return string.IsNullOrWhiteSpace(profile?.CarModel) ? string.Empty : profile!.CarModel.Trim();
     }
 
     private string NameFor(string transponder)
     {
-        var profile = _profiles.Get(transponder);
+        // WHY (23 Nov 2026, bug hunt 24): GetForAnyThread, not Get. The Team
+        // Principal's interviews are written on the thread pool (written
+        // ahead after a result is filed, and after the race), and every name
+        // in them comes through here. Get reads the live dictionary the UI
+        // thread edits when a walk-up or a new driver is saved; a read in the
+        // middle of that can miss a driver who is there - the interview then
+        // named them "Unnamed driver" and lost their team - or throw, and the
+        // written-ahead interview was lost. GetForAnyThread gives the same
+        // answer from the index every change rebuilds.
+        var profile = _profiles.GetForAnyThread(transponder);
 
         // SpokenName so the recap matches the announcements - it honours
         // the announcer-specific name, which this was ignoring.

@@ -91,6 +91,13 @@ internal sealed partial class DeskInboxForm : Form
 
     /// <summary>The caption above each group of rows in the list, by the row it is drawn over.</summary>
     private readonly Dictionary<int, (string Text, bool Blocking)> _groupCaptions = new();
+
+    /// <summary>The race the "Holding up" caption last named - see RefreshAll.</summary>
+    private string _captionRace = string.Empty;
+
+    /// <summary>The group captions as drawn, by row. For the tests.</summary>
+    internal IReadOnlyDictionary<int, (string Text, bool Blocking)> GroupCaptions => _groupCaptions;
+
     private readonly Button _btnApprove = new() { Text = "Approve..." };
     private readonly Button _btnNoted = new() { Text = "Noted" };
     private readonly Button _btnDecline = new() { Text = "Decline..." };
@@ -679,13 +686,25 @@ internal sealed partial class DeskInboxForm : Form
         FillVoteCard();
 
         var shown = _filter == InboxFilter.Vote ? _items : DeskInbox.Filter(_items, _filter);
-        var signature = string.Join("|", shown.Select(i => i.Key + ":" + (snoozed.Contains(i.Key) ? "z" : "") + i.What + i.Note));
+        // WHY (23 Nov 2026, bug hunt 24): race-blocking is part of it too, so the
+        // caption-only redo below always sees the same groups as the drawn rows.
+        var signature = string.Join("|", shown.Select(i => i.Key + ":" + (snoozed.Contains(i.Key) ? "z" : "") + (i.RaceBlocking ? "b" : "") + i.What + i.Note));
 
         if (force || signature != _drawn)
         {
             _drawn = signature;
             DrawRows(shown, snoozed);
             FillDone();
+        }
+        else if ((_voteTarget?.Invoke()?.RaceName ?? string.Empty) != _captionRace)
+        {
+            // WHY (23 Nov 2026, bug hunt 24): the "Holding up <race>" caption follows
+            // Race Control to the next race. The rows are redrawn only when the items
+            // change, and the race is not part of that, so a late or skip request left
+            // waiting kept naming a race that had already run. Only the captions are
+            // redone here, so the picked rows and a half-typed reply stay as they are.
+            CaptionGroups(shown, snoozed);
+            _grid.Invalidate();
         }
 
         // The waited column in place, every second.
@@ -857,22 +876,24 @@ internal sealed partial class DeskInboxForm : Form
         // Back onto the rows that were picked, through the current cell -
         // a DataGridView's CurrentRow follows its current cell, and clearing
         // the rows puts that on the first row (12 Oct 2026, club notes).
+        // WHY (23 Nov 2026, bug hunt 24): the current cell first, then the picks.
+        // Moving the current cell clears every other picked row, and this used to
+        // be one top-to-bottom pass, so when the current row was a lower one (as a
+        // downward Ctrl+click or Shift+click leaves it) the rows picked above it
+        // were dropped - "Approve all 3" went back to "Approve" for one driver.
         var column = _grid.Columns.Cast<DataGridViewColumn>().FirstOrDefault(c => c.Visible);
+
+        if (column is not null
+            && _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Tag is InboxItem i && i.Key == current) is { } currentRow)
+        {
+            _grid.CurrentCell = currentRow.Cells[column.Index];
+        }
+
         _grid.ClearSelection();
 
         foreach (DataGridViewRow row in _grid.Rows)
         {
-            if (row.Tag is not InboxItem item)
-            {
-                continue;
-            }
-
-            if (item.Key == current && column is not null)
-            {
-                _grid.CurrentCell = row.Cells[column.Index];
-            }
-
-            if (selected.Contains(item.Key))
+            if (row.Tag is InboxItem item && selected.Contains(item.Key))
             {
                 row.Selected = true;
             }
@@ -909,6 +930,7 @@ internal sealed partial class DeskInboxForm : Form
 
         var counts = shown.GroupBy(GroupOf).ToDictionary(g => g.Key, g => g.Count());
         var race = _voteTarget?.Invoke()?.RaceName;
+        _captionRace = race ?? string.Empty;
         RowGroup? last = null;
         var room = CaptionRoom;
 
@@ -1728,6 +1750,15 @@ internal sealed partial class DeskInboxForm : Form
                     return true;
                 case Keys.Delete when _btnRemove.Visible && _btnRemove.Enabled:
                     _btnRemove.PerformClick();
+                    return true;
+
+                // WHY (23 Nov 2026, bug hunt 24, F163): an answer key whose
+                // button was greyed out (nothing picked, or the answer not
+                // open to it) fell through to whatever hosts the inbox - in
+                // Race Control that is the race's own keys. The inbox owns
+                // its answer keys wherever it is, as the Done list already
+                // did, so a press that cannot answer does nothing at all.
+                case Keys.A or Keys.N or Keys.D or Keys.S or Keys.Delete when (keyData & Keys.Shift) == 0:
                     return true;
                 case Keys.V when _vote is not null:
                     ShowVotePopover();

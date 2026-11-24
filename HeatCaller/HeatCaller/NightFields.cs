@@ -614,6 +614,40 @@ internal sealed class NightFields
         }
     }
 
+    /// <summary>
+    /// A drop-down that saves the moment it changes takes no turn of the
+    /// wheel; the turn goes to the scrolling page round it instead, so the
+    /// page carries on scrolling under the pointer - the same rule as
+    /// Setup's club rules boxes (bug hunt 24). An open list still scrolls
+    /// itself.
+    /// </summary>
+    private static void RefuseWheel(ComboBox box)
+    {
+        box.MouseWheel += (_, e) =>
+        {
+            if (e is not HandledMouseEventArgs { Handled: false } handled || box.DroppedDown)
+            {
+                return;
+            }
+
+            handled.Handled = true;
+
+            if (e.Delta != 0 && WheelPassThrough.ScrollingPage(box) is { } page)
+            {
+                var screen = box.PointToScreen(e.Location);
+                var wParam = (IntPtr)(e.Delta << 16);
+                var lParam = (IntPtr)((screen.Y << 16) | (screen.X & 0xFFFF));
+
+                SendWheel(page.Handle, WM_MOUSEWHEEL, wParam, lParam);
+            }
+        };
+    }
+
+    private const int WM_MOUSEWHEEL = 0x020A;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SendMessageW")]
+    private static extern IntPtr SendWheel(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
     private void Wire()
     {
         void Change()
@@ -671,6 +705,16 @@ internal sealed class NightFields
         foreach (var combo in new[] { Championship, FirstRound, GapPreset })
         {
             combo.SelectedIndexChanged += (_, _) => Change();
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): these drop-downs save the moment
+        // they change, and a turn of the wheel over one while scrolling
+        // Setup's Tonight tab stepped it - switching the kind of night, the
+        // championship, the seeding or the between-race talk and saving it
+        // onto the night, with nobody having picked anything.
+        foreach (var combo in new[] { Shape, Championship, FirstRound, GapPreset })
+        {
+            RefuseWheel(combo);
         }
 
         CheckedInOnly.CheckedChanged += (_, _) => Change();

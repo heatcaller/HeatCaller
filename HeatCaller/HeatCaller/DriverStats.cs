@@ -26,6 +26,12 @@ public sealed class DriverStatsSources
 
     /// <summary>The track layouts, for the lap records a driver holds.</summary>
     public TrackLayoutStore? TrackLayouts { get; init; }
+
+    /// <summary>
+    /// The garage, for which setups are a driver's: one linked to their car
+    /// is theirs whatever name it was typed under (23 Nov 2026, bug hunt 24).
+    /// </summary>
+    public CarStore? Cars { get; init; }
 }
 
 /// <summary>
@@ -65,6 +71,9 @@ public sealed class DriverStatsSnapshot
 
     /// <summary>The setup sheets by id, copied out of the store for the field names.</summary>
     public IReadOnlyDictionary<string, ChassisTemplate> SetupSheets { get; init; } = new Dictionary<string, ChassisTemplate>();
+
+    /// <summary>Each car in the garage as its id and its owner's transponder, copied as values - which setups are a driver's (bug hunt 24).</summary>
+    public IReadOnlyList<(string CarId, string Owner)> CarOwners { get; init; } = Array.Empty<(string, string)>();
 
     /// <summary>Each layout's lap record as it stands - layout, lap, who it was announced for, when - copied from the live store.</summary>
     public IReadOnlyList<(string Layout, long LapMs, string Holder, DateTime? SetUtc)> TrackRecords { get; init; } =
@@ -163,6 +172,12 @@ public sealed class DriverStatsSnapshot
             // sums may be reading these on another thread.
             Setups = (sources.SetupLog?.All ?? Array.Empty<SetupEntry>()).Select(SetupLogStore.CopyOf).ToList(),
             SetupSheets = sheets,
+
+            // Copied as values, like the setups: the sums may run on
+            // another thread while a car is lent or passed on.
+            CarOwners = (sources.Cars?.All ?? Array.Empty<Car>())
+                .Select(c => (c.Id ?? string.Empty, c.OwnerTransponder ?? string.Empty))
+                .ToList(),
 
             // Copied as values: the sums may run on another thread, and a
             // race finishing meanwhile writes a new record into the layout.
@@ -614,7 +629,7 @@ public sealed class DriverStats
             stats._activity.Add(new ActivityLine(session.StartedAtUtc, ActivityKind.Race, $"{RaceName(session, row, snapshot)}  ·  {outcome}"));
         }
 
-        stats._activity.AddRange(SetupActivity(query.DriverName, snapshot));
+        stats._activity.AddRange(SetupActivity(query.DriverName, CarIdsOf(query.Transponders, snapshot.CarOwners), snapshot));
         stats.RecentActivity = stats.MergeActivity(Array.Empty<ActivityLine>());
 
         // A saved race records its round, and the round its class - the
@@ -634,11 +649,26 @@ public sealed class DriverStats
         // --- Championships ---
         var standings = new List<ChampionshipLine>();
 
+        // WHY (23 Nov 2026, bug hunt 24): a table row was matched only
+        // against the names on their saved results, so a driver in the
+        // table on carried-in points alone - typed under their profile name
+        // by a club that moved to HeatCaller mid-season - got no
+        // championship line until a saved race carried that name. The
+        // profile's own name counts too, as it already does for sector
+        // records below.
+        var championshipNames = new HashSet<string>(namesInResults, StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(query.DriverName))
+        {
+            championshipNames.Add(query.DriverName.Trim());
+        }
+
         foreach (var (season, table) in snapshot.Championships)
         {
             for (var i = 0; i < table.Count; i++)
             {
-                if (!namesInResults.Contains(table[i].DriverName ?? string.Empty))
+                if (!championshipNames.Contains(table[i].DriverName ?? string.Empty)
+                    && !championshipNames.Contains((table[i].DriverName ?? string.Empty).Trim()))
                 {
                     continue;
                 }
@@ -824,9 +854,14 @@ public sealed class DriverStats
     /// what it changed from the one before it on the same car - the Garage's
     /// "Changed Since Last", in a line.
     /// </summary>
-    private static IEnumerable<ActivityLine> SetupActivity(string driverName, DriverStatsSnapshot snapshot)
+    private static IEnumerable<ActivityLine> SetupActivity(string driverName, IReadOnlySet<string> carIds, DriverStatsSnapshot snapshot)
     {
-        if (string.IsNullOrWhiteSpace(driverName))
+        // WHY (23 Nov 2026, bug hunt 24): this listed only setups carrying
+        // the profile's name, and gave up at once for a driver with no name,
+        // while the Setups tab beside the card also shows those linked to
+        // their cars. A setup typed under another name, or logged before a
+        // rename, was missing from the card. Now the same rule as the tab.
+        if (string.IsNullOrWhiteSpace(driverName) && carIds.Count == 0)
         {
             yield break;
         }
@@ -835,8 +870,7 @@ public sealed class DriverStats
             id is not null && snapshot.SetupSheets.TryGetValue(id, out var sheet) ? sheet : null;
 
         var theirs = snapshot.Setups
-            .Where(e => e.RecordedAtUtc != default
-                        && string.Equals((e.DriverName ?? string.Empty).Trim(), driverName, StringComparison.OrdinalIgnoreCase))
+            .Where(e => e.RecordedAtUtc != default && IsDriversSetup(e, driverName, carIds))
             .OrderByDescending(e => e.RecordedAtUtc)
             .Take(ActivityLookBack);
 
@@ -910,14 +944,59 @@ public sealed class DriverStats
         // for its undo, not for counting (CheckInStore.EventsAttended).
         var eventsAttended = sources.CheckIns?.EventsAttended(transponder, sources.Events is null ? null : id => sources.Events.Get(id) is not null) ?? 0;
 
-        // The setup log files entries by driver name.
+        // WHY (23 Nov 2026, bug hunt 24): this counted only setups filed
+        // under the profile's name, while the Setups tab beside the card
+        // also counts those linked to the driver's cars - so a renamed
+        // driver, or one whose setup was typed under another name, read
+        // "Setup sheets logged: 0" beside a tab listing five. Same rule as
+        // the tab now (IsDriversSetup).
         var name = profile.DriverName?.Trim() ?? string.Empty;
 
-        var setupSheets = name.Length == 0 || sources.SetupLog is null
-            ? 0
-            : sources.SetupLog.All.Count(e => string.Equals(e.DriverName?.Trim(), name, StringComparison.OrdinalIgnoreCase));
+        var carIds = sources.Cars is null
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : sources.Cars.OwnedBy(profile).Select(c => c.Id).ToHashSet(StringComparer.Ordinal);
+
+        var setupSheets = sources.SetupLog is null ? 0 : CountDriversSetups(sources.SetupLog.All, name, carIds);
 
         return new RaceDayLine(checkedIn, tech, techFailed, handicap, eventsAttended, setupSheets);
+    }
+
+    /// <summary>
+    /// Whether a logged setup is this driver's - the Setups tab's rule
+    /// (DriverSetupsPanel): linked to one of their cars, or carrying their
+    /// name (one logged before setups were linked to cars, or on a car they
+    /// have since passed on, which takes its setups with it).
+    /// </summary>
+    public static bool IsDriversSetup(SetupEntry entry, string? driverName, IReadOnlySet<string> carIds)
+    {
+        if (!string.IsNullOrEmpty(entry.CarId) && carIds.Contains(entry.CarId))
+        {
+            return true;
+        }
+
+        var name = driverName?.Trim() ?? string.Empty;
+
+        return name.Length > 0 && string.Equals(entry.DriverName?.Trim(), name, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>How many of these setups are the driver's - see <see cref="IsDriversSetup"/>.</summary>
+    public static int CountDriversSetups(IEnumerable<SetupEntry> setups, string? driverName, IReadOnlySet<string> carIds) =>
+        setups.Count(e => IsDriversSetup(e, driverName, carIds));
+
+    /// <summary>The ids of the cars owned under any of these transponders, from the snapshot's copy of the garage.</summary>
+    internal static IReadOnlySet<string> CarIdsOf(IReadOnlySet<string> transponders, IReadOnlyList<(string CarId, string Owner)> carOwners)
+    {
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var (carId, owner) in carOwners)
+        {
+            if (!string.IsNullOrEmpty(carId) && !string.IsNullOrWhiteSpace(owner) && transponders.Contains(owner.Trim()))
+            {
+                ids.Add(carId);
+            }
+        }
+
+        return ids;
     }
 
     /// <summary>

@@ -132,6 +132,17 @@ internal sealed class PublicPrivacy
             if (entry.Initials && Initials(entry.Name) is { Length: > 0 } initials)
             {
                 juniorForms.Add(initials);
+
+                // WHY (23 Nov 2026, bug hunt 24): two initials-only drivers
+                // with the same initials go online as "M.K." and "M.K. 2"
+                // (RelayPublisher.KeepInitialsApart). Only the bare "M.K."
+                // was listed, so the relay - which matches names exactly -
+                // let anybody follow the second one, a child, by name and
+                // get their race alerts. The numbered forms are listed too.
+                foreach (var form in NumberedInitials(initials))
+                {
+                    juniorForms.Add(form);
+                }
             }
         }
 
@@ -497,7 +508,14 @@ internal sealed class PublicPrivacy
                 continue;
             }
 
-            if (!chosen.TryGetValue(key, out var have) || (!InitialsForTransponder(have) && InitialsForTransponder(id)))
+            // WHY (23 Nov 2026, bug hunt 24, F276): only an initials-only
+            // transponder used to win over the one already held. Where a
+            // junior's name sits on rows under two transponders (their own,
+            // and a spare now an adult's), whichever came first was kept, so
+            // the standings and the tracks page could take the adult's and
+            // publish the junior's full name. Ranked now: initials-only,
+            // then junior, then anyone - still erring private.
+            if (!chosen.TryGetValue(key, out var have) || PrivateRank(id) > PrivateRank(have))
             {
                 chosen[key] = id;
             }
@@ -506,6 +524,35 @@ internal sealed class PublicPrivacy
         return names
             .Select(n => chosen.TryGetValue((n ?? string.Empty).Trim(), out var id) ? id : null)
             .ToList();
+    }
+
+    /// <summary>How private a transponder's driver is to be kept, for TransponderForEach: 2 initials-only, 1 junior, 0 anyone else.</summary>
+    private int PrivateRank(string? transponder) =>
+        InitialsForTransponder(transponder) ? 2 : JuniorForTransponder(transponder) ? 1 : 0;
+
+    /// <summary>
+    /// True when the driver registered on <paramref name="transponder"/>
+    /// goes by <paramref name="name"/> - their driver name or announcer name,
+    /// single-spaced, in any case. False when nobody is registered on it.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24, F276): a saved row keeps the name it
+    /// was filed under, and a transponder can since have gone to someone
+    /// else. Whether that row is the transponder's present driver needs
+    /// their own names, which only this register holds - so a junior's old
+    /// rows on a transponder now an adult's can be told from the adult's own.
+    /// </summary>
+    internal bool GoesBy(string? transponder, string? name)
+    {
+        if (Find(transponder) is not { } entry)
+        {
+            return false;
+        }
+
+        var said = SingleSpaced(name);
+
+        return said.Length > 0
+            && (string.Equals(said, SingleSpaced(entry.Name), StringComparison.OrdinalIgnoreCase)
+                || string.Equals(said, SingleSpaced(entry.AnnouncerName), StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -575,6 +622,22 @@ internal sealed class PublicPrivacy
 
         return Enumerable.Range(1, last.Length).Select(take => head + " " + last[..take]).ToList();
     }
+
+    /// <summary>
+    /// The most a set of matching initials is numbered up to in
+    /// <see cref="NumberedInitials"/>: "M.K. 2" to "M.K. 20". It takes that
+    /// many initials-only drivers sharing one set of initials to go past it.
+    /// </summary>
+    internal const int MostInitialsNumber = 20;
+
+    /// <summary>
+    /// "M.K. 2" ... "M.K. 20": how RelayPublisher.KeepInitialsApart shows
+    /// the second and later initials-only drivers who share initials (23 Nov
+    /// 2026, bug hunt 24), so a junior's numbered form is in
+    /// <see cref="JuniorPublicNames"/> as well.
+    /// </summary>
+    internal static IReadOnlyList<string> NumberedInitials(string initials) =>
+        Enumerable.Range(2, MostInitialsNumber - 1).Select(number => $"{initials} {number}").ToList();
 
     /// <summary>True when the register holds a driver with this transponder (main or extra), flagged or not.</summary>
     public bool Knows(string? transponder) => Find(transponder) is not null;

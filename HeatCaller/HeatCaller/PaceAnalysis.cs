@@ -136,13 +136,19 @@ public static class PaceAnalysis
         }
 
         var best = laps.Min();
-        var average = (long)laps.Average();
+        // WHY (23 Nov 2026, bug hunt 24): the mean was cast to a whole
+        // millisecond, which cuts it down, while the phone's results page
+        // rounds the same mean - so laps of 5.123 and 5.124 read 5.123 here
+        // and 5.124 on the phone. Rounded now, halves away from zero to
+        // match the phone. The spread below still uses the exact mean.
+        var mean = laps.Average();
+        var average = MeanMs(laps);
         var median = Median(laps);
 
         // Population rather than sample standard deviation: these are all
         // the laps the driver ran, not a sample drawn from some larger set
         // of laps they might have run.
-        var variance = laps.Select(l => (l - (double)average) * (l - (double)average)).Average();
+        var variance = laps.Select(l => (l - mean) * (l - mean)).Average();
         var consistency = average > 0 ? Math.Sqrt(variance) / average * 100.0 : 0;
 
         return new Row(
@@ -256,8 +262,18 @@ public static class PaceAnalysis
             return 0;
         }
 
-        return (long)laps.OrderBy(l => l).Take(window).Average();
+        // WHY (23 Nov 2026, bug hunt 24): rounded, not cut down, so it reads
+        // the same as the phone's "Avg. top" figure (see MeanMs).
+        return MeanMs(laps.OrderBy(l => l).Take(window));
     }
+
+    /// <summary>
+    /// A mean lap to the nearest millisecond, halves rounded up - the same
+    /// rule as the phone's results page, so the two never differ by a
+    /// thousandth.
+    /// </summary>
+    internal static long MeanMs(IEnumerable<long> laps) =>
+        (long)Math.Round(laps.Average(), MidpointRounding.AwayFromZero);
 
     /// <summary>
     /// How much slower the last third was than the first.

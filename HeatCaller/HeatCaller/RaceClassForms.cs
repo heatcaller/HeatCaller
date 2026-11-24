@@ -338,7 +338,11 @@ public sealed class RaceClassEditForm : Form
                 Result.QualifierFormat,
                 $"Qualifier Format - {(string.IsNullOrWhiteSpace(_txtName.Text) ? "this class" : _txtName.Text)}",
                 allowUseDefault: true,
-                fallback: Result.Format ?? _store?.AppDefaultFormat?.Invoke());
+                fallback: QualifierFallback(
+                    lengthRowsLive: _length is not null && !_formatSetElsewhere,
+                    typedFormat: _length?.Format(),
+                    classFormat: Result.Format,
+                    appDefault: _store?.AppDefaultFormat?.Invoke()));
 
             if (form.ShowDialog(this) == DialogResult.OK)
             {
@@ -684,6 +688,21 @@ public sealed class RaceClassEditForm : Form
             Result.Format = _length.Format();
         }
     }
+
+    /// <summary>
+    /// What Qualifier Format... says the qualifiers follow, and starts its
+    /// fields from when custom is ticked: the class's race format, else the
+    /// app default. For a new class whose Race length / When time's up rows
+    /// are still live, the class's race format is the one typed there.
+    /// </summary>
+    // WHY (23 Nov 2026, bug hunt 24): the button used to pass the format the
+    // new class was made with (the suggested 5 minutes and finish rule), not
+    // the length just typed, because only Format, a preset and Save seed the
+    // format from the rows. So a director who typed 8 minutes was told the
+    // qualifiers followed a 5 minute race, and ticking custom filled the
+    // fields from it.
+    internal static RaceFormat? QualifierFallback(bool lengthRowsLive, RaceFormat? typedFormat, RaceFormat? classFormat, RaceFormat? appDefault) =>
+        (lengthRowsLive ? typedFormat : classFormat) ?? appDefault;
 
     /// <summary>Format or a preset has set the new class's format: that wins, and the rows say so.</summary>
     private void FormatSetElsewhere()

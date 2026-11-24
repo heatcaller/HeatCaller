@@ -312,7 +312,10 @@ public sealed class EventsControl : UserControl
                 : isActive ? AppTheme.Success
                 : colours[nextColour++ % colours.Count];
 
-            var startedOn = raceEvent.StartedUtc.ToLocalTime().Date;
+            // WHY (23 Nov 2026, bug hunt 24): the night it was started on, 6am to 6am like
+            // its raced nights. The calendar date put a day started at 00:10 on the next
+            // date, then its dot jumped back a day once its first race was recorded.
+            var startedOn = NightStartedOn(raceEvent.StartedUtc.ToLocalTime());
 
             if (!raceEvent.IsLegacy)
             {
@@ -409,7 +412,7 @@ public sealed class EventsControl : UserControl
 
         _night ??= Selected() is { } picked && _dayMarks.TryGetValue(picked.Id, out var own)
             ? (own.Nights.Count > 0 ? own.Nights[^1] : own.StartedOn)
-            : marks.Count > 0 ? marks.Keys.Max() : DateTime.Today;
+            : marks.Count > 0 ? marks.Keys.Max() : TonightAtTheTrack.NightOf(DateTime.Now);
 
         _calendar.SetMarkedNights(marks, _night);
         ShowNightText();
@@ -487,6 +490,13 @@ public sealed class EventsControl : UserControl
             .GroupBy(x => x.Night)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<RaceCalendar.NightMark>)g.Select(x => x.Mark).ToList());
 
+    /// <summary>Whether a calendar night is tonight's race night - before 6am it is still yesterday's.</summary>
+    internal static bool IsTonight(DateTime night, DateTime nowLocal) =>
+        night.Date == TonightAtTheTrack.NightOf(nowLocal);
+
+    /// <summary>The race night (6am to 6am) a race day started at this local time belongs to.</summary>
+    internal static DateTime NightStartedOn(DateTime startedLocal) => TonightAtTheTrack.NightOf(startedLocal);
+
     /// <summary>Under the calendar: the night, then each race day on it and which of its nights this was.</summary>
     private void ShowNightText()
     {
@@ -498,7 +508,11 @@ public sealed class EventsControl : UserControl
             return;
         }
 
-        var tonight = night == DateTime.Today;
+        // WHY (23 Nov 2026, bug hunt 24): tonight is the race night, 6am to 6am, the same
+        // rule the calendar's nights come from. The old test used the calendar date, so
+        // after midnight the night still racing lost "Tonight" and the next date said
+        // "Nothing on tonight yet." and offered New Race Day.
+        var tonight = IsTonight(night, DateTime.Now);
         _lblNight.Text = (tonight ? "Tonight, " : string.Empty) + night.ToString("dddd d MMMM", CultureInfo.CurrentCulture);
 
         var lines = _events.All

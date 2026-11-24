@@ -161,7 +161,11 @@ public sealed partial class RaceProgramControl
                     _events?.RemoveRound(run.Id);
                 }
 
-                var built = PoleShootout.BuildRuns(className, field, PoleShootout.TimedLapsFor(raceClass), raceClass.Format, DayTrack());
+                // WHY (23 Nov 2026, bug hunt 24): with the app default, as the
+                // first build has it - a class following the app default has
+                // a null Format, and a rebuild raced under the built-in 3 s
+                // min lap and automatic start instead of the club's default.
+                var built = PoleShootout.BuildRuns(className, field, PoleShootout.TimedLapsFor(raceClass), raceClass.Format, DayTrack(), RaceFormat.FromSettings(_settings));
 
                 foreach (var run in built)
                 {

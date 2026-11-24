@@ -97,7 +97,7 @@ import { BROADCAST_TTL_SECONDS, FOLLOW_CHANNEL, followIdOf, followNameFrom, myNi
 import { PAGES_BUILD } from "./pagebuild.js";
 import { isJuniorName, NO_PRIVACY_RULES, namesAJunior, PRIVACY_CHANNEL, privacyNameKey, privacyRulesFrom, resultTakenDown, ROBOTS_TXT, UNKNOWN_PRIVACY_RULES, yearTakenDown, type PrivacyRules } from "./privacy.js";
 import { NIGHTS_FEED, nextNightIcs, nightsFeedWith, nightsIcs } from "./ics.js";
-import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, streamFrom, streamNightId, VIDEO_CHECK_FOR_MS, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
+import { hiddenAfter, liveVideo, mergedStreamBody, raceVideo, STREAM_MAX_PIECES, STREAM_NIGHTS_KEPT, STREAM_OPEN_PIECE_MAX_MS, streamFrom, streamNightId, VIDEO_CHECK_FOR_MS, VideoCheck, type OEmbedAsk, type RaceVideo, type Stream } from "./video.js";
 import { SIGNIN_MAIL, SIGNIN_MAIL_MAX, SIGNIN_MAIL_MAX_BODY, SIGNIN_MAIL_PER_HOUR, signinEmailFrom, signinItemsFrom } from "./signinmail.js";
 import { DIRECTORY_HELD_MS, directoryEntry, directoryFacts, directoryOrder, isListed, type DirectoryEntry, type DirectoryFacts } from "./directory.js";
 import { looksLikeABot, type DirectoryVisits } from "./directoryvisits.js";
@@ -1101,6 +1101,26 @@ export class Limiter {
   }
 
   /**
+   * Drops every key whose newest hit is outside the window - they hold
+   * nothing any more.
+   *
+   * WHY (23 Nov 2026, bug hunt 24, F339): pruning used to happen only when
+   * the same key was used again or the 10,000-key cap was passed, so an
+   * address that asked once and never came back stayed in memory until the
+   * relay restarted. The cookie policy and the Terms say an address is held
+   * for ten minutes at most. listen() now calls this every minute.
+   */
+  sweep(): void {
+    const cutoff = this.clock() - this.windowMs;
+
+    for (const [key, times] of this.hits) {
+      if ((times[times.length - 1] ?? 0) <= cutoff) {
+        this.hits.delete(key);
+      }
+    }
+  }
+
+  /**
    * Bounded, so a flood of distinct keys cannot grow this forever - but
    * never by forgetting everything at once. Clearing the lot would hand
    * every guesser a fresh allowance the moment somebody sent ten thousand
@@ -1306,8 +1326,18 @@ export class Relay {
   private readonly countTraffic: Limiter;
   /** Usage reports one club may send in a day (see appusage.ts): a brake on a laptop in a loop. */
   private readonly appUsageReports: Limiter;
-  /** Sign-in link asks per connection and per email address (signinmail.ts). */
+  /** Sign-in link asks per email address, over an hour (signinmail.ts). */
   private readonly signinMailTraffic: Limiter;
+  /**
+   * Sign-in link asks per connection, over ten minutes (signinmail.ts).
+   *
+   * WHY (23 Nov 2026, bug hunt 24, F339): the connection count shared the
+   * email count's hour, so the relay held a phone's internet address for an
+   * hour, while the cookie policy and the Terms say ten minutes at most.
+   * The hour stays on the hashed email address, which is what stops one
+   * inbox being sent link after link.
+   */
+  private readonly signinMailFromTraffic: Limiter;
   /** One laptop rendering lines: a race night's worth in a burst when Prepare Lines runs, and a trickle after that. */
   private readonly voiceTraffic: Limiter;
   /** The two open voice-sample routes, per address - nobody is signed in, so that is all there is. See VOICE_SAMPLES_PER_ADDRESS. */
@@ -1611,6 +1641,7 @@ export class Relay {
     this.sponsorTraffic = new Limiter(SPONSOR_SEEN_PER_ADDRESS, 5 * 60 * 1000, () => this.now().getTime());
     this.countTraffic = new Limiter(PAGE_COUNTS_PER_ADDRESS, 5 * 60 * 1000, () => this.now().getTime());
     this.signinMailTraffic = new Limiter(SIGNIN_MAIL_PER_HOUR, 3600 * 1000, () => this.now().getTime());
+    this.signinMailFromTraffic = new Limiter(SIGNIN_MAIL_PER_HOUR, 10 * 60 * 1000, () => this.now().getTime());
 
     // Prepare Lines on the laptop walks a whole announcer style in one go -
     // a hundred or so lines, two at a time - and a club is entitled to do
@@ -1852,22 +1883,45 @@ export class Relay {
   /** Which club's short address this is (see A CLUB'S SHORT ADDRESS), held a minute. */
   private aliasCache: { at: number; map: Map<string, string> } | undefined;
 
+  /**
+   * Bumped by forgetSite, so a map built from site documents that have
+   * since been replaced is not kept (23 Nov 2026, bug hunt 24).
+   */
+  private aliasEpoch = 0;
+
   private async aliasOwner(alias: string): Promise<string | undefined> {
     const now = this.now().getTime();
 
     if (this.aliasCache === undefined || now - this.aliasCache.at > 60_000) {
       const map = new Map<string, string>();
       const ids = new Set(this.tenants.all().map((t) => t.club));
+      const epoch = this.aliasEpoch;
+      let partial = false;
 
       for (const t of this.tenants.all()) {
         const mine = await this.siteOf(t.club).then((s) => s.look.alias).catch(() => undefined);
+
+        // WHY (23 Nov 2026, bug hunt 24): a club whose site document would
+        // not read stands in with the default look, which has no alias, so
+        // its working poster address was missing from the map for a whole
+        // minute. Such a map is kept only a few seconds.
+        if (!this.sites.has(t.club) && this.siteFallbacks.has(t.club)) {
+          partial = true;
+        }
 
         if (mine !== undefined && !ids.has(mine) && !map.has(mine)) {
           map.set(mine, t.club);
         }
       }
 
-      this.aliasCache = { at: now, map };
+      // WHY (23 Nov 2026, bug hunt 24): a site document written while this
+      // map was being built makes it out of date before it is kept, so it
+      // answers this one lookup and is not held.
+      if (epoch !== this.aliasEpoch) {
+        return map.get(alias);
+      }
+
+      this.aliasCache = { at: partial ? now - 55_000 : now, map };
     }
 
     return this.aliasCache.map.get(alias);
@@ -2078,6 +2132,15 @@ export class Relay {
     this.siteEpochs.set(club, (this.siteEpochs.get(club) ?? 0) + 1);
     this.sites.delete(club);
     this.siteFallbacks.delete(club);
+
+    // WHY (23 Nov 2026, bug hunt 24): the short address lives in the site
+    // document, but the minute-long alias map was never dropped when it
+    // changed. The app checks a new address ("free") just before it
+    // publishes it, and that check builds a fresh map without it - so
+    // /c/<new address> answered "No club here" for up to a minute, and an
+    // old address went on redirecting as long.
+    this.aliasCache = undefined;
+    this.aliasEpoch++;
 
     // The drawn cards too: every one of them is in the colours of the
     // site document that has just been replaced.
@@ -2413,6 +2476,29 @@ export class Relay {
     return site.card;
   }
 
+  /**
+   * Forgets every internet address whose limit window has passed, in every
+   * limiter and in both code guards. listen() runs it each minute.
+   *
+   * WHY (23 Nov 2026, bug hunt 24, F339): an address was dropped only when
+   * it came back or ten thousand others pushed it out, so one that asked
+   * once stayed in memory until the relay restarted, though the cookie
+   * policy and the Terms say ten minutes at most. Every Limiter field is
+   * swept, found by type, so a limiter added later is not missed; sweeping
+   * one keyed by club or badge is harmless, since it only drops keys that
+   * hold nothing.
+   */
+  sweepAddresses(): void {
+    for (const value of Object.values(this)) {
+      if (value instanceof Limiter) {
+        value.sweep();
+      }
+    }
+
+    this.familyCodeGuard.sweep();
+    this.crewCodeGuard.sweep();
+  }
+
   listen(port: number, host = "0.0.0.0"): Server {
     const server = createServer((request, response) => {
       this.handle(request, response).catch((error: unknown) => {
@@ -2474,9 +2560,17 @@ export class Relay {
     const hourlySweep = setInterval(sweep, 60 * 60 * 1000);
     firstSweep.unref();
     hourlySweep.unref();
+
+    // WHY (23 Nov 2026, bug hunt 24, F339): see sweepAddresses.
+    const addressSweep = setInterval(() => {
+      this.sweepAddresses();
+    }, 60 * 1000);
+    addressSweep.unref();
+
     server.once("close", () => {
       clearTimeout(firstSweep);
       clearInterval(hourlySweep);
+      clearInterval(addressSweep);
     });
 
     server.listen(port, host);
@@ -3634,9 +3728,11 @@ export class Relay {
           this.privacyHeld.delete(club);
           this.forgetNoindex(club);
 
-          if (!unreadable) {
-            void this.applyPrivacy(club, privacyRulesFrom(body));
-          }
+          // WHY (23 Nov 2026, bug hunt 24): this waited on the OLD privacy
+          // document having read, though the new rules come only from the
+          // new one - and the laptop sends it only when it changes, so old
+          // results stayed up until the next change.
+          void this.applyPrivacy(club, privacyRulesFrom(body));
         }
 
         if (spec.name === "checkin") {
@@ -5808,10 +5904,32 @@ export class Relay {
       let sessions = 0;
 
       await this.withLock(club, async () => {
+        // Years whose index is not JSON at all: deleted only once the sweep
+        // below has taken their results down (23 Nov 2026, bug hunt 24).
+        const corrupt: string[] = [];
+
         for (const item of await this.store.itemSizes(club, PREVIEW_CHANNEL)) {
           if (!yearTakenDown(rules, item.id)) continue;
 
-          const index = await this.store.getItem(club, PREVIEW_CHANNEL, item.id).catch(() => undefined);
+          // WHY (23 Nov 2026, bug hunt 24): a read that failed was taken
+          // as an empty index - nothing deleted, and then the index itself
+          // deleted, the only pointer to that year's results, so they stayed
+          // public with nothing left to find them. A read that failed now
+          // leaves the index for the next try.
+          let index: StoredDocument | undefined;
+
+          try {
+            index = await this.store.getItem(club, PREVIEW_CHANNEL, item.id);
+          } catch (e) {
+            if (e instanceof StoreReadError && e.corrupt) {
+              corrupt.push(item.id);
+            } else {
+              this.log(`[relay] "${club}": could not read the ${item.id} results index to take it down; will try again: ${String(e)}`);
+            }
+
+            continue;
+          }
+
           const indexBody = index?.body;
           const list = isPlainObject(indexBody) && Array.isArray(indexBody["sessions"]) ? indexBody["sessions"] : [];
 
@@ -5827,14 +5945,29 @@ export class Relay {
           years++;
         }
 
-        if (years > 0) {
+        // WHY (23 Nov 2026, bug hunt 24): the old results were found only
+        // through each year's index, so a result no index named (one left
+        // behind by the read failure above, before it was fixed) stayed
+        // public for good. Every result is now checked by its own date.
+        for (const result of await this.store.listItems(club, "results")) {
+          if (!resultTakenDown(rules, result.doc.body)) continue;
+          await this.store.deleteItem(club, "results", result.id).catch(() => undefined);
+          sessions++;
+        }
+
+        for (const id of corrupt) {
+          await this.store.deleteItem(club, PREVIEW_CHANNEL, id);
+          years++;
+        }
+
+        if (years > 0 || sessions > 0) {
           this.forgetListing(club, "results");
           this.forgetListing(club, PREVIEW_CHANNEL);
           this.forgetPreviews(club);
         }
       });
 
-      if (years > 0) {
+      if (years > 0 || sessions > 0) {
         this.forgetNoindex(club);
         this.log(`[relay] "${club}": took down ${years} old year${years === 1 ? "" : "s"} of results (${sessions} session${sessions === 1 ? "" : "s"}), as the club asked`);
       }
@@ -7854,8 +7987,11 @@ export class Relay {
 
     const outcome = await push.followSubscribe(club, name, sub);
 
+    // WHY (23 Nov 2026, bug hunt 24, #360): "full" now also means ten phones
+    // already follow this one name, but the words blamed the club. These
+    // cover both ceilings.
     if (outcome === "full") {
-      sendJson(response, 507, { ok: false, error: "This club cannot take any more phones for alerts." });
+      sendJson(response, 507, { ok: false, error: "No more phones can be signed up for these alerts just now." });
       return;
     }
 
@@ -8109,6 +8245,11 @@ export class Relay {
       driver: typeof nb["driver"] === "string" ? nb["driver"] : "",
       title: typeof nb["title"] === "string" ? nb["title"] : "",
       when: typeof nb["when"] === "string" ? nb["when"] : "",
+      // WHY (23 Nov 2026, bug hunt 24 #356): the family page headed the last
+      // filed night "Tonight" even when it was last week, because it was never
+      // told which night it was. It now gets the night's day and heads an
+      // older one "Last time out".
+      night: typeof nb["night"] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(nb["night"]) ? nb["night"] : "",
       lines: Array.isArray(nb["lines"]) ? (nb["lines"] as unknown[]).filter((l) => typeof l === "string").slice(0, 20) : [],
       races: races.map((r) => familyRaceFrom(r)),
       next: next === null ? null : familyNextFrom(next as Record<string, unknown>),
@@ -10581,6 +10722,11 @@ export class Relay {
     }
 
     this.mergedStreams.delete(club);
+    // WHY (23 Nov 2026, bug hunt 24): "Watch the last race" was kept a
+    // minute and not dropped here, so a race the club had just hidden (a
+    // crash, a child, a parent asking) was still offered with its video
+    // for up to a minute after every other video route had hidden it.
+    this.lastRaceVideos.delete(club);
   }
 
   /**
@@ -10712,9 +10858,12 @@ export class Relay {
       if (rb === undefined) continue;
       const video = raceVideo(stream, { sid, startedUtc: rb["startedUtc"], endedUtc: rb["endedUtc"] }, false, r);
       const green = typeof rb["startedUtc"] === "string" ? Date.parse(rb["startedUtc"]) : NaN;
+      // WHY (23 Nov 2026, bug hunt 24, #64): a piece with no end used to
+      // cover every race after it, so an old piece left open hid tonight's
+      // missed races. An open piece now ends where raceVideo ends it.
       if (video !== undefined) videos[sid] = video;
       else if (stream !== undefined && !stream.hidden.has(sid) && streamedNear(green) && green < this.now().getTime()
-        && !stream.pieces.some((p) => green >= p.startMs && (p.endMs === undefined || green <= p.endMs))) missed.push(sid);
+        && !stream.pieces.some((p) => green >= p.startMs && green <= (p.endMs ?? p.startMs + STREAM_OPEN_PIECE_MAX_MS))) missed.push(sid);
     }
 
     sendJson(response, 200, { ok: true, videos, missed });
@@ -10779,12 +10928,12 @@ export class Relay {
 
     const from = `${club}|${clientAddress(request)}`;
 
-    if (this.signinMailTraffic.blocked(from)) {
-      sendJson(response, 429, { ok: false, error: "Too many asks from this connection. Try again in an hour." });
+    if (this.signinMailFromTraffic.blocked(from)) {
+      sendJson(response, 429, { ok: false, error: "Too many asks from this connection. Try again in ten minutes." });
       return;
     }
 
-    this.signinMailTraffic.hit(from);
+    this.signinMailFromTraffic.hit(from);
     const body = await readBody(request, response, SIGNIN_MAIL_MAX_BODY);
     const email = isPlainObject(body) ? signinEmailFrom(body["email"]) : "";
 
@@ -12487,6 +12636,16 @@ function readRawBody(
     // "unreadable" by the close that follows the drain.
     const onClose = (): void => finish("unreadable");
 
+    // WHY (23 Nov 2026, bug hunt 24): a client that hung up while the
+    // handler was still awaiting something (a disk read) has a request
+    // already destroyed, whose one "close" has been and gone. The old code
+    // put its listeners on anyway and waited for ever, so a clip upload's
+    // place was never given back. Nothing more will come: answer now.
+    if (request.destroyed) {
+      finish("unreadable");
+      return;
+    }
+
     request.on("data", onData);
     request.on("end", onEnd);
     request.on("error", () => finish("unreadable"));
@@ -12587,6 +12746,18 @@ function readBody(
         finish("unreadable");
       }
     };
+
+    // WHY (23 Nov 2026, bug hunt 24): a client that hung up while the
+    // handler was still awaiting something (driverPhoto reads two switch
+    // files first) has a request already destroyed, whose one "close" has
+    // been and gone. The old code put its listeners on anyway and waited
+    // for ever, so the car-photo place it held was never given back - six
+    // such hang-ups and every club's car photos were "Busy" until a
+    // restart. Nothing more will come: answer now.
+    if (request.destroyed) {
+      finish("unreadable");
+      return;
+    }
 
     const declared = Number(request.headers["content-length"] ?? NaN);
 

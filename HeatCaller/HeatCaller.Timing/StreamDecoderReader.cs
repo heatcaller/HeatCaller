@@ -24,9 +24,19 @@ namespace HeatCaller;
 /// When the map has too few readings to trust - the first passes after
 /// connecting, or after a quiet spell on a decoder that sends no heartbeat -
 /// the last offset it gave is used, and with none yet, the arrival time.
-/// A mapped time that lands well away from the arrival (a decoder that has
-/// restarted, so its clock jumped) is not believed either: arrival is used
-/// and the old offset forgotten.
+/// A mapped time that lands after the arrival, or further before it than
+/// any link could hold a pass up (a decoder whose clock jumped), is not
+/// believed either: arrival is used and the old offset forgotten.
+/// </para>
+/// <para>
+/// WHY (23 Nov 2026, bug hunt 24): a mapped time up to MostEarlyMs BEFORE
+/// its arrival is believed. That limit was 2 seconds, on the thought that
+/// only a restarted decoder lands further back. But a restart is caught in
+/// Learn before it gets here, so what did land further back was a pass held
+/// up on the link (a Wi-Fi drop, a Bluetooth hiccup) and delivered late in a
+/// burst. It was timed as it arrived while a later car in the same burst
+/// kept its true time: the two swapped places, and the late car's next lap
+/// came out seconds short.
 /// </para>
 /// </remarks>
 internal sealed class StreamDecoderReader
@@ -37,8 +47,13 @@ internal sealed class StreamDecoderReader
     /// </summary>
     internal const long DuplicateWindowMs = 800;
 
-    /// <summary>How far before its arrival a mapped pass may land before it is not believed - far beyond any link's delay.</summary>
-    internal const long MostEarlyMs = DecoderClockMap.Jump;
+    /// <summary>
+    /// How far before its arrival a mapped pass may land and still be
+    /// believed: a pass the link held up, whose decoder stamp is the truth.
+    /// WHY (23 Nov 2026, bug hunt 24): was DecoderClockMap.Jump (2 s), which a
+    /// stalled link beats - see the class remarks.
+    /// </summary>
+    internal const long MostEarlyMs = DecoderClockMap.Window;
 
     /// <summary>A mapped time may land this far after its arrival - rounding, nothing more.</summary>
     internal const long MostLateMs = 5;
@@ -184,6 +199,18 @@ internal sealed class StreamDecoderReader
         }
 
         var relative = deviceMs - start;
+
+        // WHY (23 Nov 2026, bug hunt 24): the offset is remembered from what
+        // the map says BEFORE this reading goes in. A reading held up on the
+        // link is held back by the map, which then answers nothing until a
+        // good one follows; the offset used to be remembered only at a pass,
+        // after its own reading, so the first pass of a night that arrived
+        // late had no offset to fall back on and was timed as it arrived.
+        if (Clock.Estimate(arrivedMs) is { } before)
+        {
+            _lastOffset = before.Offset;
+        }
+
         Clock.Add(arrivedMs, (uint)relative);
         return relative;
     }
@@ -208,7 +235,12 @@ internal sealed class StreamDecoderReader
 
         var mapped = device + offset;
 
-        if (mapped > arrivedMs + MostLateMs || mapped < arrivedMs - MostEarlyMs)
+        // WHY (23 Nov 2026, bug hunt 24): the early side is now MostEarlyMs
+        // (a minute), not 2 seconds, so a pass the link held up keeps the
+        // decoder's time and its place - see the class remarks. A time before
+        // the app's clock began cannot be a crossing, and would not fit
+        // DeviceTimeMs.
+        if (mapped > arrivedMs + MostLateMs || mapped < arrivedMs - MostEarlyMs || mapped < 0)
         {
             _lastOffset = null;
             return arrivedMs;

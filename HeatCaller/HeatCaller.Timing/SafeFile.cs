@@ -454,7 +454,12 @@ public static class SafeFile
     /// carries on as it always has.
     /// </summary>
     /// <returns>True when nothing may be saved over this file until the app restarts and can read it.</returns>
-    public static bool HoldWritesAfterUnreadable(string path, Exception? ex)
+    /// <param name="whatHappensNext">
+    /// Said in place of "nothing will be saved ... restart" when the caller
+    /// does not in fact hold its writes (the race journal copies the unread
+    /// file aside and carries on). Null keeps the usual words.
+    /// </param>
+    public static bool HoldWritesAfterUnreadable(string path, Exception? ex, string? whatHappensNext = null)
     {
         var name = Path.GetFileName(path);
         var (copyName, copyError) = KeepCopy(path);
@@ -464,9 +469,18 @@ public static class SafeFile
 
         if (hold)
         {
-            Notify($"[storage] Couldn't read \"{name}\" ({ReasonFor(ex)}). Nothing will be saved to it until HeatCaller is "
-                + "restarted and can read it, so what is in it cannot be written over. Close anything that might have it "
-                + "open (a backup or sync tool is the usual cause) and restart."
+            // WHY (23 Nov 2026, bug hunt 24, F007): the race journal borrows
+            // this check but does not hold its writes - the next race copies
+            // the unread file aside and starts a new one. The fixed sentence
+            // told the director on a race night to restart for nothing, and
+            // the journal's own "was kept as ..." line said otherwise minutes
+            // later. A caller that carries on now says what really happens.
+            var next = string.IsNullOrWhiteSpace(whatHappensNext)
+                ? "Nothing will be saved to it until HeatCaller is restarted and can read it, so what is in it cannot be "
+                    + "written over. Close anything that might have it open (a backup or sync tool is the usual cause) and restart."
+                : whatHappensNext.Trim();
+
+            Notify($"[storage] Couldn't read \"{name}\" ({ReasonFor(ex)}). " + next
                 + (copyName is not null ? $" A copy was also kept as \"{copyName}\"." : string.Empty));
         }
         else if (copyName is not null)
@@ -628,7 +642,12 @@ public static class SafeFile
         // save everything, and a line per store says nothing more.
         if (Interlocked.Exchange(ref _frozenReported, 1) == 0)
         {
-            Notify("[storage] Saving is switched off until the app restarts, so the restored files aren't overwritten.");
+            // WHY (23 Nov 2026, bug hunt 24, F051): Freeze is called by a
+            // restore AND by an update that is putting the old files back
+            // after it failed, so the line used to talk about "restored
+            // files" when nothing had been restored. It now says only what
+            // is true in both cases.
+            Notify("[storage] Saving is switched off until the app restarts.");
         }
     }
 

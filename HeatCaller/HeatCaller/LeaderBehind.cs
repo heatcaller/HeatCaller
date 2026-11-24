@@ -60,10 +60,11 @@ internal static class LeaderBehind
         RacerStanding car,
         IReadOnlyList<RacerStanding> ordered,
         RaceStartType startType = RaceStartType.Standard,
-        StaggerClock staggerClock = StaggerClock.SharedGreen) =>
+        StaggerClock staggerClock = StaggerClock.SharedGreen,
+        Func<string, bool>? tookTheFlag = null) =>
         car is null || ordered is null || Ghosts.IsGhost(car.TransponderId)
             ? null
-            : Approach(car, ordered.FirstOrDefault(s => !Ghosts.IsGhost(s.TransponderId))!, startType, staggerClock);
+            : Approach(car, ordered.FirstOrDefault(s => !Ghosts.IsGhost(s.TransponderId))!, startType, staggerClock, tookTheFlag);
 
     /// <summary>
     /// The approach for one car against the race leader, or null for none - see the class notes.
@@ -81,19 +82,24 @@ internal static class LeaderBehind
     /// that first crossed 3 s after the leader had a leader 5 s behind look
     /// 2 s behind, and the opposite offset lost the call altogether. The
     /// same rule as the ghost gap (RaceControlControl.ClockZeroSinceGreenMs).
+    ///
+    /// <paramref name="tookTheFlag"/> says whether a car has taken the
+    /// checkered flag (RaceTiming.HasTakenFlag); null means nobody has.
     /// </summary>
     internal static int? Approach(
         RacerStanding car,
         RacerStanding leader,
         RaceStartType startType = RaceStartType.Standard,
-        StaggerClock staggerClock = StaggerClock.SharedGreen) =>
+        StaggerClock staggerClock = StaggerClock.SharedGreen,
+        Func<string, bool>? tookTheFlag = null) =>
         car is null || leader is null || ReferenceEquals(car, leader)
             ? null
             : Approach(
                 car.LapTimesMs, car.Laps,
                 car.ElapsedMs - car.PenaltyMs + RaceControlControl.ClockZeroSinceGreenMs(car, startType, staggerClock),
                 leader.LapTimesMs, leader.Laps,
-                leader.ElapsedMs - leader.PenaltyMs + RaceControlControl.ClockZeroSinceGreenMs(leader, startType, staggerClock));
+                leader.ElapsedMs - leader.PenaltyMs + RaceControlControl.ClockZeroSinceGreenMs(leader, startType, staggerClock),
+                tookTheFlag?.Invoke(leader.TransponderId) == true);
 
     /// <summary>
     /// The approach worked out from lap histories alone, for tests and any
@@ -107,7 +113,8 @@ internal static class LeaderBehind
         long carElapsedMs,
         IReadOnlyList<long> leaderLapTimes,
         int leaderLaps,
-        long leaderElapsedMs)
+        long leaderElapsedMs,
+        bool leaderFinished = false)
     {
         // A flying lap each to have a pace at all.
         if (carLapTimes is not { Count: >= 2 } || leaderLapTimes is not { Count: >= 2 } || carLaps < 1 || leaderLaps < 1)
@@ -142,6 +149,18 @@ internal static class LeaderBehind
         }
 
         if (before is not { } leaderBefore)
+        {
+            return null;
+        }
+
+        // WHY (23 Nov 2026, bug hunt 24): a leader that has taken the checkered
+        // flag will not cross again. The old code still projected its next
+        // crossing as its last one plus its usual lap, so a backmarker
+        // finishing a couple of seconds ahead of where a finished leader
+        // "would" be heard "Leader behind" in the call for their own
+        // finishing lap, about a leader whose race was already over. A
+        // crossing that really happened is still used as before.
+        if (leaderFinished && beforeLap >= leaderLaps)
         {
             return null;
         }

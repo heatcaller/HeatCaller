@@ -414,7 +414,12 @@ internal static class SupportBundle
 
         if (decoderLogs.Count > 0)
         {
-            text.AppendLine($"  decoder\\     Everything the I-Lap decoder sent, one file a day: {string.Join(", ", decoderLogs.Select(d => d.Name))}.");
+            // WHY (23 Nov 2026, bug hunt 24): this said "Everything the I-Lap
+            // decoder sent" for every capture, so since the Beta decoders'
+            // decoder-raw-*.log files joined the zip (2 Nov 2026) a club on a
+            // P3 or ZRound was told its files came from an I-Lap it doesn't
+            // own. The file names beside it say which decoder each is from.
+            text.AppendLine($"  decoder\\     Everything the decoder sent, one file a day: {string.Join(", ", decoderLogs.Select(d => d.Name))}.");
         }
 
         if (unreadable.Count > 0)

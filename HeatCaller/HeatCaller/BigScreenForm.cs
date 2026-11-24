@@ -1225,7 +1225,9 @@ public sealed partial class BigScreenForm : Form
             return;
         }
 
-        var parts = new[] { nextUp.ScheduledTime, nextUp.ClassName, nextUp.Description }
+        // WHY (23 Nov 2026, bug hunt 24): the stored "HH:mm" went up as it is
+        // kept, so a 12-hour club's crowd screen read 19:30 for a 7:30 PM race.
+        var parts = new[] { DayScheduleControl.ShownTime(nextUp.ScheduledTime), nextUp.ClassName, nextUp.Description }
             .Where(s => !string.IsNullOrWhiteSpace(s));
         // All three fields default to empty, so an entry with none of them
         // set printed a bare "ON DECK:" across the spectator screen. The
@@ -2226,6 +2228,18 @@ public sealed partial class BigScreenForm : Form
         return true;
     }
 
+    /// <summary>
+    /// Whether a commercial break ending takes the sponsor slide down
+    /// straight away. A video keeps its slot, and so does a paid read.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the read was not an exception, so a
+    /// break ending during a read's last seconds took the read's picture
+    /// down and the read put it back up half a second later - a flicker on
+    /// the crowd screen at the end of every break with a paid read.
+    /// </summary>
+    internal static bool BreakHandBackTakesTheSlideDown(bool showingSponsor, bool videoUp, bool showingRead) =>
+        showingSponsor && !videoUp && !showingRead;
+
     private void UpdateCommercialBreak()
     {
         if (IsDisposed || Disposing || _sponsors is null)
@@ -2310,9 +2324,26 @@ public sealed partial class BigScreenForm : Form
             // run under the recap's first line - the rule ShowSponsorVideo
             // already states - and the video's own Finished brings the
             // screen back within seconds anyway.
-            if (_showingSponsor && !(_video is not null && _video.View.Visible))
+            var videoUp = _video is not null && _video.View.Visible;
+
+            if (BreakHandBackTakesTheSlideDown(_showingSponsor, videoUp, _showingRead))
             {
                 ShowLeaderboardAgain();
+            }
+            else if (_showingSponsor && !videoUp && _showingRead)
+            {
+                // WHY (23 Nov 2026, bug hunt 24): a break that ends while a
+                // paid read is still on (its 2 s overhang, or a voice that
+                // read faster than the estimate) used to come through here
+                // and call ShowLeaderboardAgain, which took the READ'S OWN
+                // picture down - and half a second later UpdateSponsorRead
+                // found the read still on air and put it straight back up,
+                // so the room saw standings, sponsor, standings. Now the
+                // rotation's slot is let go and the read keeps the screen
+                // until its own deadline, when UpdateSponsorRead brings the
+                // board back once.
+                _showingSponsor = false;
+                _sponsorTimer.Interval = SponsorIntervalMs(_sponsors.Current.LeaderboardSeconds);
             }
 
             return;

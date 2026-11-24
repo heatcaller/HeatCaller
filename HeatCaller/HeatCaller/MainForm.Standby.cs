@@ -35,6 +35,15 @@ public partial class MainForm
     /// </summary>
     private StandbyMirror.Target StandbyTarget()
     {
+        // WHY (23 Nov 2026, bug hunt 24): a restored backup's standby
+        // address was paired with this laptop's sealed Standby PIN and sent
+        // to it as X-Pin, with nothing holding it back. While the restore's
+        // standby settings are held, there is no address and no PIN to send.
+        if (RestoredSettings.StandbyHeldProblem() is { } held)
+        {
+            return new StandbyMirror.Target(null, string.Empty, held);
+        }
+
         var address = WarmStandby.SnapshotAddress(_settings.StandbyPrimaryAddress, 8080, out var problem);
         return new StandbyMirror.Target(address, _settings.StandbyPin, problem);
     }

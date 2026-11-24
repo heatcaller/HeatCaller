@@ -98,7 +98,14 @@ internal sealed partial class DeskInboxForm
         }
 
         var one = current[0];
-        var before = NewestUndo();
+
+        // WHY (23 Nov 2026, bug hunt 24): "before" is taken just before each desk
+        // call, after its window has closed. It used to be taken here, before the
+        // window opened, so a phone's own setup, pack, car or photo applied while
+        // the question was open was counted as this answer's, and Undo on the toast
+        // took that driver's change back too (or, for late, skip and a swap, offered
+        // an Undo that took back only the phone's change).
+        long before;
         string refusal;
 
         switch (one.Kind)
@@ -115,6 +122,8 @@ internal sealed partial class DeskInboxForm
                     {
                         return;
                     }
+
+                    before = NewestUndo();
 
                     if (!desk.ApplyDetails(one, choice, out refusal))
                     {
@@ -142,6 +151,8 @@ internal sealed partial class DeskInboxForm
                         return;
                     }
 
+                    before = NewestUndo();
+
                     if (!desk.ApplyCrew(one, chosen, out refusal))
                     {
                         AppDialog.Show(this, refusal, "Not applied", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -160,6 +171,8 @@ internal sealed partial class DeskInboxForm
                     return;
                 }
 
+                before = NewestUndo();
+
                 if (!desk.ApprovePack(one, out refusal))
                 {
                     AppDialog.Show(this, refusal, "Not changed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -170,6 +183,8 @@ internal sealed partial class DeskInboxForm
 
             // Race video (14 Nov 2026, V5, V6).
             case DriverAsk.VideoHide:
+                before = NewestUndo();
+
                 if (!desk.ApproveVideoHide(one, out refusal))
                 {
                     AppDialog.Show(this, refusal, "Not hidden", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -192,6 +207,8 @@ internal sealed partial class DeskInboxForm
                     return;
                 }
 
+                before = NewestUndo();
+
                 if (!desk.ApproveRaceAsk(one, out refusal))
                 {
                     AppDialog.Show(this, refusal, "Not changed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -213,6 +230,8 @@ internal sealed partial class DeskInboxForm
                 {
                     return;
                 }
+
+                before = NewestUndo();
 
                 if (!desk.ApproveCover(one, out refusal))
                 {

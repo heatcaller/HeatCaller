@@ -80,7 +80,7 @@ public sealed partial class CheckInControl
     /// <summary>The right-click menu's Paid cash / Paid card / Comp / Owing, for the drivers picked.</summary>
     private void AddPaymentItems(ContextMenuStrip menu, IReadOnlyList<DriverProfile> drivers)
     {
-        if (_payments is null || TonightsFees() is not { Charges: true } fees)
+        if (_payments is not { } payments || TonightsFees() is not { Charges: true } fees)
         {
             return;
         }
@@ -95,8 +95,14 @@ public sealed partial class CheckInControl
         }
 
         var who = drivers.Count == 1 ? string.Empty : $" ({drivers.Count})";
-        Item($"Paid Cash{who}", PaidHow.Cash);
-        Item($"Paid Card{who}", PaidHow.Card);
+
+        // WHY (23 Nov 2026, bug hunt 24): Paid Cash and Paid Card settle only
+        // the drivers still owing (see Settle), so their count says that many
+        // - it used to count every driver picked, settled ones too.
+        var toSettle = DeskMoney.WhoToSettle(drivers, PaidHow.Cash, p => payments.Get(fees.Day.Id, p.Transponder), p => FeeFor(p, fees.Day, ClassNamed));
+        var paidWho = drivers.Count == 1 ? string.Empty : $" ({toSettle.Count})";
+        Item($"Paid Cash{paidWho}", PaidHow.Cash);
+        Item($"Paid Card{paidWho}", PaidHow.Card);
 
         var comp = new ToolStripMenuItem($"Comp{who}");
 
@@ -119,6 +125,17 @@ public sealed partial class CheckInControl
         {
             return;
         }
+
+        // WHY (23 Nov 2026, bug hunt 24): Paid Cash or Paid Card over a pick
+        // that mixed settled and owing drivers refiled the settled ones too - a
+        // "Cash $15.00 + Card $10.00" split became "Card $25.00" (cash $15 under,
+        // card $15 over the till) and Cash was written over a comp, losing its
+        // reason. Only the drivers still owing are settled now, as the Driver
+        // Paid slip already did; the undo, the desk log and the status line
+        // count just them.
+        var picked = drivers.Count;
+        drivers = DeskMoney.WhoToSettle(drivers, how, p => payments.Get(day.Id, p.Transponder), p => FeeFor(p, day, ClassNamed));
+        var leftAlone = picked - drivers.Count;
 
         var before = drivers.ToDictionary(p => p.Transponder, p => payments.Get(day.Id, p.Transponder), StringComparer.OrdinalIgnoreCase);
         var now = DateTime.UtcNow;
@@ -154,10 +171,22 @@ public sealed partial class CheckInControl
         });
 
         RefreshDriverList();
-        SetScanStatus(how == PaidHow.Owing
-            ? $"{Plural.Of(drivers.Count, "driver")} marked as still owing."
-            : $"{Plural.Of(drivers.Count, "driver")} marked {(how == PaidHow.Comp ? "comp" : $"paid by {how.ToString().ToLowerInvariant()}")}.",
-            AppTheme.Success);
+        SetScanStatus(SettledWords(drivers.Count, leftAlone, how), AppTheme.Success);
+    }
+
+    /// <summary>
+    /// The status line after Paid Cash, Paid Card, Comp or Still Owing:
+    /// "2 drivers marked paid by card. 1 already settled, left as it is."
+    /// </summary>
+    internal static string SettledWords(int settled, int leftAlone, PaidHow how)
+    {
+        var words = how == PaidHow.Owing
+            ? $"{Plural.Of(settled, "driver")} marked as still owing."
+            : $"{Plural.Of(settled, "driver")} marked {(how == PaidHow.Comp ? "comp" : $"paid by {how.ToString().ToLowerInvariant()}")}.";
+
+        return leftAlone > 0
+            ? $"{words} {leftAlone} already settled, left as {(leftAlone == 1 ? "it is" : "they are")}."
+            : words;
     }
 
     /// <summary>

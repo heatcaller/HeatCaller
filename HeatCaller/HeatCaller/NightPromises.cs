@@ -288,6 +288,36 @@ internal sealed class NightPromises
     }
 
     /// <summary>
+    /// Takes back the fight promise a battle watch filed for this pair -
+    /// either order - because its line was thrown away before a word of it
+    /// was heard. Not counted as lapsed: it was never made.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): a battle watch is settled as said when
+    /// it is queued, so a line the voice then binned unheard still left a
+    /// promise behind, and a later callback told the room the fight "was
+    /// called on air earlier tonight" about a line nobody heard.
+    /// </remarks>
+    internal void Withdraw(string aId, string bId)
+    {
+        if (string.IsNullOrWhiteSpace(aId) || string.IsNullOrWhiteSpace(bId))
+        {
+            return;
+        }
+
+        bool Is(string? one, string other) => string.Equals(one ?? string.Empty, other, StringComparison.OrdinalIgnoreCase);
+
+        lock (_gate)
+        {
+            var gone = _held.RemoveAll(one =>
+                one.From == SegmentKind.BattleWatch
+                && ((Is(one.Subject, aId) && Is(one.Against, bId)) || (Is(one.Subject, bId) && Is(one.Against, aId))));
+
+            _noted = Math.Max(0, _noted - gone);
+        }
+    }
+
+    /// <summary>
     /// The one promise the night has something to say about, as a fact
     /// block, or null.
     ///

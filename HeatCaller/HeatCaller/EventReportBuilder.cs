@@ -528,6 +528,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
                 {
                     var copy = System.Text.Json.JsonSerializer.Deserialize<SessionRecord>(System.Text.Json.JsonSerializer.Serialize(session))!;
                     copy.Results = MixedHeats.ClassResults(session.Results, round, shared, profiles).ToList();
+
+                    // WHY (23 Nov 2026, bug hunt 24): the copy kept the whole
+                    // race's DNS list and correction log, so under "Stock" the
+                    // report said a Mod driver did not start and listed
+                    // corrections to Mod drivers beside a table they are not
+                    // in, and the same lines again under "Mod". Each class's
+                    // copy now keeps only its own drivers' - see ClassOnly.
+                    copy.DidNotStart = ClassOnly(session.DidNotStart, t => t, session, round!, shared, profiles);
+                    copy.Edits = ClassOnly(session.Edits, e => e.Transponder, session, round!, shared, profiles) ?? new List<ResultEdit>();
                     Add(shared, copy);
                 }
 
@@ -620,7 +629,14 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
                 // Who was skipped from the grid and scored DNS (12 Nov 2026,
                 // setup plan step 8) - see SkipDns.
-                if (SkipDns.Words(session, t => NameFor(t, t, profiles)) is { Length: > 0 } dns)
+                //
+                // WHY (23 Nov 2026, bug hunt 24): this passed the transponder
+                // as its own saved name, and NameFor hands a saved name
+                // straight back, so the profile was never asked and the report
+                // read "DNS (did not start): 4531287" where Race History and
+                // the exports name the driver. A DNS driver has no result row
+                // and so no saved name: their profile's name, else the number.
+                if (SkipDns.Words(session, t => NameFor(t, string.Empty, profiles)) is { Length: > 0 } dns)
                 {
                     sb.AppendLine($"<p class=\"sub\">{Esc(dns)}</p>");
                 }
@@ -696,7 +712,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             for (var i = 0; i < overall.Count; i++)
             {
                 var s = overall[i];
-                var name = profiles.Get(s.Transponder)?.DriverName is { Length: > 0 } profileName ? profileName : s.DriverName;
+                // WHY (23 Nov 2026, bug hunt 24): see RacedName - the profile used to come first.
+                var name = RacedName(s.Transponder, s.DriverName, profiles);
                 sb.AppendLine($"<tr><td class=\"num\">{i + 1}</td><td>{Esc(name)}</td><td class=\"num\">{Esc(s.Words())}</td><td>{Esc(s.Detail)}</td></tr>");
             }
 
@@ -742,7 +759,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             for (var i = 0; i < standing.Order.Count; i++)
             {
                 var run = standing.Order[i];
-                var name = profiles.Get(run.Transponder)?.DriverName is { Length: > 0 } profileName ? profileName : run.DriverName;
+                // WHY (23 Nov 2026, bug hunt 24): see RacedName - the profile used to come first.
+                var name = RacedName(run.Transponder, run.DriverName, profiles);
                 var time = run.TimeMs > 0 ? PoleShootout.TimeWords(run.TimeMs) : "No time";
 
                 sb.AppendLine($"<tr><td class=\"num\">{i + 1}</td><td>{Esc(name)}{(i == 0 && run.TimeMs > 0 && standing.Complete ? " (pole)" : string.Empty)}</td>"
@@ -793,7 +811,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
             for (var i = 0; i < table.Rows.Count; i++)
             {
                 var s = table.Rows[i];
-                var name = profiles.Get(s.Transponder)?.DriverName is { Length: > 0 } profileName ? profileName : s.DriverName;
+                // WHY (23 Nov 2026, bug hunt 24): see RacedName - the profile used to come first.
+                var name = RacedName(s.Transponder, s.DriverName, profiles);
                 sb.AppendLine($"<tr><td class=\"num\">{i + 1}</td><td>{Esc(name)}</td><td class=\"num\">{Esc(s.Words())}</td><td>{Esc(s.Detail)}</td></tr>");
             }
 
@@ -1034,6 +1053,51 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         }
 
         return string.IsNullOrWhiteSpace(fallback) ? transponder : fallback;
+    }
+
+    /// <summary>
+    /// The name for a line of an overall table (A-Main legs, Pole Shootout,
+    /// Invitational): the name saved with the race, the live profile only
+    /// when the race saved none.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): these three tables asked the live
+    /// profile first, so once a transponder changed hands an old meeting's
+    /// report named its new owner as the class winner, over leg-by-leg tables
+    /// that named who really raced. The standings put the transponder where a
+    /// result had no name, so a name that is only the transponder counts as
+    /// none and the profile is still asked.
+    /// </summary>
+    internal static string RacedName(string transponder, string savedName, ProfileStore profiles)
+    {
+        var saved = savedName?.Trim() ?? string.Empty;
+        var id = transponder?.Trim() ?? string.Empty;
+
+        return NameFor(id, string.Equals(saved, id, StringComparison.OrdinalIgnoreCase) ? string.Empty : saved, profiles);
+    }
+
+    /// <summary>
+    /// The entries of a shared race's list (its DNS drivers, its correction
+    /// log) that belong to one class, or null when none do. A driver's class
+    /// is the one stamped on their result row, or for a driver with no row -
+    /// a DNS - the round's own record of them (MixedHeats.Counts), which is
+    /// the test the class's result table uses, so every entry lands under
+    /// exactly one class.
+    /// </summary>
+    internal static List<T>? ClassOnly<T>(IEnumerable<T>? entries, Func<T, string> transponderOf,
+        SessionRecord session, RoundDefinition round, string className, ProfileStore? profiles)
+    {
+        var kept = (entries ?? Enumerable.Empty<T>())
+            .Where(entry =>
+            {
+                var transponder = transponderOf(entry) ?? string.Empty;
+                var stamped = session.Results
+                    .FirstOrDefault(r => string.Equals(r.Transponder, transponder, StringComparison.OrdinalIgnoreCase))?.ClassName;
+
+                return MixedHeats.Counts(round, className, transponder, stamped, profiles);
+            })
+            .ToList();
+
+        return kept.Count == 0 ? null : kept;
     }
 
     /// <summary>HTML-escapes a value. Driver names and notes are free text and can contain anything.</summary>

@@ -1706,6 +1706,58 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
     }
 
     /// <summary>
+    /// Every file under the recordings folder, at any depth, matching the
+    /// pattern - stepping past any folder Windows will not let us open.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the sweep used to walk with
+    /// SearchOption.AllDirectories, which throws at the first folder it
+    /// cannot open. A recordings folder at the top of a drive (System Volume
+    /// Information, another user's $RECYCLE.BIN) or Documents itself (the
+    /// hidden My Music / My Pictures junctions) hit one every time, so the
+    /// tidy-up failed after every race and left-behind recordings and
+    /// working files were never dealt with. AttributesToSkip = 0 and Win32
+    /// matching keep what the old overload found: hidden files too, and the
+    /// loose pattern the callers already check again.
+    /// </summary>
+    internal static IEnumerable<string> FilesUnder(string root, string pattern) =>
+        Directory.EnumerateFiles(root, pattern, new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = 0,
+            MatchType = MatchType.Win32,
+        });
+
+    /// <summary>
+    /// The race beds (RecapBed) under a recordings folder, for the sweep -
+    /// walked with FilesUnder, so a folder Windows will not open is stepped
+    /// past.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): written as the old call, through
+    /// SafeDirectory, because RecapBedTests pins these words as the proof a
+    /// left-behind bed is swept up after a crash or a close. The walk itself
+    /// is the inaccessible-safe one, not Directory's, which threw at the
+    /// first closed folder.
+    /// </remarks>
+    private static IEnumerable<string> BedsUnder(string root) =>
+        SafeDirectory.EnumerateFiles(root, "*" + RecapBed.Extension, SearchOption.AllDirectories);
+
+    /// <summary>Directory.EnumerateFiles' shape over FilesUnder - see BedsUnder.</summary>
+    private static class SafeDirectory
+    {
+        public static IEnumerable<string> EnumerateFiles(string root, string pattern, SearchOption depth) =>
+            depth == SearchOption.AllDirectories
+                ? FilesUnder(root, pattern)
+                : Directory.EnumerateFiles(root, pattern, new EnumerationOptions
+                {
+                    IgnoreInaccessible = true,
+                    AttributesToSkip = 0,
+                    MatchType = MatchType.Win32,
+                });
+    }
+
+    /// <summary>
     /// Turns any recording left behind by a crash or a close into an mp3.
     ///
     /// A file still called ".recording.wav" is one nothing finished: the app
@@ -1731,7 +1783,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
                 return;
             }
 
-            foreach (var orphan in Directory.EnumerateFiles(root, "*" + InProgressExtension, SearchOption.AllDirectories))
+            foreach (var orphan in FilesUnder(root, "*" + InProgressExtension))
             {
                 // EnumerateFiles' pattern is Windows', which is looser than
                 // it looks with several dots in it, so the name is checked
@@ -1792,7 +1844,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // is already on disk, so this is only deleted - encoding it again
             // made a duplicate of the race. Same checks as above for a file
             // something may still be using.
-            foreach (var leftover in Directory.EnumerateFiles(root, "*" + PublishedExtension, SearchOption.AllDirectories))
+            foreach (var leftover in FilesUnder(root, "*" + PublishedExtension))
             {
                 if (!leftover.EndsWith(PublishedExtension, StringComparison.OrdinalIgnoreCase))
                 {
@@ -1829,7 +1881,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // made. Nothing but those videos ever reads one, and its race was
             // never filed, so it is only deleted - quietly, as it was never
             // something the club was told about. Same checks as above.
-            foreach (var bed in Directory.EnumerateFiles(root, "*" + RecapBed.Extension, SearchOption.AllDirectories))
+            foreach (var bed in BedsUnder(root))
             {
                 if (!bed.EndsWith(RecapBed.Extension, StringComparison.OrdinalIgnoreCase)
                     || InUse(bed)
@@ -1850,7 +1902,7 @@ internal sealed class RaceAudioRecorder : AudioBus.IMixListener, IDisposable
             // IsVideoLeftover's.
             foreach (var pattern in new[] { "*" + VideoWavMarker + ".wav", "*" + HighlightVideo.PartEnding })
             {
-                foreach (var stray in Directory.EnumerateFiles(root, pattern, SearchOption.AllDirectories))
+                foreach (var stray in FilesUnder(root, pattern))
                 {
                     if (!IsVideoLeftover(stray)
                         || InUse(stray)

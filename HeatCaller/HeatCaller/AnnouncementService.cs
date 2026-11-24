@@ -815,7 +815,22 @@ public sealed partial class AnnouncementService
 
             if (!string.Equals(said, real, StringComparison.Ordinal) && text.Contains(said, StringComparison.Ordinal))
             {
-                swaps.TryAdd(said, real);
+                // WHY (23 Nov 2026, bug hunt 24): a nickname two drivers share
+                // is left as it was said. The first profile in list order used
+                // to win, so a call about the second "Junior" showed the first
+                // Junior's real name on the Big Screen and the captions - the
+                // wrong driver, maybe one not even racing tonight.
+                if (swaps.TryGetValue(said, out var first))
+                {
+                    if (!string.Equals(first, real, StringComparison.Ordinal))
+                    {
+                        swaps[said] = said;
+                    }
+                }
+                else
+                {
+                    swaps.Add(said, real);
+                }
             }
         }
 
@@ -1607,6 +1622,11 @@ public sealed partial class AnnouncementService
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - it was made in ElevenLabs, whose quota is used up, and couldn't be said again ({ex.Message}).");
+                    // WHY (23 Nov 2026, bug hunt 24): taken back off the screens. These
+                    // drops left a recap or teaser nobody heard up on the Big Screen and
+                    // listed as said in the feed, while the same drops in
+                    // SynthesizeAndPlayAsync (and the stale one below) took theirs back.
+                    WithdrawAnnouncementText(prepared.DisplayText);
                     return;
                 }
             }
@@ -1627,12 +1647,14 @@ public sealed partial class AnnouncementService
                 if (IsSupersededByInterrupt())
                 {
                     StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - a flag call interrupted while it waited for the speaker.");
+                    WithdrawAnnouncementText(prepared.DisplayText);
                     return;
                 }
 
                 if (IsCutByCountdown())
                 {
                     StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - the countdown started while it waited for the speaker.");
+                    WithdrawAnnouncementText(prepared.DisplayText);
                     return;
                 }
 
@@ -1640,6 +1662,7 @@ public sealed partial class AnnouncementService
                 if (IsOvertakenOnTrack())
                 {
                     StatusMessage?.Invoke($"[voice] Reminder (prepared): dropped \"{prepared.Text}\" - the two cars it is about swapped while it waited for the speaker.");
+                    WithdrawAnnouncementText(prepared.DisplayText);
                     return;
                 }
 
@@ -1655,6 +1678,7 @@ public sealed partial class AnnouncementService
                 if (Muted)
                 {
                     StatusMessage?.Invoke("[voice] Reminder (prepared): dropped - the announcer was muted.");
+                    WithdrawAnnouncementText(prepared.DisplayText);
                     return;
                 }
 
@@ -1974,9 +1998,13 @@ public sealed partial class AnnouncementService
         lock (_voiceQueueLock)
         {
             // RemoveAll keeps the survivors in order, as Clear + AddRange did.
+            // WHY (23 Nov 2026, bug hunt 24): with their words taken back off the
+            // screens. A mute or a stop binned the waiting lines but left the newest
+            // of them on the Big Screen and every one listed as said in the feed,
+            // as the flag and countdown bins already stopped doing (21 Nov 2026).
             voiceCleared = keepPriority
-                ? BinQueuedLocked(item => !IsPriorityAnnouncement(item.Type), ref giveBack)
-                : BinQueuedLocked(_ => true, ref giveBack);
+                ? BinQueuedLocked(item => !IsPriorityAnnouncement(item.Type), ref giveBack, withdrawText: true)
+                : BinQueuedLocked(_ => true, ref giveBack, withdrawText: true);
         }
 
         GiveBackLost(giveBack);

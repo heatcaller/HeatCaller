@@ -36,9 +36,11 @@ public sealed class RacingWordsForm : Form
     /// <summary>
     /// One entry: the words as the app shows them, and what they mean.
     /// </summary>
-    private sealed record Word(string Term, string Meaning);
+    // WHY (23 Nov 2026, bug hunt 24): internal, not private, so a test can
+    // read the words the sheet shows without opening the window.
+    internal sealed record Word(string Term, string Meaning);
 
-    private sealed record Group(string Heading, string Blurb, Word[] Words);
+    internal sealed record Group(string Heading, string Blurb, Word[] Words);
 
     /// <summary>The words show at least this many lines of text before the window scrolls instead.</summary>
     private const int LeastLines = 6;
@@ -124,7 +126,7 @@ public sealed class RacingWordsForm : Form
     /// kit. An A-to-Z is easier to write and useless to somebody who does
     /// not yet know which word they are looking for.
     /// </summary>
-    private static Group[] Words() => new[]
+    internal static Group[] Words() => new[]
     {
         new Group(
             "Setting the night up",
@@ -138,7 +140,9 @@ public sealed class RacingWordsForm : Form
                 new Word(
                     "Heats each driver gets",
                     "How many times every driver in a class races before the finals. Three is the usual club "
-                    + "number. Their best result out of those counts."),
+                    // WHY (23 Nov 2026, bug hunt 24): "Usually" - the old words said the best
+                    // result always counts, which is wrong for a class set to add heats together.
+                    + "number. Usually their best result out of those counts."),
                 new Word(
                     "Build the finals from qualifying",
                     "Sorts each class by how they did in the heats and puts them into the finals - the fastest "
@@ -200,10 +204,16 @@ public sealed class RacingWordsForm : Form
                 new Word(
                     "Grid",
                     "The starting order of a race. Position one is the front."),
+                // WHY (23 Nov 2026, bug hunt 24): the old entry, "Best run counts", said only a
+                // driver's single best heat is ever used for seeding. That is true only when a
+                // class's "Heats that count" is 1: set to 2 or more the best heats are added
+                // together, and a class can qualify on points instead. The term is now the
+                // setting's own name, which "Best run counts" matched nowhere in the app.
                 new Word(
-                    "Best run counts",
-                    "Only a driver's single best heat is used for seeding, so one bad heat - a flat battery, "
-                    + "somebody else's mistake - does not decide their night."),
+                    "Heats that count",
+                    "Usually only a driver's single best heat is used for seeding, so one bad heat - a flat "
+                    + "battery, somebody else's mistake - does not decide their night. A class can be set to "
+                    + "add its best two or more heats together instead, or to qualify on points."),
             }),
 
         new Group(

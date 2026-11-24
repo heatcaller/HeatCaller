@@ -99,7 +99,14 @@ internal static class RollCall
                 continue;
             }
 
-            var sighting = watch.Of(transponder);
+            // WHY (23 Nov 2026, bug hunt 24, F269): the watch files a pass
+            // on an alternate transponder under the driver's MAIN id, but a
+            // grid can seat a driver on their alternate. Asked by the
+            // roster's id, that car was never heard and its card stayed
+            // waiting while it was out on track. Asked by the id its passes
+            // are filed under.
+            var owner = watch.AlternateTransponderOwner?.Invoke(transponder);
+            var sighting = watch.Of(string.IsNullOrWhiteSpace(owner) ? transponder : owner);
             var state = sighting is null || sighting.LastSeenUtc < sinceUtc
                 ? State.Waiting
                 : sighting.SignalKnown && sighting.Weak ? State.Weak : State.Heard;
@@ -189,7 +196,13 @@ internal sealed class RollCallBoard : Control
     public void ShowEntries(IReadOnlyList<RollCall.Entry> entries)
     {
         var now = Environment.TickCount64;
-        var changed = entries.Count != _entries.Count;
+
+        // WHY (23 Nov 2026, bug hunt 24): this used to repaint only when the
+        // count changed, a card's state flipped or a transponder was new, so a
+        // driver named or renamed in Driver Hub during staging kept showing on
+        // the Big Screen as the bare transponder number (or the old spelling)
+        // until some other card flipped. A change of name or order repaints too.
+        var changed = NeedsRedraw(_entries, entries);
 
         foreach (var entry in entries)
         {
@@ -216,6 +229,28 @@ internal sealed class RollCallBoard : Control
         {
             Invalidate();
         }
+    }
+
+    /// <summary>
+    /// Whether the board must repaint going from <paramref name="before"/> to
+    /// <paramref name="now"/>: any difference in count, order, name or state.
+    /// </summary>
+    internal static bool NeedsRedraw(IReadOnlyList<RollCall.Entry> before, IReadOnlyList<RollCall.Entry> now)
+    {
+        if (before.Count != now.Count)
+        {
+            return true;
+        }
+
+        for (var i = 0; i < now.Count; i++)
+        {
+            if (before[i] != now[i])
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>How much wider than tall a card is at most.</summary>

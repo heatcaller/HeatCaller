@@ -451,6 +451,20 @@ internal static class SettingsRestore
 
                 merged[property.Name] = value?.DeepClone();
             }
+
+            // WHY (23 Nov 2026, bug hunt 24): a copy made before 11 Nov has no
+            // PitLaneLiveArrivedOff, and its CommentarySegmentsOff cannot name
+            // PitLaneLive. The merge took that older off-list (Tuning) but kept
+            // the live file's flag (Memory), so the next start skipped
+            // AppSettings.ArrivePitLaneLiveOff and the throw to pit lane came on
+            // though nobody ticked it. With the flag dropped, the start switches
+            // it off once, as it does for any file from before it. A copy that
+            // has the flag is left as it is, so a club's own choice is kept.
+            if (file.Type == typeof(AppSettings)
+                && !copyNode.ContainsKey(nameof(AppSettings.PitLaneLiveArrivedOff)))
+            {
+                merged.Remove(nameof(AppSettings.PitLaneLiveArrivedOff));
+            }
         }
 
         return JsonNode.DeepEquals(merged, copyNode) ? copyJson : merged.ToJsonString(file.Json);
@@ -474,9 +488,15 @@ internal static class SettingsRestore
     };
 
     /// <summary>What a restore keeps, in plain words.</summary>
+    // WHY (23 Nov 2026, bug hunt 24, F297/F298): a restore now also keeps
+    // the words the club wrote and its children's-privacy choices, and this
+    // line - the one the confirm dialog shows - still listed only the old set,
+    // so the director could not tell those were safe.
     internal const string WhatIsKept =
         "Kept: your drivers, classes, tracks, race days and results, sponsors, venues and garage; your keys, the club website's "
-        + "club and token and address, PINs and email sign-in; the decoder's connection and port; backups; and the soundscape's crowd.";
+        + "club and token and address, PINs and email sign-in; the decoder's connection and port; backups; the soundscape's crowd; "
+        + "the words you wrote for your club website and announcer; and your children's-privacy choices (old results taken down, "
+        + "offline voices for juniors).";
 
     internal const string AlsoShownTick = "Also reset the everyday settings (track, lap count, voice, volumes, look)";
 

@@ -88,7 +88,7 @@ public partial class MainForm
         // asks for every car on every heat, and history can be long.
         if (DateTime.UtcNow - _savedTonight.Value.ReadUtc > TimeSpan.FromSeconds(30))
         {
-            _savedTonight = (DateTime.UtcNow, TonightsSightings.InSessions(_sessionHistory.All, since));
+            _savedTonight = (DateTime.UtcNow, TonightsSightings.InSessions(RacesThatProveALoopCrossing(_sessionHistory.All), since));
         }
 
         // Any of the driver's transponders (12 Nov 2026, setup plan step 7):
@@ -105,10 +105,36 @@ public partial class MainForm
     /// <summary>The transponders in races saved tonight, and when that was read. See HeardTonight.</summary>
     private (DateTime ReadUtc, HashSet<string> Heard)? _savedTonight;
 
+    /// <summary>
+    /// The saved races whose laps came off the loop: not a saved demo race,
+    /// and not a result pasted in from another program.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): every race saved tonight used to
+    /// count. A demo race saved before doors carries the club's real
+    /// transponder numbers with made-up laps, so each of those cars read as
+    /// heard on the loop until 6am and the "not heard tonight" names missed
+    /// the dead transponder they are there to catch.
+    /// </remarks>
+    internal static IEnumerable<SessionRecord> RacesThatProveALoopCrossing(IEnumerable<SessionRecord> sessions) =>
+        sessions.Where(s => s is not null && !s.IsNotScored());
+
+    /// <summary>
+    /// Whether a line pass shows the transponder really crossed the loop: not
+    /// a hand-added lap, and not one made up by the simulated decoder.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): only hand-added laps were left out.
+    /// The simulated decoder laps under the club's real transponder numbers,
+    /// so a rehearsal with it marked every car as heard for the rest of the
+    /// run, even after the real decoder was connected.
+    /// </remarks>
+    internal static bool PassCountsAsHeard(DirectLapEvent lap) => !lap.IsSynthetic && !lap.IsSimulated;
+
     /// <summary>Notes a line pass for the not-heard list. A hand-added lap proves nothing about the transponder.</summary>
     private static void NoteTonightsSighting(DirectLapEvent lap)
     {
-        if (!lap.IsSynthetic)
+        if (PassCountsAsHeard(lap))
         {
             TonightsSightings.Note(lap.TransponderId, DateTime.UtcNow);
         }

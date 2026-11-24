@@ -76,7 +76,15 @@ internal static class DriverForget
     public const string Placeholder = "Removed driver";
 
     /// <summary>What Forget did, a line per kind of thing, for the dialog that follows.</summary>
-    internal sealed record Outcome(string Placeholder, IReadOnlyList<string> Lines, IReadOnlyList<string> Badges, IReadOnlyList<string> Names);
+    internal sealed record Outcome(string Placeholder, IReadOnlyList<string> Lines, IReadOnlyList<string> Badges, IReadOnlyList<string> Names)
+    {
+        /// <summary>
+        /// Transponders that are not on the driver's profile but had a result
+        /// renamed all the same - one they raced on and later gave up. Their
+        /// published results need sending again too (23 Nov 2026, bug hunt 24).
+        /// </summary>
+        public IReadOnlyList<string> AlsoRepublish { get; init; } = Array.Empty<string>();
+    }
 
     /// <summary>
     /// The placeholder this driver's results take: "Removed driver" if no
@@ -136,6 +144,7 @@ internal static class DriverForget
             .ToList();
         var placeholder = NextPlaceholder(sources);
         var lines = new List<string>();
+        IReadOnlyList<string> republish = Array.Empty<string>();
         var settings = sources.Settings;
 
         // Worked out before anything goes: the badge codes come from the
@@ -148,6 +157,20 @@ internal static class DriverForget
         bool IsThem(string? transponder, string? driverName) =>
             (!string.IsNullOrWhiteSpace(transponder) && idSet.Contains(transponder.Trim()))
             || (string.IsNullOrWhiteSpace(transponder) && name.Length > 0 && SameName(driverName, name));
+
+        // WHY (23 Nov 2026, bug hunt 24): the names of every OTHER driver on
+        // file, read before the profile goes - what tells a result somebody
+        // else ran on this driver's transponder from one of their own (see
+        // IsTheirResult). Null when no profiles were handed in: then nothing
+        // is known about anybody else and the transponder alone decides.
+        HashSet<string>? otherNames = sources.Profiles is null
+            ? null
+            : sources.Profiles.All
+                .Where(p => !ReferenceEquals(p, profile)
+                            && !string.Equals((p.Transponder ?? string.Empty).Trim(), (profile.Transponder ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase))
+                .Select(p => Clean(p.DriverName))
+                .Where(n => n.Length > 0)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         void Say(int count, string one, string many)
         {
@@ -368,33 +391,90 @@ internal static class DriverForget
         {
             var rows = 0;
 
+            // WHY (23 Nov 2026, bug hunt 24): three things were wrong here.
+            //
+            // Whose result it is. The old test renamed every result ever run
+            // on one of their transponders, whoever drove - so after an extra
+            // transponder changed hands, forgetting its new owner turned the
+            // old owner's saved results into "Removed driver" for good. And a
+            // result under THEIR name on a transponder they had since given
+            // up was missed, leaving the child's name in Race History. See
+            // IsTheirResult for the rule now.
+            //
+            // What gets saved. The history was written only when a result row
+            // was renamed, so a driver with no results whose name was typed
+            // in a race's notes or a correction's reason had it replaced in
+            // memory and back again after a restart. Any change saves now.
+            //
+            // And a save that did not reach the disk was not mentioned.
+            var changed = false;
+            var leftAlone = 0;
+            var alsoRepublish = new List<string>();
+
             foreach (var session in history.All)
             {
-                foreach (var row in session.Results.Where(r => IsThem(r.Transponder, r.DriverName)))
+                foreach (var row in session.Results)
                 {
+                    var onTheirs = !string.IsNullOrWhiteSpace(row.Transponder) && idSet.Contains(row.Transponder.Trim());
+
+                    if (!IsTheirResult(row.Transponder, row.DriverName, idSet, name, names, otherNames))
+                    {
+                        if (onTheirs)
+                        {
+                            leftAlone++;
+                        }
+
+                        continue;
+                    }
+
+                    if (!onTheirs && !string.IsNullOrWhiteSpace(row.Transponder)
+                        && !alsoRepublish.Contains(row.Transponder.Trim(), StringComparer.OrdinalIgnoreCase))
+                    {
+                        alsoRepublish.Add(row.Transponder.Trim());
+                    }
+
                     row.DriverName = placeholder;
                     rows++;
+                    changed = true;
                 }
 
-                foreach (var edit in session.Edits.Where(e => IsThem(e.Transponder, e.DriverName)))
+                foreach (var edit in session.Edits.Where(e => IsTheirResult(e.Transponder, e.DriverName, idSet, name, names, otherNames)))
                 {
                     edit.DriverName = placeholder;
+                    changed = true;
                 }
 
                 foreach (var edit in session.Edits)
                 {
-                    edit.Reason = ReplaceNames(edit.Reason, names, placeholder);
+                    var reason = ReplaceNames(edit.Reason, names, placeholder);
+                    if (!string.Equals(reason, edit.Reason ?? string.Empty, StringComparison.Ordinal))
+                    {
+                        edit.Reason = reason;
+                        changed = true;
+                    }
                 }
 
-                session.Notes = ReplaceNames(session.Notes, names, placeholder);
+                var notes = ReplaceNames(session.Notes, names, placeholder);
+                if (!string.Equals(notes, session.Notes ?? string.Empty, StringComparison.Ordinal))
+                {
+                    session.Notes = notes;
+                    changed = true;
+                }
             }
 
-            if (rows > 0)
-            {
-                history.SaveChanges();
-            }
+            var saved = !changed || history.SaveChanges();
 
             Say(rows, $"1 result renamed to \"{placeholder}\"", $"results renamed to \"{placeholder}\"");
+            Say(leftAlone,
+                "Not changed: 1 result on their transponder that carries another driver's name",
+                "results on their transponder not changed - they carry another driver's name");
+
+            if (!saved)
+            {
+                lines.Add("NOT saved: Race History could not be written, so their name may still be in saved results. Check the disk, then open Race History and save a note on any race to try again");
+            }
+
+            republish = alsoRepublish;
         }
 
         if (sources.Seasons is { } seasons && name.Length > 0)
@@ -467,9 +547,12 @@ internal static class DriverForget
         // from their laps, and a ghost with no source has nothing to chase.
         if (sources.Ghosts is { } ghosts)
         {
-            var gone = ghosts.Current.Ghosts.RemoveAll(g =>
-                idSet.Contains((g.SourceTransponder ?? string.Empty).Trim())
-                || names.Any(n => n.Length > 0 && (g.Name ?? string.Empty).Contains(n, StringComparison.OrdinalIgnoreCase)));
+            //
+            // WHY (23 Nov 2026, bug hunt 24): the name test was "contains",
+            // on any ghost - so forgetting a driver announced as "Sam" also
+            // took "Samantha Lee's ghost", which chases Samantha. See
+            // IsTheirGhost.
+            var gone = ghosts.Current.Ghosts.RemoveAll(g => IsTheirGhost(g.SourceTransponder, g.Name, idSet, names));
 
             if (gone > 0)
             {
@@ -496,7 +579,90 @@ internal static class DriverForget
             lines.Add("Check-in PIN and night-email record");
         }
 
-        return new Outcome(placeholder, lines, badges, names);
+        return new Outcome(placeholder, lines, badges, names) { AlsoRepublish = republish };
+    }
+
+    /// <summary>
+    /// Whether a saved result (or a correction to one) is this driver's, for
+    /// Forget and Export.
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): a transponder can be one driver's this
+    /// season and another's the next (the Transponders tab's Transfer and
+    /// Remove), and a saved result keeps the transponder it was timed on and
+    /// the name it was filed under. The old rule looked at the transponder
+    /// only, so it renamed the previous owner's results and missed this
+    /// driver's own on a transponder they no longer hold.
+    ///
+    /// On one of their transponders: theirs, unless the name on it is not
+    /// one of theirs AND is the name of another driver still on file. (Not
+    /// "only when the name is theirs": a profile renamed since the race
+    /// leaves the old name on the result, and that must still go.)
+    ///
+    /// On no transponder: theirs when the name is their driver name, as
+    /// before.
+    ///
+    /// On somebody else's transponder, or nobody's: theirs when the name is
+    /// their driver name and no other driver on file has that name.
+    ///
+    /// otherNames is every other profile's driver name (cleaned, compared
+    /// without case), or null when that is not known - then the transponder
+    /// alone decides, as it used to.
+    /// </summary>
+    internal static bool IsTheirResult(
+        string? transponder,
+        string? driverName,
+        IReadOnlyCollection<string> theirTransponders,
+        string theirDriverName,
+        IReadOnlyList<string> theirNames,
+        IReadOnlyCollection<string>? otherNames)
+    {
+        var id = (transponder ?? string.Empty).Trim();
+        var rowName = Clean(driverName);
+        var theirName = Clean(theirDriverName);
+
+        if (id.Length == 0)
+        {
+            return theirName.Length > 0 && SameName(rowName, theirName);
+        }
+
+        if (theirTransponders.Contains(id, StringComparer.OrdinalIgnoreCase))
+        {
+            var someoneElses = otherNames is not null
+                && rowName.Length > 0
+                && !theirNames.Any(n => SameName(rowName, n))
+                && otherNames.Contains(rowName, StringComparer.OrdinalIgnoreCase);
+
+            return !someoneElses;
+        }
+
+        return otherNames is not null
+            && theirName.Length > 0
+            && SameName(rowName, theirName)
+            && !otherNames.Contains(theirName, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether a ghost car goes with the forgotten driver: one that chases
+    /// one of their transponders, or one that chases nobody and has their
+    /// name in its own as a whole word ("Mia's pace").
+    ///
+    /// WHY (23 Nov 2026, bug hunt 24): the name used to be looked for
+    /// anywhere inside any ghost's name, so "Sam" matched "Samantha Lee's
+    /// ghost" and two drivers both announced as "Mia" lost each other's. A
+    /// ghost that chases some other transponder is that driver's, whatever
+    /// it is called.
+    /// </summary>
+    internal static bool IsTheirGhost(string? sourceTransponder, string? ghostName, IReadOnlyCollection<string> theirTransponders, IReadOnlyList<string> theirNames)
+    {
+        var source = (sourceTransponder ?? string.Empty).Trim();
+
+        if (source.Length > 0)
+        {
+            return theirTransponders.Contains(source, StringComparer.OrdinalIgnoreCase);
+        }
+
+        var shown = ghostName ?? string.Empty;
+        return !string.Equals(ReplaceNames(shown, theirNames, string.Empty), shown, StringComparison.Ordinal);
     }
 
     /// <summary>Single-spaced and trimmed - how names are compared everywhere privacy is.</summary>

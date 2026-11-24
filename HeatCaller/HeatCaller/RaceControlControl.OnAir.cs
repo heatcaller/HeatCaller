@@ -388,6 +388,12 @@ public sealed partial class RaceControlControl
 
         _onAirStageNow = true;
 
+        // So the phone is told what really happened, not "Red flag out." (bug hunt 24).
+        if (_runningRemoteCommand)
+        {
+            _remoteSkippedOnAirToDemo = true;
+        }
+
         // CancelAsync, not Cancel (7 Nov 2026, bug hunt 14) - see the same
         // in RunOnAirAsync: Cancel ran On Air's continuation inline, which
         // staged the race, and the SilenceOnAir below then wiped the call

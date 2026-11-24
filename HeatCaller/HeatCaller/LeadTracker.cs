@@ -185,6 +185,48 @@ public sealed class LeadTracker
         }
     }
 
+    /// <summary>
+    /// The race's tally so far - how many times the lead has changed hands,
+    /// and how many times each driver has led - for putting back with
+    /// <see cref="Restore"/>.
+    /// </summary>
+    /// <remarks>
+    /// WHY (23 Nov 2026, bug hunt 24): after an undone Stage or Reset, or a
+    /// race picked back up after a crash, the count started again from
+    /// nothing, so the fifth lead change of a race was called "the first"
+    /// and the broadcast tower went back to one leader. There was no way to
+    /// hand the tally back.
+    /// </remarks>
+    public (int Changes, IReadOnlyDictionary<string, int> TimesLed) Snapshot()
+    {
+        lock (_gate)
+        {
+            return (_changes, new Dictionary<string, int>(_timesLed, StringComparer.OrdinalIgnoreCase));
+        }
+    }
+
+    /// <summary>
+    /// Puts a tally from <see cref="Snapshot"/> back. Who is in front is not
+    /// put back: the next car seen there is the leader without counting as a
+    /// change, the same as after <see cref="Forget"/>.
+    /// </summary>
+    public void Restore(int changes, IReadOnlyDictionary<string, int>? timesLed)
+    {
+        lock (_gate)
+        {
+            _changes = Math.Max(0, changes);
+            _timesLed.Clear();
+
+            foreach (var (driver, times) in timesLed ?? new Dictionary<string, int>())
+            {
+                if (!string.IsNullOrWhiteSpace(driver) && times > 0)
+                {
+                    _timesLed[driver] = times;
+                }
+            }
+        }
+    }
+
     /// <summary>A new race: nobody has led and nothing has changed hands.</summary>
     public void Reset()
     {

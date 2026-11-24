@@ -46,7 +46,8 @@ internal sealed class AppUsageTracker : IDisposable
     private Control? _pageControl;
     private DateTime _lastSave = DateTime.Now;
     private bool _wasOn;
-    private DateTime _lastSendTry = DateTime.MinValue;
+    private DateTime _nextSendTry = DateTime.MinValue;
+    private int _sendFailures;
     private string? _dialog;
     private bool _sending;
 
@@ -245,11 +246,52 @@ internal sealed class AppUsageTracker : IDisposable
             _lastSave = now;
         }
 
-        if (!_sending && now - _lastSendTry >= SendEvery)
+        // WHY (23 Nov 2026, bug hunt 24): the old code stamped the try before
+        // sending and waited the full 6 hours whatever happened, so a laptop
+        // with no internet 15 seconds after starting (the track hotspot joined
+        // a minute later) sent nothing that night. Now a try that could not
+        // send is tried again in minutes (see NextSendWait).
+        if (!_sending && now >= _nextSendTry)
         {
-            _lastSendTry = now;
+            // Until this try says how it went; also the fallback if it fails before it starts.
+            _nextSendTry = now + SendEvery;
             _ = SendFinishedDaysAsync(now);
         }
+    }
+
+    /// <summary>The first wait after a try that could not send.</summary>
+    internal static readonly TimeSpan RetryFirst = TimeSpan.FromMinutes(5);
+
+    /// <summary>The longest wait after tries that could not send.</summary>
+    internal static readonly TimeSpan RetryMost = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// How long until the next try (bug hunt 24): <see cref="SendEvery"/>
+    /// after a try that went (Sent or NothingWaiting); after one that could
+    /// not send (TryLater, or null: not allowed yet, or it threw) 5 minutes,
+    /// doubling with each failure in a row, never more than an hour - so a
+    /// relay that is down is not asked every few minutes all night.
+    /// </summary>
+    internal static TimeSpan NextSendWait(AppUsageSender.Outcome? outcome, int failuresInARow)
+    {
+        if (outcome is AppUsageSender.Outcome.Sent or AppUsageSender.Outcome.NothingWaiting)
+        {
+            return SendEvery;
+        }
+
+        var doublings = Math.Clamp(failuresInARow - 1, 0, 10);
+        var wait = TimeSpan.FromTicks(RetryFirst.Ticks << doublings);
+
+        return wait > RetryMost ? RetryMost : wait;
+    }
+
+    /// <summary>Sets the next try from how this one went, counting failures in a row.</summary>
+    private void Tried(AppUsageSender.Outcome? outcome)
+    {
+        _sendFailures = outcome is AppUsageSender.Outcome.Sent or AppUsageSender.Outcome.NothingWaiting
+            ? 0
+            : _sendFailures + 1;
+        _nextSendTry = DateTime.Now + NextSendWait(outcome, _sendFailures);
     }
 
     /// <summary>
@@ -263,14 +305,17 @@ internal sealed class AppUsageTracker : IDisposable
 
         if (whyNot is not null || target is not { } relay)
         {
+            Tried(null);
             return;
         }
 
         _sending = true;
+        AppUsageSender.Outcome? outcome = null;
 
         try
         {
-            var (_, days) = await AppUsageSender.SendAsync(_usage, relay, now, UsageMeters.Http);
+            var (result, days) = await AppUsageSender.SendAsync(_usage, relay, now, UsageMeters.Http);
+            outcome = result;
 
             if (days > 0)
             {
@@ -286,6 +331,7 @@ internal sealed class AppUsageTracker : IDisposable
         finally
         {
             _sending = false;
+            Tried(outcome);
         }
     }
 
