@@ -1,6 +1,6 @@
 site_name: HeatCaller Documentation
 site_description: Run RC race nights from one laptop - timing, race control, an AI announcer, results, championships and online check-in.
-# site_url: https://docs.example.com/   # set when the website has an address
+site_url: https://heatcaller.com/docs/
 docs_dir: docs
 copyright: >-
   &copy; 2026 HeatCaller LLC. LiveTime, LiveRC, MYLAPS, AMB, RC4, EasyLap, Robitronic,
@@ -9,6 +9,8 @@ copyright: >-
 
 theme:
   name: material
+  # WHY (25 Nov 2026): the PC's own fonts, not Google Fonts - nothing loaded from another site, and quicker on a slow track connection.
+  font: false
   features:
     - navigation.sections
     - navigation.top

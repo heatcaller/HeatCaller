@@ -243,7 +243,7 @@ To get data back from an `.unreadable-` copy, close HeatCaller, make a backup of
 - **Standby PC** lets a second laptop on the track's network keep a copy of this one's race data and take over by hand if this one dies. See [Standby PC](standby-pc.md).
 - **Default settings** has **Restore Default Settings** and **Put Back Earlier Settings**, which reset the tuning settings without touching your drivers, results or keys. See [Default settings](#default-settings) below.
 - **Updates** says which version this PC is on, has **Check for Updates**, and the **Look for updates by itself every few hours** switch. See [Updates](../getting-started/install.md#updates).
-- **Getting help** has **Save Support Info** (below), **About HeatCaller** (the version, and the licenses of the components HeatCaller ships) and **License and Privacy** (the license agreement and privacy notice you accepted). It also has **Send HeatCaller anonymous usage totals**, ticked to begin with in the United States only: see [Usage totals](#usage-totals) below.
+- **Getting help** has **User Guide** (this guide, in your web browser), **Save Support Info** (below), **About HeatCaller** (the version, and the licenses of the components HeatCaller ships) and **License and Privacy** (the license agreement and privacy notice you accepted). It also has **Send HeatCaller anonymous usage totals**, ticked to begin with in the United States only: see [Usage totals](#usage-totals) below.
 
 ## Usage totals
 

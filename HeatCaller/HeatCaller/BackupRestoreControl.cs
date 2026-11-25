@@ -288,6 +288,13 @@ public sealed partial class BackupRestoreControl : UserControl
         var btnSupport = new Button { Text = "Save Support Info..." };
         btnSupport.Click += (_, _) => SupportInfoRequested?.Invoke();
 
+        // WHY (25 Nov 2026, Asher: "find a better place in the app for people to
+        // find" the guide): first on the card that is about getting help - the
+        // sidebar's User Guide button opens it at the page you're on, this at
+        // its start.
+        var btnGuide = new Button { Text = "User Guide..." };
+        btnGuide.Click += (_, _) => AppSupport.OpenGuide(AppSupport.GuideUrl);
+
         var btnAbout = new Button { Text = "About HeatCaller..." };
         btnAbout.Click += (_, _) => AboutForm.ShowFor(FindForm());
 
@@ -363,7 +370,7 @@ public sealed partial class BackupRestoreControl : UserControl
 
         var card = new Section("Getting help");
 
-        card.Add(new ButtonBar().With(btnSupport, btnAbout, btnTerms));
+        card.Add(new ButtonBar().With(btnGuide, btnSupport, btnAbout, btnTerms));
         card.Add(lblHint);
         card.Add(FieldGrid.Inline(lnkEmail, btnCopyEmail), gapBelow: UiLayout.RowGap);
         var btnSeeSent = new Button { Text = "See What's Sent..." };
