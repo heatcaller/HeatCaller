@@ -1229,6 +1229,16 @@ public partial class MainForm
                 return;
             }
 
+            // WHY (25 Nov 2026, Asher: "speed up the animation"): while Focus
+            // or Restore plays, the warming waits. Its steps ran ahead of the
+            // picture after the view change, so a Focus pressed in the first
+            // half-minute held its cards still for 0.5-4 s, and once ran out
+            // its six seconds without finishing.
+            if (_focusStage is not null)
+            {
+                return;
+            }
+
             var next = steps.Dequeue();
             var nav = next.Nav;
 

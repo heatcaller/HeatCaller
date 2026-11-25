@@ -124,6 +124,9 @@ public partial class MainForm
     /// <summary>How long each step of the last ApplyFocusView took - for the log and the tests.</summary>
     internal string LastFocusStepTimes { get; private set; } = string.Empty;
 
+    /// <summary>Where the time went between the view changing and the picture after: waiting for the message loop, the redraw, the picture.</summary>
+    internal string LastArriveTimes { get; private set; } = string.Empty;
+
     private void ApplyFocusView(FocusViewState target, bool slide, bool restoring)
     {
         _applyingFocus = true;
@@ -320,9 +323,13 @@ public partial class MainForm
                 return;
             }
 
+            var queuedFor = timing.ElapsedMilliseconds - changedAt;
+            var drawn = System.Diagnostics.Stopwatch.StartNew();
             RedrawWindow(Handle, IntPtr.Zero, IntPtr.Zero, RdwInvalidate | RdwErase | RdwAllChildren | RdwUpdateNow);
+            var redrawMs = drawn.ElapsedMilliseconds;
 
             var after = ClientPicture();
+            LastArriveTimes = $"waited {queuedFor}, redraw {redrawMs}, picture {drawn.ElapsedMilliseconds - redrawMs}";
 
             if (after is null)
             {
@@ -338,7 +345,7 @@ public partial class MainForm
             });
 
             // How long each part took, for a slow press to be found in the log.
-            OnClientRawMessage($"{AppTime.LogStampNow()}  [view] {(entering ? "Focus" : "Restore")} timings: stage up {upAt} ms, view changed {changedAt} ms ({LastFocusStepTimes}), picture after {timing.ElapsedMilliseconds} ms.");
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [view] {(entering ? "Focus" : "Restore")} timings: stage up {upAt} ms, view changed {changedAt} ms ({LastFocusStepTimes}), picture after {timing.ElapsedMilliseconds} ms ({LastArriveTimes}).");
         }));
 
         return true;
@@ -407,14 +414,23 @@ public partial class MainForm
         control.IsHandleCreated && control.Visible ? RectangleToClient(control.RectangleToScreen(control.ClientRectangle)) : Rectangle.Empty;
 
     /// <summary>
-    /// The client area as it is drawn now, every window in it - taken with
-    /// PrintWindow from what Windows has composed, so it is right even with
-    /// the stage over it. Null when it cannot be had.
+    /// The client area as it is drawn now, every window in it - copied from
+    /// the window's own drawing surface, so it is right even with the stage
+    /// (or anything else) over it. Null when it cannot be had.
+    ///
+    /// WHY (25 Nov 2026, Asher: "speed up the animation"): PrintWindow took
+    /// 150-700 ms for each picture, so the stage's first frame waited that
+    /// long after the press and the cards that long again after the view had
+    /// changed. Copying the surface Windows already keeps for the window
+    /// takes about 10 ms and gave the same picture, pixel for pixel, on
+    /// screen, off screen and with a window over it (measured 25 Nov 2026).
+    /// PrintWindow is kept for when the copy fails.
     /// </summary>
     private Bitmap? ClientPicture()
     {
         const uint PW_CLIENTONLY = 0x1;
         const uint PW_RENDERFULLCONTENT = 0x2;
+        const int SRCCOPY = 0x00CC0020;
 
         Bitmap? picture = null;
 
@@ -428,7 +444,18 @@ public partial class MainForm
 
             try
             {
-                ok = PrintWindow(Handle, hdc, PW_CLIENTONLY | PW_RENDERFULLCONTENT);
+                var own = GetDC(Handle);
+                ok = own != IntPtr.Zero && BitBlt(hdc, 0, 0, picture.Width, picture.Height, own, 0, 0, SRCCOPY);
+
+                if (own != IntPtr.Zero)
+                {
+                    ReleaseDC(Handle, own);
+                }
+
+                if (!ok)
+                {
+                    ok = PrintWindow(Handle, hdc, PW_CLIENTONLY | PW_RENDERFULLCONTENT);
+                }
             }
             finally
             {
@@ -452,4 +479,13 @@ public partial class MainForm
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetDC(IntPtr hwnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int ReleaseDC(IntPtr hwnd, IntPtr hdc);
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+    private static extern bool BitBlt(IntPtr dest, int x, int y, int width, int height, IntPtr source, int sourceX, int sourceY, int rop);
 }
