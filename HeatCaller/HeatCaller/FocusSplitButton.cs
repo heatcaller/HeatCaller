@@ -18,7 +18,7 @@ namespace HeatCaller;
 /// What each press does is the host's (FocusView, MainForm.Focus). Words the
 /// room sees are set by <see cref="ShowState"/>.
 /// </summary>
-internal sealed class FocusSplitButton : Control
+internal sealed class FocusSplitButton : Control, IBadgeHost
 {
     private readonly ContextMenuStrip _menu = new();
     private readonly ToolStripMenuItem _miFocus = new();
@@ -132,8 +132,38 @@ internal sealed class FocusSplitButton : Control
         get
         {
             var widest = Math.Max(Measure("Focus").Width, Measure("Restore").Width);
-            return Pad + IconWidth + IconGap + widest + Pad;
+            var after = _badgeRoom > 0 ? BadgeGap + _badgeRoom + UiLayout.AtDpi(8) : Pad;
+            return Pad + IconWidth + IconGap + widest + after;
         }
+    }
+
+    private int _badgeRoom;
+
+    /// <summary>The gap between the caption and its badge.</summary>
+    private static int BadgeGap => UiLayout.AtDpi(3);
+
+    /// <inheritdoc/>
+    public int BadgeRoom
+    {
+        get => _badgeRoom;
+        set
+        {
+            value = Math.Max(0, value);
+
+            if (_badgeRoom != value)
+            {
+                _badgeRoom = value;
+                AutoSizeNow();
+            }
+        }
+    }
+
+    /// <summary>Just after the caption (Focus or Restore), its top a little above the caption's.</summary>
+    public Point BadgeSpot(Size badge)
+    {
+        var text = Measure(Text);
+        var wordsTop = (Height - text.Height) / 2;
+        return new Point(Pad + IconWidth + IconGap + text.Width + BadgeGap, Math.Max(UiLayout.AtDpi(2), wordsTop - UiLayout.AtDpi(3)));
     }
 
     private Size Measure(string text) =>

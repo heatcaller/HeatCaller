@@ -465,7 +465,7 @@ public sealed class FocusOnRaceControlTests
             }
         }, TimeSpan.FromMinutes(3), () => "Race Control's Focus button");
 
-        Assert.True(seen.oneRow, "pills, pen and Focus share one row at 1280 wide, Focus against the right with its i badge on its corner - " + seen.row);
+        Assert.True(seen.oneRow, "pills, pen and Focus share one row at 1280 wide, Focus against the right with its i badge inside it - " + seen.row);
         Assert.Equal(new[]
         {
             "Focus: nav=False side=False inbox=Closed",

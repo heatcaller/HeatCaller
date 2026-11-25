@@ -4,8 +4,9 @@ using System.Drawing.Drawing2D;
 namespace HeatCaller;
 
 /// <summary>
-/// A SMALL CIRCLE WITH AN "i" IN IT, on the top right-hand corner of the
-/// thing it explains, that holds that thing's help.
+/// A SMALL CIRCLE WITH AN "i" IN IT that holds a part's help: inside the
+/// part just after its words (a pill, Focus), or on its top right-hand corner
+/// (the pen, too small to hold it).
 ///
 /// WHY (25 Nov 2026, asked for by Asher: "for all the tool tips here can we
 /// put them behind a small circle with an i in it?"): at the foot of Race
@@ -38,9 +39,14 @@ internal sealed class InfoDot : Control
     private static InfoDot? _current;
 
     /// <summary>The circle's width and height at 100%.</summary>
-    // WHY (25 Nov 2026, Asher: "make the badges a bit smaller"): at 18 they
-    // stood out over the pills more than help you have to ask for should.
-    internal const int SizeAt100 = 14;
+    // WHY (25 Nov 2026, Asher: "make the badges a bit smaller", then "they're
+    // too small. go back to older size. put in the pill upper right of
+    // text"): 14 was too small to find, so it is 18 again - but inside the
+    // pill, after its words, where it no longer stands out over the edge.
+    internal const int SizeAt100 = 18;
+
+    /// <summary>Inside its part (a pill, Focus), not over its edge: no ring cut out in the card's colour.</summary>
+    internal bool Inside { get; set; }
 
     /// <summary>How long a tip stays up if it is never clicked shut.</summary>
     internal const int OpenMs = 60_000;
@@ -276,9 +282,10 @@ internal sealed class InfoDot : Control
                 g.FillEllipse(brush, circle);
             }
 
-            var cutout = Parent?.BackColor is { A: 255 } back ? back : AppTheme.Background;
-            using (var ring = new Pen(cutout, line))
+            if (!Inside)
             {
+                var cutout = Parent?.BackColor is { A: 255 } back ? back : AppTheme.Background;
+                using var ring = new Pen(cutout, line);
                 g.DrawEllipse(ring, RectangleF.Inflate(circle, -line / 2f, -line / 2f));
             }
 
