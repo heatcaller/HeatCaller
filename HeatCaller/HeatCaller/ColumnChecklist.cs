@@ -508,6 +508,16 @@ internal sealed class ColumnChecklist : ListBox
         return Rectangle.FromLTRB(client.Left, top, client.Right, client.Bottom);
     }
 
+    /// <summary>
+    /// WHY (25 Nov 2026, Asher's screenshot after #351: every row but Pos had
+    /// lost its name): a row's off-screen buffer starts at the row, not at the
+    /// top of the list, and the words are told where the row is in the list.
+    /// The buffer's Graphics is shifted to make up for that, but the words
+    /// ignore the shift unless asked, so they landed outside every buffer but
+    /// the first row's. Every bit of text drawn in a row asks.
+    /// </summary>
+    private const TextFormatFlags InTheRowsBuffer = TextFormatFlags.PreserveGraphicsTranslateTransform;
+
     private void DrawRow(Graphics g, Rectangle bounds, int index, bool picked)
     {
         var row = _rows[index];
@@ -536,7 +546,7 @@ internal sealed class ColumnChecklist : ListBox
 
         TextRenderer.DrawText(g, column.Label, AppTheme.BodyFont, textRect,
             row.Shown ? AppTheme.TextDark : AppTheme.TextMuted,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | InTheRowsBuffer);
 
         if (withArrows)
         {
@@ -559,7 +569,7 @@ internal sealed class ColumnChecklist : ListBox
         var textRect = new Rectangle(left, bounds.Top, size.Width, bounds.Height);
 
         TextRenderer.DrawText(g, text, AppTheme.SmallFont, textRect, AppTheme.TextMuted,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPadding);
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.NoPadding | InTheRowsBuffer);
 
         var y = bounds.Top + bounds.Height / 2;
         var lineLeft = textRect.Right + UiLayout.AtTextSize(8);
