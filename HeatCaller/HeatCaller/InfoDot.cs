@@ -38,7 +38,9 @@ internal sealed class InfoDot : Control
     private static InfoDot? _current;
 
     /// <summary>The circle's width and height at 100%.</summary>
-    internal const int SizeAt100 = 18;
+    // WHY (25 Nov 2026, Asher: "make the badges a bit smaller"): at 18 they
+    // stood out over the pills more than help you have to ask for should.
+    internal const int SizeAt100 = 14;
 
     /// <summary>How long a tip stays up if it is never clicked shut.</summary>
     internal const int OpenMs = 60_000;
