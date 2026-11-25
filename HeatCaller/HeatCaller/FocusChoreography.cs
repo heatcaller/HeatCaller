@@ -43,47 +43,52 @@ internal readonly record struct FocusMoment(
 /// from the "arrival", the moment the view has changed underneath and its
 /// picture is taken (measured 25 Nov 2026: about 300-550 ms at 1440x900).
 ///
-/// Focus: press 0-90; sidebar 0-280; column parts from 40, 30 ms apart, 200
-/// each; cards glide A' to A'+320 (A' = the arrival, no earlier than 120);
-/// inbox A'+60 to A'+400; its rows from A'+180, 35 ms apart; the landing
-/// light A'+340 to A'+480; then 80 ms of hand-over.
+/// Focus: press 0-70; sidebar 0-200; column parts from 30, 20 ms apart, 150
+/// each; cards glide A' to A'+230 (A' = the arrival, no earlier than 90);
+/// inbox A'+40 to A'+280; its rows from A'+120, 24 ms apart; the landing
+/// light A'+240 to A'+350; then 60 ms of hand-over.
 ///
-/// Restore: press 0-90; the inbox's rows fade 0-100 and it slides out 0-240;
-/// from A' (no earlier than 80) the sidebar widens over 300 and the cards
-/// glide over 320; the column parts come back from A'+120, 30 ms apart; then
+/// Restore: press 0-70; the inbox's rows fade 0-70 and it slides out 0-170;
+/// from A' (no earlier than 60) the sidebar widens over 210 and the cards
+/// glide over 230; the column parts come back from A'+80, 20 ms apart; then
 /// the hand-over. No light: going back is quieter.
+///
+/// WHY (25 Nov 2026, Asher: "speed up the animation"): every part about 30%
+/// shorter - Focus ran about 540 ms after the arrival, now about 380 - and
+/// the pictures it waits for now take about 10 ms, not 150-700 (see
+/// MainForm.ClientPicture), so the cards move sooner as well.
 /// </summary>
 internal static class FocusChoreography
 {
-    public const double PressMs = 90;
-    public const double SidebarMs = 280;
-    public const double RestoreSidebarMs = 300;
-    public const double GlideMs = 320;
-    public const double EnterEarliest = 120;
-    public const double LeaveEarliest = 80;
+    public const double PressMs = 70;
+    public const double SidebarMs = 200;
+    public const double RestoreSidebarMs = 210;
+    public const double GlideMs = 230;
+    public const double EnterEarliest = 90;
+    public const double LeaveEarliest = 60;
 
     /// <summary>The column's parts, folding away or coming back: the first's start, the gap between starts, how long each takes.</summary>
-    public const double FoldStart = 40;
-    public const double FoldStagger = 30;
-    public const double FoldMs = 200;
-    public const double RestoreFoldDelay = 120;
+    public const double FoldStart = 30;
+    public const double FoldStagger = 20;
+    public const double FoldMs = 150;
+    public const double RestoreFoldDelay = 80;
 
     /// <summary>How far a column part drifts right as it goes (comes back from), in pixels at 100%.</summary>
     public const int FoldDrift = 24;
 
-    public const double InboxDelay = 60;
-    public const double InboxMs = 340;
-    public const double LeaveInboxMs = 240;
-    public const double RowsDelay = 180;
-    public const double RowStagger = 35;
-    public const double RowMs = 220;
+    public const double InboxDelay = 40;
+    public const double InboxMs = 240;
+    public const double LeaveInboxMs = 170;
+    public const double RowsDelay = 120;
+    public const double RowStagger = 24;
+    public const double RowMs = 160;
 
     /// <summary>How far each inbox row rises as it comes in, in pixels at 100%.</summary>
     public const int RowRise = 6;
 
-    public const double LightDelay = 340;
-    public const double LightMs = 140;
-    public const double HandOverMs = 80;
+    public const double LightDelay = 240;
+    public const double LightMs = 110;
+    public const double HandOverMs = 60;
 
     /// <summary>When the cards start: at the arrival, but never before <paramref name="earliest"/>. Null until it has arrived.</summary>
     public static double? CardsStart(double? arrivedAt, bool entering) =>
@@ -124,7 +129,7 @@ internal static class FocusChoreography
 
             // Into the narrow sidebar's own picture once it is there - never
             // before the wide one has nearly closed.
-            var narrow = a is { } at0 ? EaseOutCubic(Phase(ms, Math.Max(200, at0), 120)) : 0;
+            var narrow = a is { } at0 ? EaseOutCubic(Phase(ms, Math.Max(140, at0), 90)) : 0;
 
             if (a is not { } at)
             {
@@ -150,7 +155,7 @@ internal static class FocusChoreography
 
         // Restore: the inbox leaves on its own clock; the rest waits for the arrival.
         var inbox = 1 - EaseInCubic(Phase(ms, 0, LeaveInboxMs));
-        var rows = 1 - Phase(ms, 0, 100);
+        var rows = 1 - Phase(ms, 0, 70);
 
         if (a is not { } back)
         {

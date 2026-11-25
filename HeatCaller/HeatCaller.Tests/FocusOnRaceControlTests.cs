@@ -114,9 +114,9 @@ public sealed class FocusOnRaceControlTests
         Assert.True(first.Sidebar > 0, "the sidebar is moving");
         Assert.True(FocusChoreography.Fold(60, 0, entering: true, arrivedAt: null) > 0, "the column's first part is going");
 
-        // The press is over by 90 ms; the sidebar is narrow by 280.
-        Assert.False(FocusChoreography.At(90, true, null, 8).Pressed);
-        Assert.Equal(1, FocusChoreography.At(280, true, null, 8).Sidebar);
+        // The press is over by 70 ms; the sidebar is narrow by 200 (25 Nov 2026, Asher: "speed up the animation" - were 90 and 280).
+        Assert.False(FocusChoreography.At(70, true, null, 8).Pressed);
+        Assert.Equal(1, FocusChoreography.At(200, true, null, 8).Sidebar);
     }
 
     [Fact]
@@ -138,9 +138,9 @@ public sealed class FocusOnRaceControlTests
     }
 
     [Theory]
-    [InlineData(true, 0, 120)]
+    [InlineData(true, 0, 90)]
     [InlineData(true, 300, 300)]
-    [InlineData(false, 0, 80)]
+    [InlineData(false, 0, 60)]
     [InlineData(false, 250, 250)]
     public void The_cards_start_at_the_arrival_but_never_before_the_opening_has_had_its_moment(bool entering, double arrivedAt, double start)
     {
@@ -162,9 +162,9 @@ public sealed class FocusOnRaceControlTests
         Assert.True(glide < inbox && inbox < row && row < light && light < handOver, $"glide {glide}, inbox {inbox}, row {row}, light {light}, hand-over {handOver}");
         Assert.Equal(a + FocusChoreography.InboxDelay + 1, inbox);
 
-        // The rows one after another, 35 ms apart.
-        Assert.Equal(0, FocusChoreography.RowIn(a + FocusChoreography.RowsDelay + 30, 1, a));
-        Assert.True(FocusChoreography.RowIn(a + FocusChoreography.RowsDelay + 40, 1, a) > 0);
+        // The rows one after another, 24 ms apart.
+        Assert.Equal(0, FocusChoreography.RowIn(a + FocusChoreography.RowsDelay + 20, 1, a));
+        Assert.True(FocusChoreography.RowIn(a + FocusChoreography.RowsDelay + 30, 1, a) > 0);
 
         // Done once the hand-over is over, and not before - and every band of
         // the inbox, its foot too, is in before the hand-over starts (found in

@@ -119,3 +119,15 @@ Measured:
 - **Real stage, six rounds:** it played every time. The stage was up 158–289 ms after the press. That is the picture before, taken with `PrintWindow`: 143–272 ms with two other test runs on the PC. The stage's own start is 13–33 ms, overlapped with the picture (it was 58–122 after it).
 
 Not met: **"the first frame within 16 ms of the press."** The button shows its own press at once, but the stage's first frame waits for the picture before. Copying the window off the screen instead (a few ms) was tried: in the test process it differed from `PrintWindow` in 72% of pixels (display scaling), and it was refused whenever the window wasn't in front. A wrong picture is worse than a late one, so it was taken out. It is worth another try in the real app, where the scaling matches.
+
+## Faster (25 Nov 2026, Asher: "speed up the animation")
+
+Measured on a real window before the change, a Focus press took 1.1 to 1.9 s to settle. Three things made it slow, and each was fixed with a regression test (`FocusSpeedTests`):
+
+1. **The pictures.** `PrintWindow` took 150 to 700 ms a picture, once before the stage could go up and once after the view had changed. The window's own drawing surface is now copied with `BitBlt` from its window DC instead. That takes 7 to 14 ms and gives the same picture pixel for pixel, on screen, off screen and with another window over it. `PrintWindow` is kept for when the copy fails. Unlike the screen copy tried before, this reads the window, not the screen, so the stage on top doesn't get into the picture. The stage is now up 23 to 88 ms after the press, where it was 158 to 289.
+2. **Docking the spare inbox: 260 to 460 ms.** A trace (dotnet-trace, sampled thread time) showed that `Controls.Add` takes a part out of its old parent first. In between, WinForms parks the part's window out of sight, so every part of the inbox was hidden, laid out, shown and laid out again. Now the spare's parking panel becomes the dock (`ParkingBecomesDock`). It takes the empty dock's place in the window's order and is docked right, so the inbox never moves. The inbox step is now 4 to 50 ms, and the whole view change for Focus is 160 to 320 ms, where it was 700 to 940.
+3. **The start-up warming.** `WarmPagesInTurn` ticks every millisecond, and its steps ran ahead of the picture after. A Focus pressed in the first half-minute waited 0.5 to 4.3 s for it, and once ran out its six seconds. The warming now waits while a stage is up.
+
+Every timing is also about 30% shorter: press 70, sidebar 200, cards 230, inbox 240, rows from 120 at 24 ms apart, light 240 to 350, hand-over 60. After the view has changed, Focus now runs about 440 ms, where it ran about 620.
+
+Result, six rounds on a real window: the stage is up within 50 ms of the press and gone 650 to 900 ms after it. "The first frame within 16 ms of the press" is still not met (the stage's own window takes 20 to 40 ms to come up), but it's close.

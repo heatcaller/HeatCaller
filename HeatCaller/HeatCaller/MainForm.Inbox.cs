@@ -199,7 +199,8 @@ public partial class MainForm
 
             if (_spareParking is not { IsDisposed: false })
             {
-                _spareParking = new Panel { Enabled = false, TabStop = false };
+                // The dock's own colour: it becomes the dock when the spare is taken.
+                _spareParking = new Panel { Enabled = false, TabStop = false, BackColor = AppTheme.Background };
                 Controls.Add(_spareParking);
             }
 
@@ -284,14 +285,13 @@ public partial class MainForm
 
             // WHY (25 Nov 2026, the Focus animation): the spare comes straight
             // from its parking place, as it is - shown, docked to fill, at the
-            // dock's size - so moving it is one change of parent. Hidden, taken
-            // out and put back in, then shown, it took 150-250 ms of a Focus.
-            if (!form.TopLevel && _spareParking is not null && form.Parent == _spareParking)
+            // dock's size. Hidden, taken out and put back in, then shown, it
+            // took 150-250 ms of a Focus; and since 25 Nov 2026 it is not moved
+            // at all - its parking place becomes the dock (ParkingBecomesDock).
+            if (!form.TopLevel && _spareParking is { } parking && form.Parent == parking)
             {
                 EnsureInboxDock();
-                _inboxDock!.Controls.Add(form);
-                _inboxSplit!.Visible = true;
-                _inboxDock.Visible = true;
+                ParkingBecomesDock(parking);
                 return;
             }
 
@@ -322,6 +322,39 @@ public partial class MainForm
                 form.Show(this);
             }
         }
+    }
+
+    /// <summary>
+    /// The spare's parking place, with the spare in it, takes the empty
+    /// dock's place down the right of the window and becomes the dock.
+    ///
+    /// WHY (25 Nov 2026, Asher: "speed up the animation"): moving the spare
+    /// from its parking place into the dock was 260-460 ms of each Focus. A
+    /// trace showed why: WinForms takes a part out of its old parent before
+    /// putting it in the new one, and in between parks its window out of
+    /// sight - so every part of the inbox was hidden, laid out, shown and
+    /// laid out again. Nothing moves now: the panel the spare is already
+    /// in is docked at the old dock's place in the window's order, at the
+    /// dock's width, and the old dock, empty, goes.
+    /// </summary>
+    private void ParkingBecomesDock(Panel parking)
+    {
+        var old = _inboxDock!;
+
+        parking.Width = old.Width;
+        parking.BackColor = old.BackColor;
+        Controls.SetChildIndex(parking, Controls.GetChildIndex(old));
+        parking.Dock = DockStyle.Right;
+        parking.Enabled = true;
+        parking.TabStop = old.TabStop;
+
+        Controls.Remove(old);
+        old.Dispose();
+
+        _inboxDock = parking;
+        _spareParking = null;
+        _inboxSplit!.Visible = true;
+        parking.Visible = true;
     }
 
     /// <summary>
@@ -424,11 +457,14 @@ public partial class MainForm
             Visible = false,
         };
 
-        var dock = _inboxDock;
+        // The dock as it is then: a spare's parking place can become it (ParkingBecomesDock).
         _inboxSplit.SplitterMoved += (_, _) =>
         {
-            _settings.InboxDockWidth = dock.Width;
-            _settings.Save();
+            if (_inboxDock is { } dock)
+            {
+                _settings.InboxDockWidth = dock.Width;
+                _settings.Save();
+            }
         };
 
         Controls.Add(_inboxSplit);
