@@ -164,7 +164,7 @@ A transponder sitting near the loop, or a car that bounces over it after a crash
 
 The limit is **Min valid lap (ms):** in the race format. The default is 3000 ms (3 seconds), and you can set anything from 100 to 60000 ms.
 
-- To change it for the current race, click **Format** on the **Race Control** page.
+- To change it for the current race, click the pen beside the format at the foot of the **Race Control** leaderboard.
 - Each class can have its own format, and a round can override its class. See [Running a race](../race-control/running-a-race.md).
 - A venue can carry its own default as **Minimum lap time (ms):** on the **Venues** page.
 

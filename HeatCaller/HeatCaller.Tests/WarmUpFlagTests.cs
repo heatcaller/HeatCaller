@@ -225,9 +225,9 @@ public sealed class WarmUpFlagTests : IDisposable
         var layout = Source("RaceControlControl.Layout.cs");
         var onAir = Source("RaceControlControl.OnAir.cs");
 
-        Assert.Contains("_chkStartWithOnAir, _swWarmUpFirst, _swAutoStart", layout, StringComparison.Ordinal);
-        // "Warm-up:" since 15 Nov 2026, so the footer fits on one row at 1280 wide.
-        Assert.Contains("new(\"Warm-up:\", \"Off\", \"On\")", onAir, StringComparison.Ordinal);
+        Assert.Contains("new BoardFootRow(new Control[] { _chkStartWithOnAir, _swWarmUpFirst, _swAutoStart }", layout, StringComparison.Ordinal);
+        // A lit pill, "Warm-up", since 24 Nov 2026 (it was "Warm-up: Off | On").
+        Assert.Contains("private readonly LitPill _swWarmUpFirst = new(\"Warm-up\");", onAir, StringComparison.Ordinal);
     }
 
     [Fact]

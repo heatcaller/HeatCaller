@@ -58,38 +58,19 @@ public partial class RaceControlControl
 
     /// <summary>
     /// DOCK INBOX (22 Nov 2026, asked for by Asher: "make a button next to
-    /// expand on race control to dock the inbox"). At the foot of the board,
-    /// beside Expand: one press puts the inbox in the dock down the right of
-    /// the main window - opening it if it is closed - and it then reads
-    /// Undock Inbox, which makes it a window of its own again. Before, it
-    /// could only be docked from the tick at the inbox's own foot, and the
-    /// flag row's Inbox button is only there while something is waiting.
-    /// The rules are in <see cref="InboxDockButton"/>.
-    ///
-    /// A PICTURE, NOT WORDS (22 Nov 2026, Asher's pick of three): the row
-    /// it stands on was made tight to stay "on one level" (15 Nov), and at
-    /// a 1280-wide window it has 46 pixels left where "Dock Inbox" needs
-    /// 120 - in words the button dropped to a second row and the board lost
-    /// a driver's row. So it is a square with a window drawn in it, a panel
-    /// down its right-hand side - filled while the inbox is docked - and
-    /// the words are its tooltip and its name for a screen reader.
-    ///
-    /// The button itself is DockInboxSquare since 24 Nov 2026, shared with
-    /// Practice.
+    /// expand on race control to dock the inbox") was a square beside Expand
+    /// at the foot of the board. Since 24 Nov 2026 it is "Inbox only" on the
+    /// Focus button's menu, and Focus itself docks the inbox along with the
+    /// wide board - see FocusSplitButton and MainForm.Focus. Practice keeps
+    /// its square (DockInboxSquare).
     /// </summary>
-    private readonly DockInboxSquare _btnDockInbox = new();
+    private bool _inboxDockedOnScreen;
 
-    /// <summary>Dock Inbox was pressed: the host docks the inbox (true) or makes it a window of its own again (false).</summary>
-    internal event Action<bool>? DockInboxRequested;
+    /// <summary>The inbox docked, undocked or closed, from anywhere.</summary>
+    internal void ShowInboxDocked(bool dockedOnScreen) => _inboxDockedOnScreen = dockedOnScreen;
 
-    /// <summary>The Dock Inbox button - for the tests.</summary>
-    internal Button DockInboxButton => _btnDockInbox;
-
-    /// <summary>The inbox docked, undocked or closed, from anywhere - for Dock Inbox's caption.</summary>
-    internal void ShowInboxDocked(bool dockedOnScreen) => _btnDockInbox.ShowDocked(dockedOnScreen);
-
-    /// <summary>Wires Dock Inbox. Called once, by BuildLayout, before the button goes on its row.</summary>
-    private void BuildDockInboxButton() => _btnDockInbox.DockRequested += dock => DockInboxRequested?.Invoke(dock);
+    /// <summary>Whether the host last said the inbox is docked on screen - for the tests.</summary>
+    internal bool InboxDockedOnScreen => _inboxDockedOnScreen;
 
     /// <summary>The badge's colour: red while anything waiting holds up the next race, dark otherwise.</summary>
     internal static Color DeskBadgeColour(bool urgent) => urgent ? DeskBadgeRed : DeskBadgeCalm;

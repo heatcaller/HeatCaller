@@ -2304,13 +2304,12 @@ public partial class MainForm
         _raceControlControl.OwnBestGhosts = () => OwnBestGhost.ChasedBy(_ghostStore.Current);
         _raceControlControl.MissionControlRequested += ShowMissionControl;
 
-        // Expand board (15 Nov 2026): the sidebar narrowed with the column under the clock.
-        _raceControlControl.ExpandBoardRequested += SlideNavIconsOnly;
+        // Focus (24 Nov 2026), in place of Expand board (15 Nov) and Dock
+        // Inbox (22 Nov): the wide board and the docked inbox in one press,
+        // or either alone from its menu - see MainForm.Focus.
+        _raceControlControl.FocusRequested += FocusFromRaceControl;
+        _raceControlControl.SideFoldChanged += NoteFocusView;
         _raceControlControl.ShowNavNarrowed(_navIconsOnly);
-
-        // Dock Inbox (22 Nov 2026), beside Expand: the inbox into the dock
-        // down the right of this window, or back out of it.
-        _raceControlControl.DockInboxRequested += DockInboxFromRaceControl;
         ShowInboxDockedOnRaceControl();
 
         // Brings Race Control forward without closing the announcer's

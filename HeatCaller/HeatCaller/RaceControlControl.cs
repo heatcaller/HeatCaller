@@ -237,9 +237,13 @@ public sealed partial class RaceControlControl : UserControl
     private RaceFormat _fmt = new();
 
     /// <summary>The chip that says which format is in force and where it came from.</summary>
-    private readonly Label _lblFormat = new();
+    private readonly Label _lblFormat = new FormatLineLabel();
 
-    private readonly Button _btnFormat = new();
+    private readonly Button _btnFormat = new FormatPenSquare();
+
+    /// <summary>The format line's tooltip: the whole format, where it comes from - see ApplyEffectiveFormat.</summary>
+    private readonly ToolTip _formatTip = new();
+
     private readonly Button _btnQuickRace = new();
 
     // --- The Next Up bar ---

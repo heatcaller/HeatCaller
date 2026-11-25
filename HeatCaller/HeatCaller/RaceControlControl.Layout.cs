@@ -46,34 +46,82 @@ public sealed partial class RaceControlControl
         }
     }
 
-    /// <summary>At the foot of the board: folds the sidebar and the column under the clock together - see BuildLayout.</summary>
-    private readonly Button _btnExpandBoard = new() { Text = "Expand" };
+    /// <summary>
+    /// FOCUS (24 Nov 2026, option B of six, asked for by Asher: "one button
+    /// press that expands the leaderboard and loads in the docked inbox"): at
+    /// the right of the foot of the board, in place of Expand and the dock
+    /// square. Its main part is Focus (Restore while focused); its arrow has
+    /// Wide board only - what Expand did - and Inbox only - what the dock
+    /// square did. The host does each (MainForm.Focus); see FocusView.
+    /// </summary>
+    private readonly FocusSplitButton _btnFocus = new();
 
     /// <summary>The sidebar is narrowed to its icons - told by MainForm (ShowNavNarrowed).</summary>
     private bool _navNarrowed;
 
-    /// <summary>Asks for the sidebar narrowed (true) or opened (false), with Expand board.</summary>
-    public event Action<bool>? ExpandBoardRequested;
+    /// <summary>Focus, Wide board only or Inbox only was pressed - for the host to do.</summary>
+    internal event Action<FocusAsk>? FocusRequested;
 
-    /// <summary>Both sides folded: the sidebar narrowed to its icons, and the column under the clock folded away.</summary>
-    private bool BoardExpanded => _navNarrowed && _settings.RaceControlSideFolded;
+    /// <summary>The column under the clock was folded or opened from here (the clock's chevron) - the host keeps Focus's caption right.</summary>
+    internal event Action? SideFoldChanged;
 
-    /// <summary>The sidebar narrowed or opened, from anywhere - for Expand board's caption.</summary>
-    internal void ShowNavNarrowed(bool narrowed)
+    /// <summary>The Focus button - for the host and the tests.</summary>
+    internal FocusSplitButton FocusButton => _btnFocus;
+
+    /// <summary>The sidebar narrowed or opened, from anywhere.</summary>
+    internal void ShowNavNarrowed(bool narrowed) => _navNarrowed = narrowed;
+
+    /// <summary>Whether the column under the clock is folded.</summary>
+    internal bool SideFolded => _settings.RaceControlSideFolded;
+
+    /// <summary>Focus's caption and its menu's ticks, for the view as it is now - told by MainForm whenever any part of it changes.</summary>
+    internal void ShowFocusState(FocusViewState now) =>
+        _btnFocus.ShowState(FocusView.IsFocused(now), wide: now.NavNarrowed && now.SideFolded, inboxDocked: now.Inbox == InboxPlace.Docked);
+
+    /// <summary>
+    /// Folds the column under the clock, or opens it, saved for next time.
+    /// <paramref name="slide"/>: slid there (Beside.SlideTo); false, at once -
+    /// under the Focus stage, which plays the move itself from pictures.
+    /// </summary>
+    internal void SetSideFolded(bool folded, bool slide)
     {
-        _navNarrowed = narrowed;
-        ShowExpandCaption();
-    }
-
-    private void ShowExpandCaption()
-    {
-        var caption = BoardExpanded ? "Restore" : "Expand";
-
-        if (_btnExpandBoard.Text != caption)
+        if (_settings.RaceControlSideFolded == folded)
         {
-            _btnExpandBoard.Text = caption;
+            return;
+        }
+
+        _settings.RaceControlSideFolded = folded;
+        _settings.Save();
+
+        if (slide && _body is not null)
+        {
+            _body.SlideTo(ShowSideFolded);
+        }
+        else
+        {
+            // Laid out once at the end rather than once for every part that
+            // shows or hides - 340 ms of the Focus press (24 Nov 2026).
+            _body?.SuspendLayout();
+
+            try
+            {
+                ShowSideFolded();
+            }
+            finally
+            {
+                _body?.ResumeLayout(true);
+            }
         }
     }
+
+    /// <summary>The page's Beside - the clock column and the board. Set in BuildLayout.</summary>
+    private Beside? _body;
+
+    /// <summary>The leaderboard's card. Set in BuildLayout.</summary>
+    private Section? _boardCard;
+
+    /// <summary>The leaderboard's card on screen - the Focus stage runs its light along the top of it.</summary>
+    internal Rectangle BoardScreenBounds => _boardCard is { IsHandleCreated: true, Visible: true } card ? card.RectangleToScreen(card.ClientRectangle) : Rectangle.Empty;
 
     /// <summary>What the fold button hides: everything in the clock column under it.</summary>
     private readonly List<Control> _foldedAway = new();
@@ -127,8 +175,10 @@ public sealed partial class RaceControlControl
         }
 
         FitClockToFold();
-        ShowExpandCaption();
         PlaceFoldButton();
+
+        // Focus's caption and ticks follow the fold - see MainForm.NoteFocusView.
+        SideFoldChanged?.Invoke();
     }
 
     /// <summary>
@@ -304,41 +354,27 @@ public sealed partial class RaceControlControl
 
         board.AddFill(_dgvLeaderboard, LeastBoardHeight);
 
-        // The foot of the board: the things set once a night rather than
-        // pressed during a race - whether a start goes through On Air, the
-        // race format in force, and which columns the board shows.
-        board.Add(_lblFormat, gapBelow: UiLayout.HintGap);
-
-        // Auto start (11 Nov 2026) decides whether races start themselves,
-        // which a volunteer has to see.
-        // Warm-up first (14 Nov 2026) beside Start races: both say how a race
-        // starts.
-        // Tight (15 Nov 2026, asked for by Asher: "on one level"): each button
-        // as wide as its caption, so the row fits on one line beside the clock.
-        // Dock Inbox (22 Nov 2026) after Expand: both change what stands
-        // beside the board - see RaceControlControl.Desk.
-        BuildDockInboxButton();
-        var footer = new ButtonBar(tight: true).With(_chkStartWithOnAir, _swWarmUpFirst, _swAutoStart, _btnFormat, _btnExpandBoard, _btnDockInbox);
-
-        // It squares itself after the row's own sizing of it: see DockInboxSquare.
-
-        // The switches are shorter than the buttons beside them; the bar lines
-        // everything up along the top, so they are brought down to their middle.
-        footer.Layout += (_, _) =>
+        // THE FOOT OF THE BOARD, OPTION B (24 Nov 2026, asked for by Asher:
+        // "this is confusing"; plans/race-control-foot-plan.md). One row:
+        // three lit pills for how races start - On Air, Warm-up, Starts
+        // itself - a hairline, the format and its pen, and Focus at the
+        // right. It was three two-part switches ("Start: Stage | On Air",
+        // "Warm-up: Off | On", "Auto: Off | On") that read as six buttons, a
+        // Format button, Expand and the dock square, under a line of its own
+        // for the format.
+        //
+        // Before that: Auto start (11 Nov 2026) decides whether races start
+        // themselves, which a volunteer has to see; Warm-up first (14 Nov
+        // 2026) beside On Air, as both say how a race starts; one level (15
+        // Nov 2026, asked for by Asher), so the row fits beside the clock.
+        _btnFocus.Asked += ask => FocusRequested?.Invoke(ask);
+        var footer = new BoardFootRow(new Control[] { _chkStartWithOnAir, _swWarmUpFirst, _swAutoStart }, _lblFormat, _btnFormat, _btnFocus)
         {
-            foreach (var control in new Control[] { _chkStartWithOnAir, _swWarmUpFirst, _swAutoStart })
-            {
-                var drop = Math.Max(0, (_btnFormat.Height - control.Height) / 2);
-                var margin = control.Margin;
-
-                if (margin.Top != drop)
-                {
-                    control.Margin = new Padding(margin.Left, drop, margin.Right, margin.Bottom);
-                }
-            }
+            AutoSize = true,
         };
 
         board.Add(footer, gapBelow: 0);
+        _boardCard = board;
 
         // The board goes the whole width, under the clock, while the column's
         // buttons and meters are folded away - see _btnFoldSide below.
@@ -371,33 +407,14 @@ public sealed partial class RaceControlControl
         // flags card's height, so the board keeps its place. It slides there
         // rather than jumping (Beside.SlideTo). Kept from night to night
         // (AppSettings.RaceControlSideFolded).
-        _btnFoldSide.Click += (_, _) =>
-        {
-            _settings.RaceControlSideFolded = !_settings.RaceControlSideFolded;
-            _settings.Save();
-            body.SlideTo(ShowSideFolded);
-        };
+        _body = body;
+        _btnFoldSide.Click += (_, _) => SetSideFolded(!_settings.RaceControlSideFolded, slide: true);
 
         // EXPAND BOARD (15 Nov 2026, asked for by Asher: "add an expand
         // button at the bottom of board that folds both sides at the same
-        // time"). At the foot of the board: the sidebar narrowed to its
-        // icons (MainForm, through ExpandBoardRequested) and the column
-        // under the clock folded, sliding together. Pressed again with both
-        // folded, it opens both.
-        _btnExpandBoard.Click += (_, _) =>
-        {
-            var expand = !BoardExpanded;
-
-            if (_settings.RaceControlSideFolded != expand)
-            {
-                _settings.RaceControlSideFolded = expand;
-                _settings.Save();
-                body.SlideTo(ShowSideFolded);
-            }
-
-            ExpandBoardRequested?.Invoke(expand);
-            ShowExpandCaption();
-        };
+        // time") is "Wide board only" on Focus's menu since 24 Nov 2026: the
+        // sidebar narrowed and the column folded, sliding together, as it
+        // was. MainForm does it - see MainForm.Focus.
 
         _clock.Controls.Add(_btnFoldSide);
         _clock.Resize += (_, _) => PlaceFoldButton();
@@ -1764,20 +1781,15 @@ public sealed partial class RaceControlControl
             _btnWarmUp, _btnStage, _btnCountdown, _btnGreen, _btnYellow, _btnRed, _btnCheckered,
             _btnBarSkip, _btnBarHoldTalk, _btnBarCallUp, _btnBarEditResult, _btnReset, _btnBarDesk);
 
-        // The chip wraps to the card's width - the value can run long - and
-        // wears the window's font.
-        _lblFormat.AutoSize = true;
+        // On the foot's one row since 24 Nov 2026 (option B): the length and
+        // the start, shortened with "..." when the row is short of room; the
+        // whole of it - where it comes from, the warm-up, the staging and the
+        // countdown - in its tooltip. See BoardFootRow and ApplyEffectiveFormat.
         _lblFormat.ForeColor = AppTheme.TextMuted;
+        AppTheme.StyleToolTip(_formatTip, keep: true);
 
-        var formatTip = new ToolTip();
-        AppTheme.StyleToolTip(formatTip, keep: true);
-        formatTip.SetToolTip(_lblFormat,
-            "The format for the next race: the round's override, else its class's format, else the app default. "
-            + "Class formats are set on the Classes page.");
-
-        // "Format" (15 Nov 2026, asked for by Asher), short so the foot of the
-        // board stays on one row.
-        _btnFormat.Text = "Format";
+        // A pen beside the line it changes since 24 Nov 2026 (it was "Format",
+        // 15 Nov 2026) - see FormatPenSquare.
         _btnFormat.Click += (_, _) => EditFormat();
 
         ApplyEffectiveFormat();

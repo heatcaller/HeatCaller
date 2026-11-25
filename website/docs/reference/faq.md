@@ -92,7 +92,7 @@ No. A car with an unknown transponder can still race. It's listed on a banner at
 
 ### How do I set how long a race is?
 
-Races follow a *race format*: lap limit, time limit, minimum lap time, start type and so on. On a new install the app default has no lap or time limit, so a race on it runs until you throw the checkered flag (press and hold **Checkered**, or press <kbd>F6</kbd>). A class added while that's so starts with a 5-minute time limit of its own. Set the app default with **Format** on **Race Control**, give a class its own format on the **Classes** page (with a separate one for qualifiers if you like), or override a single round. See [Running a race](../race-control/running-a-race.md).
+Races follow a *race format*: lap limit, time limit, minimum lap time, start type and so on. On a new install the app default has no lap or time limit, so a race on it runs until you throw the checkered flag (press and hold **Checkered**, or press <kbd>F6</kbd>). A class added while that's so starts with a 5-minute time limit of its own. Set the app default with the pen beside the format at the foot of **Race Control**'s leaderboard, give a class its own format on the **Classes** page (with a separate one for qualifiers if you like), or override a single round. See [Running a race](../race-control/running-a-race.md).
 
 ### Can I run more than one class on the same night?
 

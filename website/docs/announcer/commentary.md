@@ -658,7 +658,7 @@ A race day can use a different preset for that day only: **Between-race talk:** 
 | **Sponsor reads, at most one every:** | The least time between sponsor reads in the gap. Whether there are reads at all is on the **Sponsors** page. | 2 minutes |
 | **Quiet after the recap:** | Silence after the recap show before anything else is said. | 10 seconds |
 | **Quiet before the call:** | Nothing new starts this close to the next race's run-sheet time, not even a call-up, so the grid call goes out clean. Only the countdown still speaks. | 20 seconds |
-| **Play call-ups after the recap when On Air opens the next race** | With **Start:** set to **On Air**, call-ups still play after the recap. The hand-over and **Coming up next** stay off then, because On Air's opening says the same thing. | On |
+| **Play call-ups after the recap when On Air opens the next race** | With the **On Air** pill lit on **Race Control**, call-ups still play after the recap. The hand-over and **Coming up next** stay off then, because On Air's opening says the same thing. | On |
 | **In a long break, say when racing resumes, once** | In a break longer than the minutes you set, the announcer says once when racing starts again, and the call-ups wait until racing is near. | On, 10 minutes |
 
 **What it says** has a tick box for each kind of line: **Call-up: next race to the drivers stand**, **Call-up: two races out**, **Marshals to their posts**, **Not checked in** (names only drivers the check-in list shows as missing), **Hand-over** ("That was Heat 2. Still to come, Heat 3."), **Coming up next** (written by the commentary), **Segments from Through the night**, **Club notes** and **Timetable countdown**. All are on except two races out and not checked in.

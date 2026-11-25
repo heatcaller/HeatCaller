@@ -502,6 +502,25 @@ public static class AppTheme
     /// </summary>
     public static void ThemeEveryMenu() => ToolStripManager.Renderer = new ThemedMenuRenderer();
 
+    /// <summary>The menu items drawn as a title and a muted line under it - see SetMenuNote.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ToolStripItem, MenuNote> MenuNotes = new();
+
+    private sealed record MenuNote(string Title, string Note);
+
+    /// <summary>
+    /// A menu item drawn as its title with one muted line of help under it
+    /// (24 Nov 2026, the Focus button's menu): "Wide board only" over
+    /// "Sidebar and clock column folded". The item is measured two lines tall
+    /// by its text; the themed renderer draws the two lines.
+    /// </summary>
+    public static void SetMenuNote(ToolStripMenuItem item, string title, string note)
+    {
+        item.Text = title + "\n" + note;
+        item.AccessibleName = title;
+        item.AccessibleDescription = note;
+        MenuNotes.AddOrUpdate(item, new MenuNote(title, note));
+    }
+
     /// <summary>
     /// Fonts and padding for every item, including submenus, since a
     /// submenu is a separate drop-down with its own item collection.
@@ -626,6 +645,20 @@ public static class AppTheme
 
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
         {
+            // A title and a muted line under it - see SetMenuNote.
+            if (MenuNotes.TryGetValue(e.Item, out var note))
+            {
+                var box = e.TextRectangle;
+                var half = box.Height / 2;
+                var flags = TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding;
+
+                TextRenderer.DrawText(e.Graphics, note.Title, BoldFont, new Rectangle(box.X, box.Y, box.Width, half),
+                    e.Item.Enabled ? TextDark : TextMuted, flags | TextFormatFlags.Bottom);
+                TextRenderer.DrawText(e.Graphics, note.Note, SmallFont, new Rectangle(box.X, box.Y + half + UiLayout.AtDpi(2), box.Width, box.Height - half),
+                    TextMuted, flags | TextFormatFlags.Top);
+                return;
+            }
+
             e.TextColor = !e.Item.Enabled ? TextMuted
                 : e.Item.Tag is DangerMenuItem ? Danger
                 : TextDark;
