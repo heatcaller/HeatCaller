@@ -419,7 +419,7 @@ public sealed class FocusOnRaceControlTests
                 StaThread.Settle();
 
                 var oneRow = focus.Parent == pill.Parent && Math.Abs(focus.Top + focus.Height / 2 - (pill.Top + pill.Height / 2)) <= 1
-                             && focus.Right == focus.Parent!.ClientSize.Width && pen.Right < focus.Left && auto.Right < pen.Left;
+                             && focus.Info.Right == focus.Parent!.ClientSize.Width && focus.Info.Left > focus.Right && pen.Right < focus.Left && auto.Right < pen.Left;
                 var row = string.Join(" | ", focus.Parent!.Controls.Cast<Control>().Select(c => $"{c.GetType().Name} {c.Text} L{c.Left} T{c.Top} W{c.Width}"));
 
                 string State() => $"{focus.Text}: nav={Field<bool>(window, "_navIconsOnly")} side={page.SideFolded} inbox={Inbox(window)}";
@@ -457,7 +457,7 @@ public sealed class FocusOnRaceControlTests
             }
         }, TimeSpan.FromMinutes(3), () => "Race Control's Focus button");
 
-        Assert.True(seen.oneRow, "pills, pen and Focus share one row at 1280 wide, Focus against the right - " + seen.row);
+        Assert.True(seen.oneRow, "pills, pen and Focus share one row at 1280 wide, Focus and its i circle against the right - " + seen.row);
         Assert.Equal(new[]
         {
             "Focus: nav=False side=False inbox=Closed",

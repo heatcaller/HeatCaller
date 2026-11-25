@@ -329,9 +329,9 @@ public sealed partial class RaceControlControl
         // The length and the start on the row; the whole format, and where it
         // comes from, in the tooltip (24 Nov 2026, option B).
         _lblFormat.Text = _fmt.DescribeBrief();
-        _formatTip.SetToolTip(_lblFormat, $"Format ({source}): {_fmt.Describe()}. "
+        _infoFormat.TipText = $"Format ({source}): {_fmt.Describe()}. "
             + "The format for the next race: the round's override, else its class's format, else the app default. "
-            + "Class formats are set on the Classes page. The pen changes it.");
+            + "Class formats are set on the Classes page. The pen changes it.";
     }
 
     /// <summary>For MainForm to call when the round selection changes - the format follows the round.</summary>

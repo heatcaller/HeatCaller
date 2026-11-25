@@ -24,7 +24,13 @@ internal sealed class FocusSplitButton : Control
     private readonly ToolStripMenuItem _miFocus = new();
     private readonly ToolStripMenuItem _miWide = new();
     private readonly ToolStripMenuItem _miInbox = new();
-    private readonly ToolTip _tip = new();
+
+    /// <summary>
+    /// Focus's explanation, in an "i" circle the foot of the board puts
+    /// after it (25 Nov 2026, Asher: "put them behind a small circle with an
+    /// i in it") - it used to pop up off the button itself. See InfoDot.
+    /// </summary>
+    public InfoDot Info { get; } = new() { AccessibleName = "About Focus" };
 
     /// <summary>Which part the mouse is over: 0 the main part, 1 the arrow, -1 neither.</summary>
     private int _hot = -1;
@@ -63,7 +69,6 @@ internal sealed class FocusSplitButton : Control
         AppTheme.StyleContextMenu(_menu);
         ContextMenuStrip = _menu;
 
-        AppTheme.StyleToolTip(_tip, keep: true);
         ShowState(focused: false, wide: false, inboxDocked: false);
     }
 
@@ -91,9 +96,9 @@ internal sealed class FocusSplitButton : Control
 
         AccessibleName = caption;
         AccessibleDescription = "More views: press the arrow, or right-click.";
-        _tip.SetToolTip(this, focused
+        Info.TipText = focused
             ? "Restore: the sidebar, the clock column and the inbox back as they were before Focus. The arrow has Wide board only and Inbox only."
-            : "Focus: the sidebar narrowed, the clock column folded and the inbox docked down the right, in one press. The arrow has Wide board only and Inbox only.");
+            : "Focus: the sidebar narrowed, the clock column folded and the inbox docked down the right, in one press. The arrow has Wide board only and Inbox only.";
 
         Invalidate();
     }
@@ -382,7 +387,7 @@ internal sealed class FocusSplitButton : Control
         {
             _bold?.Dispose();
             _menu.Dispose();
-            _tip.Dispose();
+            Info.Dispose();
         }
 
         base.Dispose(disposing);
