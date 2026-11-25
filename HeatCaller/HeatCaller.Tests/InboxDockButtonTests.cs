@@ -52,20 +52,22 @@ public sealed class InboxDockButtonTests
         Assert.Equal("Dock Inbox", InboxDockButton.Caption(InboxDockButton.DockedOnScreen(open: false, inItsOwnWindow: false)));
     }
 
+    // Race Control's square went on 24 Nov 2026: docking the inbox there is
+    // Focus, or "Inbox only" on Focus's menu - see FocusOnRaceControlTests.
+    // Practice keeps the square.
     [Fact]
-    public void It_stands_beside_Expand_at_the_foot_of_the_board()
+    public void The_square_docks_by_the_rules_and_Race_Control_docks_through_Focus()
     {
-        Assert.Contains("_btnFormat, _btnExpandBoard, _btnDockInbox);", Source("RaceControlControl.Layout.cs"), StringComparison.Ordinal);
-
-        // The button is DockInboxSquare since 24 Nov 2026, shared with Practice.
         Assert.Contains("Click += (_, _) => DockRequested?.Invoke(InboxDockButton.DockOnPress(_dockedOnScreen));", Source("DockInboxSquare.cs"), StringComparison.Ordinal);
-        Assert.Contains("_btnDockInbox.DockRequested += dock => DockInboxRequested?.Invoke(dock);", Source("RaceControlControl.Desk.cs"), StringComparison.Ordinal);
+        Assert.DoesNotContain("DockInboxSquare", Source("RaceControlControl.Desk.cs").Replace("(DockInboxSquare)", string.Empty), StringComparison.Ordinal);
+        Assert.Contains("DockInboxFromRaceControl(true);", Source("MainForm.Focus.cs"), StringComparison.Ordinal);
     }
 
     [Fact]
     public void The_host_saves_the_choice_then_moves_or_opens_the_inbox_and_tells_the_button()
     {
-        Assert.Contains("_raceControlControl.DockInboxRequested += DockInboxFromRaceControl;", Source("MainForm.Pages.cs"), StringComparison.Ordinal);
+        // Through Focus since 24 Nov 2026 - see FocusOnRaceControlTests.
+        Assert.Contains("_raceControlControl.FocusRequested += FocusFromRaceControl;", Source("MainForm.Pages.cs"), StringComparison.Ordinal);
 
         var host = Source("MainForm.Inbox.cs");
         var press = host[host.IndexOf("internal void DockInboxFromRaceControl(bool dock)", StringComparison.Ordinal)..];
@@ -100,90 +102,7 @@ public sealed class InboxDockButtonTests
         Assert.StartsWith("Undock Inbox - ", InboxDockButton.Tip(dockedOnScreen: true), StringComparison.Ordinal);
     }
 
-    private static T Field<T>(object owner, string name) =>
-        (T)owner.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(owner)!;
-
-    // The real page in the real window: every press, and what the button reads after it.
-    [Fact]
-    public void On_the_page_a_press_docks_it_the_next_undocks_it_and_closing_it_puts_the_caption_back()
-    {
-        var seen = StaThread.Run(() =>
-        {
-            using var data = new TempAppData();
-
-            new AppSettings
-            {
-                StartMaximized = false,
-                HasCompletedFirstRun = true,
-                HasSeenRaceDaySetup = true,
-                AutoBackupEnabled = false,
-                ConnectDecodersAtStartup = false,
-            }.Save();
-
-            var window = new MainForm { LayoutCheckMode = true, StartPosition = FormStartPosition.Manual, Location = new Point(-20000, -20000) };
-
-            try
-            {
-                window.Show();
-                StaThread.Settle();
-
-                var page = Field<RaceControlControl>(window, "_raceControlControl");
-                var button = page.DockInboxButton;
-                var expand = Field<Button>(page, "_btnExpandBoard");
-                var format = Field<Button>(page, "_btnFormat");
-                DeskInboxForm? Inbox() => (DeskInboxForm?)typeof(MainForm).GetField("_inboxForm", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window);
-
-                var log = new List<string>();
-                void Note(string step) => log.Add($"{step}: \"{button.AccessibleName}\" open={Inbox() is { IsDisposed: false }} window={Inbox()?.TopLevel} saved={AppSettings.Load().InboxDocked} square={button.Width == button.Height && button.Text.Length == 0}");
-
-                // WHY (22 Nov 2026): in words ("Dock Inbox") the button needed 120 pixels where a
-                // 1280-wide window leaves the row 46, and dropped to a second row - so it is a picture.
-                window.SizeContentForLayoutCheck(new Size(1280, 800));
-                StaThread.Settle();
-                var oneRow = button.Parent == expand.Parent && button.Top == expand.Top && format.Top == expand.Top && button.Left > expand.Right - 1;
-
-                var row = "bar " + button.Parent!.Width + ": " + string.Join(" | ", button.Parent.Controls.Cast<Control>().Select(c => $"{c.Text} L{c.Left} T{c.Top} W{c.Width}"));
-                Note("start");
-
-                button.PerformClick();
-                StaThread.Settle();
-                Note("pressed closed");
-
-                button.PerformClick();
-                StaThread.Settle();
-                Note("pressed docked");
-
-                // Minimised in its own window, a press still docks it, and not minimised.
-                Inbox()!.WindowState = FormWindowState.Minimized;
-                button.PerformClick();
-                StaThread.Settle();
-                Note("pressed minimised");
-                var state = Inbox()!.WindowState;
-
-                // Closed while docked: the choice stays saved, the button offers to dock again.
-                Inbox()!.Close();
-                StaThread.Settle();
-                Note("closed docked");
-
-                return (oneRow, row, state, log);
-            }
-            finally
-            {
-                window.Close();
-                window.Dispose();
-                StaThread.Settle();
-            }
-        }, TimeSpan.FromMinutes(2), () => "Race Control's Dock Inbox button");
-
-        Assert.True(seen.oneRow, "Format, Expand and Dock Inbox share one row at 1280 wide - " + seen.row);
-        Assert.Equal(FormWindowState.Normal, seen.state);
-        Assert.Equal(new[]
-        {
-            "start: \"Dock Inbox\" open=False window= saved=False square=True",
-            "pressed closed: \"Undock Inbox\" open=True window=False saved=True square=True",
-            "pressed docked: \"Dock Inbox\" open=True window=True saved=False square=True",
-            "pressed minimised: \"Undock Inbox\" open=True window=False saved=True square=True",
-            "closed docked: \"Dock Inbox\" open=False window= saved=True square=True",
-        }, seen.log);
-    }
+    // The real-window test of Race Control's square (every press, and what it
+    // read after it) is FocusOnRaceControlTests' since 24 Nov 2026, through
+    // Focus's "Inbox only".
 }

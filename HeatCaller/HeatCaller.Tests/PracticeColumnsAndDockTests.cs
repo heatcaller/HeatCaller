@@ -205,7 +205,7 @@ public sealed class PracticeColumnsAndDockTests
                 var inbox = (Form?)typeof(MainForm).GetField("_inboxForm", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window);
 
                 return (columnsButton, beside, picture, before, docked: inbox is { IsDisposed: false, TopLevel: false },
-                    practice: dock.AccessibleName, raceControl: raceControl.DockInboxButton.AccessibleName);
+                    practice: dock.AccessibleName, raceControl: raceControl.InboxDockedOnScreen);
             }
             finally
             {
@@ -221,6 +221,7 @@ public sealed class PracticeColumnsAndDockTests
         Assert.Equal("Dock Inbox", seen.before);
         Assert.True(seen.docked, "a press docks the inbox, opening it");
         Assert.Equal("Undock Inbox", seen.practice);
-        Assert.Equal("Undock Inbox", seen.raceControl);
+        // Race Control is told too - its Focus button reads the dock (24 Nov 2026).
+        Assert.True(seen.raceControl, "Race Control is told the inbox is docked");
     }
 }

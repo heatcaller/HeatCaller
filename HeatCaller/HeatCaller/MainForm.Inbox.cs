@@ -179,6 +179,9 @@ public partial class MainForm
     {
         _raceControlControl?.ShowInboxDocked(InboxDockedOnScreen);
         _practiceControl?.ShowInboxDocked(InboxDockedOnScreen);
+
+        // And Race Control's Focus button (24 Nov 2026) - see MainForm.Focus.
+        NoteFocusView();
     }
 
     /// <summary>

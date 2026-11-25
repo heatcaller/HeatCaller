@@ -177,7 +177,12 @@ Its columns are **Sent**, **Kind**, **From**, **What**, **Answer** and **Ref**. 
 
 ## Docking it in the main window
 
-Tick **Dock in the main window** and the Inbox moves into a panel down the right of the main window, beside Race Control. The small button beside **Expand** at the foot of Race Control's leaderboard, and the same button beside **Expand** under Practice's **This session** table, does the same in one press, and opens the Inbox first if it's closed. It has a picture of a window with a panel down its right-hand side, and its tooltip reads **Dock Inbox**. Drag the splitter between them to make it wider or narrower; the width is remembered.
+Tick **Dock in the main window** and the Inbox moves into a panel down the right of the main window, beside Race Control. Two buttons do the same in one press, and open the Inbox first if it's closed:
+
+- On **Race Control**, **Focus** at the foot of the leaderboard docks it along with the wide leaderboard, and **Inbox only** on its arrow docks it alone (see [Make the leaderboard bigger](running-a-race.md#make-the-leaderboard-bigger)).
+- On **Practice**, the small button beside **Expand** under the **This session** table. It has a picture of a window with a panel down its right-hand side, and its tooltip reads **Dock Inbox**.
+
+Drag the splitter between them to make it wider or narrower; the width is remembered. While **Focus** is on, the docked Inbox is no wider than 400 pixels, and it goes back to your width afterwards.
 
 Narrower than about 760 pixels, it rearranges itself to fit:
 
@@ -188,4 +193,4 @@ Narrower than about 760 pixels, it rearranges itself to fit:
 
 ![The Inbox docked down the right of the main window: the filters as chips across the top from All to Done, the list in two-line rows, and the picked Skip my race request with Approve, Decline and Later in a bar under it](../assets/images/inbox-docked.png)
 
-While the Inbox is docked, the panel in the button's picture is filled in and its tooltip reads **Undock Inbox**. Press it, or untick **Dock in the main window**, to make the Inbox a window of its own again. **Close** closes the docked Inbox, and the button goes back to **Dock Inbox**.
+While the Inbox is docked, the panel in Practice's button's picture is filled in and its tooltip reads **Undock Inbox**. Press it, choose **Inbox only** on Race Control's **Focus** arrow, or untick **Dock in the main window**, to make the Inbox a window of its own again. **Close** closes the docked Inbox.

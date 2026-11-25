@@ -5,7 +5,8 @@ namespace HeatCaller;
 /// "keep the night moving"). See AutoStartClock for the rule.
 ///
 /// What it adds to Race Control:
-///  - "Auto start: Off | On" at the foot of the board, beside "Start races".
+///  - "Auto start: Off | On" at the foot of the board, beside "Start races" -
+///    since 24 Nov 2026 a lit pill, "Starts itself" (LitPill).
 ///    Off is for tonight only; its right-click menu picks the gap, and can
 ///    turn it off until it is switched back on.
 ///  - The Next Up bar says when the next race starts ("starts in 1:42"), and
@@ -28,10 +29,10 @@ public sealed partial class RaceControlControl
 {
     private readonly AutoStartClock _autoStart = new();
 
-    /// <summary>"Auto start: Off | On" - at the foot of the board.</summary>
-    // "Auto:" rather than "Auto start:" (15 Nov 2026), so the foot of the
-    // board fits on one row at 1280 wide, with "Start:" and "Warm-up:".
-    private readonly SegmentedSwitch _swAutoStart = new("Auto:", "Off", "On") { Compact = true };
+    /// <summary>"Starts itself" - Auto start, at the foot of the board.</summary>
+    // A lit pill since 24 Nov 2026, "Starts itself" - "Auto: On" did not say
+    // that races start by themselves. See LitPill.
+    private readonly LitPill _swAutoStart = new("Starts itself");
 
     /// <summary>Hold / Resume, beside Start Next on the Next Up bar.</summary>
     private readonly Button _btnAutoHold = new();
@@ -204,9 +205,9 @@ public sealed partial class RaceControlControl
         var tip = new ToolTip();
         AppTheme.StyleToolTip(tip, keep: true);
         tip.SetToolTip(_swAutoStart,
-            "On: after each race, the next one starts by itself once the gap is up (right-click to choose it). "
+            "Lit: after each race, the next one starts by itself once the gap is up (right-click to choose it). "
             + "The call-ups are timed to it, Hold on the Next Up bar stops the clock, and a car the loop hasn't heard "
-            + "waits for you to say start without it. Off is for tonight only.");
+            + "waits for you to say start without it. Turned dark, it is off for tonight only.");
 
         _btnAutoHold.Text = HoldCaption;
         _btnAutoHold.Enabled = false;

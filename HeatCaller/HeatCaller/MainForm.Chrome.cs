@@ -262,6 +262,9 @@ public partial class MainForm
         // And Practice's Expand, likewise.
         _practiceControl?.ShowNavNarrowed(iconsOnly);
 
+        // And Race Control's Focus button (24 Nov 2026) - see MainForm.Focus.
+        NoteFocusView();
+
         // Painting is held off for the whole change and the window drawn once
         // at the end, so the sidebar goes from one width to the other in a
         // single frame - without it the sidebar, the header, the footer and

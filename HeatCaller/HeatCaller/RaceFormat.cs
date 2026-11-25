@@ -204,6 +204,13 @@ public sealed class RaceFormat
         return format;
     }
 
+    /// <summary>
+    /// The length and the start alone - "12 laps · all away together" - for
+    /// the foot of Race Control's board (24 Nov 2026, option B); the warm-up,
+    /// staging and countdown are in its tooltip, from <see cref="Describe"/>.
+    /// </summary>
+    public string DescribeBrief() => string.Join(" · ", Describe().Split(" · ").Take(2));
+
     /// <summary>The format in one readable line, for the chip on Race Control.</summary>
     public string Describe()
     {
