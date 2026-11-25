@@ -25,7 +25,7 @@ public enum SoundEffectKind
     RaceStaging,
     CountdownStarted,
 
-    /// <summary>A beep a second for the last five seconds before the green.</summary>
+    /// <summary>The last five seconds before the green, ending on it - Classic's rising tone, or the generated beep a second.</summary>
     CountdownTicks,
 
     /// <summary>
@@ -248,7 +248,10 @@ public sealed class SoundEffectsProfile
         SoundEffectKind.LeaderChange => "Leader change",
         SoundEffectKind.RaceStaging => "Race staging",
         SoundEffectKind.CountdownStarted => "Countdown started",
-        SoundEffectKind.CountdownTicks => "Countdown ticks (a beep a second for the last five)",
+        // WHY (25 Nov 2026, lookback): "a beep a second for the last five"
+        // until Classic's ticks became a rising tone that ends on the green -
+        // the only pack left, so the row described a sound nobody heard.
+        SoundEffectKind.CountdownTicks => "Countdown ticks (the last five seconds to the green)",
         SoundEffectKind.JumpStart => "Jump start (crossing before the green)",
         SoundEffectKind.RaceStarted => "Race started",
         SoundEffectKind.YellowFlag => "Yellow flag",

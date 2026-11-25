@@ -510,9 +510,10 @@ public sealed partial class AnnouncementService
     }
 
     /// <summary>
-    /// How long the countdown ticks run: a beep a second for five seconds,
-    /// and the green due as they end. The built-in sound is exactly this
-    /// long - see ToneGenerator.PlayCountdownTicksAsync.
+    /// How long the countdown ticks run, with the green due as they end.
+    /// Classic's ticks (a rising tone since 25 Nov 2026) and the generated
+    /// beep a second (ToneGenerator.PlayCountdownTicksAsync) are both
+    /// exactly this long.
     /// </summary>
     public static readonly TimeSpan CountdownTicksLength = TimeSpan.FromSeconds(5);
 
