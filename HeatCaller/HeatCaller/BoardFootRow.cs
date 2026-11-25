@@ -34,12 +34,14 @@ internal sealed class BoardFootRow : Panel
     private readonly Control _right;
 
     // WHY (25 Nov 2026, Asher: "for all the tool tips here can we put them
-    // behind a small circle with an i in it?"): each part's explanation is in
-    // a small "i" circle beside it - after each pill, after the pen (for the
-    // format line and the pen together), and after Focus - rather than
-    // popping up off the part itself whenever the mouse crossed it. Place
-    // still works in whole parts: a part with a circle is just that much
-    // wider, and the circle is put in the room at its end. See InfoDot.
+    // behind a small circle with an i in it?", then "info circle should be
+    // on the upper right of the pill"): each part's explanation is in a small
+    // "i" badge on its top right-hand corner - each pill, the pen (for the
+    // format line and the pen together) and Focus - rather than popping up
+    // off the part itself whenever the mouse crossed it. The badges take no
+    // room in the row: beside the parts, they took about 95 px and pushed the
+    // format line off it at 1280 wide. The row is only a few pixels taller,
+    // so a badge standing above its part's top edge is not cut off. See InfoDot.
     private readonly InfoDot?[] _leftDots;
     private readonly InfoDot? _penDot;
     private readonly InfoDot? _rightDot;
@@ -80,13 +82,13 @@ internal sealed class BoardFootRow : Panel
         Controls.Add(_pen);
         Controls.Add(_right);
 
-        foreach (var dot in _leftDots.Append(_penDot).Append(_rightDot))
+        for (var i = 0; i < _lefts.Length; i++)
         {
-            if (dot is not null)
-            {
-                Controls.Add(dot);
-            }
+            Badge(_leftDots[i], _lefts[i]);
         }
+
+        Badge(_penDot, _pen);
+        Badge(_rightDot, _right);
 
         foreach (Control part in Controls)
         {
@@ -96,6 +98,49 @@ internal sealed class BoardFootRow : Panel
         _label.TextChanged += (_, _) => PerformLayout();
     }
 
+    /// <summary>Puts a badge on its part, above it in the z-order.</summary>
+    private void Badge(InfoDot? dot, Control part)
+    {
+        if (dot is null)
+        {
+            return;
+        }
+
+        dot.Over = part;
+        Controls.Add(dot);
+        dot.BringToFront();
+        part.LocationChanged += (_, _) => PlaceBadge(dot, part);
+        part.VisibleChanged += (_, _) => dot.Visible = part.Visible;
+    }
+
+    /// <summary>The badge's middle: this far in from its part's right-hand edge, and down from its top, at 100%.</summary>
+    internal const int BadgeInAt100 = 9;
+    internal const int BadgeDownAt100 = 3;
+
+    /// <summary>A part narrower than this, at 100%, has its badge on the very corner, hanging over it.</summary>
+    internal const int NarrowAt100 = 60;
+
+    /// <summary>
+    /// Where a badge goes on a part at <paramref name="part"/>: its top
+    /// right-hand corner. On a wide part (a pill, Focus) it sits just in from
+    /// the corner; on a narrow one (the pen) it hangs over the corner, or it
+    /// would sit over the middle of the square. Pure, for the tests.
+    /// </summary>
+    internal static Point BadgeAt(Rectangle part, Size badge)
+    {
+        var narrow = part.Width < UiLayout.AtDpi(NarrowAt100);
+        var inFromRight = narrow ? UiLayout.AtDpi(2) : UiLayout.AtDpi(BadgeInAt100);
+        var down = narrow ? UiLayout.AtDpi(1) : UiLayout.AtDpi(BadgeDownAt100);
+        return new Point(part.Right - inFromRight - badge.Width / 2, part.Top + down - badge.Height / 2);
+    }
+
+    private static void PlaceBadge(InfoDot dot, Control part) => Move(dot, BadgeAt(part.Bounds, dot.Size));
+
+    private bool HasBadges => _penDot is not null || _rightDot is not null || _leftDots.Any(d => d is not null);
+
+    /// <summary>The room over the row's parts for the badges that stand above their top edges.</summary>
+    private int Inset => HasBadges ? UiLayout.AtDpi(7) : 0;
+
     /// <summary>The gap between parts.</summary>
     private static int Gap => UiLayout.AtDpi(10);
 
@@ -104,21 +149,14 @@ internal sealed class BoardFootRow : Panel
 
     private int LabelWanted => _label.GetPreferredSize(Size.Empty).Width;
 
-    /// <summary>The room a circle takes beside its part, or none.</summary>
-    private static int DotRoom(InfoDot? dot) => dot is null ? 0 : InfoDot.Room;
-
-    private List<int> LeftWidths() => _lefts.Select((c, i) => c.Width + DotRoom(_leftDots[i])).ToList();
-
-    private int PenWidth => _pen.Width + DotRoom(_penDot);
-
-    private int RightWidth => _right.Width + DotRoom(_rightDot);
+    private List<int> LeftWidths() => _lefts.Select(c => c.Width).ToList();
 
     public override Size GetPreferredSize(Size proposedSize)
     {
         var width = proposedSize.Width > 0 ? proposedSize.Width : Width;
-        var places = Place(LeftWidths(), LabelWanted, PenWidth, RightWidth, width, Gap, UiLayout.AtDpi(1));
+        var places = Place(LeftWidths(), LabelWanted, _pen.Width, _right.Width, width, Gap, UiLayout.AtDpi(1));
         var row = RowHeight;
-        return new Size(width, places.RightOnSecondRow ? row * 2 + Gap / 2 : row);
+        return new Size(width, Inset + (places.RightOnSecondRow ? row * 2 + Gap / 2 : row));
     }
 
     protected override void OnLayout(LayoutEventArgs levent)
@@ -126,50 +164,51 @@ internal sealed class BoardFootRow : Panel
         base.OnLayout(levent);
 
         var row = RowHeight;
-        var places = Place(LeftWidths(), LabelWanted, PenWidth, RightWidth, ClientSize.Width, Gap, UiLayout.AtDpi(1));
+        var places = Place(LeftWidths(), LabelWanted, _pen.Width, _right.Width, ClientSize.Width, Gap, UiLayout.AtDpi(1));
+        var top = Inset;
 
-        int Middle(Control c) => Math.Max(0, (row - c.Height) / 2);
-        var dotGap = UiLayout.AtDpi(InfoDot.GapAt100);
+        int Middle(Control c) => top + Math.Max(0, (row - c.Height) / 2);
 
         for (var i = 0; i < _lefts.Length; i++)
         {
             Move(_lefts[i], new Point(places.Lefts[i], Middle(_lefts[i])));
-
-            if (_leftDots[i] is { } dot)
-            {
-                Move(dot, new Point(places.Lefts[i] + _lefts[i].Width + dotGap, Middle(dot)));
-            }
         }
 
         var line = UiLayout.AtDpi(1);
-        var sepX = (_lefts.Length == 0 ? 0 : places.Lefts[^1] + _lefts[^1].Width + DotRoom(_leftDots[^1])) + Gap;
+        var sepX = (_lefts.Length == 0 ? 0 : places.Lefts[^1] + _lefts[^1].Width) + Gap;
         _separator.BackColor = AppTheme.Border;
         _separator.Visible = !places.RightOnSecondRow;
-        SetBounds(_separator, new Rectangle(sepX, (row - UiLayout.AtDpi(26)) / 2, line, UiLayout.AtDpi(26)));
+        SetBounds(_separator, new Rectangle(sepX, top + (row - UiLayout.AtDpi(26)) / 2, line, UiLayout.AtDpi(26)));
 
         // On two rows, the line, its pen and Focus are all on the second.
         var under = places.RightOnSecondRow ? row + Gap / 2 : 0;
 
         _label.Visible = places.LabelWidth > 0;
-        SetBounds(_label, new Rectangle(places.LabelX, under, Math.Max(0, places.LabelWidth), row));
+        SetBounds(_label, new Rectangle(places.LabelX, top + under, Math.Max(0, places.LabelWidth), row));
         Move(_pen, new Point(places.PenX, under + Middle(_pen)));
+        Move(_right, new Point(places.RightX, under + Middle(_right)));
+
+        // Each badge on its part's corner - here as well as when the part
+        // moves, for a part that did not move but whose badge is new.
+        for (var i = 0; i < _lefts.Length; i++)
+        {
+            if (_leftDots[i] is { } dot)
+            {
+                PlaceBadge(dot, _lefts[i]);
+            }
+        }
 
         if (_penDot is not null)
         {
-            Move(_penDot, new Point(places.PenX + _pen.Width + dotGap, under + Middle(_penDot)));
+            PlaceBadge(_penDot, _pen);
         }
-
-        // Focus's circle after it, at the right-hand edge, as every circle
-        // follows its own part - before it, it sat against the format's
-        // circle and the two read as one pair.
-        Move(_right, new Point(places.RightX, under + Middle(_right)));
 
         if (_rightDot is not null)
         {
-            Move(_rightDot, new Point(places.RightX + _right.Width + dotGap, under + Middle(_rightDot)));
+            PlaceBadge(_rightDot, _right);
         }
 
-        var height = places.RightOnSecondRow ? row * 2 + Gap / 2 : row;
+        var height = Inset + (places.RightOnSecondRow ? row * 2 + Gap / 2 : row);
 
         if (Height != height)
         {
