@@ -1538,7 +1538,7 @@ public sealed class SoundEffectsControl : UserControl
             ? "Your own sound file for this row (optional). Browse to pick one - it plays instead of the pack sound."
             : path;
 
-    /// <summary>One entry in a sound dropdown: "Generated tones" or a pack (Synthwave shown as Classic - see SoundPacks.All).</summary>
+    /// <summary>One entry in a sound dropdown: the Classic pack, the only one (Synthwave shown as Classic - see SoundPacks.All).</summary>
     private sealed record SoundChoice(string Key, string Name)
     {
         public override string ToString() => Name;
@@ -1548,8 +1548,8 @@ public sealed class SoundEffectsControl : UserControl
     private static ComboBox NewSoundCombo(string? selectedKey)
     {
         var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
-        combo.Items.Add(new SoundChoice(SoundPacks.ClassicKey, SoundPacks.DisplayName(null)));
-        foreach (var pack in SoundPacks.All)
+        // Classic alone since 25 Nov 2026 - see SoundPacks.EffectsKey.
+        foreach (var pack in SoundPacks.EffectPacks)
         {
             combo.Items.Add(new SoundChoice(pack.Key, pack.Name));
         }
@@ -1558,10 +1558,10 @@ public sealed class SoundEffectsControl : UserControl
         return combo;
     }
 
-    /// <summary>Selects the entry for a pack key; anything unknown shows as Generated tones, which is what it would play.</summary>
+    /// <summary>Selects Classic, whatever the key: it's what every row plays (see SoundPacks.EffectsKey).</summary>
     private static void SelectSound(ComboBox combo, string? key)
     {
-        var match = SoundPacks.Find(key)?.Key ?? SoundPacks.ClassicKey;
+        var match = SoundPacks.EffectsKey;
         for (var i = 0; i < combo.Items.Count; i++)
         {
             if (combo.Items[i] is SoundChoice c && c.Key == match)
@@ -1572,7 +1572,7 @@ public sealed class SoundEffectsControl : UserControl
         }
     }
 
-    private static string SoundKeyOf(ComboBox combo) => (combo.SelectedItem as SoundChoice)?.Key ?? SoundPacks.ClassicKey;
+    private static string SoundKeyOf(ComboBox combo) => (combo.SelectedItem as SoundChoice)?.Key ?? SoundPacks.EffectsKey;
 
     /// <summary>Plays a row as a race would pick it: own file, then the chosen pack, then the generated tone.</summary>
     private Task PlayRowAsync(SoundEffectKind kind, ComboBox sound, string filePath)

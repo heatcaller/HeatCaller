@@ -85,10 +85,12 @@ public sealed class SoundEffectConfig
     /// <summary>
     /// Which built-in sound pack this effect plays when no custom file is
     /// set - a SoundPacks key ("Podium", "Arcade", ...), or empty for the
-    /// generated "Classic tones". Empty by default, so every settings file
-    /// written before packs existed keeps sounding exactly as it did.
+    /// generated "Classic tones". Since 25 Nov 2026 every effect plays the
+    /// Classic pack whatever this says, and it's set to Classic when the
+    /// settings are read (see SoundPacks.EffectsKey and
+    /// SoundEffectsStore.FillMissing).
     /// </summary>
-    public string BuiltInSound { get; set; } = string.Empty;
+    public string BuiltInSound { get; set; } = SoundPacks.EffectsKey;
 
     // How much this effect "matters" relative to the others when several
     // could all fire for the same lap (see SoundEffectsProfile.MaxEffectsPerLap).
@@ -224,10 +226,12 @@ public sealed class SoundEffectsProfile
     /// </summary>
     public static SoundEffectsProfile CreateForPack(string packKey)
     {
+        // Classic for every soundscape since 25 Nov 2026, whatever its pack
+        // - see SoundPacks.EffectsKey. The pack still gives it its crowd.
         var p = CreateDefault();
         foreach (var config in p.Effects.Values)
         {
-            config.BuiltInSound = packKey;
+            config.BuiltInSound = SoundPacks.EffectsKey;
         }
 
         return p;

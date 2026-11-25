@@ -329,7 +329,9 @@ public sealed class BugHunt4AudioTests : IDisposable
         var warning = older.Effects[nameof(SoundEffectKind.Warning)];
         Assert.True(warning.Enabled);
         Assert.False(warning.IsEnabledFor(practice: true));
-        Assert.Equal("PitLane", warning.BuiltInSound);
+        // Classic, not the buzzer's Pit Lane: Classic is the only pack
+        // since 25 Nov 2026 (see SoundPacks.EffectsKey).
+        Assert.Equal(SoundPacks.EffectsKey, warning.BuiltInSound);
         Assert.Equal(@"C:\Club Sounds\buzzer.wav", warning.CustomFilePath);
     }
 

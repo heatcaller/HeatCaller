@@ -136,7 +136,11 @@ public sealed class SoundEffectsStore
         foreach (var effect in profile.Effects.Values)
         {
             effect.CustomFilePath ??= string.Empty;
-            effect.BuiltInSound ??= string.Empty;
+
+            // WHY (25 Nov 2026, Asher: only the Classic pack): a row saved on
+            // Pit Lane, Podium or Generated tones would show a pack the
+            // lists no longer have. It plays Classic, so it says Classic.
+            effect.BuiltInSound = SoundPacks.EffectsKey;
         }
     }
 
