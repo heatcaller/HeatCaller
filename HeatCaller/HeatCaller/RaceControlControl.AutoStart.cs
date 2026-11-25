@@ -6,7 +6,7 @@ namespace HeatCaller;
 ///
 /// What it adds to Race Control:
 ///  - "Auto start: Off | On" at the foot of the board, beside "Start races" -
-///    since 24 Nov 2026 a lit pill, "Starts itself" (LitPill).
+///    since 24 Nov 2026 a lit pill, "Auto Start" (LitPill).
 ///    Off is for tonight only; its right-click menu picks the gap, and can
 ///    turn it off until it is switched back on.
 ///  - The Next Up bar says when the next race starts ("starts in 1:42"), and
@@ -29,10 +29,10 @@ public sealed partial class RaceControlControl
 {
     private readonly AutoStartClock _autoStart = new();
 
-    /// <summary>"Starts itself" - Auto start, at the foot of the board.</summary>
-    // A lit pill since 24 Nov 2026, "Starts itself" - "Auto: On" did not say
+    /// <summary>"Auto Start" - Auto start, at the foot of the board.</summary>
+    // A lit pill since 24 Nov 2026, "Auto Start" - "Auto: On" did not say
     // that races start by themselves. See LitPill.
-    private readonly LitPill _swAutoStart = new("Starts itself");
+    private readonly LitPill _swAutoStart = new("Auto Start");
 
     /// <summary>Hold / Resume, beside Start Next on the Next Up bar.</summary>
     private readonly Button _btnAutoHold = new();

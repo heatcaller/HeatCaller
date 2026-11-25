@@ -14,7 +14,7 @@ internal readonly record struct BoardFootPlaces(IReadOnlyList<int> Lefts, int La
 /// Asher: "this is confusing", option B of six in
 /// plans/race-control-foot-plan.md):
 ///
-/// <c>(● On Air) (○ Warm-up) (● Starts itself) | 12 laps · all away together ✎          [ Focus | ^ ]</c>
+/// <c>(● On Air) (○ Warm-up) (● Auto Start) | 12 laps · all away together ✎          [ Focus | ^ ]</c>
 ///
 /// The three lit pills from the left, a hairline, the format line and its
 /// pen, and the Focus split button against the right-hand edge. The format
