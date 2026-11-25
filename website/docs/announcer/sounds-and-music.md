@@ -41,7 +41,7 @@ The list has a heading over each column: **Race**, **Practice**, **Sound**, **Pa
 | **Leader change** | Yes | 100 |
 | **Race staging** | No | – |
 | **Countdown started** | No | – |
-| **Countdown ticks** (a beep a second for the last five) | No | – |
+| **Countdown ticks** (the last five seconds to the green) | No | – |
 | **Jump start** (crossing before the green) | No | – |
 | **Race started** | Yes | – |
 | **Yellow flag** | No | – |
@@ -62,7 +62,7 @@ The race-moment sounds (such as the **Race started** horn, the **Race time over 
 
 A flag call cuts off any sound effects still playing. Crowd surges (for a fast lap or a lead change, say) aren't cut short when the announcer speaks.
 
-Sound effects can play over each other, so two cars on a good lap are both heard as they cross. Each car's sounds play as they happen, up to 8 at once. When a second copy of the same sound starts at the same moment, it comes a fraction of a second after the first, so you hear two chimes rather than one louder one. Each sound that joins others playing is a little quieter, so a pile-up doesn't drown the mix. The race-moment sounds (**Race staging**, **Countdown started**, **Countdown ticks (a beep a second for the last five)**, **Race started**, the flags, **Race time over (last lap)** and **Race completed**) still play one after another, in order, and a lap chime doesn't wait for them. None of this changes how sounds and the announcer share the speaker.
+Sound effects can play over each other, so two cars on a good lap are both heard as they cross. Each car's sounds play as they happen, up to 8 at once. When a second copy of the same sound starts at the same moment, it comes a fraction of a second after the first, so you hear two chimes rather than one louder one. Each sound that joins others playing is a little quieter, so a pile-up doesn't drown the mix. The race-moment sounds (**Race staging**, **Countdown started**, **Countdown ticks (the last five seconds to the green)**, **Race started**, the flags, **Race time over (last lap)** and **Race completed**) still play one after another, in order, and a lap chime doesn't wait for them. None of this changes how sounds and the announcer share the speaker.
 
 On a busy track, per-lap sounds are kept close to the action: a lap chime that's fallen more than about 3 seconds behind the crossing is skipped, and no more than 3 wait to play at a time.
 

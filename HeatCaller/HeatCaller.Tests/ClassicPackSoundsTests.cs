@@ -210,4 +210,11 @@ public sealed class ClassicPackSoundsTests
         Assert.InRange(20 * Math.Log10(end / start), -1.5, 1.5);
         Assert.InRange(peak, 0.1f, 0.5f);
     }
+
+    [Fact]
+    public void The_ticks_row_describes_the_sound_it_plays()
+    {
+        // It said "a beep a second for the last five" over the rising tone.
+        Assert.Equal("Countdown ticks (the last five seconds to the green)", SoundEffectsProfile.Describe(SoundEffectKind.CountdownTicks));
+    }
 }
