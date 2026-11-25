@@ -32,8 +32,11 @@ public sealed class VoiceLevelTests
         return pcm;
     }
 
+    // By how loud the line sounds since 25 Nov 2026 (see Loudness), the
+    // measure VoiceLevel now levels by. A 220 Hz tone reads about 0.7 dB
+    // under its flat level on it.
     private static double LevelOf(byte[] pcm, WaveFormat format) =>
-        KokoroLoudness.SpeechDb(pcm, format.SampleRate * format.Channels)!.Value;
+        Loudness.Db(pcm, format.SampleRate, format.Channels)!.Value;
 
     [Fact]
     public void A_nearly_silent_line_is_raised_no_more_than_12_dB()
@@ -68,8 +71,8 @@ public sealed class VoiceLevelTests
     [Fact]
     public void A_line_already_at_the_level_is_the_same_array()
     {
-        // A sine's RMS is its amplitude over root 2.
-        var amplitude = Math.Pow(10, VoiceLevel.TargetDb / 20) * Math.Sqrt(2);
+        var probe = Tone(0.1, Mono);
+        var amplitude = 0.1 * Math.Pow(10, (VoiceLevel.TargetDb - LevelOf(probe, Mono)) / 20);
         var line = Tone(amplitude, Mono);
 
         Assert.Same(line, VoiceLevel.Level(line, Mono));
@@ -90,7 +93,9 @@ public sealed class VoiceLevelTests
     public void Stereo_is_levelled_too_and_stays_the_same_length()
     {
         var stereo = new WaveFormat(44_100, 16, 2);
-        var quiet = Tone(0.05, stereo);
+        // 0.07, not 0.05: by how it sounds (25 Nov 2026) 0.05 is just over
+        // 12 dB short, and the most a line is raised is 12.
+        var quiet = Tone(0.07, stereo);
 
         var levelled = VoiceLevel.Level(quiet, stereo);
 

@@ -497,7 +497,7 @@ The **Ducking** card, under the channels, sets how far everything drops while th
 |---|---|---|
 | **Ambience:** **Duck under announcements, down to** | Drops the ambience to this share of its level while a line is spoken. Untick it and the ambience stays at full level. | On, 35% |
 | **Music:** **Duck under announcements, down to** | The same for the music. | On, 25% |
-| **Voice lift:** **Lift the voice when the crowd is loud, up to x** | Raises the announcer's volume when the ambience is loud, scaled by how loud the crowd bed actually is. No lift over a quiet one. | On, x1.3 |
+| **Voice lift:** **Lift the voice when the crowd is loud, up to x** | Raises the announcer's volume when the ambience is loud, scaled by how loud the crowd bed actually is. No lift over a quiet one. The jingles, sweepers, bumpers and stingers get the same lift, so they stay where **Imaging pieces:** puts them beside the voice. | On, x1.3 |
 | **Race recap:** **Duck music and crowd further, down to** | An extra drop under the race recap. Needs the race recaps on **Voice → AI Commentary**. | On, 20% |
 
 These used to be on the **Ambience** and **Music** tabs, and the recap's on the AI commentary settings; they're the same settings.
@@ -512,7 +512,7 @@ The **Imaging levels** card sets how loud the soundscape's [imaging](#imaging) p
 | **Imaging beds:** | The soundscape's music beds, low on purpose. | 22% |
 | **Beds under voice:** | How far the beds drop while the announcer speaks, as a share of their own level. | 55% |
 
-Each piece is brought to the announcer's level before **Imaging pieces:** is applied, the way every spoken line is, so the same number sounds the same on every soundscape and on pieces you've added yourself. A piece is never raised by more than 12 dB.
+Each piece is brought to the announcer's level before **Imaging pieces:** is applied, the way every spoken line is, by how loud it sounds rather than by its raw signal level, so the same number sounds the same on every soundscape and on pieces you've added yourself. A piece is never raised by more than 12 dB.
 
 The levels for your club's own show music are on the **Show treatment** card on **Sounds → Imaging**.
 
