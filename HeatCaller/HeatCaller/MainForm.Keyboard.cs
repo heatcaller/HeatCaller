@@ -344,6 +344,13 @@ public partial class MainForm
             case Keys.H when !e.Shift: rc.TriggerAutoStartHold(); break;
             case Keys.N when !e.Shift: rc.TriggerAutoStartNow(); break;
 
+            // Play Again (25 Nov 2026, asked for by Asher - board G of
+            // plans/play-again-plan.md): what the On Air bar's Play button
+            // plays now - the winner after the flag, the call-up between
+            // races. S for "say again"; bare only, as Shift+S is Race Day
+            // setup. The docked inbox keeps its own S while it has the keys.
+            case Keys.S when !e.Shift: rc.TriggerPlayAgain(); break;
+
             // On Air itself (17 Oct 2026), whatever "Start races On Air" is
             // set to - a key rather than Shift+F1, since the F-keys stay bare
             // (see the top of this method). 0 since 1 Nov 2026 (it was O,
