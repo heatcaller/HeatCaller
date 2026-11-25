@@ -144,12 +144,10 @@ internal sealed class ImagingSettings
     /// </summary>
     public Dictionary<string, double>? TalkUps { get; set; } = new();
 
-    /// <summary>
-    /// Moves every post, in seconds: below zero brings the piece's voice in
-    /// a touch before the last word ends, above zero a touch after it. One
-    /// setting for the whole show, -0.3 to +0.3.
-    /// </summary>
-    public double PostNudge { get; set; }
+    // WHY (25 Nov 2026, Asher): PostNudge, one nudge on every post, is gone
+    // with its Post timing box - each piece's POST mark already says where
+    // its voice comes in. An old imaging.json that still has it loads fine;
+    // the value is just ignored.
 
     /// <summary>What each point in the run of show plays, by ImagingCue name. A missing one plays its default.</summary>
     public Dictionary<string, ImagingChoice>? RunOfShow { get; set; } = new();
@@ -1335,33 +1333,6 @@ internal static class BroadcastImaging
         return TimeSpan.FromSeconds(Math.Clamp(marked, 0, Math.Max(0, limit)));
     }
 
-    /// <summary>The most the post nudge moves every post, either way, in seconds.</summary>
-    internal const double MostNudge = 0.3;
-
-    /// <summary>The club's nudge on every post - see ImagingSettings.PostNudge.</summary>
-    internal static double PostNudge
-    {
-        get
-        {
-            lock (Gate)
-            {
-                var nudge = Loaded().PostNudge;
-
-                return double.IsFinite(nudge) ? Math.Clamp(nudge, -MostNudge, MostNudge) : 0;
-            }
-        }
-        set
-        {
-            lock (Gate)
-            {
-                Loaded().PostNudge = Math.Round(Math.Clamp(value, -MostNudge, MostNudge), 2);
-                SaveLocked();
-            }
-
-            Saved();
-        }
-    }
-
     /// <summary>
     /// Plays the next piece for a point so it HITS THE POST: fired while the
     /// announcer is still talking, timed so the piece's own voice comes in
@@ -1392,10 +1363,7 @@ internal static class BroadcastImaging
                 return null;
             }
 
-            // The nudge moves the piece, not the voice: below zero is the
-            // piece's voice in a touch early, so the piece fires a touch
-            // early - a bigger post to wait off.
-            var post = TalkUpOf(chosen.Path, chosen.Clip) - TimeSpan.FromSeconds(PostNudge) + TimeSpan.FromSeconds(Tighten);
+            var post = TalkUpOf(chosen.Path, chosen.Clip) + TimeSpan.FromSeconds(Tighten);
 
             await TalkUp.WaitToFireAsync(announcer, post, limit, ct);
 

@@ -704,7 +704,6 @@ internal static class SettingsTable
             nameof(ImagingSettings.BedDuckPercent),
             nameof(ImagingSettings.Posts),
             nameof(ImagingSettings.TalkUps),
-            nameof(ImagingSettings.PostNudge),
             nameof(ImagingSettings.RunOfShow),
         },
         kept: new[]

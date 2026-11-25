@@ -439,7 +439,6 @@ Under **On air**, the page has these cards:
 | **Soundscape** | **Soundscape:** picks which soundscape's imaging the page shows. You can set up any of them here, not only the one in use. |
 | **Pieces** | The soundscape's pieces, one row each, with **Element**, **File**, **Post**, **Out** and **From** ("ships with it", "added" or "missing"). Under the list: a picker for the element, **Add Files** (copies files into the club's data as that element), **Play**, **Stop**, **Remove**, **Restore Element Defaults** and **Restore Soundscape Defaults**. Double-click a row to play it. |
 | **Run of show** | Where each kind of piece plays, one row for each point in the night, from **Top of the race** and **Opening bed** through **After-the-flag bed**, **Race recap open**, **Race recap bed** and **Between recap parts** to **After the recap**. Each row's picker chooses **Nothing**, **A jingle**, **A sweeper**, **A jingle or a sweeper**, **A bumper**, **A stinger** or **A music bed**. A point set to something the soundscape doesn't have plays nothing. **Restore Run of Show Defaults** puts them back. |
-| **Timing** | **Post timing:** nudges every piece's post earlier (below zero) or later (above zero). |
 | **Show treatment** | Your club's own show music: the opener, bed and sting for the set pieces. See [The show's music](commentary.md#the-shows-music). |
 
 **Post at:** and **Out at:**, under the list, mark where talking can start and stop over the selected piece:
