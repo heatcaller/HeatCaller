@@ -54,6 +54,33 @@ public sealed partial class RaceControlControl
     /// </summary>
     private int? _autoStartAfter;
 
+    /// <summary>The race that opened the gap was a demo, so Auto start runs the next one as a demo too.</summary>
+    private bool _autoStartAsDemo;
+
+    /// <summary>
+    /// Whether Auto start may count the gap after a race, and whether the
+    /// race it starts is a demo. Pure.
+    ///
+    /// WHY (24 Nov 2026, asked by Asher): "why didn't the next race start
+    /// after 5 minutes automaticly?" - he had run the heats as demos (Start
+    /// Next held), and Auto start only ever counted after a real race was
+    /// filed, so a rehearsed night never started a race by itself and the
+    /// countdown marks timed to it were never called. A demo of a program
+    /// race now counts, and "if a race was started as a demo then the next
+    /// race to start by itself should also be a demo" - so a rehearsal never
+    /// slips into a real, scored race on its own. A Demo Mode race with no
+    /// program race behind it, a Quick Race and a race kept on its own
+    /// still never lead to an automatic start.
+    /// </summary>
+    /// <param name="isDemo">The race was a demo.</param>
+    /// <param name="notScored">The record scores nothing (a demo, a Quick Race...).</param>
+    /// <param name="roundId">The round it was filed against, if any (a demo's is always null).</param>
+    /// <param name="demoOfARound">A demo run for a program race (DemoRound was set).</param>
+    internal static (bool Counts, bool AsDemo) AutoStartFollows(bool isDemo, bool notScored, string? roundId, bool demoOfARound) =>
+        isDemo
+            ? (demoOfARound, demoOfARound)
+            : (!notScored && roundId is not null, false);
+
     private const string HoldCaption = "Hold";
     private const string ResumeCaption = "Resume";
 
@@ -495,8 +522,18 @@ public sealed partial class RaceControlControl
                     NoteGap(next.Id, GapNoteKind.WaitedForPromise, now, waitedForTime);
                 }
 
-                StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Starting {next.RoundLabel} - the gap is up.");
-                StartNext();
+                // After a demo, the next race is a demo too (24 Nov 2026) -
+                // Start Next held's own path, with its own refusals.
+                if (_autoStartAsDemo)
+                {
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Starting {next.RoundLabel} as a demo - the gap is up, and the last race was a demo.");
+                    StartNextAsDemo();
+                }
+                else
+                {
+                    StatusMessage?.Invoke($"{AppTime.LogStampNow()}  [auto] Starting {next.RoundLabel} - the gap is up.");
+                    StartNext();
+                }
                 break;
 
             default:

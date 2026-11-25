@@ -333,10 +333,16 @@ public sealed class AutoStartTests
     }
 
     [Fact]
-    public void Only_a_real_program_race_leads_to_an_automatic_start()
+    public void Only_a_program_race_or_its_demo_leads_to_an_automatic_start()
     {
+        // 24 Nov 2026: a demo of a program race counts too, saved or not,
+        // and the race it starts is a demo - see AutoStartAfterDemoTests.
         var source = Source("RaceControlControl.AfterRace.cs");
+        var autoStart = Source("RaceControlControl.AutoStart.cs");
 
-        Assert.Contains("_autoStartAfter = !record.IsNotScored() && record.RoundId is not null", source);
+        Assert.Contains("AutoStartFollows(record.IsDemo, record.IsNotScored(), record.RoundId, DemoRound is not null)", source);
+        Assert.Contains("AutoStartFollows(isDemo: true, notScored: true, roundId: null, demoOfARound: DemoRound is not null)", source);
+        Assert.Contains("if (_autoStartAsDemo)", autoStart);
+        Assert.Contains("StartNextAsDemo();", autoStart);
     }
 }
