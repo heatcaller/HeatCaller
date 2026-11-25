@@ -127,13 +127,31 @@ public sealed class KokoroLoudnessTests
         Assert.Equal(said, RaceNumbers.SpokenRoundNames(written));
     }
 
+    // WHY (24 Nov 2026, Asher: "the new guy is pronouncing A-main
+    // eye-main"): a cloud voice gets "Ay-" only after "the". Finley said
+    // "Ay-Main" with nothing before it as "eye-main"; plain "A-Main" and
+    // "the Ay-Main" were the letter A wherever Asher heard them.
     [Theory]
     [InlineData("The A-Main for Stock is next.", "The Ay-Main for Stock is next.")]
-    [InlineData("A Main, Stock - drivers to the stand.", "Ay-Main, Stock - drivers to the stand.")]
-    [InlineData("Three A-Mains tonight.", "Three Ay-Mains tonight.")]
-    public void A_cloud_voice_is_sent_ay_main_which_elevenlabs_says_as_the_letter(string written, string said)
+    [InlineData("into the A-main", "into the Ay-main")]
+    [InlineData("Billy wins the A Main!", "Billy wins the Ay-Main!")]
+    [InlineData("A-Main for 50% is next. Drivers, to the stand please.", "A-Main for 50% is next. Drivers, to the stand please.")]
+    [InlineData("5 minutes to A-Main.", "5 minutes to A-Main.")]
+    [InlineData("A Main, Stock - drivers to the stand.", "A-Main, Stock - drivers to the stand.")]
+    [InlineData("Three A-Mains tonight.", "Three A-Mains tonight.")]
+    [InlineData("Breathe A-Main air", "Breathe A-Main air")]
+    public void A_cloud_voice_is_sent_ay_main_only_after_the(string written, string said)
     {
         Assert.Equal(said, RaceNumbers.SpokenRoundNames(written, cloudVoice: true));
+    }
+
+    [Fact]
+    public void The_call_up_never_starts_with_ay_for_a_cloud_voice()
+    {
+        var sent = RaceNumbers.SpokenRoundNames("A-Main for 50% is next. Drivers, to the stand please.", cloudVoice: true);
+
+        Assert.DoesNotContain("Ay-", sent);
+        Assert.DoesNotContain("Ey-", sent);
     }
 
     [Fact]

@@ -43,6 +43,14 @@ internal static class RaceNumbers
         System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>
+    /// The same, with "the" just in front - "the A-Main", "The A Main". The
+    /// one place a cloud voice is still sent "Ay-" (24 Nov 2026).
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex TheAMain = new(
+        @"(?<=(?<![\w'])[Tt]he\s+)A[\s-]+(?=[Mm]ains?\b)",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
     /// A round's letter said as a letter (8 Nov 2026, Asher: "when A main is
     /// spoken, it's the letter A, not a soft ah"). Every voice read "A-Main"
     /// as the article - Kokoro's own phonemes for it are "ɐmˌAn" - while
@@ -59,9 +67,33 @@ internal static class RaceNumbers
     /// cloud voices - ElevenLabs and the HeatCaller voice -
     /// get "Ay-Main", <paramref name="cloudVoice"/> (see
     /// AnnouncementService.ForCloudVoice). Kokoro keeps "Eh-".
+    ///
+    /// WHY (24 Nov 2026, Asher: "the new guy is pronouncing A-main eye-main,
+    /// i heard it inbetween races"): the cloud voices now get "Ay-" ONLY
+    /// after "the". Finley, the announcer since that day, said "Ay-Main" and
+    /// "Ey-Main" as "eye-main" wherever nothing came before them - the
+    /// call-up "A-Main for 50% is next" and the countdown "5 minutes to
+    /// A-Main" (eleven_v4_turbo; "Ay!" at the start of a line is the cry).
+    /// Asher heard it said both ways in clips of those exact lines: plain
+    /// "A-Main" was the letter in every place, and so was "the Ay-Main". So
+    /// a cloud voice gets "the Ay-Main" where the line has "the", and
+    /// "A-Main" - a space made a hyphen, so it stays one word - everywhere
+    /// else.
     /// </summary>
-    internal static string SpokenRoundNames(string text, bool cloudVoice = false) =>
-        string.IsNullOrEmpty(text) ? text : AMain.Replace(text, cloudVoice ? "Ay-" : "Eh-");
+    internal static string SpokenRoundNames(string text, bool cloudVoice = false)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text;
+        }
+
+        if (!cloudVoice)
+        {
+            return AMain.Replace(text, "Eh-");
+        }
+
+        return AMain.Replace(TheAMain.Replace(text, "Ay-"), "A-");
+    }
 
     private static readonly string[] Small =
     {
