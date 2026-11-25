@@ -596,7 +596,7 @@ The event report also lists any units still out. See [Results and championships]
 
 A venue saves everything specific to one physical track so you can switch it all over with one click — useful if your club races at more than one place.
 
-![The Venues page: Home Track and Upstate Mini Z listed, and Home Track's settings with its EasyLap decoder, Classic soundscape and race defaults, and Apply This Venue](../assets/images/venues.png)
+![The Venues page: Home Track and Valley Raceway listed, and Home Track's settings with its EasyLap decoder, Classic soundscape and race defaults, and Apply This Venue](../assets/images/venues.png)
 
 The **Venues** card down the left lists each venue as a card: its initials, its name, and what it sets (decoder, track layout, soundscape). The venue applied last is marked **APPLIED**. **New Venue** adds one and **Delete** removes the one picked.
 
@@ -674,7 +674,7 @@ The **Garage** page shows all the club's cars. One driver's cars are also on the
 
 The **Garage** page shows the club's cars as cards, grouped under their class. A car with a photo shows it; one without gets a plate with its number. Tiles count the **Cars**, **Classes**, **Retired** cars and **Setups logged**. On the **Which cars** card, **Show:** picks whose cars are on the wall (**Everyone's cars**, **The club's own cars**, or one driver's), and **Include retired** adds retired cars. The **Garage** card has **Add a Car**, **Chassis Types** (the list of chassis a car can be), **Chassis Sheets** (see [Chassis sheets](#chassis-sheets)) and **Club Batteries** (see [Club batteries](#club-batteries)).
 
-![Garage page: Everyone's cars, 10 cars in 3 classes, grouped under Box Stock 2 with the cars on plates with their initials and Mod 2 with photos, with Add a Car, Chassis Types, Chassis Sheets and Club Batteries below](../assets/images/garage.png)
+![Garage page: Everyone's cars, 10 cars in 3 classes, grouped under Box Stock 2 and Mod 2, each car on a plate with its initials, with Add a Car, Chassis Types, Chassis Sheets and Club Batteries below](../assets/images/garage.png)
 
 Click a car to open it. Across the top is the car: a small picture, its details, and the buttons **Edit**, **Photos** and **More**. **More** holds **Lend Out**, **Transfer** (see [Transfer a car](#transfer-a-car)), **Retire** and **Delete Car**. Under that is every setup logged for the car.
 

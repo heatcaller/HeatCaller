@@ -79,4 +79,31 @@ Checked against the code and the site on 25 Nov 2026, before anything was built:
 
 ## 9. Lookback (after building)
 
-To be filled in.
+Checked on 25 Nov 2026, once everything was built and the guide was live.
+
+**What was built, against the plan**
+
+- **The guide is live at https://heatcaller.com/docs/** (heatcaller-site #40, 86e78ea3). The site's own pages are unchanged. The only "docs" links on the home page are its existing Google Form, so nothing on heatcaller.com points at the guide. Search engines aren't stopped, as planned.
+- **Every address the app opens is a live guide page.** All 14 folders in `GuidePages` were fetched from the live site, each with its page's own title. The test ties them to `mkdocs.yml`'s nav, so a renamed page fails the build of the app, not a club.
+- **App:**
+  - The fourth footer button, **User Guide**, opens the page for the page shown.
+  - Getting help has **User Guide**.
+  - About links to the guide.
+  - The page search knows "guide" and "manual".
+  - All of it is on branch `claude/user-guide-link`. The layout sweep, sidebar, rail and Desk View tests pass, 112 of 112.
+
+**What changed from the plan, and why**
+
+- **The pictures were retaken first.** The build found every one of the old 54 pictures showed the real club: its logo, its sponsors' slides, a photo of a person, and cars in real sponsors' liveries. Asher chose "Retake pictures first". A scrubbed copy of the data was made, for the made-up Thunder Valley RC:
+  - no logo or photos, and one made-up sponsor;
+  - the crude crew and car names, brand car names, the game-named soundscape and the real email changed or cleared;
+  - the made-up club pointed at a relay on this PC, never the live one.
+  52 pictures were retaken from it. Race Analytics' Overview had nothing worth showing on the made-up data, so its old picture is taken out and left as a screenshot note. The unused `driver-hub.png` is deleted. About 20 captions were rewritten to say what the new pictures show.
+- **The footer button was built with the others.** Added later, the theme pass didn't give it their rounded plate. It's made in `MainForm.Designer.cs` now, beside the other three.
+
+**What's still open**
+
+- **The pictures show three footer buttons, not four.** They were taken from `main`, before the User Guide button. The tour's words describe the button, and the next retake will show it.
+- **The guide describes the User Guide button before a release has it.** It's in the Unreleased notes and the tour. A club on 0.x today finds the tour mentions a button they don't have until they update.
+- **Race Analytics → Overview** needs a picture once the made-up data has a few nights in it.
+- **Putting the guide up again is by hand.** Run `website/build-site.ps1` into heatcaller-site's `docs/` and merge. There's no automatic build, because GitHub Actions fails on billing.

@@ -45,7 +45,7 @@ The announcer's voice itself is picked on **Voice → Cast**, on the **Announcer
 
 ![Voice, Cast tab: the Voices card with Load Voices and Use HeatCaller's cast, the Announcer card with its Name, Finley as the ElevenLabs voice and a Kokoro voice under If ElevenLabs runs out, and the Recap host card on Will with the line "ElevenLabs retires Will on 31 December. Switch to Baxter?" and Play, Switch and Pick another under it](../assets/images/voice-cast.png)
 
-![Voice tab, Speak with card: ElevenLabs chosen at 77% used, the HeatCaller voice not included for this club yet, and the Kokoro voice ready on this PC and standing by](../assets/images/voice-voice.png)
+![Voice tab, Speak with card: ElevenLabs chosen at 63% used, the HeatCaller voice not included for this club yet, and the Kokoro voice ready on this PC and standing by](../assets/images/voice-voice.png)
 
 | Choice | What it is |
 |---|---|
@@ -777,7 +777,7 @@ The same two-at-once limit and the same 30-second give-up apply to the relay.
 
 The Announcer screen is a window for whoever is on the microphone. It's not another leaderboard. It gives you things to say. Open it with **Announcer Screen** on **Race Control** (shortcut <kbd>A</kbd>). The first time, it opens beside the main window when there's room, so the director keeps **Race Control** while you keep the Announcer; you can also put it on a second monitor. Closing it only hides it: open it again and everything is still on it. The **Race Control** button in the window brings the main window forward on **Race Control** without closing the Announcer.
 
-![The Announcer screen during a demo race: GREEN FLAG with the clock and ON DECK, the running order of eight drivers, talking points with the latest line, the Spotlight on the leader, and the Last line card](../assets/images/announcer-screen.png)
+![The Announcer screen during a demo race: GREEN FLAG with the clock and ON DECK, the running order of eight drivers, talking points with the latest line, the Spotlight on the leader, and the Last race summary card](../assets/images/announcer-screen.png)
 
 The page shows:
 

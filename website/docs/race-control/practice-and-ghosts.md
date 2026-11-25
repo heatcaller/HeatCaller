@@ -11,7 +11,7 @@ This page covers four features that sit around racing:
 
 The **Practice** page is for open lapping with no staging, flags or finish. Every transponder that crosses the line is timed, and the table shows live lap stats instead of a finishing order. It's the quickest way to run an open practice night or a tuning session.
 
-![The Practice page before a session starts: the Run practice card, the Setup card, the Ghost Cars card with three ghosts to pick from, the clock reading IDLE, and the empty This session table](../assets/images/practice.png)
+![The Practice page before a session starts: the Run practice card, the Setup card, the Ghost Cars card with four ghosts to pick from, none ticked, the clock reading IDLE, and the empty This session table](../assets/images/practice.png)
 
 ### Run a practice session
 
