@@ -64,6 +64,68 @@ public sealed class ColumnChecklistFlashTests
     }
 
     /// <summary>
+    /// Every row shows its words (25 Nov 2026, Asher's screenshot after #351:
+    /// only Pos still had its name). Each row is drawn off-screen with that
+    /// row's own starting point, and the words were drawn as if the row
+    /// started at the top of the list, so all but the first row's landed
+    /// outside the row and were never seen.
+    /// </summary>
+    [Fact]
+    public void Every_row_shows_its_words()
+    {
+        var rows = StaThread.Run(() =>
+        {
+            using var form = new Form
+            {
+                StartPosition = FormStartPosition.Manual,
+                Location = new Point(-20000, -20000),
+                Size = new Size(500, 900),
+                ShowInTaskbar = false,
+            };
+
+            var choices = new ColumnChoices(KpiCatalog.DefaultRaceControl, KpiCatalog.All);
+            var list = new ColumnChecklist(choices) { Dock = DockStyle.Fill };
+            form.Controls.Add(list);
+
+            form.Show();
+            StaThread.Settle();
+
+            using var bmp = new Bitmap(list.Width, list.Height);
+            list.DrawToBitmap(bmp, new Rectangle(Point.Empty, list.Size));
+            var back = list.BackColor.ToArgb();
+            var found = new List<(int Row, bool HasWords)>();
+
+            for (var i = 0; i < Math.Min(10, list.RowCount); i++)
+            {
+                var r = list.GetItemRectangle(i);
+                if (r.Bottom > bmp.Height)
+                {
+                    break;
+                }
+
+                // The words sit between the tick box and the arrows: anything
+                // there but the row's background is the words.
+                var words = false;
+                for (var x = r.Left + 50; x < r.Left + 140 && !words; x++)
+                {
+                    for (var y = r.Top + 2; y < r.Bottom - 2 && !words; y++)
+                    {
+                        words = bmp.GetPixel(x, y).ToArgb() != back;
+                    }
+                }
+
+                found.Add((i, words));
+            }
+
+            form.Close();
+            return found;
+        }, TimeSpan.FromMinutes(2), () => "drawing the columns list's rows");
+
+        Assert.True(rows.Count >= 8, $"only {rows.Count} rows were drawn");
+        Assert.All(rows, r => Assert.True(r.HasWords, $"row {r.Row} has no words"));
+    }
+
+    /// <summary>
     /// Asher, after the fix above: "still flashy but just a little at the top
     /// with the ticked options". Windows filled a row with the plain
     /// background before it was drawn, so a ticked row's pink box blinked.
