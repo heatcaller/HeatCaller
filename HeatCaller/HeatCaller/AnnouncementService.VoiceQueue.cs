@@ -163,7 +163,15 @@ public sealed partial class AnnouncementService
             return;
         }
 
-        if (IsInterruptingAnnouncement(type) && !sponsoredHere && TrySpeakPreparedFlag(type, config))
+        // THE WINNER FIRST, THEN THE FINISH CALL (24 Nov 2026, asked for by
+        // Asher: "I want the winner announced played first and then the race
+        // completed call after it"). With the Winner named row on, the
+        // winner's line now goes out straight after the fanfare, and this
+        // call's own words are queued behind it. A sponsored finish too: its
+        // words, credit and all, are only moved to after the name.
+        var afterTheWinner = type == AnnouncementEventType.RaceCompleted && _dryRun is null && TrySpeakTheWinnerFirst();
+
+        if (!afterTheWinner && IsInterruptingAnnouncement(type) && !sponsoredHere && TrySpeakPreparedFlag(type, config))
         {
             return;
         }
@@ -418,8 +426,7 @@ public sealed partial class AnnouncementService
         // A line the queue turns down - or keeps and then loses - gives the
         // sponsor's ration back (20 Oct 2026, Bug Hunt 8), or the sponsor
         // went unnamed for three minutes over a line nobody heard.
-        var accepted = EnqueueVoiceWork(type, transponder,
-            async () =>
+        Func<Task> work = async () =>
             {
                 var said = false;
 
@@ -456,7 +463,17 @@ public sealed partial class AnnouncementService
                         releaseMention?.Invoke();
                     }
                 }
-            },
+            };
+
+        // The winner was named first, in the finish call's place - its own
+        // words follow (24 Nov 2026). See TrySpeakTheWinnerFirst.
+        if (afterTheWinner)
+        {
+            QueueTheFinishAfterTheWinner(work, displayText.Length > 0 ? displayText : text, () => RenderLineAheadAsync(text, type, speed));
+            return;
+        }
+
+        var accepted = EnqueueVoiceWork(type, transponder, work,
             displayText: displayText.Length > 0 ? displayText : text,
             lost: releaseMention,
             sayByMs: sayByMs,
