@@ -1945,8 +1945,13 @@ internal sealed class ShowTreatment
             return null;
         }
 
+        // WHY (25 Nov 2026, lookback on the imaging levels plan): the
+        // soundscape's jingle opening a show is an imaging piece like any
+        // other, so it is levelled to the announcer and takes the crowd lift
+        // too (see ImagingLevel). It was still Level / 100 here, at the
+        // file's own level, after the pieces BroadcastImaging plays moved.
         var openerLevel = imagingOpener is not null
-            ? BroadcastImaging.Level / 100f
+            ? ImagingLevel.Volume(BroadcastImaging.Level, imagingOpener.LevelGain, BroadcastImaging.CrowdBoostNow())
             : Level(_settings.ShowOpenerLevel, 0.9f);
         // The soundscape's recap bed takes the Imaging page's own bed level
         // and duck (17 Oct 2026), not the Commentary page's show bed ones -
@@ -2404,7 +2409,8 @@ internal sealed class ShowTreatment
 
         if (SoundscapeHasStinger && BroadcastImaging.NextPiece(ImagingCue.BetweenRecapParts) is { } piece)
         {
-            return new ShowSting(piece.Clip, BroadcastImaging.Level / 100f, BroadcastImaging.PlayedOutOf(piece.Path, piece.Clip));
+            // Levelled like every piece (25 Nov 2026 - see the opener above).
+            return new ShowSting(piece.Clip, ImagingLevel.Volume(BroadcastImaging.Level, piece.Clip.LevelGain, BroadcastImaging.CrowdBoostNow()), BroadcastImaging.PlayedOutOf(piece.Path, piece.Clip));
         }
 
         if (!_settings.ShowThemeEnabled)
@@ -2427,7 +2433,9 @@ internal sealed class ShowTreatment
             // written when that task faults. The catch below still covers
             // anything thrown on the way in. The console line is safe from
             // any thread.
-            var played = AudioBus.PlayAsync(source, level);
+            // Past 1 for a levelled imaging piece (25 Nov 2026 - see
+            // ImagingLevel); the bus rounds its peaks off.
+            var played = AudioBus.PlayAsync(source, level, allowBoost: level > 1f);
             _ = played.ContinueWith(
                 done => Status?.Invoke($"[show] The {what} couldn't play: {done.Exception?.GetBaseException().Message}"),
                 CancellationToken.None,

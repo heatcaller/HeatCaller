@@ -12,17 +12,14 @@ namespace HeatCaller;
 /// apart they were. Asher's was at 20, which put every piece about 14 dB
 /// under the voice with nothing on screen to say so.
 ///
-/// Now each piece is measured the way a line is (the level of its sound,
-/// in 50 ms windows, leaving out the quiet ones - see KokoroLoudness.SpeechDb)
+/// Now each piece is measured the way a line is (how loud it sounds, in
+/// 50 ms windows, leaving out the quiet ones - see Loudness)
 /// and brought to the voice's level, so Imaging pieces means the same on
 /// every pack and every club file: 100 is as loud as the announcer, the
 /// default 80 just under, and 20 well under.
 /// </summary>
 internal static class ImagingLevel
 {
-    /// <summary>The windows above this count, so a fade or a gap does not pull a piece's level down. The same floor a line is measured with.</summary>
-    private const double SoundFloorDb = -45;
-
     /// <summary>Never raised by more than this, so a nearly silent file is not turned into noise.</summary>
     internal const double MostRaiseDb = 12;
 
@@ -33,33 +30,8 @@ internal static class ImagingLevel
     /// The level of a piece's sound, in dBFS, over every channel; null when
     /// nothing in it is above the floor.
     /// </summary>
-    internal static double? Db(float[] samples, int channels, int sampleRate)
-    {
-        channels = Math.Max(1, channels);
-        var window = Math.Max(1, sampleRate / 20) * channels;
-        double power = 0;
-        long counted = 0;
-
-        for (var start = 0; start < samples.Length; start += window)
-        {
-            var end = Math.Min(samples.Length, start + window);
-            double sum = 0;
-
-            for (var i = start; i < end; i++)
-            {
-                sum += (double)samples[i] * samples[i];
-            }
-
-            var n = end - start;
-            if (n > 0 && 10 * Math.Log10((sum / n) + 1e-12) > SoundFloorDb)
-            {
-                power += sum;
-                counted += n;
-            }
-        }
-
-        return counted == 0 ? null : 10 * Math.Log10((power / counted) + 1e-12);
-    }
+    internal static double? Db(float[] samples, int channels, int sampleRate) =>
+        Loudness.Db(samples, sampleRate, channels);
 
     /// <summary>
     /// What a piece measured at <paramref name="measuredDb"/> is multiplied
@@ -78,11 +50,14 @@ internal static class ImagingLevel
 
     /// <summary>
     /// How loud a piece plays: the Mixer's Imaging pieces number (0 to 100)
-    /// times the piece's own gain. Above 1 for a quiet piece at a high
-    /// number - the bus rounds its peaks off rather than clipping them.
+    /// times the piece's own gain, times the lift the announcer is getting
+    /// over a loud crowd (1 to 2 - see BroadcastImaging.CrowdBoost), so a
+    /// piece stays where the Mixer says beside the voice. Above 1 for a
+    /// quiet piece at a high number - the bus rounds its peaks off rather
+    /// than clipping them.
     /// </summary>
-    internal static float Volume(int level, float pieceGain) =>
-        Math.Clamp(level, 0, 100) / 100f * pieceGain;
+    internal static float Volume(int level, float pieceGain, float crowdBoost = 1f) =>
+        Math.Clamp(level, 0, 100) / 100f * pieceGain * (float.IsNaN(crowdBoost) ? 1f : Math.Clamp(crowdBoost, 1f, 2f));
 
     /// <summary>How many dB under the announcer the pieces sit at this Imaging pieces number. Infinity at 0.</summary>
     internal static double UnderVoiceDb(int level) =>
