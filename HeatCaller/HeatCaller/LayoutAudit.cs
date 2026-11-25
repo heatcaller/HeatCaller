@@ -1088,12 +1088,27 @@ internal static class LayoutAudit
                     continue;
                 }
 
+                // WHY (25 Nov 2026): an "i" badge on its own part's top
+                // right-hand corner is put there on purpose (BoardFootRow,
+                // asked for by Asher: "info circle should be on the upper right
+                // of the pill") - it hangs a few pixels over the part's top
+                // edge, so it is not wholly inside it, and the page sweep
+                // flagged Focus's badge at 1920x1080. A badge over any OTHER
+                // part is still an overlap.
+                if (IsBadgeOn(first, second) || IsBadgeOn(second, first))
+                {
+                    continue;
+                }
+
                 findings.Add(new Finding(where, Overlap,
                     $"{Describe(first)} at {Box(first.Bounds)} and {Describe(second)} at {Box(second.Bounds)} "
                     + $"overlap by {overlap.Width}x{overlap.Height}{(isPage ? " on the page" : In(container))}"));
             }
         }
     }
+
+    /// <summary>Whether <paramref name="badge"/> is an "i" badge belonging to <paramref name="part"/> - see CheckOverlaps.</summary>
+    internal static bool IsBadgeOn(Control badge, Control part) => badge is InfoDot { Over: { } over } && ReferenceEquals(over, part);
 
     // --- Past the edge -------------------------------------------------------
 
