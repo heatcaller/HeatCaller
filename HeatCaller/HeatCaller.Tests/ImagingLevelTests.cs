@@ -32,7 +32,9 @@ public sealed class ImagingLevelTests
     {
         // Before, each played at its own file's level times the one number:
         // 18 dB apart here.
-        var quiet = Tone(0.05);
+        // 0.08 rather than quieter, so the quiet one isn't held back by the
+        // 12 dB limit on a raise.
+        var quiet = Tone(0.08);
         var loud = Tone(0.4);
 
         var quietHeard = HeardDb(quiet, ImagingLevel.Volume(80, ImagingLevel.GainFor(ImagingLevel.Db(quiet, 2, 44_100))));
@@ -56,7 +58,9 @@ public sealed class ImagingLevelTests
         var loud = Tone(0.3, seconds: 1);
         var withGap = loud.Concat(new float[44_100 * 2 * 2]).ToArray();
 
-        Assert.Equal(ImagingLevel.Db(loud, 2, 44_100)!.Value, ImagingLevel.Db(withGap, 2, 44_100)!.Value, 1);
+        // Within 0.3 dB: the weighting filter rings for a moment where the
+        // sound stops, which reads as a little more sound (25 Nov 2026).
+        Assert.InRange(ImagingLevel.Db(loud, 2, 44_100)!.Value - ImagingLevel.Db(withGap, 2, 44_100)!.Value, -0.3, 0.3);
     }
 
     [Fact]
@@ -125,8 +129,15 @@ public sealed class ImagingLevelTests
         var source = File.ReadAllText(Path.Combine(RepoRoot(), "HeatCaller", "HeatCaller", "BroadcastImaging.cs"));
 
         Assert.DoesNotContain("Level / 100f", source);
-        Assert.Contains("ImagingLevel.Volume(Level, piece.Clip.LevelGain)", source);
-        Assert.Contains("ImagingLevel.Volume(Level, clip.LevelGain)", source);
+        Assert.Contains("ImagingLevel.Volume(Level, piece.Clip.LevelGain, CrowdBoostNow())", source);
+        Assert.Contains("ImagingLevel.Volume(Level, clip.LevelGain, CrowdBoostNow())", source);
+
+        // The show plays pieces too: the soundscape jingle that opens it and
+        // the stingers between recap parts (missed at first, 25 Nov 2026).
+        var show = File.ReadAllText(Path.Combine(RepoRoot(), "HeatCaller", "HeatCaller", "ShowTreatment.cs"));
+        Assert.DoesNotContain("BroadcastImaging.Level / 100f", show);
+        Assert.Contains("ImagingLevel.Volume(BroadcastImaging.Level, imagingOpener.LevelGain, BroadcastImaging.CrowdBoostNow())", show);
+        Assert.Contains("ImagingLevel.Volume(BroadcastImaging.Level, piece.Clip.LevelGain, BroadcastImaging.CrowdBoostNow())", show);
     }
 
     private static string RepoRoot()

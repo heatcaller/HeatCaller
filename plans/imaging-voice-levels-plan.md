@@ -90,4 +90,23 @@ Steps 2, 3 and 6 are built, with one change to step 2: a piece is brought to the
 - **Sounds → Mixer** shows a line under **Imaging pieces:** that says how the pieces sit beside the announcer.
 - `ImagingLevelTests` covers all of the above. It also checks the default levels (80, 22 and 55%) and that every shipped piece moves by 6 dB or less.
 
-Steps 4 (measuring how loud the voice sounds rather than its raw signal) and 5 (the crowd boost) are still open. Asher's saved **Imaging pieces** is still 20; HeatCaller doesn't change a club's own number.
+Steps 4 and 5 were built later the same day (see below). Asher's saved **Imaging pieces** is still 20; HeatCaller doesn't change a club's own number.
+
+## Steps 4 and 5, built (25 Nov 2026)
+
+**Step 4: measured by how loud it sounds.**
+
+- `Loudness.Db` applies BS.1770's K-weighting (a 4 dB lift above about 2 kHz and a roll-off under about 40 Hz) at any sample rate. It then measures in the same 50 ms windows with the same −45 dB floor as before. Stereo reads as mono does.
+- It's calibrated by `CalibrationDb` = −0.64, the median of flat − weighted over 1,570 saved ElevenLabs takes across 19 voices and models. A typical line therefore measures what it did, and `VoiceLevel.TargetDb` (−16.7) is unchanged.
+- The weighted level reads above the flat one by different amounts per voice: 1.2 dB for Daniel on v4, about 0.7 for Finley, about 0.1 for Charlie. That spread is what the flat level couldn't hear.
+- `VoiceLevel.Level` measures with it and raises through the new `KokoroLoudness.Raise`. The streamed-line memory (`VoiceLevelMemory`) learns from the same measurement.
+- `ImagingLevel.Db` uses it too, so both paths are on one scale.
+- Kokoro's own pre-match (`KokoroLoudness.Match`) is still flat. Every Kokoro line goes through `VoiceLevel.Level` afterwards, which settles it.
+
+**Step 5: the crowd boost.**
+
+There's no live log of the boost, so I worked it out from the settings: Voice boost at ×2, and Classic's crowd at about 0.28 racing, 0.5 excited and 0.85 at its peak. That gives a lift of ×1.04 while racing, ×1.33 at excited moments and ×1.8 at the finish. The voice got it and the imaging didn't, and the race-over bumper plays at the finish.
+
+`BroadcastImaging.CrowdBoost` is handed the announcer's own `VoiceBoostProvider` (in MainForm). Pieces and previews play at `ImagingLevel.Volume(level, gain, CrowdBoostNow())`, with the lift clamped to 1-2.
+
+**Tests:** `LoudnessTests`. `VoiceLevelTests` and `ImagingLevelTests` were adjusted to the new measure.

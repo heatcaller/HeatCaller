@@ -65,11 +65,13 @@ internal static class VoiceLevel
             return pcm;
         }
 
-        // Interleaved stereo measures as one stream at twice the rate: the
-        // 50 ms windows stay 50 ms long.
-        var rate = format.SampleRate * Math.Max(1, format.Channels);
-
-        var measured = KokoroLoudness.SpeechDb(pcm, rate);
+        // WHY (25 Nov 2026, Asher, step 4 of the imaging levels plan): by how
+        // loud the line sounds (Loudness), not its flat signal level. Two
+        // lines at one flat level sounded up to a dB apart - Finley about
+        // 0.6 dB above Charlie - and the imaging is measured the same way
+        // now, so the two are on one scale. Calibrated so a typical line
+        // measures what it did and TargetDb is unchanged.
+        var measured = Loudness.Db(pcm, format.SampleRate, format.Channels);
         LastMeasuredDb = measured;
 
         if (measured is not { } level || Math.Abs(level - TargetDb) <= ToleranceDb)
@@ -79,7 +81,7 @@ internal static class VoiceLevel
 
         if (level < TargetDb)
         {
-            return KokoroLoudness.Match(pcm, rate, TargetDb);
+            return KokoroLoudness.Raise(pcm, TargetDb - level);
         }
 
         var gain = Math.Pow(10, (TargetDb - level) / 20);
