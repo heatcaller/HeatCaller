@@ -453,14 +453,64 @@ internal sealed class ColumnChecklist : ListBox
 
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
-        if (e.Index < 0 || e.Index >= _rows.Count)
+        if (e.Index < 0 || e.Index >= _rows.Count || e.Bounds.Width <= 0 || e.Bounds.Height <= 0)
         {
             return;
         }
 
-        var g = e.Graphics;
-        var bounds = e.Bounds;
-        var row = _rows[e.Index];
+        // WHY (25 Nov 2026, Asher, after the blank-rows fix: "still flashy
+        // but just a little at the top with the ticked options"): a row was
+        // drawn in steps straight onto the screen - its background, then the
+        // tick, the words and the arrows - so a ticked row's pink box blinked
+        // to plain background and back each time the mouse came or went. It
+        // is drawn off-screen now and goes up in one piece.
+        using var buffer = BufferedGraphicsManager.Current.Allocate(e.Graphics, e.Bounds);
+        DrawRow(buffer.Graphics, e.Bounds, e.Index, (e.State & DrawItemState.Selected) == DrawItemState.Selected);
+        buffer.Render(e.Graphics);
+    }
+
+    /// <summary>
+    /// The list's background is filled only where no row is - below the last
+    /// one. Under a row it was filled and then drawn over, which is the other
+    /// half of the blink OnDrawItem's buffer stops (25 Nov 2026).
+    /// </summary>
+    protected override void WndProc(ref Message m)
+    {
+        const int WmEraseBkgnd = 0x0014;
+
+        if (m.Msg == WmEraseBkgnd && m.WParam != IntPtr.Zero)
+        {
+            using (var g = Graphics.FromHdc(m.WParam))
+            using (var back = new SolidBrush(BackColor))
+            {
+                g.FillRectangle(back, BelowTheRows());
+            }
+
+            m.Result = (IntPtr)1;
+            return;
+        }
+
+        base.WndProc(ref m);
+    }
+
+    /// <summary>The part of the list with no row on it: below the last row shown, or all of it when there are none.</summary>
+    internal Rectangle BelowTheRows()
+    {
+        var client = ClientRectangle;
+
+        if (Items.Count == 0)
+        {
+            return client;
+        }
+
+        var last = GetItemRectangle(Items.Count - 1);
+        var top = Math.Clamp(last.Bottom, client.Top, client.Bottom);
+        return Rectangle.FromLTRB(client.Left, top, client.Right, client.Bottom);
+    }
+
+    private void DrawRow(Graphics g, Rectangle bounds, int index, bool picked)
+    {
+        var row = _rows[index];
 
         if (row.Column is not { } column)
         {
@@ -468,8 +518,7 @@ internal sealed class ColumnChecklist : ListBox
             return;
         }
 
-        var picked = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-        var hovered = e.Index == _hover;
+        var hovered = index == _hover;
 
         using (var back = new SolidBrush(picked ? AppTheme.PrimaryTint : hovered ? AppTheme.RowAlt : AppTheme.Surface))
         {

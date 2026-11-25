@@ -62,4 +62,68 @@ public sealed class ColumnChecklistFlashTests
         Assert.Equal(6, waiting.Count);
         Assert.All(waiting, w => Assert.False(w));
     }
+
+    /// <summary>
+    /// Asher, after the fix above: "still flashy but just a little at the top
+    /// with the ticked options". Windows filled a row with the plain
+    /// background before it was drawn, so a ticked row's pink box blinked.
+    /// Now the fill goes only where there is no row.
+    /// </summary>
+    [Fact]
+    public void Clearing_the_list_leaves_the_rows_alone_and_fills_only_below_them()
+    {
+        var seen = StaThread.Run(() =>
+        {
+            using var form = new Form
+            {
+                StartPosition = FormStartPosition.Manual,
+                Location = new Point(-20000, -20000),
+                Size = new Size(500, 700),
+                ShowInTaskbar = false,
+            };
+
+            // A few columns in a tall list, so there is room below the rows.
+            var offered = KpiCatalog.All.Take(4).ToList();
+            var choices = new ColumnChoices(offered.Take(2).Select(d => d.Key), offered);
+            var list = new ColumnChecklist(choices) { Dock = DockStyle.Fill };
+            form.Controls.Add(list);
+
+            form.Show();
+            StaThread.Settle();
+
+            var marker = Color.FromArgb(255, 1, 2, 3);
+            using var bmp = new Bitmap(list.ClientSize.Width, list.ClientSize.Height);
+
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.Clear(marker);
+                var hdc = g.GetHdc();
+
+                try
+                {
+                    SendMessage(list.Handle, 0x0014, hdc, IntPtr.Zero);
+                }
+                finally
+                {
+                    g.ReleaseHdc(hdc);
+                }
+            }
+
+            var firstRow = list.GetItemRectangle(0);
+            var below = list.BelowTheRows();
+
+            var result = (
+                RowKept: bmp.GetPixel(firstRow.Left + 3, firstRow.Top + firstRow.Height / 2),
+                BelowFilled: bmp.GetPixel(below.Left + 3, below.Top + below.Height / 2),
+                RoomBelow: below.Height,
+                Back: list.BackColor);
+
+            form.Close();
+            return result;
+        }, TimeSpan.FromMinutes(2), () => "clearing the columns list");
+
+        Assert.True(seen.RoomBelow > 0, "the list should be taller than its rows for this test");
+        Assert.Equal(Color.FromArgb(255, 1, 2, 3).ToArgb(), seen.RowKept.ToArgb());
+        Assert.Equal(seen.Back.ToArgb(), seen.BelowFilled.ToArgb());
+    }
 }
