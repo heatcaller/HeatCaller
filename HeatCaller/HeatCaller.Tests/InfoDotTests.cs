@@ -8,7 +8,8 @@ namespace HeatCaller.Tests;
 /// The old behaviour: the pills, the format line, its pen and Focus each
 /// popped a paragraph up whenever the mouse crossed them on the way to a
 /// press, and nothing showed the help was there. Now each part's words are
-/// in a small badge on its top right-hand corner, opened and closed by a
+/// in a small badge - inside a pill or Focus just after its words, on the
+/// pen's top right-hand corner - opened and closed by a
 /// press ("if you click it it should bring up the tip and if you click again
 /// it kills the tip"), and the parts themselves are quiet.
 /// </summary>
@@ -134,6 +135,65 @@ public sealed class InfoDotTests
         Assert.Equal(0, result);
     }
 
+
+    [Fact]
+    public void A_pill_and_Focus_hold_their_18_px_badge_inside_just_after_their_words_and_a_little_above_them()
+    {
+        // WHY (25 Nov 2026, Asher: "they're too small. go back to older size.
+        // put in the pill upper right of text"): at 14 px on each part's
+        // corner the badges were too small to find, and hung over the pills'
+        // edges. Now a pill and Focus each hold theirs inside, after the words.
+        var result = StaThread.Run(() =>
+        {
+            using var host = new Form { Width = 1400 };
+            var pills = new[] { new LitPill("On Air"), new LitPill("Warm-up"), new LitPill("Auto Start") };
+            var plainWidths = pills.Select(p => p.Width).ToArray();
+            var label = new Label { Text = "12 laps · all away together" };
+            var pen = new Panel { Size = new Size(34, 34) };
+            var focus = new FocusSplitButton { Font = AppTheme.BodyFont };
+            var dots = new[] { new InfoDot(), new InfoDot(), new InfoDot(), new InfoDot() };
+            var row = new BoardFootRow(pills, label, pen, focus, dots[..3], dots[3], focus.Info) { Width = 1200 };
+            host.Controls.Add(row);
+            _ = host.Handle;
+            row.PerformLayout();
+
+            Assert.Equal(UiLayout.AtDpi(18), dots[0].Width);
+
+            var parts = new Control[] { pills[0], pills[1], pills[2], focus };
+            var badges = new[] { dots[0], dots[1], dots[2], focus.Info };
+
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var part = parts[i].Bounds;
+                var dot = badges[i].Bounds;
+                using var bold = new Font(parts[i].Font, FontStyle.Bold);
+                var words = TextRenderer.MeasureText(parts[i].Text, bold, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                var wordsEnd = i < 3 ? part.Left + UiLayout.AtDpi(12 + 9 + 9) + words.Width : part.Left + UiLayout.AtDpi(16 + 22 + 10) + words.Width;
+                var wordsTop = part.Top + (part.Height - words.Height) / 2;
+
+                Assert.True(part.Contains(dot), $"badge {i} at {dot} is wholly inside its part at {part}");
+                Assert.True(dot.Left >= wordsEnd, $"badge {i} starts after the words, which end at {wordsEnd}");
+                Assert.True(dot.Left - wordsEnd <= UiLayout.AtDpi(6), $"badge {i} sits just after the words");
+                Assert.True(dot.Top < wordsTop, $"badge {i} is a little above the words");
+                Assert.True(badges[i].Inside);
+            }
+
+            // The pills grow only by the badge less the room they had after their words.
+            for (var i = 0; i < 3; i++)
+            {
+                Assert.InRange(pills[i].Width - plainWidths[i], 1, UiLayout.AtDpi(14));
+            }
+
+            // Focus to Restore: the badge follows the end of the caption, still inside.
+            var before = focus.Info.Left;
+            focus.ShowState(focused: true, wide: false, inboxDocked: false);
+            Assert.True(focus.Info.Left > before, "Restore is longer than Focus");
+            Assert.True(focus.Bounds.Contains(focus.Info.Bounds));
+            return 0;
+        }, TimeSpan.FromSeconds(30), () => "the badges inside");
+
+        Assert.Equal(0, result);
+    }
 
     [Fact]
     public void The_foot_of_the_board_has_a_circle_for_each_part_and_the_parts_pop_nothing_up()

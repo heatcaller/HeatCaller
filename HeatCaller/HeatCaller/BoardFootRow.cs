@@ -38,10 +38,17 @@ internal sealed class BoardFootRow : Panel
     // on the upper right of the pill"): each part's explanation is in a small
     // "i" badge on its top right-hand corner - each pill, the pen (for the
     // format line and the pen together) and Focus - rather than popping up
-    // off the part itself whenever the mouse crossed it. The badges take no
-    // room in the row: beside the parts, they took about 95 px and pushed the
-    // format line off it at 1280 wide. The row is only a few pixels taller,
-    // so a badge standing above its part's top edge is not cut off. See InfoDot.
+    // off the part itself whenever the mouse crossed it. Beside the parts the
+    // badges took about 95 px and pushed the format line off the row at 1280
+    // wide.
+    //
+    // WHY (25 Nov 2026, Asher: "they're too small. go back to older size. put
+    // in the pill upper right of text"): a pill and Focus (IBadgeHost) carry
+    // their 18 px badge inside, just after their words and a little above
+    // them, and are made that much wider - about 13 px each, not the 30 a
+    // badge beside them took. The pen is too small to hold one, so its badge
+    // still hangs on its corner, with a few pixels over the row for it. See
+    // InfoDot.
     private readonly InfoDot?[] _leftDots;
     private readonly InfoDot? _penDot;
     private readonly InfoDot? _rightDot;
@@ -109,6 +116,17 @@ internal sealed class BoardFootRow : Panel
         dot.Over = part;
         Controls.Add(dot);
         dot.BringToFront();
+
+        if (part is IBadgeHost host)
+        {
+            dot.Inside = true;
+            host.BadgeRoom = dot.Width;
+            dot.SizeChanged += (_, _) => host.BadgeRoom = dot.Width;
+
+            // Focus to Restore moves the badge with the end of the caption.
+            part.TextChanged += (_, _) => PlaceBadge(dot, part);
+        }
+
         part.LocationChanged += (_, _) => PlaceBadge(dot, part);
         part.VisibleChanged += (_, _) => dot.Visible = part.Visible;
     }
@@ -134,12 +152,19 @@ internal sealed class BoardFootRow : Panel
         return new Point(part.Right - inFromRight - badge.Width / 2, part.Top + down - badge.Height / 2);
     }
 
-    private static void PlaceBadge(InfoDot dot, Control part) => Move(dot, BadgeAt(part.Bounds, dot.Size));
+    private static void PlaceBadge(InfoDot dot, Control part) =>
+        Move(dot, part is IBadgeHost host ? BadgeIn(part.Location, host.BadgeSpot(dot.Size)) : BadgeAt(part.Bounds, dot.Size));
 
-    private bool HasBadges => _penDot is not null || _rightDot is not null || _leftDots.Any(d => d is not null);
+    /// <summary>A badge inside its part, at <paramref name="spot"/> in the part's own coordinates. Pure, for the tests.</summary>
+    internal static Point BadgeIn(Point part, Point spot) => new(part.X + spot.X, part.Y + spot.Y);
+
+    /// <summary>A badge that hangs on its part's corner - one on a part too small to hold it.</summary>
+    private bool HasCornerBadges =>
+        (_penDot is not null && _pen is not IBadgeHost) || (_rightDot is not null && _right is not IBadgeHost)
+        || _leftDots.Where((d, i) => d is not null && _lefts[i] is not IBadgeHost).Any();
 
     /// <summary>The room over the row's parts for the badges that stand above their top edges.</summary>
-    private int Inset => HasBadges ? UiLayout.AtDpi(5) : 0;
+    private int Inset => HasCornerBadges ? UiLayout.AtDpi(6) : 0;
 
     /// <summary>The gap between parts.</summary>
     private static int Gap => UiLayout.AtDpi(10);
