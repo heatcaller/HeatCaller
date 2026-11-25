@@ -1088,6 +1088,18 @@ internal static class LayoutAudit
                     continue;
                 }
 
+                // WHY (25 Nov 2026, lookback after #344): an "i" badge sits on
+                // the top right-hand corner of the part it explains, half on
+                // it, on purpose (#339 - Race Control's foot of the board).
+                // Every page sweep failed on the five of them from then on,
+                // and main was red with nothing wrong on the page. A badge on
+                // a part still counts as an overlap when it is on another
+                // badge.
+                if ((first is InfoDot) != (second is InfoDot))
+                {
+                    continue;
+                }
+
                 findings.Add(new Finding(where, Overlap,
                     $"{Describe(first)} at {Box(first.Bounds)} and {Describe(second)} at {Box(second.Bounds)} "
                     + $"overlap by {overlap.Width}x{overlap.Height}{(isPage ? " on the page" : In(container))}"));
