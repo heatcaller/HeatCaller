@@ -16,10 +16,11 @@ namespace HeatCaller;
 /// focused press Space or Enter. Colours are read at paint time, so it
 /// follows a theme change.
 /// </summary>
-internal sealed class LitPill : Control
+internal sealed class LitPill : Control, IBadgeHost
 {
     private bool _on;
     private bool _hot;
+    private int _badgeRoom;
 
     public LitPill(string text)
     {
@@ -87,7 +88,38 @@ internal sealed class LitPill : Control
     public override Size GetPreferredSize(Size proposedSize)
     {
         var text = Measure();
-        return new Size(PadLeft + Dot + DotGap + text.Width + PadRight, text.Height + VerticalPad * 2);
+        var after = _badgeRoom > 0 ? BadgeGap + _badgeRoom + UiLayout.AtDpi(BadgeEndAt100) : PadRight;
+        return new Size(PadLeft + Dot + DotGap + text.Width + after, text.Height + VerticalPad * 2);
+    }
+
+    /// <summary>The gap between the words and a badge after them.</summary>
+    private static int BadgeGap => UiLayout.AtDpi(3);
+
+    /// <summary>The room after a badge, at 100%, so it keeps clear of the pill's round end.</summary>
+    internal const int BadgeEndAt100 = 12;
+
+    /// <inheritdoc/>
+    public int BadgeRoom
+    {
+        get => _badgeRoom;
+        set
+        {
+            value = Math.Max(0, value);
+
+            if (_badgeRoom != value)
+            {
+                _badgeRoom = value;
+                AutoSizeNow();
+            }
+        }
+    }
+
+    /// <summary>Just after the words, its top a little above theirs - the upper right of the text.</summary>
+    public Point BadgeSpot(Size badge)
+    {
+        var text = Measure();
+        var wordsTop = (Height - text.Height) / 2;
+        return new Point(PadLeft + Dot + DotGap + text.Width + BadgeGap, Math.Max(UiLayout.AtDpi(2), wordsTop - UiLayout.AtDpi(3)));
     }
 
     private void AutoSizeNow()
