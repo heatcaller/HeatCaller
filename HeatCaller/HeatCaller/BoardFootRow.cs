@@ -33,12 +33,33 @@ internal sealed class BoardFootRow : Panel
     private readonly Control _pen;
     private readonly Control _right;
 
-    public BoardFootRow(Control[] lefts, Label label, Control pen, Control right)
+    // WHY (25 Nov 2026, Asher: "for all the tool tips here can we put them
+    // behind a small circle with an i in it?"): each part's explanation is in
+    // a small "i" circle beside it - after each pill, after the pen (for the
+    // format line and the pen together), and after Focus - rather than
+    // popping up off the part itself whenever the mouse crossed it. Place
+    // still works in whole parts: a part with a circle is just that much
+    // wider, and the circle is put in the room at its end. See InfoDot.
+    private readonly InfoDot?[] _leftDots;
+    private readonly InfoDot? _penDot;
+    private readonly InfoDot? _rightDot;
+
+    public BoardFootRow(Control[] lefts, Label label, Control pen, Control right,
+        InfoDot?[]? leftDots = null, InfoDot? penDot = null, InfoDot? rightDot = null)
     {
         _lefts = lefts;
         _label = label;
         _pen = pen;
         _right = right;
+        _leftDots = new InfoDot?[lefts.Length];
+
+        if (leftDots is not null)
+        {
+            Array.Copy(leftDots, _leftDots, Math.Min(leftDots.Length, lefts.Length));
+        }
+
+        _penDot = penDot;
+        _rightDot = rightDot;
 
         LayoutFreeze.Adopt(this);
 
@@ -59,6 +80,14 @@ internal sealed class BoardFootRow : Panel
         Controls.Add(_pen);
         Controls.Add(_right);
 
+        foreach (var dot in _leftDots.Append(_penDot).Append(_rightDot))
+        {
+            if (dot is not null)
+            {
+                Controls.Add(dot);
+            }
+        }
+
         foreach (Control part in Controls)
         {
             part.SizeChanged += (_, _) => PerformLayout();
@@ -75,10 +104,19 @@ internal sealed class BoardFootRow : Panel
 
     private int LabelWanted => _label.GetPreferredSize(Size.Empty).Width;
 
+    /// <summary>The room a circle takes beside its part, or none.</summary>
+    private static int DotRoom(InfoDot? dot) => dot is null ? 0 : InfoDot.Room;
+
+    private List<int> LeftWidths() => _lefts.Select((c, i) => c.Width + DotRoom(_leftDots[i])).ToList();
+
+    private int PenWidth => _pen.Width + DotRoom(_penDot);
+
+    private int RightWidth => _right.Width + DotRoom(_rightDot);
+
     public override Size GetPreferredSize(Size proposedSize)
     {
         var width = proposedSize.Width > 0 ? proposedSize.Width : Width;
-        var places = Place(_lefts.Select(c => c.Width).ToList(), LabelWanted, _pen.Width, _right.Width, width, Gap, UiLayout.AtDpi(1));
+        var places = Place(LeftWidths(), LabelWanted, PenWidth, RightWidth, width, Gap, UiLayout.AtDpi(1));
         var row = RowHeight;
         return new Size(width, places.RightOnSecondRow ? row * 2 + Gap / 2 : row);
     }
@@ -88,17 +126,23 @@ internal sealed class BoardFootRow : Panel
         base.OnLayout(levent);
 
         var row = RowHeight;
-        var places = Place(_lefts.Select(c => c.Width).ToList(), LabelWanted, _pen.Width, _right.Width, ClientSize.Width, Gap, UiLayout.AtDpi(1));
+        var places = Place(LeftWidths(), LabelWanted, PenWidth, RightWidth, ClientSize.Width, Gap, UiLayout.AtDpi(1));
 
         int Middle(Control c) => Math.Max(0, (row - c.Height) / 2);
+        var dotGap = UiLayout.AtDpi(InfoDot.GapAt100);
 
         for (var i = 0; i < _lefts.Length; i++)
         {
             Move(_lefts[i], new Point(places.Lefts[i], Middle(_lefts[i])));
+
+            if (_leftDots[i] is { } dot)
+            {
+                Move(dot, new Point(places.Lefts[i] + _lefts[i].Width + dotGap, Middle(dot)));
+            }
         }
 
         var line = UiLayout.AtDpi(1);
-        var sepX = (_lefts.Length == 0 ? 0 : places.Lefts[^1] + _lefts[^1].Width) + Gap;
+        var sepX = (_lefts.Length == 0 ? 0 : places.Lefts[^1] + _lefts[^1].Width + DotRoom(_leftDots[^1])) + Gap;
         _separator.BackColor = AppTheme.Border;
         _separator.Visible = !places.RightOnSecondRow;
         SetBounds(_separator, new Rectangle(sepX, (row - UiLayout.AtDpi(26)) / 2, line, UiLayout.AtDpi(26)));
@@ -109,7 +153,21 @@ internal sealed class BoardFootRow : Panel
         _label.Visible = places.LabelWidth > 0;
         SetBounds(_label, new Rectangle(places.LabelX, under, Math.Max(0, places.LabelWidth), row));
         Move(_pen, new Point(places.PenX, under + Middle(_pen)));
+
+        if (_penDot is not null)
+        {
+            Move(_penDot, new Point(places.PenX + _pen.Width + dotGap, under + Middle(_penDot)));
+        }
+
+        // Focus's circle after it, at the right-hand edge, as every circle
+        // follows its own part - before it, it sat against the format's
+        // circle and the two read as one pair.
         Move(_right, new Point(places.RightX, under + Middle(_right)));
+
+        if (_rightDot is not null)
+        {
+            Move(_rightDot, new Point(places.RightX + _right.Width + dotGap, under + Middle(_rightDot)));
+        }
 
         var height = places.RightOnSecondRow ? row * 2 + Gap / 2 : row;
 

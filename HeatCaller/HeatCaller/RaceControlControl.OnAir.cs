@@ -275,21 +275,19 @@ public sealed partial class RaceControlControl
         _chkStartWithOnAir.On = _settings.RaceStartWithOnAir;
         _chkStartWithOnAir.OnChanged += (_, _) => StartWithOnAir = _chkStartWithOnAir.On;
 
-        var tip = new ToolTip();
-        AppTheme.StyleToolTip(tip, keep: true);
-        tip.SetToolTip(_chkStartWithOnAir,
+        _infoOnAir.TipText =
             "Lit: Start Next, the program's Start, F1, the phone and the day schedule all go through On Air first: "
             + "the soundscape's jingle or sweeper, the opening, a bumper, then Stage. 0 starts it by hand; while it runs, "
-            + "hold 0 for a second to skip to Stage. Dark: they stage straight away. The Stage button always stages straight away.");
+            + "hold 0 for a second to skip to Stage. Dark: they stage straight away. The Stage button always stages straight away.";
 
         _swWarmUpFirst.On = _settings.RaceStartWithWarmUp;
         _swWarmUpFirst.OnChanged += (_, _) => StartWithWarmUp = _swWarmUpFirst.On;
         _swWarmUpFirst.ContextMenuStrip = BuildWarmUpLengthMenu();
-        tip.SetToolTip(_swWarmUpFirst,
+        _infoWarmUp.TipText =
             "Lit: every race starts with the warm-up flag - free laps, not counted, for the format's warm-up "
             + "(two minutes if it has none, or the length you right-click to choose) - then Stage and the countdown. "
             + "On Air, when it is lit, goes first. Dark: only a format with a warm-up has one. "
-            + "Press Warm-up or Stage during it to skip the rest.");
+            + "Press Warm-up or Stage during it to skip the rest.";
 
         // The strip's bar and countdown while the opening is got ready.
         _onAirProgressTimer.Interval = 150;
