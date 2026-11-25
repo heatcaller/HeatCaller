@@ -202,12 +202,13 @@ public sealed partial class RaceControlControl
 
         _swAutoStart.ContextMenuStrip = menu;
 
-        var tip = new ToolTip();
-        AppTheme.StyleToolTip(tip, keep: true);
-        tip.SetToolTip(_swAutoStart,
+        _infoAutoStart.TipText =
             "Lit: after each race, the next one starts by itself once the gap is up (right-click to choose it). "
             + "The call-ups are timed to it, Hold on the Next Up bar stops the clock, and a car the loop hasn't heard "
-            + "waits for you to say start without it. Turned dark, it is off for tonight only.");
+            + "waits for you to say start without it. Turned dark, it is off for tonight only.";
+
+        var tip = new ToolTip();
+        AppTheme.StyleToolTip(tip, keep: true);
 
         _btnAutoHold.Text = HoldCaption;
         _btnAutoHold.Enabled = false;

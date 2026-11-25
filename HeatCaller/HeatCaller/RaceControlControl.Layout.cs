@@ -458,7 +458,8 @@ public sealed partial class RaceControlControl
         // 2026) beside On Air, as both say how a race starts; one level (15
         // Nov 2026, asked for by Asher), so the row fits beside the clock.
         _btnFocus.Asked += ask => FocusRequested?.Invoke(ask);
-        var footer = new BoardFootRow(new Control[] { _chkStartWithOnAir, _swWarmUpFirst, _swAutoStart }, _lblFormat, _btnFormat, _btnFocus)
+        var footer = new BoardFootRow(new Control[] { _chkStartWithOnAir, _swWarmUpFirst, _swAutoStart }, _lblFormat, _btnFormat, _btnFocus,
+            leftDots: new InfoDot?[] { _infoOnAir, _infoWarmUp, _infoAutoStart }, penDot: _infoFormat, rightDot: _btnFocus.Info)
         {
             AutoSize = true,
         };
@@ -1876,7 +1877,6 @@ public sealed partial class RaceControlControl
         // whole of it - where it comes from, the warm-up, the staging and the
         // countdown - in its tooltip. See BoardFootRow and ApplyEffectiveFormat.
         _lblFormat.ForeColor = AppTheme.TextMuted;
-        AppTheme.StyleToolTip(_formatTip, keep: true);
 
         // A pen beside the line it changes since 24 Nov 2026 (it was "Format",
         // 15 Nov 2026) - see FormatPenSquare.

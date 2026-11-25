@@ -241,8 +241,23 @@ public sealed partial class RaceControlControl : UserControl
 
     private readonly Button _btnFormat = new FormatPenSquare();
 
-    /// <summary>The format line's tooltip: the whole format, where it comes from - see ApplyEffectiveFormat.</summary>
-    private readonly ToolTip _formatTip = new();
+    // WHY (25 Nov 2026, Asher: "for all the tool tips here can we put them
+    // behind a small circle with an i in it?"): the foot of the board's
+    // explanations are in "i" circles beside each part - they used to pop up
+    // off the pills, the format line and its pen whenever the mouse crossed
+    // them. See InfoDot and BoardFootRow.
+
+    /// <summary>On Air's explanation, beside its pill.</summary>
+    private readonly InfoDot _infoOnAir = new() { AccessibleName = "About On Air" };
+
+    /// <summary>Warm-up's explanation, beside its pill.</summary>
+    private readonly InfoDot _infoWarmUp = new() { AccessibleName = "About Warm-up" };
+
+    /// <summary>Auto Start's explanation, beside its pill.</summary>
+    private readonly InfoDot _infoAutoStart = new() { AccessibleName = "About Auto Start" };
+
+    /// <summary>The format line's and its pen's explanation: the whole format, where it comes from - see ApplyEffectiveFormat.</summary>
+    private readonly InfoDot _infoFormat = new() { AccessibleName = "About the format" };
 
     private readonly Button _btnQuickRace = new();
 

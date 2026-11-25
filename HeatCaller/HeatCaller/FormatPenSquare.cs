@@ -7,21 +7,16 @@ namespace HeatCaller;
 /// the foot of the board): a square with a pen drawn in it, beside the format
 /// line it changes - "12 laps · all away together ✎". It was a "Format"
 /// button in words, at the far end of the row from the line it changed. Its
-/// name for a screen reader is still "Format", and its tooltip says what it
-/// does.
+/// name for a screen reader is still "Format". What it does is in the "i"
+/// circle after it (InfoDot, 25 Nov 2026), not a tooltip of its own.
 /// </summary>
 internal sealed class FormatPenSquare : Button
 {
-    private readonly ToolTip _tip = new();
-
     public FormatPenSquare()
     {
         Text = string.Empty;
         AccessibleName = "Format";
         AccessibleDescription = "Change the format for the next race.";
-
-        AppTheme.StyleToolTip(_tip, keep: true);
-        _tip.SetToolTip(this, "Change format: the round's override, its class's format, or the app default.");
     }
 
     /// <summary>As wide as it is tall - see DockInboxSquare, which it copies.</summary>
@@ -68,15 +63,5 @@ internal sealed class FormatPenSquare : Button
         g.DrawLine(pen, At(9.5f, 4.5f), At(11.5f, 6.5f));
 
         g.Restore(saved);
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            _tip.Dispose();
-        }
-
-        base.Dispose(disposing);
     }
 }

@@ -56,6 +56,13 @@ public sealed class MixerControl : UserControl
     private readonly CheckBox _chkRecapDuck = new ThemedCheckBox();
     private readonly NumericUpDown _numRecapDuck = new();
     private readonly NumericUpDown _numImagingLevel = new();
+
+    /// <summary>
+    /// Under Imaging pieces: how the pieces sit beside the announcer, in
+    /// words (25 Nov 2026 - see ImagingLevel.BalanceWords). Asher's had
+    /// been at 20 for days with nothing to say the jingles were 14 dB under.
+    /// </summary>
+    private Label? _lblImagingBalance;
     private readonly NumericUpDown _numImagingBedLevel = new();
     private readonly NumericUpDown _numImagingBedDuck = new();
 
@@ -628,6 +635,8 @@ public sealed class MixerControl : UserControl
             {
                 BroadcastImaging.Level = (int)_numImagingLevel.Value;
             }
+
+            ShowImagingBalance();
         };
 
         _numImagingBedLevel.Minimum = 2;
@@ -659,6 +668,7 @@ public sealed class MixerControl : UserControl
         var imagingGrid = new FieldGrid();
 
         imagingGrid.AddRow("Imaging pieces:", FieldGrid.Inline(_numImagingLevel, Muted("%  - jingles, sweepers, bumpers and stingers")));
+        _lblImagingBalance = imagingGrid.AddHint(ImagingLevel.BalanceWords((int)_numImagingLevel.Value));
         imagingGrid.AddRow("Imaging beds:", FieldGrid.Inline(_numImagingBedLevel, Muted("%  - the soundscape's music beds, low on purpose")));
         imagingGrid.AddRow("Beds under voice:", FieldGrid.Inline(_numImagingBedDuck, Muted("% of the bed level while the announcer speaks")));
         imagingGrid.AddHint("The pieces and run of show are on the Imaging tab, and so are the club's own show music levels (Show treatment).");
@@ -974,6 +984,7 @@ public sealed class MixerControl : UserControl
             SetIfDifferent(_chkRecapDuck, _settings.SummaryDeepDuck);
             SetNumber(_numRecapDuck, _settings.SummaryDuckPercent);
             SetNumber(_numImagingLevel, BroadcastImaging.Level);
+            ShowImagingBalance();
             SetNumber(_numImagingBedLevel, BroadcastImaging.BedLevelPercent);
             SetNumber(_numImagingBedDuck, BroadcastImaging.BedDuckPercent);
         }
@@ -2080,6 +2091,14 @@ public sealed class MixerControl : UserControl
         if (_cmbMusicEnd.Items.Count > 0)
         {
             _cmbMusicEnd.SelectedIndex = 0;
+        }
+    }
+
+    private void ShowImagingBalance()
+    {
+        if (_lblImagingBalance is { } label)
+        {
+            label.Text = ImagingLevel.BalanceWords((int)_numImagingLevel.Value);
         }
     }
 }
