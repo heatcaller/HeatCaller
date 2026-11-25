@@ -552,7 +552,7 @@ Mission Control puts every check that matters before a green flag in one window,
 
 Open it with the **Mission Control** button at the bottom of the clock column, from **Connection → Mission Control**, or from **Mission Control** in the **Pre-race check** window. It isn't a dialog: it can stay open beside Race Control, or on a second screen, all night. It checks everything again once a second. Opening it again brings the open one to the front.
 
-![Mission Control reading "2 problems to fix before the green, and 2 to keep an eye on.": Timing at Normal, Cars heard at 0, Next race at 0 of 1 heard, Allowances amber at AI 82%, and Split Loop dimmed at Off](../assets/images/mission-control.png)
+![Mission Control reading "2 problems to fix before the green, and 2 to keep an eye on.": the Decoder tile red for a MyLaps P3 that is not connected, Cloud Backup red with Copy failed, Next race amber at 0 of 1 heard, Allowances amber at AI 82%, Split Loop dimmed at Off, and the Timing, Transponders, Website and Sound tiles green](../assets/images/mission-control.png)
 
 The headline over the tiles sums it up: "All clear. Ready to race.", "Ready to race - 2 to keep an eye on." or "1 problem to fix before the green."
 

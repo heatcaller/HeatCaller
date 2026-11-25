@@ -83,7 +83,7 @@ Checked on 25 Nov 2026, once everything was built and the guide was live.
 
 **What was built, against the plan**
 
-- **The guide is live at https://heatcaller.com/docs/** (heatcaller-site #40, 86e78ea3). The site's own pages are unchanged. The only "docs" links on the home page are its existing Google Form, so nothing on heatcaller.com points at the guide. Search engines aren't stopped, as planned.
+- **The guide is live at https://heatcaller.com/docs/** (heatcaller-site #40, 86e78ea3, then #41 for one caption). The site's own pages are unchanged. The only "docs" links on the home page are its existing Google Form, so nothing on heatcaller.com points at the guide. Search engines aren't stopped, as planned.
 - **Every address the app opens is a live guide page.** All 14 folders in `GuidePages` were fetched from the live site, each with its page's own title. The test ties them to `mkdocs.yml`'s nav, so a renamed page fails the build of the app, not a club.
 - **App:**
   - The fourth footer button, **User Guide**, opens the page for the page shown.
@@ -91,6 +91,12 @@ Checked on 25 Nov 2026, once everything was built and the guide was live.
   - About links to the guide.
   - The page search knows "guide" and "manual".
   - All of it is on branch `claude/user-guide-link`. The layout sweep, sidebar, rail and Desk View tests pass, 112 of 112.
+
+- **Search works on the live guide.** The index parses (1,059 entries) and has none of the writers' notes. A search for "transponder" in the browser lists 32 pages.
+- **Who checked the pictures.**
+  - A helper agent retook and looked at all 52.
+  - After that, Claude looked at every one of the 52 before the second publish. Only seven had been looked at before the first one (#40); the rest went up on the agent's word. Nothing real was in any of them.
+  - The check found one caption that was wrong: Mission Control's left out its two red tiles. It was fixed in #41.
 
 **What changed from the plan, and why**
 
@@ -100,6 +106,11 @@ Checked on 25 Nov 2026, once everything was built and the guide was live.
   - the made-up club pointed at a relay on this PC, never the live one.
   52 pictures were retaken from it. Race Analytics' Overview had nothing worth showing on the made-up data, so its old picture is taken out and left as a screenshot note. The unused `driver-hub.png` is deleted. About 20 captions were rewritten to say what the new pictures show.
 - **The footer button was built with the others.** Added later, the theme pass didn't give it their rounded plate. It's made in `MainForm.Designer.cs` now, beside the other three.
+
+**What wasn't done**
+
+- **Desk View:** the plan's check that the button is off in Desk View has no test of its own. Desk View turns off the whole footer (`pnlSidebarFooter.Enabled = false`), and the button is in the footer.
+- **The full app suite** (about 45 minutes) wasn't run. The guide, rail, Desk View, About, Backup and layout tests were (112 and 264 passing).
 
 **What's still open**
 
