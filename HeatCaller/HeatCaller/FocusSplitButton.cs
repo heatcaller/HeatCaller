@@ -30,7 +30,7 @@ internal sealed class FocusSplitButton : Control, IBadgeHost
     /// after it (25 Nov 2026, Asher: "put them behind a small circle with an
     /// i in it") - it used to pop up off the button itself. See InfoDot.
     /// </summary>
-    public InfoDot Info { get; } = new() { AccessibleName = "About Focus" };
+    public InfoDot Info { get; } = new() { AccessibleName = "About Focus", OnPink = true };
 
     /// <summary>Which part the mouse is over: 0 the main part, 1 the arrow, -1 neither.</summary>
     private int _hot = -1;
