@@ -97,6 +97,13 @@ public sealed partial class RaceControlControl
         {
             _body.SlideTo(ShowSideFolded);
         }
+        else if (_bodyHeld > 0)
+        {
+            // Held by the Focus stage's change (25 Nov 2026): laid out once,
+            // at the page's new size, when the hold ends - laid out here, the
+            // column was laid out at the old width only to be done again.
+            ShowSideFolded();
+        }
         else
         {
             // Laid out once at the end rather than once for every part that
@@ -116,6 +123,85 @@ public sealed partial class RaceControlControl
 
     /// <summary>The page's Beside - the clock column and the board. Set in BuildLayout.</summary>
     private Beside? _body;
+
+    /// <summary>
+    /// The page's pieces for the Focus stage (25 Nov 2026,
+    /// plans/focus-motion-plan.md): every row of the page - the Session row,
+    /// the Next Up bar and whatever else is showing - and, in the row with the
+    /// clock, each card and button beside it. Folds is true for what the fold
+    /// hides (the column's buttons and meters). The same controls before and
+    /// after a change, so the stage can match each one's two places. Hidden
+    /// ones are left out; the stage reads each one's place itself.
+    /// </summary>
+    internal IEnumerable<(Control Piece, bool Folds)> FocusPieces()
+    {
+        if (_body?.Parent is not { } holder || holder.Parent is not { } rows)
+        {
+            yield break;
+        }
+
+        foreach (Control row in rows.Controls)
+        {
+            if (row.Visible && row != holder)
+            {
+                yield return (row, false);
+            }
+        }
+
+        foreach (Control part in _body.Controls)
+        {
+            yield return (part, _foldedAway.Contains(part));
+        }
+
+        // And whatever else is on the page beside its rows - its slim scroll
+        // bar, which comes with Focus at 1440x900 (the Session card's second
+        // row makes the page taller than the window). Left out, it appeared
+        // all at once as the stage handed over (25 Nov 2026, frame strip).
+        for (var level = rows.Parent; level is not null && level != Parent; level = level.Parent)
+        {
+            foreach (Control other in level.Controls)
+            {
+                if (!other.Contains(rows) && other != rows)
+                {
+                    yield return (other, false);
+                }
+            }
+        }
+    }
+
+    /// <summary>How many holds on the body's layout are open - see <see cref="HoldBodyLayout"/>.</summary>
+    private int _bodyHeld;
+
+    /// <summary>
+    /// Holds the clock column and the board's layout until the result is
+    /// disposed, which lays them out once - for the Focus stage, which
+    /// changes the sidebar, the column and the inbox together (25 Nov 2026).
+    /// Dispose it after the window's own layout has been let go, so the
+    /// body is laid out at its final size.
+    /// </summary>
+    internal IDisposable HoldBodyLayout()
+    {
+        _bodyHeld++;
+        _body?.SuspendLayout();
+        return new BodyHold(this);
+    }
+
+    private sealed class BodyHold(RaceControlControl owner) : IDisposable
+    {
+        private RaceControlControl? _owner = owner;
+
+        public void Dispose()
+        {
+            if (_owner is not { } owner)
+            {
+                return;
+            }
+
+            _owner = null;
+            owner._bodyHeld--;
+            owner._body?.ResumeLayout(true);
+        }
+    }
 
     /// <summary>The leaderboard's card. Set in BuildLayout.</summary>
     private Section? _boardCard;
@@ -368,7 +454,8 @@ public sealed partial class RaceControlControl
         // 2026) beside On Air, as both say how a race starts; one level (15
         // Nov 2026, asked for by Asher), so the row fits beside the clock.
         _btnFocus.Asked += ask => FocusRequested?.Invoke(ask);
-        var footer = new BoardFootRow(new Control[] { _chkStartWithOnAir, _swWarmUpFirst, _swAutoStart }, _lblFormat, _btnFormat, _btnFocus)
+        var footer = new BoardFootRow(new Control[] { _chkStartWithOnAir, _swWarmUpFirst, _swAutoStart }, _lblFormat, _btnFormat, _btnFocus,
+            leftDots: new InfoDot?[] { _infoOnAir, _infoWarmUp, _infoAutoStart }, penDot: _infoFormat, rightDot: _btnFocus.Info)
         {
             AutoSize = true,
         };
@@ -1786,7 +1873,6 @@ public sealed partial class RaceControlControl
         // whole of it - where it comes from, the warm-up, the staging and the
         // countdown - in its tooltip. See BoardFootRow and ApplyEffectiveFormat.
         _lblFormat.ForeColor = AppTheme.TextMuted;
-        AppTheme.StyleToolTip(_formatTip, keep: true);
 
         // A pen beside the line it changes since 24 Nov 2026 (it was "Format",
         // 15 Nov 2026) - see FormatPenSquare.

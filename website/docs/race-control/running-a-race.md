@@ -122,7 +122,9 @@ If you don't choose a round and **Start the next race automatically** is ticked 
 
 ### The race format
 
-The format at the foot of the leaderboard shows the next race's length and how the field is released, for example "5 min · all away together". Hover over it for the whole format and where it comes from, for example "Format (Stock class): 5 min · all away together · auto 15+5s.". When the row is short of room it's shortened with "…".
+The format at the foot of the leaderboard shows the next race's length and how the field is released, for example "5 min · all away together". Click the small **i** on the pen's top right-hand corner for the whole format and where it comes from, for example "Format (Stock class): 5 min · all away together · auto 15+5s.". When the row is short of room the line is shortened with "…", and when there is too little room to read it, it is left out; the **i** still has it.
+
+Each part of that row has an **i** like this on its top right-hand corner: **On Air**, **Warm-up**, **Auto Start**, the pen and **Focus**. Click an **i** to read what its part does, and click it again to close it. Opening another **i** closes the one that was open. Hovering over the pills, the pen or **Focus** doesn't show anything.
 
 HeatCaller uses the first of these that exists:
 

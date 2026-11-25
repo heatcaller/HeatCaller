@@ -100,118 +100,126 @@ public sealed class FocusOnRaceControlTests
     }
 
     // --- The timings (FocusChoreography) -----------------------------------
+    //
+    // WHY (25 Nov 2026, Asher: "would you pay $10k for that animation?"):
+    // every piece now travels, and what needs nothing from the window after
+    // moves on the first frame - see plans/focus-motion-plan.md.
 
     [Fact]
-    public void Focus_takes_650_ms_and_Restore_420()
+    public void Focus_answers_on_the_first_frame_with_the_press_the_sidebar_and_the_column()
     {
-        Assert.Equal(650, FocusChoreography.EnterMs);
-        Assert.Equal(420, FocusChoreography.LeaveMs);
-        Assert.False(FocusChoreography.Done(649, entering: true));
-        Assert.True(FocusChoreography.Done(650, entering: true));
-        Assert.True(FocusChoreography.Done(420, entering: false));
+        var first = FocusChoreography.At(16, entering: true, arrivedAt: null, foldParts: 8);
+
+        Assert.True(first.Pressed);
+        Assert.True(first.Sidebar > 0, "the sidebar is moving");
+        Assert.True(FocusChoreography.Fold(60, 0, entering: true, arrivedAt: null) > 0, "the column's first part is going");
+
+        // The press is over by 90 ms; the sidebar is narrow by 280.
+        Assert.False(FocusChoreography.At(90, true, null, 8).Pressed);
+        Assert.Equal(1, FocusChoreography.At(280, true, null, 8).Sidebar);
     }
 
     [Fact]
-    public void Entering_each_part_moves_in_its_turn_as_the_plan_says()
+    public void The_cards_and_the_inbox_wait_for_the_view_underneath_however_long_it_takes()
     {
-        var start = FocusChoreography.Enter(0);
-        var end = FocusChoreography.Enter(FocusChoreography.EnterMs);
+        // Not arrived at 600 ms: the cards, the inbox and the light hold.
+        var waiting = FocusChoreography.At(600, entering: true, arrivedAt: null, foldParts: 8);
+        Assert.Equal(0, waiting.Glide);
+        Assert.Equal(0, waiting.InboxIn);
+        Assert.Equal(0, waiting.LightAlpha);
+        Assert.Equal(1, waiting.StageAlpha);
+        Assert.False(waiting.Done);
 
-        // Nothing but the ring at the press.
-        Assert.Equal(0, start.Curtain);
-        Assert.Equal(0, start.InboxIn);
-        Assert.Equal(1, start.RingAlpha);
-        Assert.Equal(1, start.StageAlpha);
+        // Arrived at 500: the glide starts there, not at the press.
+        Assert.Equal(500, FocusChoreography.CardsStart(500, entering: true));
+        Assert.Equal(0, FocusChoreography.At(500, true, 500, 8).Glide);
+        Assert.True(FocusChoreography.At(560, true, 500, 8).Glide > 0);
+        Assert.Equal(1, FocusChoreography.At(500 + FocusChoreography.GlideMs, true, 500, 8).Glide);
+    }
 
-        // The sidebar and the page by 360 ms; the inbox not before 180.
-        Assert.Equal(1, FocusChoreography.Enter(360).Curtain, 6);
-        Assert.Equal(1, FocusChoreography.Enter(360).Cross, 6);
-        Assert.Equal(0, FocusChoreography.Enter(180).InboxIn);
-        Assert.True(FocusChoreography.Enter(300).InboxIn > 0);
-
-        // The rows drop in from 300 ms, each 30 ms after the one above.
-        Assert.Equal(0, FocusChoreography.RowIn(300, 0));
-        Assert.True(FocusChoreography.RowIn(330, 0) > 0);
-        Assert.Equal(0, FocusChoreography.RowIn(330, 1));
-
-        // Settled at the end, and the stage gone.
-        Assert.Equal(1, end.Curtain);
-        Assert.Equal(1, end.InboxIn);
-        Assert.Equal(1, end.InboxAlpha);
-        Assert.Equal(0, end.StageAlpha);
-        Assert.Equal(0, end.RingAlpha, 6);
+    [Theory]
+    [InlineData(true, 0, 120)]
+    [InlineData(true, 300, 300)]
+    [InlineData(false, 0, 80)]
+    [InlineData(false, 250, 250)]
+    public void The_cards_start_at_the_arrival_but_never_before_the_opening_has_had_its_moment(bool entering, double arrivedAt, double start)
+    {
+        Assert.Equal(start, FocusChoreography.CardsStart(arrivedAt, entering));
     }
 
     [Fact]
-    public void The_pages_dip_through_the_background_rather_than_cross_fade()
+    public void Entering_each_part_follows_the_one_before_it_as_the_plan_says()
     {
-        Assert.Equal((1d, 0d), FocusChoreography.Dip(0));
-        Assert.Equal((0d, 1d), FocusChoreography.Dip(1));
+        const double a = 200;
+        double First(Func<double, bool> moving) => Enumerable.Range(0, 1400).Select(ms => (double)ms).First(moving);
 
-        // In the middle neither page is more than faint, so no words show twice.
-        var (from, to) = FocusChoreography.Dip(0.5);
-        Assert.True(from < 0.2 && to < 0.2, $"from {from}, to {to}");
+        var glide = First(ms => FocusChoreography.At(ms, true, a, 8).Glide > 0);
+        var inbox = First(ms => FocusChoreography.At(ms, true, a, 8).InboxIn > 0);
+        var row = First(ms => FocusChoreography.RowIn(ms, 0, a) > 0);
+        var light = First(ms => FocusChoreography.At(ms, true, a, 8).LightAlpha > 0);
+        var handOver = First(ms => FocusChoreography.At(ms, true, a, 8).StageAlpha < 1);
+
+        Assert.True(glide < inbox && inbox < row && row < light && light < handOver, $"glide {glide}, inbox {inbox}, row {row}, light {light}, hand-over {handOver}");
+        Assert.Equal(a + FocusChoreography.InboxDelay + 1, inbox);
+
+        // The rows one after another, 35 ms apart.
+        Assert.Equal(0, FocusChoreography.RowIn(a + FocusChoreography.RowsDelay + 30, 1, a));
+        Assert.True(FocusChoreography.RowIn(a + FocusChoreography.RowsDelay + 40, 1, a) > 0);
+
+        // Done once the hand-over is over, and not before - and every band of
+        // the inbox, its foot too, is in before the hand-over starts (found in
+        // the 25 Nov frame strip: the foot was still out and popped in).
+        var end = FocusChoreography.End(a, true, 8)!.Value;
+        Assert.All(Enumerable.Range(0, 20), band => Assert.Equal(1, FocusChoreography.RowIn(end, band, a)));
+        Assert.False(FocusChoreography.At(end + FocusChoreography.HandOverMs - 1, true, a, 8).Done);
+        Assert.True(FocusChoreography.At(end + FocusChoreography.HandOverMs, true, a, 8).Done);
     }
 
     [Fact]
-    public void The_wide_sidebar_fades_into_the_narrow_one_rather_than_jumping()
+    public void The_columns_parts_go_one_by_one_from_the_top_and_come_back_the_same_way_on_Restore()
     {
-        Assert.Equal(1, FocusChoreography.CurtainAlpha(0, narrowing: true));
-        Assert.Equal(1, FocusChoreography.CurtainAlpha(0.6, narrowing: true), 6);
-        Assert.Equal(0, FocusChoreography.CurtainAlpha(1, narrowing: true));
-        Assert.Equal(0, FocusChoreography.CurtainAlpha(0, narrowing: false));
-        Assert.Equal(1, FocusChoreography.CurtainAlpha(1, narrowing: false));
+        Assert.True(FocusChoreography.Fold(100, 0, true, null) > FocusChoreography.Fold(100, 1, true, null));
+        Assert.Equal(0, FocusChoreography.Fold(FocusChoreography.FoldStart + FocusChoreography.FoldStagger * 3, 3, true, null));
+        Assert.Equal(1, FocusChoreography.Fold(1000, 7, true, null));
 
-        // The ring has gone before the page under it moves on.
-        Assert.Equal(0, FocusChoreography.Enter(380).RingAlpha, 6);
+        // Restoring: gone until the arrival, then back one by one.
+        Assert.Equal(1, FocusChoreography.Fold(400, 0, false, null));
+        Assert.Equal(1, FocusChoreography.Fold(80 + FocusChoreography.RestoreFoldDelay, 0, false, 80));
+        Assert.True(FocusChoreography.Fold(80 + FocusChoreography.RestoreFoldDelay + 100, 0, false, 80) < 1);
+        Assert.Equal(0, FocusChoreography.Fold(2000, 7, false, 80));
     }
 
     [Fact]
-    public void The_parts_that_need_the_picture_after_wait_for_it_and_then_play_from_where_they_were_held()
+    public void Inside_a_card_the_new_contents_take_over_in_the_middle_of_the_glide()
     {
-        // In before the hold: on time.
-        Assert.Equal(0, FocusStage.Lateness(ms: 300, afterAt: 90, hold: FocusStage.EnterHoldMs));
-
-        // Still waiting at 500 ms: held at the hold.
-        Assert.Equal(500 - FocusStage.EnterHoldMs, FocusStage.Lateness(ms: 500, afterAt: null, hold: FocusStage.EnterHoldMs));
-
-        // In at 900 ms, a second Focus press's worth of work later: they run 760 ms behind from then on.
-        Assert.Equal(900 - FocusStage.EnterHoldMs, FocusStage.Lateness(ms: 1200, afterAt: 900, hold: FocusStage.EnterHoldMs));
-
-        // The hold is before the sidebar's fade into its narrow self begins (60% of its way).
-        Assert.True(FocusChoreography.Enter(FocusStage.EnterHoldMs).Curtain <= 0.6);
-        Assert.Equal(0, FocusChoreography.Dip(FocusChoreography.Enter(FocusStage.EnterHoldMs).Cross).To);
+        Assert.Equal(0, FocusChoreography.Cross(0.3));
+        Assert.Equal(0.5, FocusChoreography.Cross(0.5), 6);
+        Assert.Equal(1, FocusChoreography.Cross(0.7));
     }
 
     [Fact]
-    public void While_waiting_for_the_window_the_light_runs_along_the_board_again_and_again()
+    public void The_inbox_lands_a_few_pixels_past_its_place_and_settles_on_it()
     {
-        Assert.Null(FocusChoreography.Waiting(300));
-        Assert.NotNull(FocusChoreography.Waiting(400));
+        var most = Enumerable.Range(0, 1001).Max(i => FocusChoreography.Overshoot(i / 1000d));
 
-        var first = FocusChoreography.Waiting(360 + 200)!.Value;
-        var second = FocusChoreography.Waiting(360 + 200 + FocusChoreography.WaitingRunMs)!.Value;
-        Assert.Equal(first.At, second.At, 6);
+        // About 4 px of the inbox's 400.
+        Assert.InRange(most * 400 - 400, 3, 5);
+        Assert.Equal(0, FocusChoreography.Overshoot(0));
+        Assert.Equal(1, FocusChoreography.Overshoot(1));
     }
 
     [Fact]
-    public void The_inbox_springs_a_little_past_its_place_and_settles_on_it()
+    public void Restore_sends_the_inbox_out_at_once_and_the_rest_follows_the_arrival_with_no_light()
     {
-        var most = Enumerable.Range(0, 651).Max(ms => FocusChoreography.Enter(ms).InboxIn);
+        Assert.Equal(1, FocusChoreography.At(0, false, null, 8).InboxIn);
+        Assert.Equal(0, FocusChoreography.At(FocusChoreography.LeaveInboxMs, false, null, 8).InboxIn);
+        Assert.Equal(0, FocusChoreography.At(100, false, null, 8).InboxAlpha);
 
-        Assert.InRange(most, 1.01, 1.05);
-        Assert.Equal(1, FocusChoreography.Enter(640).InboxIn);
-    }
-
-    [Fact]
-    public void Restore_sends_the_inbox_out_first_then_opens_the_sidebar()
-    {
-        Assert.Equal(1, FocusChoreography.Leave(0).InboxIn);
-        Assert.Equal(0, FocusChoreography.Leave(220).InboxIn);
-        Assert.Equal(0, FocusChoreography.Leave(120).Curtain);
-        Assert.Equal(1, FocusChoreography.Leave(400).Curtain, 6);
-        Assert.Equal(0, FocusChoreography.Leave(FocusChoreography.LeaveMs).StageAlpha);
-        Assert.Equal(0, FocusChoreography.Leave(200).SweepAlpha);
+        // The sidebar waits for the arrival: its wide picture is only in the picture after.
+        Assert.Equal(0, FocusChoreography.At(300, false, null, 8).Sidebar);
+        Assert.Equal(1, FocusChoreography.At(300 + FocusChoreography.RestoreSidebarMs, false, 300, 8).Sidebar);
+        Assert.True(Enumerable.Range(0, 1500).All(ms => FocusChoreography.At(ms, false, 200, 8).LightAlpha == 0));
+        Assert.True(FocusChoreography.At(5000, false, 200, 8).Done);
     }
 
     // --- The row (BoardFootRow.Place) --------------------------------------
@@ -419,7 +427,7 @@ public sealed class FocusOnRaceControlTests
                 StaThread.Settle();
 
                 var oneRow = focus.Parent == pill.Parent && Math.Abs(focus.Top + focus.Height / 2 - (pill.Top + pill.Height / 2)) <= 1
-                             && focus.Right == focus.Parent!.ClientSize.Width && pen.Right < focus.Left && auto.Right < pen.Left;
+                             && focus.Right == focus.Parent!.ClientSize.Width && focus.Info.Bounds.IntersectsWith(focus.Bounds) && focus.Info.Right <= focus.Right && pen.Right < focus.Left && auto.Right < pen.Left;
                 var row = string.Join(" | ", focus.Parent!.Controls.Cast<Control>().Select(c => $"{c.GetType().Name} {c.Text} L{c.Left} T{c.Top} W{c.Width}"));
 
                 string State() => $"{focus.Text}: nav={Field<bool>(window, "_navIconsOnly")} side={page.SideFolded} inbox={Inbox(window)}";
@@ -457,7 +465,7 @@ public sealed class FocusOnRaceControlTests
             }
         }, TimeSpan.FromMinutes(3), () => "Race Control's Focus button");
 
-        Assert.True(seen.oneRow, "pills, pen and Focus share one row at 1280 wide, Focus against the right - " + seen.row);
+        Assert.True(seen.oneRow, "pills, pen and Focus share one row at 1280 wide, Focus against the right with its i badge on its corner - " + seen.row);
         Assert.Equal(new[]
         {
             "Focus: nav=False side=False inbox=Closed",
@@ -551,6 +559,54 @@ public sealed class FocusOnRaceControlTests
         static int Made(Control c) => (c.IsHandleCreated ? 1 : 0) + c.Controls.Cast<Control>().Where(k => k.Visible).Sum(Made);
         static int Shown(Control c) => 1 + c.Controls.Cast<Control>().Where(k => k.Visible).Sum(Shown);
         static bool OnScreen(Form window, Control c) => c.Visible && window.ClientRectangle.IntersectsWith(window.RectangleToClient(c.RectangleToScreen(c.ClientRectangle)));
+    }
+
+    // WHY (25 Nov 2026, found drawing the Focus frames): with the inbox set to
+    // a window of its own, making a spare told it it was docked, and its tick's
+    // handler saved "docked" for the club and docked it - leaving an empty
+    // 520 px dock showing down the right of Race Control.
+    [Fact]
+    public void Making_a_spare_inbox_leaves_the_clubs_dock_choice_and_the_page_as_they_were()
+    {
+        var seen = StaThread.Run(() =>
+        {
+            using var data = new TempAppData();
+
+            new AppSettings
+            {
+                StartMaximized = false,
+                HasCompletedFirstRun = true,
+                HasSeenRaceDaySetup = true,
+                AutoBackupEnabled = false,
+                ConnectDecodersAtStartup = false,
+                InboxDocked = false,
+            }.Save();
+
+            var window = new MainForm { LayoutCheckMode = true, StartPosition = FormStartPosition.Manual, Location = new Point(-20000, -20000) };
+
+            try
+            {
+                window.Show();
+                StaThread.Settle();
+                window.SizeContentForLayoutCheck(new Size(1440, 860));
+                StaThread.Settle();
+
+                window.MakeSpareInbox();
+                StaThread.Settle();
+
+                var settings = Field<AppSettings>(window, "_settings");
+                var dock = Field<Panel?>(window, "_inboxDock");
+                return (window.SpareInboxReady, settings.InboxDocked, DockShowing: dock is { Visible: true });
+            }
+            finally
+            {
+                window.Close();
+                window.Dispose();
+                StaThread.Settle();
+            }
+        }, TimeSpan.FromMinutes(3), () => "a spare inbox, not docked");
+
+        Assert.Equal((true, false, false), seen);
     }
 
     private static string Inbox(MainForm window)

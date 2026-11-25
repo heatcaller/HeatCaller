@@ -1,61 +1,57 @@
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 
 namespace HeatCaller;
 
-/// <summary>Where the moving parts are, in the main window's client area, for one Focus animation.</summary>
+/// <summary>What the Focus stage moves, in the main window's client area.</summary>
 /// <param name="NavFrom">The sidebar's width before.</param>
 /// <param name="NavTo">The sidebar's width after - known before the change, as the sidebar's two widths are fixed.</param>
-/// <param name="Inbox">The docked inbox, splitter and all: in the picture after when focusing, in the picture before when restoring. Empty when there is none.</param>
-/// <param name="BoardTop">The top edge of the leaderboard card after - where the light runs. Empty for none.</param>
-/// <param name="Button">The Focus button where it was pressed - where the ring of light grows from.</param>
-internal readonly record struct FocusScene(int NavFrom, int NavTo, Rectangle Inbox, Rectangle BoardTop, Rectangle Button);
+/// <param name="Button">The Focus button where it was pressed - drawn pressed in for the first 90 ms.</param>
+/// <param name="Pieces">The page's pieces: each card's place before (and after, once the view has changed), and the column's parts.</param>
+/// <param name="Inbox">The docked inbox, splitter and all: in the picture after when focusing, in the picture before when restoring. Empty for none.</param>
+/// <param name="BoardTop">The top edge of the leaderboard's card after - where the landing light runs. Empty for none.</param>
+internal sealed record FocusScene(int NavFrom, int NavTo, Rectangle Button, IReadOnlyList<FocusPiece> Pieces, Rectangle Inbox, Rectangle BoardTop);
 
 /// <summary>
-/// THE FOCUS STAGE (24 Nov 2026, asked for by Asher: "that should be animated
-/// in a way that looks like it costs $10,000"). A borderless window laid over
-/// the main window's client area for the 650 ms of a Focus (420 of a
-/// Restore), drawing two pictures of it - before and after - moving, cut and
-/// faded as FocusChoreography says, with the glow, the light and the ring
-/// drawn on top.
+/// THE FOCUS STAGE. A borderless window laid over the main window's client
+/// area while Focus or Restore plays, drawing the page's pieces from two
+/// pictures of the window - before and after - as FocusChoreography says.
+///
+/// WHY (25 Nov 2026, Asher: "would you pay $10k for that animation?" - no:
+/// plans/focus-motion-plan.md). The 24 Nov stage cross-faded the two pictures
+/// with a ring, a sweep and a glow over them, so nothing on screen travelled
+/// and the eye had nothing to follow. Now every piece moves from where it was
+/// to where it goes: the sidebar narrows with the page riding its edge, the
+/// column's buttons fold away one by one, each card glides to its new place
+/// and size with its contents pinned to its edges (FocusElastic), and the
+/// inbox slides in and lands. One pink light along the board as it lands is
+/// the only accent.
 ///
 /// WHY PICTURES. Race Control cannot be laid out sixty times a second - the
 /// leaderboard alone takes 30-40 ms (PR #218) - so nothing real moves. The
-/// window is changed once, underneath, while the stage covers it, and the
-/// stage plays between the two pictures. Each frame is a few GDI blits
-/// (BitBlt, and AlphaBlend for the fades), a millisecond or two at full
-/// size, so it holds sixty frames a second.
+/// window is changed once, underneath, while the stage covers it. Each frame
+/// is a few dozen GDI copies (BitBlt, StretchBlt for the plain seams,
+/// AlphaBlend for the fades).
 ///
-/// ON A THREAD OF ITS OWN. Changing the window underneath takes about a
-/// second - the inbox built (about 380 ms), the clock column folded (about
-/// 340), the sidebar narrowed (about 120), measured 24 Nov 2026 - and on the
-/// window's own thread the stage sat frozen on the picture before for all of
-/// it. So the stage has its own thread and message loop: it starts moving the
-/// moment Focus is pressed, with what needs only the picture before - the
-/// ring, the sidebar closing, the old page fading out - and the parts that
-/// need the picture after (the new page, the inbox, the light) play from
-/// when it arrives (<see cref="Arrive"/>), however long that took.
+/// ON A THREAD OF ITS OWN. Changing the window underneath takes about half a
+/// second (measured 25 Nov 2026), and on the window's own thread the stage
+/// would sit frozen for it. So the stage has its own thread and message loop:
+/// it moves the moment Focus is pressed with what needs only the picture
+/// before, and the cards follow from when the picture after arrives
+/// (<see cref="Arrive"/>).
 ///
 /// It never takes the keyboard or the mouse: clicks and keys go straight to
-/// the window under it, already in its new place, so a flag thrown during
-/// the animation is thrown.
+/// the window under it, already in its new place.
 /// </summary>
 internal sealed class FocusStage : Form
 {
-    /// <summary>
-    /// How far into Focus (Restore) the parts that need the picture after are
-    /// held, if it has not arrived: the new page has not begun to show and the
-    /// sidebar's fade into its narrow self has not begun.
-    /// </summary>
-    internal const double EnterHoldMs = 130;
-
-    /// <inheritdoc cref="EnterHoldMs"/>
-    internal const double LeaveHoldMs = 120;
-
-    private readonly Bitmap _from;
+    private Bitmap _from = null!;
     private Bitmap? _to;
     private IntPtr _fromBits;
     private IntPtr _toBits;
+    private int[]? _fromPixels;
+    private int[]? _toPixels;
     private FocusScene _scene;
     private readonly bool _entering;
     private readonly Action<Action>? _toMain;
@@ -69,13 +65,22 @@ internal sealed class FocusStage : Form
     /// <summary>When the picture after arrived, in ms into the animation - null until it has.</summary>
     private double? _afterAt;
 
+    /// <summary>Each card's cut, before and after, made once - see FocusElastic.</summary>
+    private readonly Dictionary<Rectangle, ElasticPlan> _fromPlans = new();
+    private readonly Dictionary<Rectangle, ElasticPlan> _toPlans = new();
+
     /// <param name="bounds">Where it goes, on the screen: the main window's client area.</param>
     /// <param name="toMain">Runs an action on the main window's thread - the done callback goes through it.</param>
     internal FocusStage(Rectangle bounds, Bitmap before, FocusScene scene, bool entering, Action<Action>? toMain = null, Action? done = null)
+        : this(bounds, entering, toMain, done)
     {
-        _from = before;
-        _fromBits = before.GetHbitmap();
-        _scene = scene;
+        TakeBefore(before, scene);
+    }
+
+    /// <summary>A stage with no picture yet - made while the picture before is taken; see <see cref="Begin"/>.</summary>
+    private FocusStage(Rectangle bounds, bool entering, Action<Action>? toMain, Action? done)
+    {
+        _scene = new FocusScene(0, 0, Rectangle.Empty, Array.Empty<FocusPiece>(), Rectangle.Empty, Rectangle.Empty);
         _entering = entering;
         _toMain = toMain;
         _done = done;
@@ -88,31 +93,57 @@ internal sealed class FocusStage : Form
         DoubleBuffered = true;
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
 
-        // Layered from the start, so the fade at the end is a change of
+        // Layered from the start, so the hand-over at the end is a change of
         // opacity rather than a switch of window kind mid-animation.
         Opacity = 0.995;
 
         _timer.Tick += (_, _) => Frame();
     }
 
+    /// <summary>The picture before and where the pieces are in it - before the stage is shown.</summary>
+    private void TakeBefore(Bitmap before, FocusScene scene)
+    {
+        _from = before;
+        _fromBits = before.GetHbitmap();
+        _scene = scene;
+    }
+
     /// <summary>
     /// Puts a stage up over <paramref name="bounds"/> on a thread of its own
-    /// and starts it at once. Null when it could not be put up - the caller
-    /// then simply changes the view. <paramref name="done"/> runs on the main
-    /// window's thread, through <paramref name="toMain"/>, once it has gone.
+    /// and starts it at once. <paramref name="take"/> takes the picture before
+    /// and the pieces, on the caller's thread, while the stage's window is
+    /// made on its own - so the two take as long as the slower, not both
+    /// added (25 Nov 2026: the picture 216-414 ms under load, the stage's
+    /// window 58-122 ms after it). Null when it could not be put up, or
+    /// <paramref name="take"/> gave nothing - the caller then simply changes the
+    /// view. <paramref name="done"/> runs on the main window's thread, through
+    /// <paramref name="toMain"/>, once it has gone.
     /// </summary>
-    internal static FocusStage? Begin(Rectangle bounds, Bitmap before, FocusScene scene, bool entering, Action<Action> toMain, Action done)
+    internal static FocusStage? Begin(Rectangle bounds, bool entering, Action<Action> toMain, Action done, Func<(Bitmap Before, FocusScene Scene)?> take)
     {
         FocusStage? stage = null;
-        // Not disposed: the stage's thread signals it again as it ends, after
-        // this has returned - disposed, that threw on the stage's thread.
+        (Bitmap Before, FocusScene Scene)? taken = null;
+
+        // Not disposed: the stage's thread signals them again as it ends,
+        // after this has returned - disposed, that threw on the stage's thread.
         var up = new ManualResetEventSlim();
+        var go = new ManualResetEventSlim();
 
         var thread = new Thread(() =>
         {
             try
             {
-                stage = new FocusStage(bounds, before, scene, entering, toMain, done);
+                stage = new FocusStage(bounds, entering, toMain, done);
+                _ = stage.Handle;
+
+                if (!go.Wait(TimeSpan.FromSeconds(2)) || taken is not { } picture)
+                {
+                    stage.Dispose();
+                    stage = null;
+                    return;
+                }
+
+                stage.TakeBefore(picture.Before, picture.Scene);
                 stage.Shown += (_, _) => up.Set();
                 Application.Run(stage);
             }
@@ -132,6 +163,20 @@ internal sealed class FocusStage : Form
 
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
+
+        try
+        {
+            taken = take();
+        }
+        finally
+        {
+            go.Set();
+        }
+
+        if (taken is null)
+        {
+            return null;
+        }
 
         return up.Wait(TimeSpan.FromSeconds(2)) && stage is { IsDisposed: false } shown ? shown : null;
     }
@@ -179,14 +224,14 @@ internal sealed class FocusStage : Form
     }
 
     /// <summary>
-    /// The picture after has been taken, and where the inbox and the board
-    /// are in it. From any thread - it is handed to the stage's own.
+    /// The picture after has been taken, and where every piece is in it.
+    /// From any thread - it is handed to the stage's own.
     /// </summary>
-    internal void Arrive(Bitmap after, Rectangle inbox, Rectangle boardTop)
+    internal void Arrive(Bitmap after, FocusScene scene)
     {
         try
         {
-            BeginInvoke(new Action(() => Prepare(after, _scene with { Inbox = inbox, BoardTop = boardTop }, _ms)));
+            BeginInvoke(new Action(() => Prepare(after, scene, _ms)));
         }
         catch (InvalidOperationException)
         {
@@ -208,25 +253,27 @@ internal sealed class FocusStage : Form
         }
     }
 
-    /// <summary>The picture after and where the parts are in it, <paramref name="at"/> ms in - Arrive, and the tests through Render.</summary>
+    /// <summary>The picture after and where the pieces are in it, <paramref name="at"/> ms in - Arrive, and the tests through Render.</summary>
     internal void Prepare(Bitmap after, FocusScene scene, double at)
     {
         _to = after;
         _toBits = after.GetHbitmap();
+        _toPixels = PixelsOf(after);
         _scene = scene;
         _afterAt = at;
+
+        // Every card's cut in the picture after, now, rather than in the
+        // first frames of the glide.
+        foreach (var piece in scene.Pieces)
+        {
+            if (piece.Kind == FocusPieceKind.Card && !piece.After.IsEmpty)
+            {
+                PlanOf(_toPlans, _toPixels, after.Width, piece.After);
+            }
+        }
+
         Invalidate();
     }
-
-    /// <summary>
-    /// How far behind the parts that need the picture after run: nothing
-    /// when it came before their hold, else the time it was late by - and,
-    /// still waiting, as long as it has waited past the hold.
-    /// </summary>
-    internal static double Lateness(double ms, double? afterAt, double hold) =>
-        afterAt is { } at ? Math.Max(0, at - hold) : Math.Max(0, ms - hold);
-
-    private double Hold => _entering ? EnterHoldMs : LeaveHoldMs;
 
     private void Frame()
     {
@@ -240,13 +287,25 @@ internal sealed class FocusStage : Form
         }
     }
 
+    private int FoldParts => _scene.Pieces.Count(p => p.Kind == FocusPieceKind.Folding);
+
     private void NextFrame()
     {
         _ms = _clock.Tick();
 
-        var late = _ms - Lateness(_ms, _afterAt, Hold);
-        var frame = _entering ? FocusChoreography.Enter(late) : FocusChoreography.Leave(late);
-        var opacity = _afterAt is null ? 0.995 : Math.Clamp(frame.StageAlpha, 0, 0.995);
+        // The cards' cuts in the picture before, one card a frame while the
+        // sidebar moves - they are wanted only once the glide starts.
+        if (_fromPixels is null)
+        {
+            _fromPixels = PixelsOf(_from);
+        }
+        else if (_scene.Pieces.FirstOrDefault(p => p.Kind == FocusPieceKind.Card && !p.Before.IsEmpty && !_fromPlans.ContainsKey(p.Before)) is { Before.IsEmpty: false } next)
+        {
+            PlanOf(_fromPlans, _fromPixels, _from.Width, next.Before);
+        }
+
+        var moment = FocusChoreography.At(_ms, _entering, _afterAt, FoldParts);
+        var opacity = Math.Clamp(moment.StageAlpha, 0, 0.995);
 
         if (Math.Abs(Opacity - opacity) > 0.001)
         {
@@ -254,7 +313,7 @@ internal sealed class FocusStage : Form
         }
 
         // Never longer than a few seconds, whatever happened to the picture after.
-        if ((_afterAt is not null && FocusChoreography.Done(late, _entering)) || _ms > 6000)
+        if (moment.Done || _ms > 6000)
         {
             Finish();
             return;
@@ -327,38 +386,22 @@ internal sealed class FocusStage : Form
     /// </summary>
     internal void Render(Graphics g, double ms, Size size)
     {
-        // What needs only the picture before runs on the stage's own clock;
-        // what needs the picture after, from when it arrived.
-        var own = _entering ? FocusChoreography.Enter(ms) : FocusChoreography.Leave(ms);
-        var lateMs = ms - Lateness(ms, _afterAt, Hold);
-        var after = _entering ? FocusChoreography.Enter(lateMs) : FocusChoreography.Leave(lateMs);
+        var m = FocusChoreography.At(ms, _entering, _afterAt, FoldParts);
         var haveAfter = _to is not null;
-
         var width = size.Width;
         var height = size.Height;
 
-        // How open the sidebar is. Focusing, it closes on its own clock, from
-        // the picture before; restoring, it opens with the picture after.
-        var curtain = _entering ? own.Curtain : haveAfter ? after.Curtain : 0;
-        var sidebar = (int)Math.Round(Lerp(_scene.NavFrom, _scene.NavTo, curtain));
+        // The sidebar's width now, and how far it has moved: the page rides
+        // its edge, and the cards keep to it as they glide (FocusElastic.CardAt).
+        var sidebar = (int)Math.Round(Lerp(_scene.NavFrom, _scene.NavTo, m.Sidebar));
+        var ride = sidebar - _scene.NavFrom;
+        var change = _scene.NavTo - _scene.NavFrom;
 
-        // The inbox: in the picture after when focusing, before when restoring.
-        var inbox = _scene.Inbox;
-        var inboxFrame = _entering ? after : own;
-        var travel = UiLayout.AtDpi(FocusChoreography.InboxTravel);
-        var inboxShift = (int)Math.Round(travel * (1 - inboxFrame.InboxIn));
-        var showInbox = !inbox.IsEmpty && inboxFrame.InboxAlpha > 0 && (!_entering || haveAfter);
-
-        // Both pages on the clock of the picture after: until it arrives the
-        // page before stays, riding along with the closing sidebar - waiting
-        // on a slow change looks like the page settling, not an empty window.
-        var (fromAlpha, toAlpha) = FocusChoreography.Dip(after.Cross);
-
-        if (!haveAfter)
-        {
-            toAlpha = 0;
-        }
-
+        // The hand-over is the stage fading over the real window, which is
+        // already the window after: the final frame goes on being drawn, so
+        // anything that is not a piece - the page's scroll bar, which comes
+        // with Focus at 1440x900 - fades in over those 80 ms rather than
+        // appearing at once.
         var hdc = g.GetHdc();
 
         try
@@ -368,85 +411,113 @@ internal sealed class FocusStage : Form
 
             try
             {
-                // 1. The window's own background, and over it the page after,
-                //    riding along with the sidebar's edge into its place and
-                //    fading up as the page before has nearly gone (3) - a dip,
-                //    not a cross-fade: two pages of the same words, offset,
-                //    read as double vision. Focusing, it stops short of the
-                //    inbox's place: the inbox comes in by itself (4).
+                // 1. The window's own ground.
                 using (var ground = Graphics.FromHdc(hdc))
                 using (var fill = new SolidBrush(AppTheme.Background))
                 {
                     ground.FillRectangle(fill, 0, 0, width, height);
                 }
 
-                if (haveAfter && toAlpha > 0)
+                // 2. The cards: each at its place now, its contents after under
+                //    its contents before, the before fading over the glide.
+                foreach (var piece in _scene.Pieces)
                 {
-                    SelectObject(memory, _toBits);
-
-                    var afterShift = sidebar - _scene.NavTo;
-                    var afterRight = _entering && !inbox.IsEmpty ? inbox.Left + afterShift : width;
-                    var afterWidth = Math.Min(Math.Min(afterRight, width) - sidebar, width - _scene.NavTo);
-
-                    if (afterWidth > 0)
+                    if (piece.Kind != FocusPieceKind.Card || piece.Before.IsEmpty)
                     {
-                        Copy(hdc, sidebar, afterWidth, height, memory, _scene.NavTo, toAlpha);
+                        continue;
+                    }
+
+                    var at = FocusElastic.CardAt(piece.Before, piece.After, m.Glide, ride, change);
+
+                    if (at.Width <= 0 || at.Height <= 0)
+                    {
+                        continue;
+                    }
+
+                    SelectClipRgnTo(hdc, at);
+
+                    try
+                    {
+                        if (haveAfter && !piece.After.IsEmpty && m.Glide > 0)
+                        {
+                            if (m.Cross > 0)
+                            {
+                                SelectObject(memory, _toBits);
+                                DrawElastic(hdc, memory, PlanOf(_toPlans, _toPixels!, _to!.Width, piece.After), at, 1);
+                            }
+
+                            if (m.Cross < 1)
+                            {
+                                SelectObject(memory, _fromBits);
+                                DrawElastic(hdc, memory, BeforePlan(piece.Before), at, 1 - m.Cross);
+                            }
+                        }
+                        else
+                        {
+                            // Only riding the sidebar's edge: the picture before, as it was.
+                            SelectObject(memory, _fromBits);
+                            BitBlt(hdc, at.X, at.Y, piece.Before.Width, piece.Before.Height, memory, piece.Before.X, piece.Before.Y, SRCCOPY);
+                        }
+                    }
+                    finally
+                    {
+                        SelectClipRgn(hdc, IntPtr.Zero);
                     }
                 }
 
-                // 2. The sidebar: the narrow one underneath, and the wide one
-                //    over it cut off at the width it has got to - the open one
-                //    closing (focusing) or opening (restoring) - fading into the
-                //    narrow one's own icons as it reaches it, so the hand-over
-                //    is not a jump.
-                var narrowing = _scene.NavFrom >= _scene.NavTo;
-                var narrowWidth = Math.Min(_scene.NavFrom, _scene.NavTo);
-                var narrowBits = narrowing ? _toBits : _fromBits;
-                var wideBits = narrowing ? _fromBits : _toBits;
+                // 3. The column's parts: folding away one by one, drifting
+                //    right (Focus), or coming back the same way (Restore).
+                var drift = UiLayout.AtDpi(FocusChoreography.FoldDrift);
 
-                if (narrowWidth > 0 && narrowBits != IntPtr.Zero)
+                foreach (var piece in _scene.Pieces)
+                {
+                    if (piece.Kind != FocusPieceKind.Folding)
+                    {
+                        continue;
+                    }
+
+                    // Going (in the picture before) or coming (in the picture
+                    // after) - whichever way the press goes; the column's parts
+                    // go on Focus and come back on Restore.
+                    var going = !piece.Before.IsEmpty;
+                    var gone = FocusChoreography.Fold(ms, piece.Order, entering: going, _afterAt);
+                    var source = going ? piece.Before : piece.After;
+                    var bits = going ? _fromBits : _toBits;
+
+                    if (gone >= 1 || source.IsEmpty || bits == IntPtr.Zero)
+                    {
+                        continue;
+                    }
+
+                    SelectObject(memory, bits);
+                    var shift = (going ? ride : 0) + (int)Math.Round(drift * gone);
+                    Copy(hdc, memory, source, new Rectangle(source.X + shift, source.Y, source.Width, source.Height), 1 - gone);
+                }
+
+                // 4. The sidebar: the wide one cut off at the width it has got
+                //    to, and the narrow one's own picture fading in over it as
+                //    it arrives (Focus) or out as the wide one opens (Restore).
+                var wideBits = _entering ? _fromBits : _toBits;
+                var narrowBits = _entering ? _toBits : _fromBits;
+                var narrowWidth = Math.Min(_scene.NavFrom, _scene.NavTo);
+
+                if (sidebar > 0 && wideBits != IntPtr.Zero && (_entering || m.Sidebar > 0))
+                {
+                    SelectObject(memory, wideBits);
+                    BitBlt(hdc, 0, 0, sidebar, height, memory, 0, 0, SRCCOPY);
+                }
+
+                if (narrowWidth > 0 && narrowBits != IntPtr.Zero && m.NarrowAlpha > 0)
                 {
                     SelectObject(memory, narrowBits);
-                    BitBlt(hdc, 0, 0, narrowWidth, height, memory, 0, 0, SRCCOPY);
+                    Copy(hdc, memory, new Rectangle(0, 0, narrowWidth, height), new Rectangle(0, 0, narrowWidth, height), m.NarrowAlpha);
                 }
 
-                if (_scene.NavFrom != _scene.NavTo && sidebar > 0 && wideBits != IntPtr.Zero)
-                {
-                    // Focusing, solid until the narrow sidebar is there to fade into.
-                    var curtainAlpha = narrowing
-                        ? haveAfter ? FocusChoreography.CurtainAlpha(after.Curtain, narrowing: true) : 1
-                        : FocusChoreography.CurtainAlpha(curtain, narrowing: false);
-
-                    if (curtainAlpha > 0)
-                    {
-                        SelectObject(memory, wideBits);
-                        Copy(hdc, 0, sidebar, height, memory, 0, curtainAlpha);
-                    }
-                }
-
-                // 3. The page before, fading out as it rides along with the
-                //    sidebar's edge, so the old page slides as it goes.
-                //    Restoring, it stops short of the inbox, which leaves on
-                //    its own (4).
-                if (fromAlpha > 0)
-                {
-                    SelectObject(memory, _fromBits);
-
-                    var srcX = _scene.NavFrom;
-                    var pageRight = !_entering && !inbox.IsEmpty ? inbox.Left : width;
-                    var visible = Math.Min(Math.Max(0, pageRight - srcX), width - sidebar);
-
-                    if (visible > 0)
-                    {
-                        Copy(hdc, sidebar, visible, height, memory, srcX, fromAlpha);
-                    }
-                }
-
-                // 4. The inbox, sliding in from the right (or out to it).
-                if (showInbox)
+                // 5. The inbox, sliding in from the right (or out to it).
+                if (!_scene.Inbox.IsEmpty && m.InboxIn > 0 && (!_entering || haveAfter))
                 {
                     SelectObject(memory, _entering ? _toBits : _fromBits);
-                    DrawInbox(hdc, memory, inbox, inboxShift, inboxFrame, width, _entering ? lateMs : ms);
+                    DrawInbox(hdc, memory, m, ms, width);
                 }
             }
             finally
@@ -460,82 +531,110 @@ internal sealed class FocusStage : Form
             g.ReleaseHdc(hdc);
         }
 
-        // 5. Light on top: the inbox's glowing edge, the run along the board,
-        //    the ring from the button.
+        // 6. On top: the inbox's shadow, the press, the landing light.
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
-        if (showInbox && _entering && after.Edge > 0)
+        if (!_scene.Inbox.IsEmpty && m.InboxIn > 0 && (!_entering || haveAfter))
         {
-            DrawEdgeGlow(g, new Rectangle(inbox.Left + inboxShift, inbox.Top, inbox.Width, inbox.Height), after.Edge);
+            DrawShadow(g, InboxLeft(m, width), height, Math.Clamp(m.InboxIn, 0, 1));
         }
 
-        if (haveAfter && !_scene.BoardTop.IsEmpty && after.SweepAlpha > 0)
-        {
-            DrawSweep(g, _scene.BoardTop, after.Sweep, after.SweepAlpha);
-        }
-        else if (!haveAfter && _entering && !_scene.BoardTop.IsEmpty && FocusChoreography.Waiting(ms) is { } waiting)
-        {
-            // Still waiting for the picture after (the inbox being built): the
-            // light runs along the board before, riding with its page, so the
-            // wait reads as the board getting ready rather than a stall.
-            var top = _scene.BoardTop;
-            top.Offset(sidebar - _scene.NavFrom, 0);
-            DrawSweep(g, top, waiting.At, waiting.Alpha);
-        }
-
-        // The ring rides with the page before, as the button it grows from does.
-        if (!_scene.Button.IsEmpty && own.RingAlpha > 0)
+        if (m.Pressed && !_scene.Button.IsEmpty)
         {
             var button = _scene.Button;
-            button.Offset(sidebar - _scene.NavFrom, 0);
-            DrawRing(g, button, own.Ring, own.RingAlpha);
+            button.Offset(ride, 0);
+
+            using var dark = new SolidBrush(Color.FromArgb(56, Color.Black));
+            using var path = AppTheme.RoundedRect(button, UiLayout.AtDpi(10));
+            g.FillPath(dark, path);
+        }
+
+        if (m.LightAlpha > 0 && !_scene.BoardTop.IsEmpty)
+        {
+            DrawLight(g, _scene.BoardTop, m.Light, m.LightAlpha);
         }
     }
 
-    /// <summary>A strip of the picture selected into <paramref name="memory"/>, from x <paramref name="sourceX"/>, onto x <paramref name="x"/> - solid, or faded.</summary>
-    private static void Copy(IntPtr hdc, int x, int w, int h, IntPtr memory, int sourceX, double alpha)
+    private ElasticPlan BeforePlan(Rectangle before) => PlanOf(_fromPlans, _fromPixels ??= PixelsOf(_from), _from.Width, before);
+
+    private static ElasticPlan PlanOf(Dictionary<Rectangle, ElasticPlan> plans, int[] pixels, int width, Rectangle source)
+    {
+        if (!plans.TryGetValue(source, out var plan))
+        {
+            plan = FocusElastic.Analyse(pixels, width, source);
+            plans[source] = plan;
+        }
+
+        return plan;
+    }
+
+    /// <summary>A piece drawn into <paramref name="to"/> as its plan cuts it - solid, or faded.</summary>
+    private static void DrawElastic(IntPtr hdc, IntPtr memory, ElasticPlan plan, Rectangle to, double alpha)
+    {
+        foreach (var blit in FocusElastic.Map(plan, to))
+        {
+            Copy(hdc, memory, blit.From, blit.To, alpha);
+        }
+    }
+
+    /// <summary>A part of the picture selected into <paramref name="memory"/>, to <paramref name="to"/> - the same size or stretched, solid or faded.</summary>
+    private static void Copy(IntPtr hdc, IntPtr memory, Rectangle from, Rectangle to, double alpha)
     {
         var a = (byte)Math.Round(Math.Clamp(alpha, 0, 1) * 255);
 
-        if (a == 255)
+        if (a == 0 || from.Width <= 0 || from.Height <= 0 || to.Width <= 0 || to.Height <= 0)
         {
-            BitBlt(hdc, x, 0, w, h, memory, sourceX, 0, SRCCOPY);
+            return;
         }
-        else if (a > 0)
+
+        if (a == 255 && from.Size == to.Size)
         {
-            AlphaBlend(hdc, x, 0, w, h, memory, sourceX, 0, w, h, Blend(a));
+            BitBlt(hdc, to.X, to.Y, to.Width, to.Height, memory, from.X, from.Y, SRCCOPY);
+        }
+        else if (a == 255)
+        {
+            StretchBlt(hdc, to.X, to.Y, to.Width, to.Height, memory, from.X, from.Y, from.Width, from.Height, SRCCOPY);
+        }
+        else
+        {
+            AlphaBlend(hdc, to.X, to.Y, to.Width, to.Height, memory, from.X, from.Y, from.Width, from.Height, Blend(a));
         }
     }
 
+    /// <summary>Where the inbox's left edge is now: off the right edge at 0, in its place at 1, a few pixels past it on the overshoot.</summary>
+    private int InboxLeft(FocusMoment m, int width) =>
+        _scene.Inbox.Left + (int)Math.Round((width - _scene.Inbox.Left) * (1 - m.InboxIn));
+
     /// <summary>
-    /// The inbox, its panel first and then its rows in bands - entering, each
-    /// band rising a few pixels as it fades up, 30 ms after the one above it;
-    /// leaving, all of it together.
+    /// The inbox: its ground first, then its contents in bands - entering,
+    /// each band rising a few pixels as it fades up, one after another;
+    /// leaving, its contents fading together as it goes.
     /// </summary>
-    private void DrawInbox(IntPtr hdc, IntPtr memory, Rectangle inbox, int shift, FocusFrame frame, int width, double ms)
+    private void DrawInbox(IntPtr hdc, IntPtr memory, FocusMoment m, double ms, int width)
     {
-        var x = inbox.Left + shift;
-        var visible = Math.Min(inbox.Width, width - x);
+        var inbox = _scene.Inbox;
+        var x = InboxLeft(m, width);
+
+        // Wide enough to cover the overshoot's few pixels at the right.
+        var visible = Math.Min(inbox.Width + Math.Max(0, inbox.Left - x), width - x);
 
         if (visible <= 0)
         {
             return;
         }
 
-        var panelAlpha = (byte)Math.Round(Math.Clamp(frame.InboxAlpha, 0, 1) * 255);
+        using (var ground = Graphics.FromHdc(hdc))
+        using (var fill = new SolidBrush(AppTheme.Background))
+        {
+            ground.FillRectangle(fill, x, inbox.Top, visible, inbox.Height);
+        }
+
+        var shown = Math.Min(inbox.Width, width - x);
 
         if (!_entering)
         {
-            AlphaBlend(hdc, x, inbox.Top, visible, inbox.Height, memory, inbox.Left, inbox.Top, visible, inbox.Height, Blend(panelAlpha));
+            Copy(hdc, memory, new Rectangle(inbox.Left, inbox.Top, shown, inbox.Height), new Rectangle(x, inbox.Top, shown, inbox.Height), m.InboxAlpha);
             return;
-        }
-
-        // The panel's ground, the window's own background, so the bands land
-        // on the inbox rather than on the page under it.
-        using (var ground = Graphics.FromHdc(hdc))
-        using (var fill = new SolidBrush(Color.FromArgb(panelAlpha, AppTheme.Background)))
-        {
-            ground.FillRectangle(fill, x, inbox.Top, visible, inbox.Height);
         }
 
         var band = Math.Max(UiLayout.AtDpi(56), 1);
@@ -543,42 +642,35 @@ internal sealed class FocusStage : Form
 
         for (int top = inbox.Top, index = 0; top < inbox.Bottom; top += band, index++)
         {
-            var row = FocusChoreography.RowIn(ms, index);
-            var a = (byte)Math.Round(Math.Clamp(row * frame.InboxAlpha, 0, 1) * 255);
+            var row = FocusChoreography.RowIn(ms, index, _afterAt);
 
-            if (a == 0)
+            if (row <= 0)
             {
                 continue;
             }
 
             var h = Math.Min(band, inbox.Bottom - top);
             var lift = (int)Math.Round(rise * (1 - row));
-            AlphaBlend(hdc, x, top + lift, visible, h, memory, inbox.Left, top, visible, h, Blend(a));
+            Copy(hdc, memory, new Rectangle(inbox.Left, top, shown, h), new Rectangle(x, top + lift, shown, h), row);
         }
     }
 
-    private static void DrawEdgeGlow(Graphics g, Rectangle inbox, double strength)
+    /// <summary>A soft shadow cast leftwards by the inbox's edge, as it arrives.</summary>
+    private static void DrawShadow(Graphics g, int x, int height, double strength)
     {
-        var a = (int)Math.Round(Math.Clamp(strength, 0, 1) * 255);
-        var spread = UiLayout.AtDpi(28);
+        var spread = UiLayout.AtDpi(34);
+        var a = (int)Math.Round(Math.Clamp(strength, 0, 1) * 150);
+        var area = new Rectangle(x - spread, 0, spread, Math.Max(1, height));
 
-        // The soft glow, outwards to the left of the edge.
-        var glow = new Rectangle(inbox.Left - spread, inbox.Top, spread, inbox.Height);
-
-        using (var brush = new LinearGradientBrush(new Rectangle(glow.X - 1, glow.Y, glow.Width + 2, Math.Max(1, glow.Height)),
-                   Color.FromArgb(0, AppTheme.Primary), Color.FromArgb(a * 150 / 255, AppTheme.Primary), LinearGradientMode.Horizontal))
-        {
-            g.FillRectangle(brush, glow);
-        }
-
-        // The line itself.
-        using var line = new SolidBrush(Color.FromArgb(a, AppTheme.Primary));
-        g.FillRectangle(line, inbox.Left, inbox.Top, Math.Max(2, UiLayout.AtDpi(2)), inbox.Height);
+        using var brush = new LinearGradientBrush(new Rectangle(area.X - 1, 0, area.Width + 2, area.Height),
+            Color.FromArgb(0, Color.Black), Color.FromArgb(a, Color.Black), LinearGradientMode.Horizontal);
+        g.FillRectangle(brush, area);
     }
 
-    private static void DrawSweep(Graphics g, Rectangle top, double at, double strength)
+    /// <summary>The landing light: one pink line, brightest at its leading end, crossing the board's top edge.</summary>
+    private static void DrawLight(Graphics g, Rectangle top, double at, double strength)
     {
-        var length = UiLayout.AtDpi(220);
+        var length = UiLayout.AtDpi(240);
         var x = top.Left - length + (int)Math.Round((top.Width + length) * at);
         var a = (int)Math.Round(Math.Clamp(strength, 0, 1) * 255);
         var thick = Math.Max(2, UiLayout.AtDpi(2));
@@ -586,37 +678,59 @@ internal sealed class FocusStage : Form
 
         g.SetClip(new Rectangle(top.Left, top.Top - UiLayout.AtDpi(10), top.Width, UiLayout.AtDpi(20) + thick));
 
-        // A light with a soft tail: brightest at its leading end, just inside
-        // the card's top edge.
-        var body = new Rectangle(x, top.Top + UiLayout.AtDpi(1), length, thick);
+        var body = new Rectangle(x, top.Top, length, thick);
 
         using (var brush = new LinearGradientBrush(new Rectangle(body.X - 1, body.Y, body.Width + 2, body.Height),
-                   Color.FromArgb(0, AppTheme.Accent), Color.FromArgb(a, AppTheme.Accent), LinearGradientMode.Horizontal))
+                   Color.FromArgb(0, AppTheme.Primary), Color.FromArgb(a, AppTheme.Primary), LinearGradientMode.Horizontal))
         {
             g.FillRectangle(brush, body);
         }
 
-        // Its glow, above and below.
         for (var i = 1; i <= 3; i++)
         {
             var grow = UiLayout.AtDpi(i * 2);
             using var halo = new LinearGradientBrush(new Rectangle(body.X - 1, body.Y - grow, body.Width + 2, body.Height + grow * 2),
-                Color.FromArgb(0, AppTheme.Accent), Color.FromArgb(a * 40 / 255, AppTheme.Accent), LinearGradientMode.Horizontal);
+                Color.FromArgb(0, AppTheme.Primary), Color.FromArgb(a * 40 / 255, AppTheme.Primary), LinearGradientMode.Horizontal);
             g.FillRectangle(halo, new Rectangle(body.X, body.Y - grow, body.Width, body.Height + grow * 2));
         }
 
         g.Restore(state);
     }
 
-    private static void DrawRing(Graphics g, Rectangle button, double grow, double strength)
+    /// <summary>A picture's pixels, row by row, for FocusElastic.</summary>
+    internal static int[] PixelsOf(Bitmap picture)
     {
-        var spread = UiLayout.AtDpi(18) * grow;
-        var ring = RectangleF.Inflate(button, (float)spread, (float)spread);
-        var a = (int)Math.Round(Math.Clamp(strength, 0, 1) * 230);
+        var area = new Rectangle(0, 0, picture.Width, picture.Height);
+        var data = picture.LockBits(area, ImageLockMode.ReadOnly, PixelFormat.Format32bppRgb);
 
-        using var pen = new Pen(Color.FromArgb(a, AppTheme.Primary), Math.Max(1.5f, 2f * UiLayout.DpiScale));
-        using var path = AppTheme.RoundedRect(ring, UiLayout.AtDpi(11) + (int)Math.Round(spread));
-        g.DrawPath(pen, path);
+        try
+        {
+            var pixels = new int[picture.Width * picture.Height];
+
+            for (var y = 0; y < picture.Height; y++)
+            {
+                Marshal.Copy(data.Scan0 + y * data.Stride, pixels, y * picture.Width, picture.Width);
+            }
+
+            // Only the colour: the fourth byte of a 32bpp RGB picture is not alpha and may be anything.
+            for (var i = 0; i < pixels.Length; i++)
+            {
+                pixels[i] &= 0x00FFFFFF;
+            }
+
+            return pixels;
+        }
+        finally
+        {
+            picture.UnlockBits(data);
+        }
+    }
+
+    private static void SelectClipRgnTo(IntPtr hdc, Rectangle area)
+    {
+        var region = CreateRectRgn(area.Left, area.Top, area.Right, area.Bottom);
+        SelectClipRgn(hdc, region);
+        DeleteObject(region);
     }
 
     private static double Lerp(double from, double to, double t) => from + (to - from) * t;
@@ -641,7 +755,7 @@ internal sealed class FocusStage : Form
         if (disposing)
         {
             _timer.Dispose();
-            _from.Dispose();
+            _from?.Dispose();
             _to?.Dispose();
         }
 
@@ -685,6 +799,15 @@ internal sealed class FocusStage : Form
 
     [DllImport("gdi32.dll")]
     private static extern bool BitBlt(IntPtr hdc, int x, int y, int w, int h, IntPtr src, int sx, int sy, int rop);
+
+    [DllImport("gdi32.dll")]
+    private static extern bool StretchBlt(IntPtr hdc, int x, int y, int w, int h, IntPtr src, int sx, int sy, int sw, int sh, int rop);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+
+    [DllImport("gdi32.dll")]
+    private static extern int SelectClipRgn(IntPtr hdc, IntPtr region);
 
     [DllImport("msimg32.dll")]
     private static extern bool AlphaBlend(IntPtr hdc, int x, int y, int w, int h, IntPtr src, int sx, int sy, int sw, int sh, BLENDFUNCTION blend);

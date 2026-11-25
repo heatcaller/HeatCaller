@@ -115,16 +115,40 @@ public partial class MainForm
     /// column, then the inbox. <paramref name="slide"/>: the sidebar and the
     /// column slide as they do by hand; false, at once (under the stage).
     /// </summary>
+    /// <summary>How long after the press the last Focus stage was up and moving - for the log and the tests.</summary>
+    internal long LastStageUpMs { get; private set; } = -1;
+
+    /// <summary>Where the time to put the last stage up went: the picture before, the pieces, the stage's own start.</summary>
+    internal string LastStageStartTimes { get; private set; } = string.Empty;
+
+    /// <summary>How long each step of the last ApplyFocusView took - for the log and the tests.</summary>
+    internal string LastFocusStepTimes { get; private set; } = string.Empty;
+
     private void ApplyFocusView(FocusViewState target, bool slide, bool restoring)
     {
         _applyingFocus = true;
+        var steps = System.Diagnostics.Stopwatch.StartNew();
+        var times = new List<string>();
+        void Step(string what)
+        {
+            times.Add($"{what} {steps.ElapsedMilliseconds}");
+            steps.Restart();
+        }
 
         // Under the stage, the window and Race Control are laid out once, at
-        // the end, rather than at each of the three steps.
+        // the end, rather than at each of the three steps - and (25 Nov 2026)
+        // painted once, by the picture after, rather than by each step: the
+        // sidebar, the column and the inbox each drew the whole window, which
+        // nobody could see. See ShowWithoutFlash.HoldWhole.
+        IDisposable? paint = null;
+        IDisposable? body = null;
+
         if (!slide)
         {
+            paint = ShowWithoutFlash.HoldWhole(this);
             SuspendLayout();
             _raceControlControl.SuspendLayout();
+            body = _raceControlControl.HoldBodyLayout();
         }
 
         try
@@ -141,7 +165,10 @@ public partial class MainForm
                 }
             }
 
+            Step("sidebar");
+
             _raceControlControl.SetSideFolded(target.SideFolded, slide);
+            Step("column");
 
             // Focused, the inbox docks no wider than the mockup's, so the board
             // comes out wider than it was - see FocusView.FocusedInboxWidth. Set
@@ -162,6 +189,8 @@ public partial class MainForm
                 }
             }
 
+            Step("dock width");
+
             if (InboxPlaceNow() != target.Inbox)
             {
                 switch (target.Inbox)
@@ -180,6 +209,8 @@ public partial class MainForm
                 }
             }
 
+            Step("inbox");
+
             if (restoring)
             {
                 var saved = FocusView.DockSavedAfterRestore(target.Inbox, _focusDockSavedBefore);
@@ -197,7 +228,14 @@ public partial class MainForm
             {
                 _raceControlControl.ResumeLayout(true);
                 ResumeLayout(true);
+
+                // The clock column and the board once, at their final size.
+                body?.Dispose();
+                paint?.Dispose();
             }
+
+            Step("layout");
+            LastFocusStepTimes = string.Join(", ", times);
 
             _applyingFocus = false;
         }
@@ -217,41 +255,56 @@ public partial class MainForm
         }
 
         var timing = System.Diagnostics.Stopwatch.StartNew();
-        var before = ClientPicture();
 
-        if (before is null)
-        {
-            return false;
-        }
+        List<(object Key, bool Folds, Rectangle At)> piecesBefore = new();
+        FocusScene? scene = null;
+        long pictureAt = 0, piecesAt = 0;
 
-        // Where things are now, and the sidebar's width after - its two
-        // widths are fixed, so the stage can close it before the change.
-        var navFrom = SidebarEdge();
-        var navTo = navFrom == 0 ? 0 : OnClient(pnlSidebar).Left + (target.NavNarrowed ? SidebarNarrowWidth : SidebarWidth);
-        var scene = new FocusScene(
-            NavFrom: navFrom,
-            NavTo: navTo,
-            Inbox: entering ? Rectangle.Empty : InboxOnClient(),
-
-            // The board as it is now, for the light while the stage waits;
-            // the board after replaces it when its picture arrives.
-            BoardTop: BoardTopOnClient(),
-            Button: OnClient(_raceControlControl.FocusButton));
-
-        // Up and moving at once, on its own thread - see FocusStage.
-        var stage = FocusStage.Begin(RectangleToScreen(ClientRectangle), before, scene, entering,
+        // Up and moving at once, on its own thread - see FocusStage. Its
+        // window is made while the picture before is taken here.
+        var stage = FocusStage.Begin(RectangleToScreen(ClientRectangle), entering,
             toMain: action => BeginInvoke(action),
-            done: () => _focusStage = null);
+            done: () => _focusStage = null,
+            take: () =>
+            {
+                var before = ClientPicture();
+                pictureAt = timing.ElapsedMilliseconds;
 
-        if (stage is null)
+                if (before is null)
+                {
+                    return null;
+                }
+
+                // Where things are now, and the sidebar's width after - its
+                // two widths are fixed, so the stage can close it before the
+                // change - and every piece of the page where it is now: each
+                // card glides from here once its place after is known.
+                var navFrom = SidebarEdge();
+                var navTo = navFrom == 0 ? 0 : OnClient(pnlSidebar).Left + (target.NavNarrowed ? SidebarNarrowWidth : SidebarWidth);
+                piecesBefore = FocusPiecesNow();
+                piecesAt = timing.ElapsedMilliseconds;
+                scene = new FocusScene(
+                    NavFrom: navFrom,
+                    NavTo: navTo,
+                    Button: OnClient(_raceControlControl.FocusButton),
+                    Pieces: FocusElastic.Pieces(piecesBefore, after: null),
+                    Inbox: entering ? Rectangle.Empty : InboxOnClient(),
+                    BoardTop: Rectangle.Empty);
+
+                return (before, scene);
+            });
+
+        if (stage is null || scene is null)
         {
-            before.Dispose();
             OnClientRawMessage($"{AppTime.LogStampNow()}  [view] Focus played without its animation - the stage could not be put up.");
             return false;
         }
 
+        var start = scene;
         _focusStage = stage;
         var upAt = timing.ElapsedMilliseconds;
+        LastStageUpMs = upAt;
+        LastStageStartTimes = $"picture {pictureAt}, pieces {piecesAt - pictureAt}, stage {upAt - piecesAt}";
 
         // Underneath, in one go, while the stage plays.
         ApplyFocusView(target, slide: false, restoring: !entering);
@@ -268,6 +321,7 @@ public partial class MainForm
             }
 
             RedrawWindow(Handle, IntPtr.Zero, IntPtr.Zero, RdwInvalidate | RdwErase | RdwAllChildren | RdwUpdateNow);
+
             var after = ClientPicture();
 
             if (after is null)
@@ -276,13 +330,42 @@ public partial class MainForm
                 return;
             }
 
-            stage.Arrive(after, entering ? InboxOnClient() : scene.Inbox, entering ? BoardTopOnClient() : Rectangle.Empty);
+            stage.Arrive(after, start with
+            {
+                Pieces = FocusElastic.Pieces(piecesBefore, FocusPiecesNow()),
+                Inbox = entering ? InboxOnClient() : start.Inbox,
+                BoardTop = entering ? BoardTopOnClient() : Rectangle.Empty,
+            });
 
             // How long each part took, for a slow press to be found in the log.
-            OnClientRawMessage($"{AppTime.LogStampNow()}  [view] {(entering ? "Focus" : "Restore")} timings: stage up {upAt} ms, view changed {changedAt} ms, picture after {timing.ElapsedMilliseconds} ms.");
+            OnClientRawMessage($"{AppTime.LogStampNow()}  [view] {(entering ? "Focus" : "Restore")} timings: stage up {upAt} ms, view changed {changedAt} ms ({LastFocusStepTimes}), picture after {timing.ElapsedMilliseconds} ms.");
         }));
 
         return true;
+    }
+
+    /// <summary>
+    /// The page's pieces where they are now, for the Focus stage: the strip
+    /// above Race Control with the page's title, then Race Control's own
+    /// (RaceControlControl.FocusPieces). Hidden ones are there with an empty
+    /// place, so a piece that goes or comes is matched to itself.
+    /// </summary>
+    private List<(object Key, bool Folds, Rectangle At)> FocusPiecesNow()
+    {
+        var pieces = new List<(object Key, bool Folds, Rectangle At)>();
+
+        if (_raceControlControl.Parent is { } page && OnClient(page) is { IsEmpty: false } p
+            && OnClient(_raceControlControl) is { IsEmpty: false } rc && rc.Top > p.Top)
+        {
+            pieces.Add((page, false, new Rectangle(p.Left, p.Top, p.Width, rc.Top - p.Top)));
+        }
+
+        foreach (var (piece, folds) in _raceControlControl.FocusPieces())
+        {
+            pieces.Add((piece, folds, OnClient(piece)));
+        }
+
+        return pieces;
     }
 
     /// <summary>The right-hand edge of the sidebar, in the client area - 0 with it hidden (Race Mode).</summary>

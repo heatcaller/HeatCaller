@@ -1,0 +1,462 @@
+<title>Focus Motion</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700;800&family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: header, controls, Race Control drawn to scale at the app's own 1440x900 (measured rectangles), the timeline, notes. */
+:root {
+  /* The app's Synthwave look, as Looks.cs pins it - one committed look. */
+  --bg: #0F0722; --surface: #1A0F3A; --row-alt: #150B2E; --sidebar: #0A0418;
+  --primary: #FF2E9A; --primary-tint: #331545; --cyan: #2EE6FF; --text: #F7F2FF;
+  --muted: #9E8AC7; --border: #33215C; --button: #2A1A55; --danger: #FF4D6A;
+  --page: #0B0519;
+  --ui: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --head: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--text); font-family: var(--body); }
+.wrap { max-width: 1280px; margin: 0 auto; padding-block: 28px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 18px; }
+header h1 { font-family: var(--head); font-size: clamp(1.6rem, 3vw, 2.2rem); margin: 0 0 6px; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 72ch; line-height: 1.55; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
+.group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.group > span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-right: 4px; }
+button.ctl { font: 600 14px var(--ui); color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+button.ctl:hover { border-color: var(--muted); }
+button.ctl[aria-pressed="true"] { background: var(--primary-tint); border-color: var(--primary); }
+button.ctl.go { background: var(--primary); border-color: var(--primary); color: #fff; }
+button.ctl:focus-visible, input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.slider { display: flex; gap: 10px; align-items: center; flex: 1 1 260px; min-width: 0; }
+.slider label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); white-space: nowrap; }
+.slider input { flex: 1; accent-color: var(--primary); min-width: 0; }
+.slider output { font: 500 13px var(--mono); color: var(--muted); min-width: 7ch; text-align: right; font-variant-numeric: tabular-nums; }
+
+.stageBox { position: relative; width: 100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: var(--bg); }
+.scaler { position: absolute; left: 0; top: 0; width: 1440px; height: 900px; transform-origin: 0 0; }
+.layer { position: absolute; inset: 0; overflow: hidden; background: var(--bg); font-family: var(--ui); }
+.layer div, .nav i, .nav b, .pill i, .pill b, .fbtn i, .fbtn b, .fbtn em, .row b { position: absolute; }
+.pc { overflow: hidden; }                     /* a piece: its contents pinned to its edges */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.cap { font: 700 13px var(--ui); letter-spacing: 0.22em; color: var(--muted); white-space: nowrap; }
+.capP { font: 700 13px var(--ui); letter-spacing: 0.2em; color: var(--primary); white-space: nowrap; }
+.btn { height: 36px; border-radius: 6px; background: var(--button); font: 700 15px var(--ui); display: flex; align-items: center; justify-content: center; white-space: nowrap; color: var(--text); }
+.btn.dim { color: #6b5a99; background: #22154a; }
+.btn.red { background: var(--danger); }
+.txt { font: 500 15px var(--ui); white-space: nowrap; color: var(--text); }
+.box { height: 27px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); font: 500 15px var(--ui); color: var(--text); padding: 3px 10px; white-space: nowrap; overflow: hidden; }
+
+/* sidebar */
+.sbw .art { left: 0; top: 0; width: 220px; height: 128px; background: linear-gradient(180deg, #2a0b4a 0%, #5d1466 45%, #ff2e9a 75%, #1a0533 76%, #0a0418 100%); }
+.sbw .art::after { content: ""; position: absolute; left: 70px; top: 40px; width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(180deg, #ffd36b, #ff2e9a 70%); clip-path: inset(0 0 30% 0); }
+.sbw .logo { left: 18px; top: 6px; font: 800 26px var(--ui); letter-spacing: 0.02em; }
+.sbw .search { left: 10px; top: 138px; width: 170px; height: 26px; border-radius: 6px; background: var(--surface); font: 500 14px var(--ui); color: var(--muted); padding: 4px 10px; white-space: nowrap; }
+.sbw .grp { left: 24px; top: 182px; font: 700 12px var(--ui); letter-spacing: 0.1em; color: var(--muted); }
+.nav { left: 8px; width: 204px; height: 38px; border-radius: 8px; }
+.nav.on { background: var(--primary-tint); box-shadow: inset 3px 0 0 var(--primary); }
+.nav i { left: 16px; top: 11px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--muted); }
+.nav.on i { border-color: var(--text); }
+.nav b { left: 47px; top: 8px; font: 600 16px var(--ui); color: #cfc2ee; white-space: nowrap; }
+.nav.on b { color: var(--text); }
+.foot3 { width: 60px; height: 42px; border-radius: 8px; background: var(--button); }
+.sbn .hc { left: 16px; top: 22px; font: 800 18px var(--ui); }
+.sbn .nav { width: 44px; }
+
+/* clock */
+.clockc { background: linear-gradient(180deg, #1d1145, #150b32); border: 2px solid var(--cyan); border-radius: 10px; box-shadow: 0 0 14px rgba(46,230,255,0.25); }
+.clockc .time { font: 700 64px var(--mono); letter-spacing: 0.04em; white-space: nowrap; }
+.clockc .el { font: 700 11px var(--ui); letter-spacing: 0.3em; color: var(--muted); }
+.clockc .idle { height: 22px; border-radius: 11px; background: var(--row-alt); font: 700 12px var(--ui); letter-spacing: 0.25em; color: var(--muted); padding: 3px 14px; }
+.clockc .chev { width: 42px; height: 34px; border-radius: 6px; background: var(--button); }
+
+/* board */
+.pill { top: 14px; height: 38px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
+.pill b { left: 32px; top: 8px; font: 700 16px var(--ui); color: var(--muted); white-space: nowrap; }
+.pill i { left: 14px; top: 14px; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); }
+.pill.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 16%, var(--surface)); }
+.pill.on b { color: var(--text); }
+.pill.on i { border: 0; background: var(--primary); box-shadow: 0 0 8px var(--primary); }
+.fbtn { width: 168px; height: 44px; border-radius: 10px; background: var(--primary); }
+.fbtn b { left: 48px; top: 11px; font: 700 17px var(--ui); color: #fff; }
+.fbtn i { left: 16px; top: 13px; width: 22px; height: 17px; border: 2px solid #fff; border-radius: 4px; }
+.fbtn em { right: 0; top: 0; width: 38px; height: 44px; border-left: 1px solid rgba(255,255,255,0.3); }
+.fbtn em::after { content: ""; position: absolute; left: 14px; top: 19px; width: 8px; height: 8px; border-left: 2px solid #fff; border-top: 2px solid #fff; transform: rotate(45deg); }
+.light { top: -1px; height: 3px; width: 240px; background: linear-gradient(90deg, transparent, var(--primary), #fff, var(--primary), transparent); filter: drop-shadow(0 0 6px var(--primary)); opacity: 0; }
+.meters { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.meters i { bottom: 34px; width: 34px; background: repeating-linear-gradient(0deg, #3a2160 0 5px, transparent 5px 8px); }
+
+/* inbox */
+.ib { background: var(--bg); }
+.ib .shadow { left: -34px; top: 0; bottom: 0; width: 34px; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.6)); }
+.ib .split { left: -5px; top: 0; bottom: 0; width: 5px; background: var(--border); }
+.chip { height: 30px; border-radius: 15px; background: var(--button); font: 700 16px var(--ui); color: #cfc2ee; padding: 4px 12px; white-space: nowrap; }
+.chip.on { background: var(--primary); color: #fff; }
+.row { height: 64px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
+.row b { left: 14px; top: 10px; font: 700 16px var(--ui); white-space: nowrap; }
+.row span { position: absolute; left: 14px; top: 36px; font: 500 13px var(--body); color: var(--muted); white-space: nowrap; }
+.row.urgent { border-color: var(--primary); }
+
+.timeline { display: grid; gap: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; overflow-x: auto; }
+.tl-row { display: grid; grid-template-columns: 190px 1fr; gap: 12px; align-items: center; min-width: 620px; }
+.tl-row .nm { font: 500 13px var(--body); color: var(--muted); }
+.tl-track { position: relative; height: 16px; background: var(--row-alt); border-radius: 4px; }
+.tl-bar { position: absolute; top: 3px; height: 10px; border-radius: 3px; background: var(--primary); }
+.tl-bar.cy { background: var(--cyan); }
+.tl-bar.wait { background: repeating-linear-gradient(90deg, #4a3480 0 4px, transparent 4px 8px); }
+.tl-head { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); }
+.tl-axis { display: grid; grid-template-columns: 190px 1fr; gap: 12px; min-width: 620px; }
+.tl-axis > div:last-child { position: relative; height: 16px; font: 500 11px var(--mono); color: var(--muted); }
+.tl-axis span { position: absolute; transform: translateX(-50%); }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+.note { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+.note h3 { font: 700 15px var(--head); margin: 0 0 6px; }
+.note p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.ms { font-family: var(--mono); color: var(--text); font-size: 13px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Focus motion</h1>
+    <p>Race Control at 1440 × 900, with every card at its measured place before and after Focus. The sidebar narrows and the page rides with it. The clock column's buttons fold away one by one. Once the view is ready underneath, every card glides to its new place with its contents pinned to its edges. Then the inbox slides in and lands. Drag <strong>View ready at</strong> to see a slower PC: the cards start later and nothing else waits. <strong>Shipped</strong> plays what the app does today.</p>
+  </header>
+
+  <div class="controls" role="group" aria-label="Playback">
+    <div class="group"><button class="ctl go" id="play">Play Focus</button><button class="ctl" id="loop" aria-pressed="false">Loop both</button></div>
+    <div class="group"><span>Speed</span>
+      <button class="ctl" data-speed="1" aria-pressed="true">1x</button>
+      <button class="ctl" data-speed="0.5" aria-pressed="false">0.5x</button>
+      <button class="ctl" data-speed="0.2" aria-pressed="false">0.2x</button>
+    </div>
+    <div class="group"><span>Motion</span>
+      <button class="ctl" data-mode="proposed" aria-pressed="true">Proposed</button>
+      <button class="ctl" data-mode="shipped" aria-pressed="false">Shipped</button>
+    </div>
+  </div>
+  <div class="controls">
+    <div class="slider"><label for="t">Time</label><input type="range" id="t" min="0" max="700" step="1" value="0"><output id="tOut">0 ms</output></div>
+    <div class="slider"><label for="arr">View ready at</label><input type="range" id="arr" min="0" max="600" step="10" value="220"><output id="arrOut">220 ms</output></div>
+  </div>
+
+  <div class="stageBox" id="stageBox"><div class="scaler" id="scaler"></div></div>
+  <div class="timeline" id="timeline" aria-label="Timeline of each piece"></div>
+
+  <div class="notes">
+    <div class="note"><h3>Answers on the next frame</h3><p>At <span class="ms">0 ms</span> the button presses in, the sidebar starts to narrow with the page riding its edge, and the column's buttons start folding away. None of that needs the view underneath to be ready.</p></div>
+    <div class="note"><h3>Every card travels</h3><p>Each card glides from its old rectangle to its new one. What's at a card's left stays with its left edge, what's at its right (Focus, Redo Remaining Heats) stays with its right edge, and only empty space stretches. Where a card re-flows, like the Session card's second row, the new content fades in under the old as it moves.</p></div>
+    <div class="note"><h3>One accent, at the landing</h3><p>No ring, sweep or glow on the way. A single pink line crosses the leaderboard's top as the inbox lands. Restore is the same motion backwards, and quieter.</p></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const clamp = v => Math.max(0, Math.min(1, v));
+  const outCubic = t => 1 - Math.pow(1 - t, 3);
+  const inCubic = t => t * t * t;
+  const outQuint = t => 1 - Math.pow(1 - t, 5);
+  const outBack = t => { if (t <= 0) return 0; if (t >= 1) return 1; const s = 0.55, u = t - 1; return 1 + (s + 1) * u * u * u + s * u * u; };
+  const smooth = t => t * t * (3 - 2 * t);
+  const span = (ms, a, b) => clamp((ms - a) / (b - a));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const lerpR = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t), lerp(a[3], b[3], t)];
+
+  // ---- measured rectangles, 1440x900 (x, y, w, h) -------------------------
+  const R = {
+    title:   { b: [220, 0, 1220, 30],  a: [60, 0, 975, 30] },
+    session: { b: [236, 46, 1188, 77], a: [77, 47, 942, 113] },
+    nextup:  { b: [236, 133, 1188, 52], a: [77, 171, 942, 51] },
+    flags:   { b: [236, 195, 918, 162], a: [77, 233, 734, 150] },
+    clock:   { b: [1164, 195, 260, 200], a: [822, 233, 197, 150] },
+    board:   { b: [236, 357, 918, 527], a: [77, 395, 942, 489] },
+  };
+  const COLBTN = ["Quick Race", "Big Screen", "Announcer Screen", "Qualifying Projection", "Pre-race check", "Mission Control", "Broadcast"];
+  const SB_WIDE = 220, SB_NARROW = 60, INBOX = [1040, 0, 400, 900];
+
+  // ---- tracks ---------------------------------------------------------------
+  function tracks(dir, A) {
+    if (dir === "focus") {
+      const a = Math.max(120, A);
+      return [
+        ["Button press", 0, 90, "cy"],
+        ["Sidebar narrows", 0, 280],
+        ["Page rides the sidebar", 0, 280],
+        ["Column folds away", 40, 440],
+        ["View ready (arrival)", 0, A, "wait"],
+        ["Cards glide", a, a + 320],
+        ["Inbox slides in", a + 60, a + 400],
+        ["Inbox rows rise", a + 180, a + 180 + 4 * 35 + 220],
+        ["Landing light", a + 340, a + 480, "cy"],
+        ["Hand-over", a + 540, a + 620],
+      ];
+    }
+    const a = Math.max(80, A);
+    return [
+      ["Button press", 0, 90, "cy"],
+      ["Inbox slides out", 0, 240],
+      ["View ready (arrival)", 0, A, "wait"],
+      ["Sidebar widens", a, a + 300],
+      ["Cards glide", a, a + 320],
+      ["Column comes back", a + 120, a + 120 + 7 * 30 + 200],
+      ["Hand-over", a + 330 + 210, a + 330 + 290],
+    ];
+  }
+  const totalOf = (dir, A) => Math.max(...tracks(dir, A).map(t => t[2]));
+
+  // ---- building one Race Control --------------------------------------------
+  function mk(parent, cls, style, html) {
+    const e = document.createElement("div");
+    if (cls) e.className = cls;
+    if (style) e.style.cssText = style;
+    if (html != null) e.innerHTML = html;
+    parent.appendChild(e);
+    return e;
+  }
+
+  const NAV = ["Race Control", "Driver Hub", "Classes", "Track Layouts", "Race History", "Race Analytics", "Achievements", "Garage", "Practice", "Ghost Cars", "Demo Mode", "Themes", "Voice", "Sounds"];
+
+  function buildApp(host) {
+    const L = mk(host, "layer");
+    const P = {};
+
+    // sidebar: the wide one and the narrow one, each in its own piece
+    P.sbw = mk(L, "pc sbw", `background:var(--sidebar);border-right:1px solid var(--border)`);
+    mk(P.sbw, "art"); mk(P.sbw, "logo", "", "HEATCALLER");
+    mk(P.sbw, "search", "", "Search pages...");
+    mk(P.sbw, "grp", "", "ESSENTIALS");
+    NAV.forEach((n, i) => { const v = mk(P.sbw, "nav" + (i === 0 ? " on" : ""), `top:${204 + i * 44}px`); mk(v, "", "", ""); v.innerHTML = `<i></i><b>${n}</b>`; });
+    [12, 80, 148].forEach(x => mk(P.sbw, "foot3", `left:${x}px;top:838px`));
+    P.sbn = mk(L, "pc sbn", `background:var(--sidebar);border-right:1px solid var(--border)`);
+    mk(P.sbn, "hc", "", "HC");
+    NAV.forEach((n, i) => { const v = mk(P.sbn, "nav" + (i === 0 ? " on" : ""), `top:${116 + i * 44}px`); v.innerHTML = `<i></i>`; });
+    [771, 812, 853].forEach(y => mk(P.sbn, "foot3", `left:9px;top:${y}px;width:42px;height:34px`));
+
+    // title strip
+    P.title = mk(L, "pc", "border-bottom:1px solid var(--border)");
+    mk(P.title, "capP", "left:18px;top:7px", "RACE CONTROL");
+
+    // session: one row before, two rows after (re-flows: both drawn, cross-faded)
+    P.session = mk(L, "pc card");
+    P.sessionA = mk(P.session, "", "inset:0");
+    mk(P.sessionA, "cap", "left:18px;top:12px", "SESSION");
+    mk(P.sessionA, "txt", "left:18px;top:42px", "Name:");
+    mk(P.sessionA, "box", "left:82px;top:37px;width:210px;color:var(--muted)", 'optional, e.g. "Friday Main"');
+    mk(P.sessionA, "txt", "left:318px;top:42px", "Track:");
+    mk(P.sessionA, "box", "left:377px;top:36px;width:180px", "(none)");
+    mk(P.sessionA, "txt", "left:584px;top:42px", "Round:");
+    mk(P.sessionA, "box", "left:651px;right:16px;top:36px", "(freeform - no race program round)");
+    P.sessionB = mk(P.session, "", "inset:0");
+    mk(P.sessionB, "cap", "left:18px;top:12px", "SESSION");
+    mk(P.sessionB, "txt", "left:18px;top:42px", "Name:");
+    mk(P.sessionB, "box", "left:82px;top:37px;width:210px;color:var(--muted)", 'optional, e.g. "Friday Main"');
+    mk(P.sessionB, "txt", "left:318px;top:42px", "Track:");
+    mk(P.sessionB, "box", "left:377px;top:36px;width:180px", "(none)");
+    mk(P.sessionB, "txt", "left:18px;top:79px", "Round:");
+    mk(P.sessionB, "box", "left:86px;right:16px;top:73px", "(freeform - no race program round)");
+
+    // next up: left text, right buttons
+    P.nextup = mk(L, "pc card");
+    mk(P.nextup, "capP", "left:16px;top:6px", "NOW");
+    mk(P.nextup, "txt", "left:16px;top:26px", "freeform session · idle");
+    mk(P.nextup, "capP", "left:200px;top:6px", "NEXT");
+    mk(P.nextup, "txt", "left:200px;top:26px;width:calc(100% - 860px);min-width:80px;overflow:hidden;text-overflow:ellipsis", "no program - Quick Race is one press away");
+    mk(P.nextup, "btn dim", "right:490px;top:8px;width:148px", "Hold");
+    mk(P.nextup, "btn dim", "right:221px;top:8px;width:259px", "⏱ Start Next");
+    mk(P.nextup, "btn", "right:8px;top:8px;width:203px", "Redo Remaining Heats");
+
+    // flags card
+    P.flags = mk(L, "pc card");
+    mk(P.flags, "cap", "left:18px;top:12px", "RACE CONTROL");
+    const fl = mk(P.flags, "", "left:50%;top:36px;width:610px;margin-left:-305px;height:36px");
+    ["Warm-up", "Stage", "Countdown", "Green"].forEach((n, i) => mk(fl, "btn", `left:${i * 123}px;top:0;width:117px`, n));
+    mk(fl, "btn red", "left:492px;top:0;width:117px", "⏱ Reset");
+    mk(P.flags, "", "left:16px;bottom:24px;font:500 13px var(--ui);color:var(--muted)", "Reset: press and hold.");
+
+    // clock
+    P.clock = mk(L, "pc clockc");
+    P.clockTime = mk(P.clock, "time", "left:0;right:0;top:26%;text-align:center", "00:00");
+    mk(P.clock, "el", "left:0;right:0;top:56%;text-align:center", "ELAPSED");
+    mk(P.clock, "idle", "left:50%;bottom:8px;margin-left:-40px", "IDLE");
+    mk(P.clock, "chev", "right:10px;bottom:10px");
+
+    // column buttons and meters
+    P.col = COLBTN.map((n, i) => mk(L, "btn", `left:1164px;top:${405 + i * 46}px;width:260px`, n));
+    P.meters = mk(L, "meters", "left:1164px;top:727px;width:260px;height:157px");
+    [16, 79, 142, 205].forEach(x => mk(P.meters, "", `left:${x}px;top:4px;height:110px;width:34px;background:repeating-linear-gradient(0deg,#3a2160 0 5px,transparent 5px 8px)`));
+    ["VOICE", "SFX", "MUSIC", "CROWD"].forEach((n, i) => mk(P.meters, "", `left:${12 + i * 63}px;bottom:8px;font:600 14px var(--ui);color:var(--muted)`, n));
+
+    // leaderboard: header pinned left/right of its widest gap, foot row: pills left, Focus right
+    P.board = mk(L, "pc card");
+    mk(P.board, "cap", "left:18px;top:12px", "LEADERBOARD");
+    mk(P.board, "capP", "left:21px;top:46px", "POS");
+    mk(P.board, "capP", "left:85px;top:46px", "DRIVER");
+    const right = mk(P.board, "", "right:0;top:46px;width:616px;height:20px");
+    [["CAR", 0], ["LAPS", 180], ["BEST LAP", 261], ["GAP TO P1", 379], ["STREAK", 506]].forEach(([n, x]) => mk(right, "capP", `left:${x}px;top:0`, n));
+    mk(P.board, "", "left:16px;right:16px;top:69px;height:1px;background:var(--border)");
+    P.light = mk(P.board, "light");
+    [["On Air", true, 16, 88], ["Warm-up", false, 114, 110], ["Auto Start", true, 234, 126]].forEach(([n, on, x, w]) => { const p = mk(P.board, "pill" + (on ? " on" : ""), `left:${x}px;bottom:16px;top:auto;width:${w}px`); p.innerHTML = `<i></i><b>${n}</b>`; });
+    mk(P.board, "", "left:372px;bottom:28px;font:600 16px var(--ui);color:var(--muted);white-space:nowrap", '<b style="color:var(--text)">open-ended</b> · all away together');
+    mk(P.board, "btn", "left:626px;bottom:18px;width:34px;height:34px;border-radius:7px", "✎");
+    P.fbtn = mk(P.board, "fbtn", "right:16px;bottom:14px");
+    P.fbtn.innerHTML = "<i></i><b>Focus</b><em></em>";
+
+    // inbox
+    P.inbox = mk(L, "pc ib", "overflow:visible");
+    mk(P.inbox, "shadow"); mk(P.inbox, "split");
+    mk(P.inbox, "chip", "left:16px;top:12px;width:56px;color:#cfc2ee;background:var(--row-alt)", "• Off");
+    mk(P.inbox, "btn", "left:237px;top:8px;width:67px", "Vote"); mk(P.inbox, "btn", "left:310px;top:8px;width:74px", "Rules");
+    [["All", 10, true], ["Blocking", 60], ["Requests", 152], ["Queries", 250], ["Crew", 10, false, 1], ["Club", 86, false, 1], ["Sign-ups", 148, false, 1], ["Done", 242, false, 1]]
+      .forEach(([n, x, on, r]) => mk(P.inbox, "chip" + (on ? " on" : ""), `left:${x}px;top:${62 + (r ? 36 : 0)}px`, n));
+    P.rows = [["Skip my race", "Theo Grant · Heat 4 · holding up the next race", true], ["5 more minutes", "Ana Silva · Heat 5"], ["Transponder swap", "Rui Costa · car 15"], ["Club note to approve", "Paddock lights after 10pm"]]
+      .map(([a, b, u], i) => { const r = mk(P.inbox, "row" + (u ? " urgent" : ""), `left:14px;right:14px;top:${150 + i * 76}px`); r.innerHTML = `<b>${a}</b><span>${b}</span>`; return r; });
+    mk(P.inbox, "", "left:0;right:0;bottom:0;height:54px;border-top:1px solid var(--border)", '<div style="position:absolute;left:120px;top:16px;font:600 15px var(--ui)">☑ Dock in the main window</div><div class="btn" style="position:absolute;right:16px;top:9px;width:74px">Close</div>');
+    return P;
+  }
+
+  const place = (el, r) => { el.style.left = r[0] + "px"; el.style.top = r[1] + "px"; el.style.width = r[2] + "px"; el.style.height = r[3] + "px"; };
+
+  // ---- drawing one moment ------------------------------------------------------
+  // f: { sb: sidebar width, wideAlpha, narrowAlpha, glide 0..1 (cards), shift, cross, fold[i] 0..1 (0 shown), inbox 0..1+, rows[i], light, press, caption, focused }
+  function draw(P, f) {
+    place(P.sbw, [0, 0, f.sb, 900]); P.sbw.style.opacity = f.wideAlpha;
+    place(P.sbn, [0, 0, Math.min(f.sb, 220), 900]); P.sbn.style.opacity = f.narrowAlpha;
+    for (const k of ["title", "session", "nextup", "flags", "clock", "board"]) {
+      const b = R[k].b, a = R[k].a;
+      const from = f.dirFocus ? b : a, to = f.dirFocus ? a : b;
+      // As FocusElastic.CardAt: the left edge keeps to the sidebar's edge, the rest glides.
+      const change = f.dirFocus ? SB_NARROW - SB_WIDE : SB_WIDE - SB_NARROW;
+      const left = lerp(from[0], to[0] - change, f.glide) + f.shift;
+      const right = lerp(from[0] + from[2] + f.shift, to[0] + to[2], f.glide);
+      place(P[k], [left, lerp(from[1], to[1], f.glide), Math.max(0, right - left), lerp(from[3], to[3], f.glide)]);
+    }
+    // The clock's digits shrink with it, as the app's do folded.
+    P.clockTime.style.fontSize = (64 * parseFloat(P.clock.style.width) / 260) + "px";
+    // re-flowing contents: after under before, before fading
+    const showAfter = f.dirFocus ? f.cross : 1 - f.cross;
+    P.sessionA.style.opacity = 1 - showAfter; P.sessionB.style.opacity = showAfter;
+    P.col.forEach((el, i) => { const k = f.fold[i]; el.style.opacity = 1 - k; el.style.transform = `translateX(${f.shift + 24 * k}px)`; });
+    P.meters.style.opacity = 1 - f.fold[7]; P.meters.style.transform = `translateX(${f.shift + 24 * f.fold[7]}px)`;
+    const x = 1440 - (1440 - INBOX[0]) * f.inbox;
+    place(P.inbox, [x, 0, 400, 900]); P.inbox.style.visibility = f.inbox <= 0.001 ? "hidden" : "visible";
+    P.rows.forEach((r, i) => { r.style.opacity = f.rows[i]; r.style.transform = `translateY(${6 * (1 - f.rows[i])}px)`; });
+    const L = f.light; P.light.style.left = (-240 + (P.board.offsetWidth + 240) * L) + "px"; P.light.style.opacity = L > 0 && L < 1 ? Math.sin(Math.PI * L) : 0;
+    P.fbtn.style.transform = `translateY(${f.press > 0 && f.press < 1 ? 1 : 0}px)`; P.fbtn.style.filter = f.press > 0 && f.press < 1 ? "brightness(0.82)" : "none";
+    P.fbtn.querySelector("b").textContent = f.caption;
+  }
+
+  function frameAt(dir, ms, A) {
+    const T = Object.fromEntries(tracks(dir, A).map(t => [t[0], t]));
+    const p = (n, ease) => { const t = T[n]; return t ? ease(span(ms, t[1], t[2])) : 0; };
+    const f = { dirFocus: dir === "focus", press: span(ms, 0, 90), fold: [], rows: [], light: 0 };
+    if (dir === "focus") {
+      const s = p("Sidebar narrows", outCubic);
+      f.sb = lerp(SB_WIDE, SB_NARROW, s);
+      f.shift = f.sb - SB_WIDE;
+      const arrived = ms >= A;
+      // the wide sidebar fades into the narrow one only once the after-picture is in
+      const fadeStart = Math.max(200, A);
+      const nk = clamp((ms - fadeStart) / 120);
+      f.narrowAlpha = arrived ? nk : 0; f.wideAlpha = 1 - f.narrowAlpha;
+      f.glide = p("Cards glide", outQuint);
+      f.cross = smooth(clamp((f.glide - 0.3) / 0.4));
+      for (let i = 0; i < 8; i++) f.fold.push(outCubic(span(ms, 40 + i * 30, 240 + i * 30)));
+      f.inbox = outBack(span(ms, T["Inbox slides in"][1], T["Inbox slides in"][2]));
+      for (let i = 0; i < 4; i++) f.rows.push(outCubic(span(ms, T["Inbox rows rise"][1] + i * 35, T["Inbox rows rise"][1] + i * 35 + 220)));
+      f.light = span(ms, T["Landing light"][1], T["Landing light"][2]);
+      f.caption = ms > 0 ? "Restore" : "Focus";
+    } else {
+      const a = Math.max(80, A);
+      const s = p("Sidebar widens", outCubic);
+      f.sb = lerp(SB_NARROW, SB_WIDE, s);
+      f.wideAlpha = s > 0 ? 1 : 0; f.narrowAlpha = 1 - clamp(s / 0.35);
+      f.glide = p("Cards glide", outQuint);
+      f.shift = f.sb - SB_NARROW;
+      f.cross = smooth(clamp((f.glide - 0.3) / 0.4));
+      for (let i = 0; i < 8; i++) f.fold.push(1 - outCubic(span(ms, a + 120 + i * 30, a + 320 + i * 30)));
+      const out = inCubic(span(ms, 0, 240));
+      f.inbox = 1 - out;
+      for (let i = 0; i < 4; i++) f.rows.push(1 - span(ms, 0, 100));
+      f.caption = ms > 0 ? "Focus" : "Restore";
+    }
+    return f;
+  }
+
+  function still(dir, end) { // the whole view, before or after, for the shipped cross-fade
+    const focused = (dir === "focus") === end;
+    return { dirFocus: true, sb: focused ? SB_NARROW : SB_WIDE, shift: 0, glide: focused ? 1 : 0, cross: focused ? 1 : 0,
+      wideAlpha: focused ? 0 : 1, narrowAlpha: focused ? 1 : 0, fold: Array(8).fill(focused ? 1 : 0), inbox: focused ? 1 : 0, rows: Array(4).fill(focused ? 1 : 0),
+      light: 0, press: 0, caption: focused ? "Restore" : "Focus" };
+  }
+
+  // ---- stage ---------------------------------------------------------------
+  const box = document.getElementById("stageBox"), scaler = document.getElementById("scaler");
+  const hostLive = mk(scaler, "", "position:absolute;inset:0"), hostA = mk(scaler, "", "position:absolute;inset:0"), hostB = mk(scaler, "", "position:absolute;inset:0");
+  const live = buildApp(hostLive), shipA = buildApp(hostA), shipB = buildApp(hostB);
+  const fit = () => { const k = box.clientWidth / 1440; scaler.style.transform = `scale(${k})`; box.style.height = (900 * k) + "px"; };
+  new ResizeObserver(fit).observe(box); fit();
+
+  let mode = "proposed", speed = 1, dir = "focus", looping = false, A = 220;
+  const tIn = document.getElementById("t"), tOut = document.getElementById("tOut");
+  const aIn = document.getElementById("arr"), aOut = document.getElementById("arrOut");
+  const SHIP = { wait: 360, cross: 650 };
+  const total = () => mode === "shipped" ? (dir === "focus" ? SHIP.wait + SHIP.cross : 420) : totalOf(dir, A);
+
+  function render(ms) {
+    tIn.max = Math.round(total()); tIn.value = Math.round(ms); tOut.value = Math.round(ms) + " ms";
+    if (mode === "proposed") {
+      hostLive.hidden = false; hostA.hidden = true; hostB.hidden = true;
+      draw(live, frameAt(dir, ms, A));
+    } else {
+      hostLive.hidden = true; hostA.hidden = false; hostB.hidden = false;
+      const wait = dir === "focus" ? SHIP.wait : 0;
+      const c = clamp((ms - wait) / (dir === "focus" ? SHIP.cross : 420));
+      hostA.style.opacity = clamp(1 - c / 0.6); hostB.style.opacity = clamp((c - 0.4) / 0.6);
+      draw(shipA, still(dir, false)); draw(shipB, still(dir, true));
+    }
+    const f = ms / total() * 100;
+    document.querySelectorAll(".tl-head").forEach(h => h.style.left = `calc(${f}% - 1px)`);
+  }
+
+  function buildTimeline() {
+    const tl = document.getElementById("timeline"); tl.innerHTML = "";
+    const T = mode === "shipped"
+      ? (dir === "focus" ? [["Waiting light", 0, SHIP.wait, "cy"], ["Old page fades out", SHIP.wait, SHIP.wait + SHIP.cross * 0.6], ["New page fades in", SHIP.wait + SHIP.cross * 0.4, SHIP.wait + SHIP.cross], ["Ring from the button", SHIP.wait, SHIP.wait + 380, "cy"]]
+                         : [["Old page fades out", 0, 252], ["New page fades in", 168, 420]])
+      : tracks(dir, A);
+    const tot = total();
+    T.forEach(([n, a, b, c]) => {
+      const row = mk(tl, "tl-row");
+      row.innerHTML = `<div class="nm">${n}</div><div class="tl-track"><div class="tl-bar ${c || ""}" style="left:${a / tot * 100}%;width:${Math.max(0.5, (b - a) / tot * 100)}%"></div><div class="tl-head"></div></div>`;
+    });
+    let ticks = ""; for (let m = 0; m <= tot; m += 100) ticks += `<span style="left:${m / tot * 100}%">${m}</span>`;
+    mk(tl, "tl-axis").innerHTML = `<div></div><div>${ticks}</div>`;
+  }
+
+  let raf = 0, playing = false;
+  const playBtn = document.getElementById("play");
+  const label = () => { playBtn.textContent = dir === "focus" ? "Play Focus" : "Play Restore"; };
+  function play(d) {
+    dir = d; buildTimeline(); label(); cancelAnimationFrame(raf); playing = true;
+    const start = performance.now();
+    const tick = now => {
+      const ms = Math.min(total(), (now - start) * speed);
+      render(ms);
+      if (ms < total()) { raf = requestAnimationFrame(tick); return; }
+      playing = false;
+      const next = dir === "focus" ? "restore" : "focus";
+      if (looping) setTimeout(() => { if (looping) play(next); }, 800);
+      else { dir = next; buildTimeline(); label(); render(0); }
+    };
+    raf = requestAnimationFrame(tick);
+  }
+  playBtn.addEventListener("click", () => { looping = false; document.getElementById("loop").setAttribute("aria-pressed", "false"); play(dir); });
+  document.getElementById("loop").addEventListener("click", e => { looping = !looping; e.currentTarget.setAttribute("aria-pressed", String(looping)); if (looping && !playing) play(dir); });
+  document.querySelectorAll("[data-speed]").forEach(b => b.addEventListener("click", () => { speed = +b.dataset.speed; document.querySelectorAll("[data-speed]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); }));
+  document.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => { mode = b.dataset.mode; document.querySelectorAll("[data-mode]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); cancelAnimationFrame(raf); playing = false; buildTimeline(); render(0); }));
+  tIn.addEventListener("input", () => { looping = false; cancelAnimationFrame(raf); playing = false; render(+tIn.value); });
+  aIn.addEventListener("input", () => { A = +aIn.value; aOut.value = A + " ms"; buildTimeline(); render(Math.min(+tIn.value, total())); });
+
+  buildTimeline(); render(0);
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) setTimeout(() => { if (!playing) play("focus"); }, 900);
+})();
+</script>
