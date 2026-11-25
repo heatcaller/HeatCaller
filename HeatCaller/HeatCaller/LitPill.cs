@@ -65,12 +65,24 @@ internal sealed class LitPill : Control
 
     private int Dot => UiLayout.AtDpi(9);
     private int PadLeft => UiLayout.AtDpi(12);
-    private int PadRight => UiLayout.AtDpi(16);
+    private int PadRight => UiLayout.AtDpi(PadRightAt100);
     private int DotGap => UiLayout.AtDpi(9);
     private int VerticalPad => UiLayout.AtDpi(8);
 
+    /// <summary>The room after the words, at 100%: a little more than before the dot, as the round end eats into it.</summary>
+    internal const int PadRightAt100 = 20;
+
+    /// <summary>
+    /// The words' size in the font they are drawn in.
+    ///
+    /// WHY (25 Nov 2026, Asher: "add a little more button on the right side
+    /// of the pills to better fit the text"): the pill was sized by the plain
+    /// font but painted in the semibold one, which is wider, so "Starts
+    /// itself" ran into the round end and its right-hand padding was nearly
+    /// all used up.
+    /// </summary>
     private Size Measure() =>
-        TextRenderer.MeasureText(Text, Font, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+        TextRenderer.MeasureText(Text, BoldFont, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
 
     public override Size GetPreferredSize(Size proposedSize)
     {

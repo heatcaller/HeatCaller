@@ -9,7 +9,7 @@ namespace HeatCaller.Tests;
 /// should be animated in a way that looks like it costs $10,000";
 /// plans/race-control-foot-plan.md).
 ///
-/// The row is three lit pills (On Air, Warm-up, Starts itself), the format
+/// The row is three lit pills (On Air, Warm-up, Auto Start), the format
 /// and its pen, and the Focus split button. Focus narrows the sidebar, folds
 /// the clock column and docks the inbox in one press; Restore puts the view
 /// back as it was; its menu has Wide board only (Expand, as it was) and
@@ -271,12 +271,40 @@ public sealed class FocusOnRaceControlTests
         Assert.Equal(1, changes);
     }
 
+    // WHY (25 Nov 2026, Asher: "add a little more button on the right side of
+    // the pills"): sized by the plain font but drawn semibold, "Auto Start"
+    // ran into the round end. Measured in the font it is drawn in, each keeps
+    // its full room after the words, in the app's body font too.
+    [Theory]
+    [InlineData("On Air")]
+    [InlineData("Warm-up")]
+    [InlineData("Auto Start")]
+    public void A_pill_keeps_its_full_room_after_its_words_in_the_font_they_are_drawn_in(string words)
+    {
+        var room = StaThread.Run(() =>
+        {
+            using var pill = new LitPill(words) { Font = AppTheme.BodyFont };
+            using var host = new Form();
+            host.Controls.Add(pill);
+            _ = host.Handle;
+            _ = pill.Handle;
+
+            // Measured here, in the semibold the pill draws in: left padding 12, dot 9, gap 9.
+            using var bold = new Font(pill.Font, FontStyle.Bold);
+            var textWidth = TextRenderer.MeasureText(pill.Text, bold, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width;
+            return pill.Width - UiLayout.AtDpi(12 + 9 + 9) - textWidth;
+        }, TimeSpan.FromSeconds(30), () => "a pill");
+
+        Assert.True(room >= UiLayout.AtDpi(20) - 1, $"the room after \"{words}\": {room} px");
+        Assert.True(LitPill.PadRightAt100 >= 20, "a little more room on the right than the 16 it had");
+    }
+
     [Fact]
     public void The_three_switches_are_lit_pills_with_their_new_words()
     {
         Assert.Contains("private readonly LitPill _chkStartWithOnAir = new(\"On Air\");", Source("RaceControlControl.OnAir.cs"), StringComparison.Ordinal);
         Assert.Contains("private readonly LitPill _swWarmUpFirst = new(\"Warm-up\");", Source("RaceControlControl.OnAir.cs"), StringComparison.Ordinal);
-        Assert.Contains("private readonly LitPill _swAutoStart = new(\"Starts itself\");", Source("RaceControlControl.AutoStart.cs"), StringComparison.Ordinal);
+        Assert.Contains("private readonly LitPill _swAutoStart = new(\"Auto Start\");", Source("RaceControlControl.AutoStart.cs"), StringComparison.Ordinal);
 
         // Their right-click menus stay on them: the warm-up's length, Auto start's gap.
         Assert.Contains("_swWarmUpFirst.ContextMenuStrip = BuildWarmUpLengthMenu();", Source("RaceControlControl.OnAir.cs"), StringComparison.Ordinal);
@@ -291,6 +319,48 @@ public sealed class FocusOnRaceControlTests
         Assert.StartsWith("12 laps · ", format.DescribeBrief(), StringComparison.Ordinal);
         Assert.Equal(2, format.DescribeBrief().Split(" · ").Length);
         Assert.StartsWith(format.DescribeBrief(), format.Describe(), StringComparison.Ordinal);
+    }
+
+    // WHY (25 Nov 2026, Asher: "the top option to select focus won't stay
+    // selected and execute"): run inside the menu's click, Focus waited 2 s
+    // for its stage window, which could not come up until the menu had
+    // closed, then slid without it - over 3 s before anything showed. Each
+    // choice is now asked once the menu's click is over, from the window's
+    // own message queue, as a press of the button is.
+    [Fact]
+    public void A_menu_choice_is_asked_after_the_menu_s_click_is_over_not_inside_it()
+    {
+        var seen = StaThread.Run(() =>
+        {
+            using var host = new Form();
+            using var button = new FocusSplitButton();
+            host.Controls.Add(button);
+            _ = host.Handle;
+            _ = button.Handle;
+
+            var asked = new List<FocusAsk>();
+            button.Asked += asked.Add;
+
+            var log = new List<string>();
+
+            foreach (ToolStripMenuItem item in button.Menu.Items)
+            {
+                item.PerformClick();
+                log.Add($"{item.AccessibleName}: in the click {asked.Count}");
+                Application.DoEvents();
+                log.Add($"{item.AccessibleName}: after {asked.Count}");
+            }
+
+            return (log, asked);
+        }, TimeSpan.FromSeconds(30), () => "the Focus menu");
+
+        Assert.Equal(new[]
+        {
+            "Focus: in the click 0", "Focus: after 1",
+            "Wide board only: in the click 1", "Wide board only: after 2",
+            "Inbox only: in the click 2", "Inbox only: after 3",
+        }, seen.log);
+        Assert.Equal(new[] { FocusAsk.Focus, FocusAsk.WideOnly, FocusAsk.InboxOnly }, seen.asked);
     }
 
     [Fact]

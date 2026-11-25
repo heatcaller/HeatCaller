@@ -49,9 +49,15 @@ internal sealed class FocusSplitButton : Control
         AppTheme.SetMenuNote(_miWide, "Wide board only", "Sidebar and clock column folded");
         AppTheme.SetMenuNote(_miInbox, "Inbox only", "Dock the inbox, keep the board as it is");
 
-        _miFocus.Click += (_, _) => Asked?.Invoke(FocusAsk.Focus);
-        _miWide.Click += (_, _) => Asked?.Invoke(FocusAsk.WideOnly);
-        _miInbox.Click += (_, _) => Asked?.Invoke(FocusAsk.InboxOnly);
+        // WHY (25 Nov 2026, Asher: "the top option to select focus won't stay
+        // selected and execute"): run inside the menu's click, Focus waited
+        // for its stage window, which could not come up until the menu had
+        // finished closing - so the wait ran out (2 s), the view then slid
+        // without the animation, and the press seemed lost for over 3 s.
+        // Asked once the menu has gone, as the button's own press is.
+        _miFocus.Click += (_, _) => AskWhenMenuHasGone(FocusAsk.Focus);
+        _miWide.Click += (_, _) => AskWhenMenuHasGone(FocusAsk.WideOnly);
+        _miInbox.Click += (_, _) => AskWhenMenuHasGone(FocusAsk.InboxOnly);
 
         _menu.Items.AddRange(new ToolStripItem[] { _miFocus, _miWide, _miInbox });
         AppTheme.StyleContextMenu(_menu);
@@ -312,6 +318,24 @@ internal sealed class FocusSplitButton : Control
     {
         var size = _menu.GetPreferredSize(Size.Empty);
         _menu.Show(this, new Point(Width - size.Width, -size.Height - UiLayout.AtDpi(6)));
+    }
+
+    /// <summary>A menu choice, asked after the menu has closed - see the constructor.</summary>
+    private void AskWhenMenuHasGone(FocusAsk ask)
+    {
+        if (IsDisposed || !IsHandleCreated)
+        {
+            Asked?.Invoke(ask);
+            return;
+        }
+
+        BeginInvoke(() =>
+        {
+            if (!IsDisposed)
+            {
+                Asked?.Invoke(ask);
+            }
+        });
     }
 
     /// <summary>The main part's press, from the keyboard or a test.</summary>
