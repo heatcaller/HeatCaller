@@ -49,6 +49,14 @@ internal static class ShowWithoutFlash
             return;
         }
 
+        // Inside a hold on the whole window: that one is let go, and draws, at the end.
+        if (IsHeldWhole(container))
+        {
+            change();
+            ThinScrollBar.SyncNow();
+            return;
+        }
+
         var handle = container.Handle;
         SendMessage(handle, WmSetRedraw, IntPtr.Zero, IntPtr.Zero);
 
@@ -79,7 +87,7 @@ internal static class ShowWithoutFlash
     /// </summary>
     public static IntPtr? Begin(Control container)
     {
-        if (!container.IsHandleCreated || container.IsDisposed || !IsWindowVisible(container.Handle))
+        if (!container.IsHandleCreated || container.IsDisposed || !IsWindowVisible(container.Handle) || IsHeldWhole(container))
         {
             return null;
         }
@@ -103,6 +111,88 @@ internal static class ShowWithoutFlash
         finally
         {
             Release(container, handle);
+        }
+    }
+
+    /// <summary>The windows held whole now - see <see cref="HoldWhole"/>.</summary>
+    private static readonly HashSet<Form> HeldWhole = new();
+
+    /// <summary>Whether <paramref name="control"/>'s window is held whole now.</summary>
+    public static bool IsHeldWhole(Control control)
+    {
+        if (HeldWhole.Count == 0)
+        {
+            return false;
+        }
+
+        // Up through every parent: the docked inbox is a form inside the main window.
+        for (var c = control; c is not null; c = c.Parent)
+        {
+            if (c is Form form && HeldWhole.Contains(form))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Holds painting on the whole of <paramref name="window"/> until the
+    /// result is disposed, and every hold inside it (Hold, Begin, the
+    /// sidebar's own) is then a plain change: nothing is drawn until the end,
+    /// and then it is only marked to be drawn, not drawn there and then.
+    ///
+    /// WHY (25 Nov 2026, Asher on the Focus animation: "would you pay $10k for
+    /// that animation?"): under the Focus stage the sidebar, the column and the
+    /// inbox's docking each held painting and then drew the whole window at
+    /// once - three full paints of a window nobody could see, behind a stage
+    /// that waits for the window to be ready before half of it can move.
+    /// Measured at 1440x900: focus 718-1287 ms, restore 483-733 ms.
+    /// </summary>
+    public static IDisposable HoldWhole(Form window)
+    {
+        if (!window.IsHandleCreated || window.IsDisposed || HeldWhole.Contains(window))
+        {
+            return new Releaser(null);
+        }
+
+        SendMessage(window.Handle, WmSetRedraw, IntPtr.Zero, IntPtr.Zero);
+        HeldWhole.Add(window);
+        return new Releaser(window);
+    }
+
+    private sealed class Releaser(Form? window) : IDisposable
+    {
+        private Form? _window = window;
+
+        public void Dispose()
+        {
+            if (_window is not { } window)
+            {
+                return;
+            }
+
+            _window = null;
+            HeldWhole.Remove(window);
+
+            if (window.IsDisposed || !window.IsHandleCreated || !IsWindow(window.Handle))
+            {
+                return;
+            }
+
+            try
+            {
+                ThinScrollBar.SyncNow();
+            }
+            finally
+            {
+                SendMessage(window.Handle, WmSetRedraw, 1, IntPtr.Zero);
+
+                // Marked to be drawn, frames too - drawn when the caller (or
+                // Windows) next paints, once, at the new layout.
+                RedrawWindow(window.Handle, IntPtr.Zero, IntPtr.Zero, RdwInvalidate | RdwErase | RdwFrame | RdwAllChildren);
+            }
         }
     }
 

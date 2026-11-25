@@ -54,8 +54,18 @@ public partial class MainForm
 
             // After it is on screen: the spare was shown once already, hidden,
             // so opening on the vote waits for nothing - SetFilter opens the
-            // vote's card itself once the window is visible.
-            spare.SetFilter(filter);
+            // vote's card itself once the window is visible. On the chip it
+            // was made on, its rows are only redrawn if something changed
+            // (25 Nov 2026): redrawn regardless, it was 44-90 ms of a Focus.
+            if (spare.Filter == filter && filter != InboxFilter.Vote)
+            {
+                spare.RefreshAll(force: false);
+            }
+            else
+            {
+                spare.SetFilter(filter);
+            }
+
             return;
         }
 
@@ -195,8 +205,14 @@ public partial class MainForm
 
             _spareParking.Bounds = new Rectangle(new Point(-size.Width - UiLayout.AtDpi(10000), 0), size);
 
+            // WHY (25 Nov 2026, found drawing the Focus frames): its "Dock in
+            // the main window" tick is left as the club has it. The spare used
+            // to be told it was docked here, and the tick's own handler then
+            // saved "docked" for the club and docked it - so with the inbox set
+            // to a window of its own, making a spare switched the club's choice
+            // and left an empty 520 px dock down the right of Race Control.
+            // HostInbox sets the tick once the spare is really docked.
             _spareLeast = form.MinimumSize;
-            form.ShowDocked(true);
             PutInDock(form, _spareParking);
             form.Show();
             form.Resting = true;
@@ -224,12 +240,11 @@ public partial class MainForm
             return null;
         }
 
-        // Out of its parking place - its windows are kept, as any part's are
-        // when it changes parent - with its own least size back, which
-        // HostInbox keeps for when it is a window of its own.
-        spare.Hide();
-        _spareParking.Controls.Remove(spare);
-        spare.MinimumSize = _spareLeast;
+        // Left in its parking place, shown, for MoveInbox to move into the
+        // dock in one change of parent (25 Nov 2026), or out to a window of
+        // its own. Its own least size is kept for that window: docked, its
+        // MinimumSize stays empty, as PutInDock leaves it.
+        _inboxLeast = _spareLeast;
         return spare;
     }
 
@@ -267,6 +282,19 @@ public partial class MainForm
                 return;
             }
 
+            // WHY (25 Nov 2026, the Focus animation): the spare comes straight
+            // from its parking place, as it is - shown, docked to fill, at the
+            // dock's size - so moving it is one change of parent. Hidden, taken
+            // out and put back in, then shown, it took 150-250 ms of a Focus.
+            if (!form.TopLevel && _spareParking is not null && form.Parent == _spareParking)
+            {
+                EnsureInboxDock();
+                _inboxDock!.Controls.Add(form);
+                _inboxSplit!.Visible = true;
+                _inboxDock.Visible = true;
+                return;
+            }
+
             EnsureInboxDock();
             _inboxLeast = form.MinimumSize;
             PutInDock(form, _inboxDock!);
@@ -279,7 +307,9 @@ public partial class MainForm
             if (!form.TopLevel)
             {
                 form.Hide();
-                _inboxDock?.Controls.Remove(form);
+
+                // From the dock, or from the spare's parking place.
+                form.Parent?.Controls.Remove(form);
                 HideInboxDock();
                 form.Dock = DockStyle.None;
                 form.TopLevel = true;
