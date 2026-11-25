@@ -384,7 +384,7 @@ internal sealed class AppUsageTracker : IDisposable
     }
 
     /// <summary>How long since the keyboard or mouse was last used anywhere on this PC.</summary>
-    private static TimeSpan IdleFor()
+    internal static TimeSpan IdleFor()
     {
         var info = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
 

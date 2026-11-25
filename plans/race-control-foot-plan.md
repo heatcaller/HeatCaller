@@ -219,3 +219,7 @@ Still not checked:
 
 - **A first Focus with the inbox closed still takes about 1.7 s to settle**: about 1.1 s of work underneath, then the 650 ms reveal. The motion starts at once, but it's longer than the 650 ms planned. Keeping a built inbox ready (or hiding it rather than closing it on Restore) would bring it close to plan. That's a deeper change, offered separately.
 - **The light themes (Daylight)** and **DPI scaling** weren't looked at. The pills and the stage read their colours from the theme as they paint.
+
+## Follow-up: a spare inbox (25 Nov 2026)
+
+The first Focus with the inbox closed took 1.1 to 1.5 s. Measured: the inbox's constructor is 20 ms, and showing it (making its windows and laying it out) about 640 ms. A spare is now made after start-up warm-up and again after the inbox is closed. That waits for 4 s with no keyboard or mouse, and for no race or practice on (`FocusView.SpareInboxWanted`). The spare is parked in a disabled panel placed outside the window's client area. It can't go in the hidden dock, where WinForms counts every part as hidden: there it made 2 of its 89 parts. Focus then moves that window into the dock. The press is now about 320 ms (three rounds: 333, 354, 333 ms), and making the spare takes about 0.9 s out of sight.

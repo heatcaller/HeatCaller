@@ -124,4 +124,27 @@ internal static class FocusView
             InboxPlace.Window => false,
             _ => savedBeforeFocus,
         };
+
+    /// <summary>
+    /// Whether a spare inbox should be made now, ready and laid out in the
+    /// hidden dock, so the next Focus (or Dock Inbox) only has to show it.
+    ///
+    /// WHY (25 Nov 2026, Asher: "keep an inbox built so the first Focus is
+    /// fast"): with the inbox closed, Focus took 1.1 to 1.5 s before anything
+    /// settled, and about 640 ms of that was the inbox's windows being made
+    /// and laid out the moment it was shown - its constructor is only 20 ms.
+    ///
+    /// Making one is that same 640 ms, all at once on the window's thread, so
+    /// it is never done while a car could be on the track (the clock and the
+    /// board would stop for it), nor while the app is closing, nor when one is
+    /// open or ready already - there is only ever one inbox. Nor while
+    /// somebody is using the PC: measured, it holds the window for about 0.9 s,
+    /// so it waits until the keyboard and mouse have been left alone for
+    /// <see cref="SpareInboxQuiet"/>.
+    /// </summary>
+    public static bool SpareInboxWanted(bool spareReady, bool inboxOpen, bool raceOnTrack, bool closingDown, TimeSpan quietFor) =>
+        !spareReady && !inboxOpen && !raceOnTrack && !closingDown && quietFor >= SpareInboxQuiet;
+
+    /// <summary>How long the keyboard and mouse are left alone before a spare inbox is made.</summary>
+    public static readonly TimeSpan SpareInboxQuiet = TimeSpan.FromSeconds(4);
 }

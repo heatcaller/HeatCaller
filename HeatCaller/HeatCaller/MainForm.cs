@@ -2563,6 +2563,12 @@ public partial class MainForm : Form
             _closingDown = true;
             _webServer.HostReady = false;
 
+            // No spare inbox made on the way out - see WantSpareInbox. The
+            // spare itself, a part of the window, goes with it.
+            _spareTimer?.Stop();
+            _spareTimer?.Dispose();
+            _spareTimer = null;
+
             // The live state built off the UI (threaded only), stopped and
             // waited for before anything it reads - the web server, the relay,
             // the stores, the timing thread - is taken down (24 Oct 2026,

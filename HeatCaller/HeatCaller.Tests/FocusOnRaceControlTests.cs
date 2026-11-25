@@ -399,6 +399,90 @@ public sealed class FocusOnRaceControlTests
         }, seen.log);
     }
 
+    [Theory]
+    [InlineData(false, false, false, false, 5, true)]
+    [InlineData(true, false, false, false, 5, false)]   // one ready already
+    [InlineData(false, true, false, false, 5, false)]   // an inbox open - only ever one
+    [InlineData(false, false, true, false, 5, false)]   // a car could be on the track
+    [InlineData(false, false, false, true, 5, false)]   // closing
+    [InlineData(false, false, false, false, 2, false)]  // somebody at the keyboard
+    public void A_spare_inbox_is_made_only_when_none_is_there_nothing_is_on_track_and_nobody_is_at_the_keyboard(
+        bool ready, bool open, bool onTrack, bool closing, int quietSeconds, bool wanted)
+    {
+        Assert.Equal(wanted, FocusView.SpareInboxWanted(ready, open, onTrack, closing, TimeSpan.FromSeconds(quietSeconds)));
+    }
+
+    // WHY (25 Nov 2026, Asher: keep an inbox built so the first Focus is
+    // fast): the spare is made and laid out out of sight, nothing on screen
+    // changes, and Focus then docks that same window instead of making one.
+    // Parked in the hidden dock it was counted hidden and only 2 of its 89
+    // parts were made, so this checks its parts really are made.
+    [Fact]
+    public void A_spare_inbox_is_made_out_of_sight_and_Focus_docks_that_same_window()
+    {
+        var seen = StaThread.Run(() =>
+        {
+            using var data = new TempAppData();
+
+            new AppSettings
+            {
+                StartMaximized = false,
+                HasCompletedFirstRun = true,
+                HasSeenRaceDaySetup = true,
+                AutoBackupEnabled = false,
+                ConnectDecodersAtStartup = false,
+            }.Save();
+
+            var window = new MainForm { LayoutCheckMode = true, StartPosition = FormStartPosition.Manual, Location = new Point(-20000, -20000) };
+
+            try
+            {
+                window.Show();
+                StaThread.Settle();
+                window.SizeContentForLayoutCheck(new Size(1440, 860));
+                StaThread.Settle();
+
+                var page = Field<RaceControlControl>(window, "_raceControlControl");
+                var boardBefore = page.Width;
+
+                window.MakeSpareInbox();
+                StaThread.Settle();
+
+                var spare = Field<DeskInboxForm?>(window, "_spareInbox")!;
+                var made = Made(spare);
+                var shown = Shown(spare);
+                var afterMaking = (window.SpareInboxReady, Inbox(window), page.Width == boardBefore, spare.Resting, !OnScreen(window, spare));
+
+                page.FocusButton.PerformPress();
+                StaThread.Settle();
+
+                var docked = Field<Form?>(window, "_inboxForm");
+                var afterFocus = (window.SpareInboxReady, Inbox(window), ReferenceEquals(docked, spare), spare.Visible, spare.Resting, OnScreen(window, spare));
+
+                page.FocusButton.PerformPress();
+                StaThread.Settle();
+
+                return (made, shown, afterMaking, afterFocus, afterRestore: Inbox(window));
+            }
+            finally
+            {
+                window.Close();
+                window.Dispose();
+                StaThread.Settle();
+            }
+        }, TimeSpan.FromMinutes(3), () => "a spare inbox");
+
+        // In a hidden parent every part counts as hidden, so this would pass with none made - hence at least 30.
+        Assert.True(seen.shown >= 30 && seen.made * 10 >= seen.shown * 9, $"the spare's parts are made while it waits: {seen.made} of the {seen.shown} meant to show");
+        Assert.Equal((true, "Closed", true, true, true), seen.afterMaking);
+        Assert.Equal((false, "Docked", true, true, false, true), seen.afterFocus);
+        Assert.Equal("Closed", seen.afterRestore);
+
+        static int Made(Control c) => (c.IsHandleCreated ? 1 : 0) + c.Controls.Cast<Control>().Where(k => k.Visible).Sum(Made);
+        static int Shown(Control c) => 1 + c.Controls.Cast<Control>().Where(k => k.Visible).Sum(Shown);
+        static bool OnScreen(Form window, Control c) => c.Visible && window.ClientRectangle.IntersectsWith(window.RectangleToClient(c.RectangleToScreen(c.ClientRectangle)));
+    }
+
     private static string Inbox(MainForm window)
     {
         var inbox = (Form?)typeof(MainForm).GetField("_inboxForm", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window);
