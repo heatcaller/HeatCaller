@@ -711,8 +711,9 @@ internal sealed class HoldStrip : Control
         Invalidate();
     }
 
-    /// <summary>One line of the bigger of the two fonts it writes in, and room round it.</summary>
-    private static int StripHeight => Math.Max(AppTheme.BoldFont.Height, AppTheme.SmallFont.Height) + 12;
+    /// <summary>One line of the bigger of the two fonts it writes in, and room round it - and the trailing button's, with room round it, when it has one.</summary>
+    private int StripHeight => Math.Max(Math.Max(AppTheme.BoldFont.Height, AppTheme.SmallFont.Height) + 12,
+        _trailing is null ? 0 : _trailing.Height + UiLayout.AtDpi(8));
 
     public override Size GetPreferredSize(Size proposedSize)
     {
@@ -720,10 +721,73 @@ internal sealed class HoldStrip : Control
         return new Size(width, StripHeight);
     }
 
+    // PLAY AGAIN (25 Nov 2026, asked for by Asher: board G of
+    // plans/play-again-plan.md). A button of its own at the strip's right
+    // end, which everything the strip paints keeps clear of - so it never
+    // comes and goes as holds, On Air and Now Playing take the strip; and at
+    // rest, once something has been said, "Last said" with what it was.
+    private Control? _trailing;
+    private LastSaidShown? _lastSaid;
+
+    /// <summary>Puts <paramref name="control"/> at the strip's right end, for good.</summary>
+    internal void SetTrailing(Control control)
+    {
+        _trailing = control;
+        Controls.Add(control);
+        control.SizeChanged += (_, _) =>
+        {
+            PlaceTrailing();
+            Invalidate();
+        };
+        PlaceTrailing();
+    }
+
+    /// <summary>What was said last, for the strip at rest - or null for its hint, as before.</summary>
+    internal void SetLastSaid(LastSaidShown? lastSaid)
+    {
+        if (Equals(_lastSaid, lastSaid))
+        {
+            return;
+        }
+
+        _lastSaid = lastSaid;
+
+        if (_work is null && lastSaid is { } said)
+        {
+            AccessibleName = $"{said.Lead}: {said.Words}";
+        }
+
+        Invalidate();
+    }
+
+    /// <summary>What it shows as last said - for the tests.</summary>
+    internal LastSaidShown? LastSaid => _lastSaid;
+
+    private void PlaceTrailing()
+    {
+        if (_trailing is not { } t)
+        {
+            return;
+        }
+
+        var inset = UiLayout.AtDpi(5);
+        t.Location = new Point(Math.Max(0, ClientSize.Width - t.Width - inset), Math.Max(0, (ClientSize.Height - CardInsetBelow - t.Height) / 2 + 1));
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        PlaceTrailing();
+    }
+
+    /// <summary>How much of the strip's right end the trailing button keeps: the button, its inset and a gap before it.</summary>
+    private int TrailingRoom => _trailing is { Visible: true } t ? t.Width + UiLayout.AtDpi(5) + UiLayout.AtDpi(10) : 0;
+
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
         var box = ClientRectangle;
+        var room = TrailingRoom;
 
         using (var back = new SolidBrush(Parent?.BackColor ?? AppTheme.Surface))
         {
@@ -732,7 +796,7 @@ internal sealed class HoldStrip : Control
 
         if (_holding?.Progress is { } done)
         {
-            PaintCard(g, box, $"Keep holding to {_holding.Doing}…", "let go to cancel", done, AppTheme.Danger);
+            PaintCard(g, box, $"Keep holding to {_holding.Doing}…", "let go to cancel", done, AppTheme.Danger, reserve: room);
             return;
         }
 
@@ -747,18 +811,118 @@ internal sealed class HoldStrip : Control
         {
             var words = Environment.TickCount64 < _calledOffUntil ? CalledOffWords
                 : work.Length > 0 ? work : _resting;
-            PaintCard(g, box, words, _workRight, _workFill, _workColour, _nowPlaying);
+            PaintCard(g, box, words, _workRight, _workFill, _workColour, _nowPlaying, reserve: room);
             return;
         }
 
         const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
                                       | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis;
 
+        if (Environment.TickCount64 >= _calledOffUntil && _lastSaid is { } said)
+        {
+            PaintLastSaid(g, box, said, room);
+            return;
+        }
+
         var text = Environment.TickCount64 < _calledOffUntil ? CalledOffWords : _resting;
 
         if (text.Length > 0)
         {
-            TextRenderer.DrawText(g, text, AppTheme.SmallFont, box, AppTheme.TextMuted, flags);
+            TextRenderer.DrawText(g, text, AppTheme.SmallFont, new Rectangle(box.Left, box.Top, Math.Max(0, box.Width - room), box.Height), AppTheme.TextMuted, flags);
+        }
+    }
+
+    /// <summary>
+    /// The strip at rest once something has been said (board G): a quiet
+    /// card the width of the strip, a hollow dot, LAST SAID, the kind of line
+    /// in its colour, when, and the words in quotes, cut short with "…" - and
+    /// a hairline before the Play button at its right end.
+    /// </summary>
+    private void PaintLastSaid(Graphics g, Rectangle box, LastSaidShown said, int room)
+    {
+        var card = new Rectangle(box.Left, box.Top + 1, box.Width - 1, box.Height - 1 - CardInsetBelow);
+
+        if (card.Width <= 2 || card.Height <= 2)
+        {
+            return;
+        }
+
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        using (var path = Rounded(card, 6))
+        using (var fill = new SolidBrush(AppTheme.RowAlt))
+        using (var edge = new Pen(AppTheme.Border))
+        {
+            g.FillPath(fill, path);
+            g.DrawPath(edge, path);
+        }
+
+        var x = card.Left + UiLayout.AtDpi(14);
+        var mid = card.Top + card.Height / 2f;
+        var dot = UiLayout.AtDpi(7);
+
+        using (var ring = new Pen(AppTheme.TextMuted, Math.Max(1.2f, 1.5f * UiLayout.DpiScale)))
+        {
+            g.DrawEllipse(ring, x, mid - dot / 2f, dot, dot);
+        }
+
+        g.SmoothingMode = SmoothingMode.Default;
+        x += dot + UiLayout.AtDpi(9);
+
+        var right = card.Right - room;
+        const TextFormatFlags flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+                                      | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis;
+
+        int Text(string words, Font font, Color ink, int gapAfter)
+        {
+            var w = FlagRow.Measure(words, font).Width;
+            TextRenderer.DrawText(g, words, font, new Rectangle(x, card.Top, Math.Max(0, Math.Min(w, right - x)), card.Height), ink, flags);
+            x += w + gapAfter;
+            return w;
+        }
+
+        var gap = UiLayout.AtDpi(9);
+        Text("LAST SAID", AppTheme.MicroFont, AppTheme.TextMuted, gap);
+        Text("·", AppTheme.SmallFont, AppTheme.TextMuted, gap);
+
+        // The kind, as a chip in its own colour.
+        var chipWidth = FlagRow.Measure(said.Kind, AppTheme.SmallFont).Width + UiLayout.AtDpi(14);
+        var chipHeight = AppTheme.SmallFont.Height + UiLayout.AtDpi(2);
+        var chip = new Rectangle(x, (int)(mid - chipHeight / 2f), chipWidth, chipHeight);
+
+        if (chip.Right < right)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            using (var path = Rounded(chip, UiLayout.AtDpi(4)))
+            using (var fill = new SolidBrush(Blend(AppTheme.RowAlt, said.Colour, 0.12f)))
+            using (var edge = new Pen(Blend(AppTheme.RowAlt, said.Colour, 0.5f)))
+            {
+                g.FillPath(fill, path);
+                g.DrawPath(edge, path);
+            }
+
+            g.SmoothingMode = SmoothingMode.Default;
+            TextRenderer.DrawText(g, said.Kind, AppTheme.SmallFont, chip, said.Colour,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+            x = chip.Right + gap;
+        }
+
+        Text("·", AppTheme.SmallFont, AppTheme.TextMuted, gap);
+        Text(said.When, AppTheme.SmallFont, Blend(AppTheme.TextDark, AppTheme.TextMuted, 0.35f), UiLayout.AtDpi(13));
+
+        if (right - x > UiLayout.AtDpi(40))
+        {
+            TextRenderer.DrawText(g, said.Words, AppTheme.BodyFont, new Rectangle(x, card.Top, right - x, card.Height), AppTheme.TextDark, flags);
+        }
+
+        // The hairline before the button.
+        if (room > 0)
+        {
+            using var line = new Pen(AppTheme.Border);
+            var lineX = card.Right - room + UiLayout.AtDpi(4);
+            var h = UiLayout.AtDpi(24);
+            g.DrawLine(line, lineX, mid - h / 2f, lineX, mid + h / 2f);
         }
     }
 
@@ -781,7 +945,7 @@ internal sealed class HoldStrip : Control
     /// 2026): after the words, with a small speaker, in Now Playing's cyan -
     /// part of the card, not off at the strip's far end. Never on a hold's.
     /// </summary>
-    private void PaintCard(Graphics g, Rectangle box, string doing, string cancel, float? done, Color colour, string playing = "")
+    private void PaintCard(Graphics g, Rectangle box, string doing, string cancel, float? done, Color colour, string playing = "", int reserve = 0)
     {
         if (box.Width <= 2)
         {
@@ -806,6 +970,9 @@ internal sealed class HoldStrip : Control
         g.SmoothingMode = SmoothingMode.Default;
 
         var inside = Rectangle.Inflate(card, -12, 0);
+
+        // Clear of the Play Again button at the strip's right end.
+        inside.Width = Math.Max(0, inside.Width - Math.Max(0, reserve - 12));
         var bold = AppTheme.BoldFont;
         var small = AppTheme.SmallFont;
 

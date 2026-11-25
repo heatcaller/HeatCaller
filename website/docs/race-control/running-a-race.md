@@ -96,7 +96,29 @@ Each strip has a left and a right bar, from -40 dB at the foot to 0 at the top. 
 
 ### The On Air bar
 
-While anything is going out, the line under the row is the **On Air bar**, in cyan. It runs across the card under the flag buttons. It names the segment on air, for example **On air: Race Recap** or **On air: Driver Intros**, and stays up while anything is going out: the announcer speaking, the recap show (named as on the **AI Commentary** page's **Recap show** card when you've typed a name there), a replayed moment, an imaging piece or bed, a sponsor video, the music or the crowd. While On Air is live, between the jingle and staging, it reads **On air** between segments and shows "hold 0 to skip to Stage" at its right. While On Air is writing and voicing the opening, it's On Air's red bar, filling as the work gets done. When nothing is going out, it goes back to the hint about which buttons to hold. A press-and-hold still takes over the whole line while you hold. Double-click the bar to open the **Broadcast** window.
+While anything is going out, the line under the row is the **On Air bar**, in cyan. It runs across the card under the flag buttons. It names the segment on air, for example **On air: Race Recap** or **On air: Driver Intros**, and stays up while anything is going out: the announcer speaking, the recap show (named as on the **AI Commentary** page's **Recap show** card when you've typed a name there), a replayed moment, an imaging piece or bed, a sponsor video, the music or the crowd. While On Air is live, between the jingle and staging, it reads **On air** between segments and shows "hold 0 to skip to Stage" at its right. While On Air is writing and voicing the opening, it's On Air's red bar, filling as the work gets done. When nothing is going out, it goes back to **LAST SAID** and the line the room heard last, or, before anything has been said, the hint about which buttons to hold. **Play again** stays at its right-hand end throughout (see [Play a line again](#play-a-line-again)). A press-and-hold still takes over the whole line while you hold. Double-click the bar to open the **Broadcast** window.
+
+### Play a line again
+
+A driver at the far end of the pits missed the call-up, or the room talked over the winner. The **Play again** button at the right-hand end of the On Air bar plays a line again, exactly as the room heard it. It uses the same audio, so it costs nothing from your ElevenLabs or HeatCaller voice allowance and sounds the same.
+
+What one press plays follows the race. The button says which:
+
+| When | The button says | One press plays |
+|---|---|---|
+| Between races | **Play call-up** | The last call-up. |
+| Staging and the countdown | **Play again**, grayed out ("after the start") | Nothing, so nothing is played over the start. |
+| During a race, and in practice | **Play again** | The newest line from this race that's still true. |
+| After the checkered flag | **Play winner** | The winner, then the class winners. Once the next race's call-up has been said, it's **Play call-up** instead. |
+| Muted | **Muted**, grayed out ("M to unmute") | Nothing. |
+
+The small line under the words says what it plays and how long it lasts, for example "The winner · 0:05". The <kbd>S</kbd> key does what the button does, when you're not typing in a box. So does **SAY AGAIN** on the phone remote (see [Phone remote](../screens/phone-and-web.md)).
+
+The arrow beside it opens **Said tonight**: the last 20 lines heard tonight, newest first, each with what kind of line it was, when, who said it and the words. The line or lines one press would play are marked **S**. Click any line to play it again. A line from the commentary that two voices said together plays whole.
+
+Some lines can't be played again. A gap, a position, a lap time or the minutes left is about the race as it stood, so once the leader has done another lap, or the race is over, the list grays it out with "Out of date - the race has moved on". Call-ups, flags, the finish, the winner and records stay playable all night. The list starts again at 6am, with the race night.
+
+A replay waits its turn like any line: it waits for what's being said, the music and crowd duck under it, and a flag call goes first. It plays in the room and to anyone listening from home. It isn't kept again, and the race video and the Big Screen captions don't show it twice. When nothing has been said yet, the On Air bar shows the hint about which buttons to hold; after that, at rest, it shows **LAST SAID** with the kind of line, when, and the words.
 
 Inside the bar, after the segment, a small speaker and **Now playing** in cyan name the imaging element the room is hearing: a jingle, sweeper, bumper or stinger (with the point it was played for, for example "Top of the race · Classic station ID"), a music bed, the recap show's opener, bed or sting, a replay, a sponsor video with its sound, the music, or the crowd. When more than one is going out, a piece is named over a sponsor video, a sponsor video over a bed, a bed over the music, and the music over the crowd. When nothing is playing, it's left out.
 

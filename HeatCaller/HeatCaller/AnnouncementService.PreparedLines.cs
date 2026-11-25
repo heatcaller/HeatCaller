@@ -624,6 +624,9 @@ public sealed partial class AnnouncementService
                     // says the names shortened - see OfferToListenersOnly.
                     var onAir = OfferLineToListeners(text, made.Value.Audio, AudioFromShortenedText(made.Value.Source, text));
 
+                    // Kept for Play Again (25 Nov 2026) - see AnnouncementService.PlayAgain.
+                    NoteSaid(text, made.Value.Audio, null, $"[voice] {type}", type);
+
                     // WHY (23 Oct 2026, bug hunt 10): re-checked once the line is registered - see PlayPcmAsync.
                     await PlayAsync(made.Value.Audio, volume, DefaultTrailingSilenceSeconds, CurrentLeadingSilence,
                         () => Volatile.Read(ref _interruptGeneration) == generation && !Muted, onAir);

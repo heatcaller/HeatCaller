@@ -162,6 +162,10 @@ public partial class RaceControlControl
             return;
         }
 
+        // Play Again's press follows the flags and the mute (25 Nov 2026) - see
+        // RaceControlControl.PlayAgain. Repaints only on a change.
+        RefreshPlayAgain();
+
         var playing = NowPlaying.Describe(NowPlaying.Shown);
         _flagRow.SetNowPlaying(playing);
         _holdStrip.SetNowPlaying(playing);

@@ -424,6 +424,10 @@ public sealed partial class RaceControlControl
         flags.Add(BuildFlagRow(flagBar), gapBelow: 0);
         UpdateMorphingBar(_race.Flag);
 
+        // Play Again at the On Air bar's right end (25 Nov 2026) - see
+        // RaceControlControl.PlayAgain.
+        BuildPlayAgain();
+
         // Start races On Air, the format line and its button moved to the
         // foot of the board (21 Oct 2026) - set once a night, not pressed
         // during a race, so they gave up their place beside the flags.
