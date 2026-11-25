@@ -944,7 +944,7 @@ public sealed partial class RaceControlControl : UserControl
             return RemoteCommandOutcome.NotDelivered("The laptop could not take that command just now - it was NOT sent. Try again.");
         }
 
-        if (action is not ("stage" or "countdown" or "green" or "yellow" or "red" or "checkered" or "reset"
+        if (action is not ("stage" or "countdown" or "green" or "yellow" or "red" or "checkered" or "reset" or "sayagain"
                 or "skip" or "holdtalk" or "callup" or "autohold" or "autoplus" or "autonow" or "marshalsin"))
         {
             return RemoteCommandOutcome.Refused("Unknown command.");
@@ -1038,6 +1038,18 @@ public sealed partial class RaceControlControl : UserControl
 
                 case "callup": talkAnswer = CallUpNow(); break;
 
+                // Play Again (25 Nov 2026): the On Air bar's main press, as S
+                // presses it - see RaceControlControl.PlayAgain.
+                case "sayagain":
+                    talkAnswer = PlayAgainNow();
+
+                    if (talkAnswer.StartsWith("Nothing", StringComparison.Ordinal) || talkAnswer.StartsWith("Not played", StringComparison.Ordinal))
+                    {
+                        NoteRemoteRefusal(talkAnswer);
+                    }
+
+                    break;
+
                 // Auto start (11 Nov 2026): Hold / Resume, and +1 min.
                 case "autohold":
                 case "autoplus":
@@ -1101,6 +1113,7 @@ public sealed partial class RaceControlControl : UserControl
                 "red" => "Red flag out.",
                 "checkered" => "Checkered flag out.",
                 "reset" => "Race reset.",
+                "sayagain" => talkAnswer,
                 "skip" or "holdtalk" or "callup" or "autohold" or "autoplus" or "autonow" or "marshalsin" => talkAnswer,
                 _ => "Done.",
             });

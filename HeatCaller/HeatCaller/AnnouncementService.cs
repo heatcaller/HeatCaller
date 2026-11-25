@@ -1722,6 +1722,9 @@ public sealed partial class AnnouncementService
                 // listeners just because this path could not say.
                 var onAir = OfferLineToListeners(prepared.Text, audio, shortened);
 
+                // Kept for Play Again (25 Nov 2026) - see AnnouncementService.PlayAgain.
+                NoteSaid(prepared.Text, audio, null, "[voice] Reminder (prepared)");
+
                 // Noting when its last word lands, so a piece of imaging
                 // can hit the post on it (17 Oct 2026) - see TalkUp. Plays
                 // exactly as PlayAsync did.

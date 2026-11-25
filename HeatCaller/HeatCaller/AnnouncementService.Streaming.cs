@@ -376,6 +376,14 @@ public sealed partial class AnnouncementService
                 var onAir = forListeners && StreamingTheMix
                     && OfferToListenersOnly(text, null, AudioFromShortenedText(heatCaller ? LineSource.HeatCaller : LineSource.ElevenLabs, text));
 
+                // Kept for Play Again (25 Nov 2026): no audio in hand while it
+                // streams, so a replay finds the take in the voice library
+                // under these exact settings. See AnnouncementService.PlayAgain.
+                if (forListeners && honourMute)
+                {
+                    NoteSaid(text, null, profile, announcingLogPrefix);
+                }
+
                 var streaming = response;
                 download = Task.Run(() => DownloadIntoAsync(streaming, line, tailSeconds, timing, answered, keep, stopDownload.Token));
                 response = null;

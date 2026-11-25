@@ -853,6 +853,13 @@ public sealed partial class AnnouncementService
                 // full stays off the public page - see OfferToListenersOnly.
                 var onAir = forListeners && OfferLineToListeners(text, audio, AudioFromShortenedText(synthesis.Source, text));
 
+                // Kept for Play Again (25 Nov 2026) - a race line the room
+                // hears, not a test or a level check. See AnnouncementService.PlayAgain.
+                if (forListeners && honourMute)
+                {
+                    NoteSaid(text, audio, currentProfile, announcingLogPrefix);
+                }
+
                 // The pads the CALLER asked for, since 11 Oct 2026. This
                 // was the default 0.9s tail and the full lead whatever the
                 // line was, so two turns of one exchange paid both in full

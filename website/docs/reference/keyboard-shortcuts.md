@@ -24,6 +24,7 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 | <kbd>F12</kbd> | **Call Up**: calls up the next race now. |
 | <kbd>H</kbd> | **Hold** / **Resume** on the Next Up bar: holds Auto start's count to the next race, and carries it on again. See [Auto start between races](../race-control/running-a-race.md#auto-start-between-races). |
 | <kbd>N</kbd> | **Start now**, from the **Hold** button's right-click menu: starts the next race without waiting for the count. |
+| <kbd>S</kbd> | **Play again** on the On Air bar: the winner after the flag, the call-up between races, the newest line still true during a race. See [Play a line again](../race-control/running-a-race.md#play-a-line-again). |
 | <kbd>B</kbd> | **Big Screen** |
 | <kbd>R</kbd> | **Pre-race check** |
 | <kbd>A</kbd> | **Announcer Screen** |
