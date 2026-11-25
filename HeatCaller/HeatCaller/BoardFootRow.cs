@@ -114,7 +114,7 @@ internal sealed class BoardFootRow : Panel
     }
 
     /// <summary>The badge's middle: this far in from its part's right-hand edge, and down from its top, at 100%.</summary>
-    internal const int BadgeInAt100 = 9;
+    internal const int BadgeInAt100 = 7;
     internal const int BadgeDownAt100 = 3;
 
     /// <summary>A part narrower than this, at 100%, has its badge on the very corner, hanging over it.</summary>
@@ -139,7 +139,7 @@ internal sealed class BoardFootRow : Panel
     private bool HasBadges => _penDot is not null || _rightDot is not null || _leftDots.Any(d => d is not null);
 
     /// <summary>The room over the row's parts for the badges that stand above their top edges.</summary>
-    private int Inset => HasBadges ? UiLayout.AtDpi(7) : 0;
+    private int Inset => HasBadges ? UiLayout.AtDpi(5) : 0;
 
     /// <summary>The gap between parts.</summary>
     private static int Gap => UiLayout.AtDpi(10);
