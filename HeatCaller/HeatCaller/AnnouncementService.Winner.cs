@@ -12,10 +12,15 @@ namespace HeatCaller;
 /// RENDERED BEFORE THE FLAG. When the leader starts the last lap (a lap
 /// race) or the clock runs out (a timed race), the winner's line is made for
 /// each of the top two - whoever crosses first is almost always one of them.
-/// At the flag, the line for whoever won is put at the very FRONT of the
-/// queue, so it is the first thing said once the finish call has been - with
-/// its audio already made, it follows the call without a pause. A winner
-/// who was not in the top two then is rendered on the spot, as any line.
+/// A winner who was not in the top two then is rendered on the spot.
+///
+/// THE NAME FIRST, THEN THE FINISH CALL (24 Nov 2026, asked for by Asher).
+/// At the flag the winner's line goes out straight after the fanfare, in the
+/// finish call's place (TrySpeakTheWinnerFirst), and the finish call's own
+/// words are queued first behind it. It was the other way round: the finish
+/// call, then the name. Only when the finish call has been held back (the
+/// dial, a caution) is the name queued by itself, at the front of the queue
+/// (QueueTheWinnersCall).
 ///
 /// QUEUED AS THE FINISH, SO THE FINISH'S CLEAR-OUT SPARES IT. The finish
 /// call clears the decks when it speaks; a line queued as RaceCompleted
@@ -544,15 +549,92 @@ public sealed partial class AnnouncementService
             return false;
         }
 
+        SpeakTheWinnerAsTheFlag(winner, config, named, madeAsTheFinish: true);
+
+        return true;
+    }
+
+    /// <summary>
+    /// At the flag, with the Winner named row on (24 Nov 2026, asked for by
+    /// Asher: "I want the winner announced played first and then the race
+    /// completed call after it"): the winner's line is said straight after
+    /// the fanfare, in the finish call's place, and true is returned - the
+    /// finish call's own words are then queued after it
+    /// (QueueTheFinishAfterTheWinner).
+    ///
+    /// WHY: the finish call went first and the name after it - "That's the
+    /// finish - what a night!", then "Victory for Sam!" - so the moment the
+    /// room most wanted a name it heard a line that named nobody.
+    ///
+    /// False when there is no winner to name at the flag (practice, no
+    /// leader, a best-consecutive qualifier or a handicap race, the row off),
+    /// and the finish call goes on as it always did.
+    /// </summary>
+    private bool TrySpeakTheWinnerFirst()
+    {
+        var winner = TheWinnerToName();
+
+        if (winner is null || IsPracticeMode || Muted || NoWinnerToName || WinnerCallConfig() is not { } config)
+        {
+            return false;
+        }
+
+        SpeakTheWinnerAsTheFlag(winner, config, config.EffectiveTemplates, madeAsTheFinish: false);
+
+        return true;
+    }
+
+    /// <summary>
+    /// The finish call's own words, after the winner was named in its place
+    /// (TrySpeakTheWinnerFirst): first in the queue, which the winner's line
+    /// holds until it has been said. A shared heat's class winners go in
+    /// front of it (QueueTheWinnersCall), so they follow the overall winner.
+    /// Queued as the finish, so a flag's clear-out spares it.
+    /// </summary>
+    /// <param name="renderAhead">Renders its words - started at once, so they are ready by the time the winner's name has been said.</param>
+    private void QueueTheFinishAfterTheWinner(Func<Task> work, string shownText, Func<Task> renderAhead)
+    {
+        var queued = new QueuedVoiceItem(AnnouncementEventType.RaceCompleted, null, OnAir: "Finish", ShownText: shownText, Work: async () =>
+        {
+            // On the screens as it comes to be said, not while the winner's
+            // name is still being said - see the winner's call in QueueTheWinnersCall.
+            RaiseAnnouncementText(shownText);
+            await work();
+        })
+        {
+            RenderAhead = renderAhead,
+        };
+
+        lock (_voiceQueueLock)
+        {
+            _voiceQueue.Insert(0, queued);
+        }
+
+        _voiceQueueSignal.Release();
+
+        // Front of the queue now, so this is the line rendered.
+        RenderTheNextLineAhead();
+    }
+
+    /// <summary>
+    /// The winner's line said as the flag call: after the fanfare, holding
+    /// the queue until it has spoken. Its render made on the last lap is used
+    /// when it was made for this line; else it is made now, while the
+    /// fanfare plays. Marks the winner as named, so QueueTheWinnersCall does
+    /// not queue the name a second time.
+    /// </summary>
+    /// <param name="madeAsTheFinish">Whether the lines made ahead were to be the finish call's own (WinnerLines).</param>
+    private void SpeakTheWinnerAsTheFlag(string winner, AnnouncementEventConfig config, IReadOnlyList<string> templates, bool madeAsTheFinish)
+    {
         var profile = _voiceStore.Current;
         var speed = config.SpeedFor(profile.Speed);
         (string Text, string? Key, Task<SynthesisResult>? Render) call;
 
         lock (_winnerCallsLock)
         {
-            if (!_winnerCallsAreTheFinish || !_winnerCalls.TryGetValue(winner, out call))
+            if (_winnerCallsAreTheFinish != madeAsTheFinish || !_winnerCalls.TryGetValue(winner, out call))
             {
-                call = (WinnerLine(named, _standings.TryGetValue(winner, out var standing) ? SpokenNameFor(standing) : DisplayNameFor(winner)), null, null);
+                call = (WinnerLine(templates, _standings.TryGetValue(winner, out var standing) ? SpokenNameFor(standing) : DisplayNameFor(winner)), null, null);
             }
 
             _winnerCalls.Clear();
@@ -596,8 +678,6 @@ public sealed partial class AnnouncementService
         }
 
         SpeakFlagTake(AnnouncementEventType.RaceCompleted, text, take, profile, config, how);
-
-        return true;
     }
 
     /// <summary>
