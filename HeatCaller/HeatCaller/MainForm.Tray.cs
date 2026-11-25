@@ -40,6 +40,10 @@ public partial class MainForm
         exit.Click += (_, _) => BeginInvoke(new Action(Close));
         menu.Items.Add(exit);
 
+        // Themed like every other menu (24 Nov 2026, asked for by Asher:
+        // "unthemed submenu. sweep the whole app") - it was stock Windows.
+        AppTheme.StyleContextMenu(menu);
+
         _trayIcon = new NotifyIcon
         {
             Icon = icon,

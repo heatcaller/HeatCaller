@@ -488,6 +488,21 @@ public static class AppTheme
     }
 
     /// <summary>
+    /// EVERY MENU THEMED, STYLED OR NOT (24 Nov 2026, asked for by Asher:
+    /// "unthemed submenu. sweep the whole app and fix"). A menu was drawn in
+    /// the theme only if the code that made it called StyleContextMenu, and
+    /// some never did - the report-card menu on Race History and the Drivers
+    /// roster, the tray icon's - so they came up as stock white Windows
+    /// menus. A submenu whose items were added after the menu was styled
+    /// missed it too. Now the themed renderer is the default for every menu
+    /// on the UI thread: anything not given a renderer of its own is drawn by
+    /// it. Safe app-wide because menus are the app's only tool strips (a
+    /// guard test keeps it so). StyleContextMenu still does the rest - the
+    /// rounded edge, the padding, the tips.
+    /// </summary>
+    public static void ThemeEveryMenu() => ToolStripManager.Renderer = new ThemedMenuRenderer();
+
+    /// <summary>
     /// Fonts and padding for every item, including submenus, since a
     /// submenu is a separate drop-down with its own item collection.
     /// </summary>

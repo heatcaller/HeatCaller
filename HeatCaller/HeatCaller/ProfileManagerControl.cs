@@ -227,6 +227,9 @@ public sealed partial class ProfileManagerControl : UserControl
             cardItem.Text = profile is { DriverName.Length: > 0 } ? $"Report Card for {profile.DriverName}..." : "Report Card...";
             e.Cancel = ReportCardFor is null || profile is null;
         };
+        // WHY (24 Nov 2026, asked for by Asher: "unthemed submenu"): never
+        // styled, so it came up as a stock white Windows menu.
+        AppTheme.StyleContextMenu(cardMenu);
         _list.ContextMenuStrip = cardMenu;
 
         BuildLayout();

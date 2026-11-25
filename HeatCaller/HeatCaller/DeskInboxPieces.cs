@@ -1121,6 +1121,10 @@ internal sealed class InboxPopover : IDisposable
             DropShadowEnabled = true,
             Padding = new Padding(1),
             BackColor = AppTheme.Border,
+
+            // A card in a frame, not a menu: drawn as it always was, not by
+            // the menu renderer AppTheme.ThemeEveryMenu makes the default.
+            RenderMode = ToolStripRenderMode.Professional,
         };
         _drop.Items.Add(_host);
         _drop.Closed += (_, _) => Closed?.Invoke();
