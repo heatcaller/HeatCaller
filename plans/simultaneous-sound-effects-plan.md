@@ -97,7 +97,7 @@ Asher's answers to section 6:
 
 1. **A switch, for now.** **Let sound effects play over each other**, on the **Per lap** card of **Sounds → Effects**, on by default (`SoundEffectsProfile.EffectsOverlap`). It belongs to this PC, like the effects level: applying a soundscape leaves it alone.
 2. **Sounds play when they fire, as close to real time as possible.** One lap's effects start together with no gap. Asher added: "you should be able to hear multiple cars hitting a good lap". So the one gap kept is between two copies of the same sound in the same instant (120 ms, `SoundOverlap.SameSoundStagger`). Without it, two identical chimes sound like one louder one.
-3. **3 at once** (`SoundOverlap.MaxAtOnce`).
+3. **3 at once** (`SoundOverlap.MaxAtOnce`), raised to **8** later the same day at Asher's asking. The quieting goes on down with it, to half from the fifth sound on (`SoundOverlap.StackGain`), so eight at once don't flatten into one loud smear. Eight short streams cost next to nothing in a mix that already carries the voice, music and crowd.
 
 Changes from the plan:
 
