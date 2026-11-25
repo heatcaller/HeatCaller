@@ -441,7 +441,7 @@ public sealed class ThemesControl : UserControl
         }
 
         var packs = theme.SoundEffects.Effects.Values
-            .Select(c => string.IsNullOrWhiteSpace(c.CustomFilePath) ? SoundPacks.DisplayName(c.BuiltInSound) : "own files")
+            .Select(c => string.IsNullOrWhiteSpace(c.CustomFilePath) ? SoundPacks.DisplayName(SoundPacks.EffectsKey) : "own files")
             .Distinct()
             .ToList();
 

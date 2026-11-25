@@ -60,11 +60,19 @@ public sealed class Theme
     /// [cheerful] and [awe] stay (11 Nov 2026).
     /// 16: Podium's and Pit Lane's personal-best lines stop saying "never
     /// gone faster" / "than ever" (23 Nov 2026, bug hunt 24).
+    /// 17: every soundscape plays the Classic sound effects, the only pack
+    /// left, and its description stops naming the sounds it no longer has
+    /// (25 Nov 2026, Asher - see SoundPacks.EffectsKey).
     /// </summary>
     // WHY (23 Nov 2026, bug hunt 24): raised from 15 so saved copies of
     // Podium and Pit Lane are rewritten with the corrected personal-best
     // lines; at 15 a PC that already had them kept the old wording.
-    public const int CurrentBuiltInVersion = 16;
+    //
+    // WHY (25 Nov 2026, Asher: only the Classic pack): raised from 16 so
+    // saved copies of Podium, Arcade, Broadcast and Pit Lane are rewritten
+    // on Classic's sounds, with descriptions that don't promise bells,
+    // chiptune or air horns they no longer play.
+    public const int CurrentBuiltInVersion = 17;
 
     /// <summary>
     /// Built-ins that were renamed when the packs arrived, old name to new.
@@ -364,7 +372,7 @@ public sealed class Theme
         return new Theme
         {
             Name = "Podium",
-            Description = "Polished bells and chimes with a gracious, ceremony-style announcer. Premium and never harsh.",
+            Description = "A gracious, ceremony-style announcer, with the Podium crowd. Premium and never harsh.",
             SoundPack = "Podium",
             Voice = v,
             SoundEffects = SoundEffectsProfile.CreateForPack("Podium"),
@@ -513,7 +521,7 @@ public sealed class Theme
         return new Theme
         {
             Name = "Arcade",
-            Description = "8-bit chiptune sounds with an energetic gamer announcer - combos, high scores, GG.",
+            Description = "An energetic gamer announcer - combos, high scores, GG - with the Arcade crowd.",
             SoundPack = "Arcade",
             Voice = v,
             SoundEffects = SoundEffectsProfile.CreateForPack("Arcade"),
@@ -662,7 +670,7 @@ public sealed class Theme
         return new Theme
         {
             Name = "Broadcast",
-            Description = "TV sports graphics sounds - whooshes, brass and big hits - with a calm, measured motorsport commentator.",
+            Description = "A calm, measured motorsport commentator, with the Broadcast crowd and music.",
             SoundPack = "Broadcast",
             Voice = v,
             SoundEffects = SoundEffectsProfile.CreateForPack("Broadcast"),
@@ -815,7 +823,7 @@ public sealed class Theme
         return new Theme
         {
             Name = "Synthwave",
-            Description = "80s supersaws, arps and gated drums with a retro late-night radio DJ on the mic.",
+            Description = "Clean, modern sound effects and 80s music, with a retro late-night radio DJ on the mic.",
             SoundPack = "Synthwave",
             Voice = v,
             SoundEffects = SoundEffectsProfile.CreateForPack("Synthwave"),
@@ -966,7 +974,7 @@ public sealed class Theme
         return new Theme
         {
             Name = "Pit Lane",
-            Description = "Real trackside sounds - decoder beeps, air horns, the last-lap bell and the crowd - with a big arena announcer.",
+            Description = "A big arena announcer, with the Pit Lane crowd and music.",
             SoundPack = "PitLane",
             Voice = v,
             SoundEffects = SoundEffectsProfile.CreateForPack("PitLane"),

@@ -34,11 +34,13 @@ public sealed class BugHunt17_SoundPacksTests : IDisposable
     [Theory]
     [InlineData("start.ogg")]
     [InlineData("start.wav")]
-    public void A_file_that_cannot_be_decoded_gives_way_to_the_generated_tone(string name)
+    public void A_file_that_cannot_be_decoded_gives_way_to_the_classic_sound(string name)
     {
+        // The generated tone until 25 Nov 2026, when every sound got
+        // Classic's file to fall back to (see SoundPacks.EffectsKey).
         var config = new SoundEffectConfig { Enabled = true, CustomFilePath = FileOf(name, WriteRubbish) };
 
-        Assert.Null(SoundPacks.ResolveFile(config, SoundEffectKind.GoodLap));
+        Assert.Equal(SoundPacks.FileFor(SoundPacks.EffectsKey, SoundEffectKind.GoodLap), SoundPacks.ResolveFile(config, SoundEffectKind.GoodLap));
     }
 
     [Fact]
@@ -93,7 +95,7 @@ public sealed class BugHunt17_SoundPacksTests : IDisposable
         var path = FileOf("start.wav", WriteRubbish);
         var config = new SoundEffectConfig { Enabled = true, CustomFilePath = path };
 
-        Assert.Null(SoundPacks.ResolveFile(config, SoundEffectKind.GoodLap));
+        Assert.NotEqual(path, SoundPacks.ResolveFile(config, SoundEffectKind.GoodLap));
 
         WriteTone(path);
 

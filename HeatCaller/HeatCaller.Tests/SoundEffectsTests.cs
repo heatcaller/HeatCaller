@@ -56,7 +56,7 @@ public sealed class SoundEffectsTests : IDisposable
     }
 
     [Fact]
-    public void An_older_file_gets_the_new_sounds_in_the_pack_its_other_sounds_use()
+    public void An_older_file_gets_the_new_sounds_on_classic_like_its_others()
     {
         var older = new SoundEffectsProfile();
         older.Effects[nameof(SoundEffectKind.GoodLap)] = new SoundEffectConfig { Enabled = true, BuiltInSound = "PitLane" };
@@ -65,23 +65,26 @@ public sealed class SoundEffectsTests : IDisposable
 
         SoundEffectsStore.FillMissing(older);
 
+        // Classic for all of them since 25 Nov 2026, when it became the only
+        // pack (see SoundPacks.EffectsKey): the new sounds used to take the
+        // pack most of the others were on.
         foreach (var kind in AddedOn26Sep)
         {
-            Assert.Equal("PitLane", older.Effects[kind.ToString()].BuiltInSound);
+            Assert.Equal(SoundPacks.EffectsKey, older.Effects[kind.ToString()].BuiltInSound);
         }
 
-        // What was already there is untouched.
-        Assert.Equal("Podium", older.Effects[nameof(SoundEffectKind.RaceStarted)].BuiltInSound);
+        Assert.Equal(SoundPacks.EffectsKey, older.Effects[nameof(SoundEffectKind.RaceStarted)].BuiltInSound);
+        Assert.True(older.Effects[nameof(SoundEffectKind.RaceStarted)].Enabled);
     }
 
     [Fact]
-    public void A_file_with_no_sounds_at_all_gets_classic_tones()
+    public void A_file_with_no_sounds_at_all_gets_the_classic_pack()
     {
         var empty = new SoundEffectsProfile();
 
         SoundEffectsStore.FillMissing(empty);
 
-        Assert.All(empty.Effects.Values, config => Assert.Equal(SoundPacks.ClassicKey, config.BuiltInSound));
+        Assert.All(empty.Effects.Values, config => Assert.Equal(SoundPacks.EffectsKey, config.BuiltInSound));
     }
 
     [Theory]
@@ -139,12 +142,13 @@ public sealed class SoundEffectsTests : IDisposable
         var store = SoundEffectsStore.Load();
         var changed = SoundEffectsStore.Copy(store.Current);
         changed.Effects[nameof(SoundEffectKind.YellowFlag)].Enabled = true;
-        changed.Effects[nameof(SoundEffectKind.YellowFlag)].BuiltInSound = "Arcade";
+        changed.Effects[nameof(SoundEffectKind.YellowFlag)].CustomFilePath = @"C:Club Soundsyellow.wav";
 
         store.Save(changed);
 
         var reloaded = SoundEffectsStore.Load().Current.Effects[nameof(SoundEffectKind.YellowFlag)];
         Assert.True(reloaded.Enabled);
-        Assert.Equal("Arcade", reloaded.BuiltInSound);
+        Assert.Equal(@"C:Club Soundsyellow.wav", reloaded.CustomFilePath);
+        Assert.Equal(SoundPacks.EffectsKey, reloaded.BuiltInSound);
     }
 }

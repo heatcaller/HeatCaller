@@ -12,7 +12,7 @@ HeatCaller also records each race as it goes out and saves it as an mp3, with a 
 
 ## Effects
 
-**Sounds → Effects** plays short cues like Next Level Timing's own: a chime per lap plus sounds for race moments. Each sound plays **Generated tones** (tones HeatCaller makes itself, called **Classic tones** before 17 October) or one of the built-in sound packs: **Podium**, **Arcade**, **Broadcast**, **Classic** or **Pit Lane**. The **Classic** pack is the one called **Synthwave** before 16 October. You can point any of them at your own audio file instead, and your file wins over both.
+**Sounds → Effects** plays short cues like Next Level Timing's own: a chime per lap plus sounds for race moments. Each sound plays the built-in **Classic** pack (called **Synthwave** before 16 October), or your own file. Until 25 November a sound could also play **Generated tones** or the **Podium**, **Arcade**, **Broadcast** or **Pit Lane** pack; those are gone, and a sound set to one of them plays **Classic**. HeatCaller's generated tones are only used if a **Classic** file is missing. Since 25 November the Classic pack's **Good lap**, **Invalid lap**, **Personal best**, **Fast lap**, **Consistency streak**, **Leader change**, **Jump start** and **Countdown started** sounds are clean, modern ones in place of the old synth tones. Its **Countdown ticks** are the same rising tone as **Countdown started**, in place of five beeps, and the rise ends as the green comes. Its other sounds are unchanged. You can point any sound at your own audio file instead, and your file wins.
 
 ![Sounds, Effects tab: 18 of 18 sounds on for races and for practice, the Every sound at once card, and each sound with its Race and Practice ticks, Pack, Your own file (optional), Browse and Remove](../assets/images/sounds-effects.png)
 
@@ -22,10 +22,10 @@ The list has a heading over each column: **Race**, **Practice**, **Sound**, **Pa
 
 - **Race** and **Practice** tick boxes: the first plays the sound in races, the second in practice. A sound with only the practice box ticked stays silent on race night. Under each heading is a tick box for the whole column: click it to tick every sound in that column, or to clear them all when they're all ticked. It shows a part-way mark when only some are ticked, and Undo puts back the ticks you had.
 - **Sound**: the sound's name. A longer explanation, such as "all-time best on this track" for **Track record**, sits on a smaller line underneath (shown in brackets in the table below).
-- **Pack**: the built-in sound this row plays, **Generated tones** or a pack.
+- **Pack**: the built-in sound this row plays. **Classic** is the only choice.
 - **Your own file (optional)**: shows **(optional own file)** until you choose one. Once set, the box shows just the file's name; hover over it to see the full path. Click into the box and it shows the full path, so you can type or paste one.
 - **Browse** picks a `.wav` or `.mp3` file for the row.
-- **Remove** stops using your own file, so the row goes back to its pack sound. It's saved straight away, and the page says, for example: Fast lap is back to the Podium sound. "horn.wav" is no longer used - the file itself is untouched. Only the setting is cleared; your file isn't deleted. **Remove** is grayed out while the row has no file of its own.
+- **Remove** stops using your own file, so the row goes back to its pack sound. It's saved straight away, and the page says, for example: Fast lap is back to the Classic sound. "horn.wav" is no longer used - the file itself is untouched. Only the setting is cleared; your file isn't deleted. **Remove** is grayed out while the row has no file of its own.
 - **Test** plays the row as a race would (your own file if it's set, otherwise the pack sound) at the **Sound effects** level on the **Mixer**.
 - **Weight** (per-lap sounds only): which sounds win when several fire on the same lap.
 - **Caution** (per-lap sounds only): lets the sound play while a yellow or red flag is out. Otherwise per-lap sounds are held during a caution. Race-moment sounds always play.
@@ -54,7 +54,7 @@ The list has a heading over each column: **Race**, **Practice**, **Sound**, **Pa
 The rows with a weight are the per-lap sounds; only they have **Weight** and **Caution**. **Personal best** starts unticked for practice even once you tick it for races, because an open practice session is one personal best after another.
 
 !!! note "After updating from 0.58 or earlier"
-    **Personal best**, **Countdown ticks**, **Jump start**, **Yellow flag**, **Red flag** and **Green flag** are new, and start switched off, on the pack most of your other sounds use. The one exception is **Jump start**: a jump start used to play the **Invalid lap** buzzer, so if that sound was on, **Jump start** starts on too.
+    **Personal best**, **Countdown ticks**, **Jump start**, **Yellow flag**, **Red flag** and **Green flag** are new, and start switched off, on the **Classic** pack. The one exception is **Jump start**: a jump start used to play the **Invalid lap** buzzer, so if that sound was on, **Jump start** starts on too.
 
 **Warning or black flag** plays when Race Control calls a warning or a black flag, just before the announcer says it. It used to play the **Invalid lap** buzzer, so after updating it starts the way that sound was set: on if **Invalid lap** was on, with the same sound, and off if it wasn't. If you'd never changed your sounds, it starts on. Your own soundscapes get it the same way; the built-in ones have it on.
 
@@ -74,12 +74,12 @@ How loud the effects and lap beeps play is the **Sound effects** fader on the [M
 
 On the **Every sound at once** card above the list, **Enable All** and **Enable None** tick or clear every sound for both races and practice (files and volumes are left alone). **Test All Enabled** plays each ticked sound in turn.
 
-**Set every sound to:** puts the same pack on every row at once, the quickest way to hear a whole style. It shows the pack every row shares, or **Mixed - pick one** when the rows use different packs. Choose a pack and the page says "Every sound set to *pack*. Your own files, where set, still play instead."
+**Set every sound to:** puts the same pack on every row at once. With **Classic** the only pack, every row already shares it.
 
 Changes save themselves as you make them; there's no Save button. The status line at the foot of the tab confirms each save and what's on, for example "Saved 19:42:07 - 12 sounds on for races, 12 for practice."
 
 !!! note
-    A custom sound file is played from where it is on disk; HeatCaller doesn't copy it anywhere. If you move or delete the file, HeatCaller quietly falls back to the row's pack sound (or the generated tone). Files on a network share are not played.
+    A custom sound file is played from where it is on disk; HeatCaller doesn't copy it anywhere. If you move or delete the file, HeatCaller quietly falls back to the **Classic** sound (or the generated tone, if that file is missing). Files on a network share are not played.
 
 ## Ambience
 
@@ -234,11 +234,13 @@ Five soundscapes are built in:
 
 | Soundscape | Description |
 |---|---|
-| **Classic** | 80s supersaws, arps and gated drums with a retro late-night radio DJ on the mic. |
-| **Podium** | Polished bells and chimes with a gracious, ceremony-style announcer. Premium and never harsh. |
-| **Arcade** | 8-bit chiptune sounds with an energetic gamer announcer - combos, high scores, GG. |
-| **Broadcast** | TV sports graphics sounds - whooshes, brass and big hits - with a calm, measured motorsport commentator. |
-| **Pit Lane** | Real trackside sounds - decoder beeps, air horns, the last-lap bell and the crowd - with a big arena announcer. |
+| **Classic** | Clean, modern sound effects and 80s music, with a retro late-night radio DJ on the mic. |
+| **Podium** | A gracious, ceremony-style announcer, with the Podium crowd. Premium and never harsh. |
+| **Arcade** | An energetic gamer announcer - combos, high scores, GG - with the Arcade crowd. |
+| **Broadcast** | A calm, measured motorsport commentator, with the Broadcast crowd and music. |
+| **Pit Lane** | A big arena announcer, with the Pit Lane crowd and music. |
+
+Since 25 November every soundscape plays the **Classic** sound effects. The others' own effects (Podium's bells, Arcade's chiptune, Broadcast's whooshes, Pit Lane's air horns) are gone; each keeps its announcer, crowd and music.
 
 Since 16 October, **Classic** is what was **Synthwave**: its sounds, crowd, music and late-night DJ. The old Classic, on generated tones, is no longer a soundscape, and a club that was on **Synthwave** finds itself on **Classic**. Older built-in names were renamed too: **Arcade / Video Game** is now **Arcade**, **Pro Broadcast** is **Broadcast**, and **Monster Truck Rally** is **Pit Lane**. A venue that remembers one of the old names still finds it.
 
@@ -324,7 +326,7 @@ Tick **Don't ask about the sound again**, under the drop-down, and neither wizar
 | **Name:** | Required, and no two soundscapes can share one ("There's already a soundscape called "*name*" - pick another name."). |
 | **Description:** | Shown on the soundscape's card. |
 | **Background:** | The crowd: **Leave Ambience as it is**, **No soundscape crowd**, or one of the packs' crowds (for example **Podium crowd**). Then **Music:**: **No music of its own**, or one of the packs' music (for example "Podium music - 4 tracks"; "(not in your library yet)" is added when none of its tracks are in your music library). See [Soundscape crowd and music](#soundscape-crowd-and-music). |
-| The **Sounds** card | **Set all to:** puts one pack on every sound. Under it, each sound has its own pack list and a ▶ button that plays it. A sound that plays a file of your own says "own file": the file plays instead of the pack. The editor only picks packs; change or clear a file on **Sounds → Effects**. |
+| The **Sounds** card | **Set all to:** puts one pack on every sound. Under it, each sound has its own pack list (**Classic** is the only pack) and a ▶ button that plays it. A sound that plays a file of your own says "own file": the file plays instead of the pack. The editor only picks packs; change or clear a file on **Sounds → Effects**. |
 | The **Announcer** card | **Stability:**, **Style:** and **Speed:** for the delivery (Stability and Style only change ElevenLabs voices). Under them, a list of race moments. For the moment you pick, **Announce this moment** switches it on or off, and the box beside it holds its lines, one per line, picked at random. `{driver}`, `{time}`, `{lap}` and `{streak}` are filled in, and tags like `[excited]` steer ElevenLabs delivery and are dropped for other voices. |
 
 The race moments are **Race staging**, **Countdown**, **Race start**, **Jump start**, **Personal best**, **Fastest lap**, **Track record**, **Leader change**, **Streak**, **Yellow flag**, **Red flag**, **Green (restart)**, **Last lap** and **Checkered flag**. **Last lap** here is the **Race time over** announcement (the last-lap call when the time runs out) and **Checkered flag** is **Race completed**. The soundscape's other announcements are kept as they are.

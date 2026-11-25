@@ -656,8 +656,8 @@ public sealed class SoundscapeEditorForm : Form
     private static ComboBox NewSoundCombo(string? selectedKey)
     {
         var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
-        combo.Items.Add(new SoundChoice(SoundPacks.ClassicKey, SoundPacks.DisplayName(null)));
-        foreach (var pack in SoundPacks.All)
+        // Classic alone since 25 Nov 2026 - see SoundPacks.EffectsKey.
+        foreach (var pack in SoundPacks.EffectPacks)
         {
             combo.Items.Add(new SoundChoice(pack.Key, pack.Name));
         }
@@ -668,7 +668,7 @@ public sealed class SoundscapeEditorForm : Form
 
     private static void SelectSound(ComboBox combo, string? key)
     {
-        var match = SoundPacks.Find(key)?.Key ?? SoundPacks.ClassicKey;
+        var match = SoundPacks.EffectsKey;
         for (var i = 0; i < combo.Items.Count; i++)
         {
             if (combo.Items[i] is SoundChoice c && c.Key == match)
@@ -679,7 +679,7 @@ public sealed class SoundscapeEditorForm : Form
         }
     }
 
-    private static string SoundKeyOf(ComboBox combo) => (combo.SelectedItem as SoundChoice)?.Key ?? SoundPacks.ClassicKey;
+    private static string SoundKeyOf(ComboBox combo) => (combo.SelectedItem as SoundChoice)?.Key ?? SoundPacks.EffectsKey;
 
     // ------------------------------------------------------------ lines
 

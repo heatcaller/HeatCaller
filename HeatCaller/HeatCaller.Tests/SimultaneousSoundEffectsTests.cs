@@ -22,8 +22,14 @@ public sealed class SimultaneousSoundEffectsTests : IDisposable
     /// <summary>Each tone as it starts: which sound, when, and at what level.</summary>
     private readonly ConcurrentQueue<(SoundEffectKind Kind, DateTime AtUtc, float Volume)> _starts = new();
 
+    // The tones below are the generated ones, which a sound plays only
+    // when it has no file - and since 25 Nov 2026 every sound has
+    // Classic's, so the packs are read from an empty folder here.
+    public SimultaneousSoundEffectsTests() => SoundPacks.FolderForTests = Path.Combine(_data.Folder, "no-packs");
+
     public void Dispose()
     {
+        SoundPacks.FolderForTests = null;
         _release.TrySetResult();
         _data.Dispose();
     }

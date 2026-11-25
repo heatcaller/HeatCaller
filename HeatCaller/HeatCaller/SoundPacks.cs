@@ -11,7 +11,8 @@ namespace HeatCaller;
 ///
 /// HOW A SOUND IS CHOSEN. Per effect, in this order:
 ///   1. the club's own file, if one is set and still there;
-///   2. the pack the effect is set to, if that file is there;
+///   2. the Classic pack's file, if it is there - the only pack with
+///      sound effects since 25 Nov 2026 (see EffectsKey);
 ///   3. the generated tone ("Generated tones") - always available, so a
 ///      missing or damaged Assets folder costs the sound's style, never
 ///      the sound itself.
@@ -25,18 +26,53 @@ public static class SoundPacks
 
     public static readonly IReadOnlyList<Pack> All = new[]
     {
-        new Pack("Podium", "Podium", "Polished bells and chimes - premium, clean, never harsh."),
-        new Pack("Arcade", "Arcade", "8-bit chiptune - playful, punchy, cuts through motor whine."),
-        new Pack("Broadcast", "Broadcast", "TV sports graphics - whooshes, brass stabs, hits, big hall."),
+        new Pack("Podium", "Podium", "Its crowd only since 25 Nov 2026 - the sound effects are Classic's."),
+        new Pack("Arcade", "Arcade", "Its crowd only since 25 Nov 2026 - the sound effects are Classic's."),
+        new Pack("Broadcast", "Broadcast", "Its crowd only since 25 Nov 2026 - the sound effects are Classic's."),
         // Key "Synthwave", shown as "Classic" (17 Oct 2026): Classic took
         // this pack over whole on 16 Oct, and the pickers, the crowd layer
         // and the soundscape cards still said Synthwave. The key stays -
         // every saved soundscape, sound setting and crowd layer names it.
-        new Pack("Synthwave", "Classic", "80s supersaws, arps and gated reverb."),
-        new Pack("PitLane", "Pit Lane", "Realistic trackside - decoder beeps, air horns, lap bell, crowd."),
+        //
+        // WHY (25 Nov 2026, Asher picked them): its good lap, invalid lap,
+        // personal best, fast lap, streak, leader change, jump start and
+        // countdown started are new - clean, modern sounds made with
+        // ElevenLabs, trimmed and levelled - in place of the old synth
+        // tones. The countdown ticks are the same rise, timed to end on
+        // the green, in place of five beeps. The race sounds and flags
+        // are the 80s ones still.
+        new Pack("Synthwave", "Classic", "Clean, modern lap sounds, with 80s synths and gated reverb for the race."),
+        new Pack("PitLane", "Pit Lane", "Its crowd only since 25 Nov 2026 - the sound effects are Classic's."),
     };
 
-    public static string Folder => Path.Combine(AppContext.BaseDirectory, "Assets", "SoundPacks");
+    /// <summary>
+    /// The one pack sound effects come from: Classic.
+    ///
+    /// WHY (25 Nov 2026, Asher: "only the classic pack should in the app.
+    /// get ride of all other sound effect packs"): the other four packs'
+    /// effect files are gone, and every sound plays Classic's file, whatever
+    /// pack a saved setting, a soundscape or an older settings file names -
+    /// "Generated tones" included. A setting naming Pit Lane used to play
+    /// Pit Lane's sound, so a club that picked Classic still heard another
+    /// pack on the rows it never changed. The packs stay in All for their
+    /// crowds (Ambience.wav, CrowdRoar.wav), which the soundscapes keep.
+    /// The generated tones are only the backup now, for a Classic file
+    /// that's missing.
+    /// </summary>
+    public const string EffectsKey = "Synthwave";
+
+    /// <summary>What the Pack lists offer: Classic alone.</summary>
+    public static IReadOnlyList<Pack> EffectPacks => All.Where(p => p.Key == EffectsKey).ToArray();
+
+    public static string Folder => FolderForTests ?? Path.Combine(AppContext.BaseDirectory, "Assets", "SoundPacks");
+
+    /// <summary>
+    /// Tests only: a folder to read the packs from instead, or null for the
+    /// one beside the exe. Since every sound plays Classic's file (see
+    /// EffectsKey), a test that needs the generated tone points this at an
+    /// empty folder. The tests run one at a time, so one static is safe.
+    /// </summary>
+    internal static string? FolderForTests { get; set; }
 
     public static Pack? Find(string? key) =>
         string.IsNullOrWhiteSpace(key) ? null : All.FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase));
@@ -48,18 +84,15 @@ public static class SoundPacks
     /// </summary>
     public static string DisplayName(string? key) => Find(key)?.Name ?? "Generated tones";
 
-    /// <summary>The pack's file for this effect, or null if it isn't on disk.</summary>
+    /// <summary>
+    /// Classic's file for this effect, or null if it isn't on disk. The pack
+    /// a setting names makes no difference any more - see EffectsKey.
+    /// </summary>
     public static string? FileFor(string? packKey, SoundEffectKind kind)
     {
-        var pack = Find(packKey);
-        if (pack is null)
-        {
-            return null;
-        }
-
         try
         {
-            var path = Path.Combine(Folder, pack.Key, kind + ".wav");
+            var path = Path.Combine(Folder, EffectsKey, kind + ".wav");
             if (File.Exists(path))
             {
                 return path;
@@ -67,7 +100,7 @@ public static class SoundPacks
 
             // No pack has a warning sound of its own: it plays the pack's
             // invalid-lap buzzer, as it did before it was a sound of its own.
-            return kind == SoundEffectKind.Warning ? FileFor(packKey, SoundEffectKind.InvalidLap) : null;
+            return kind == SoundEffectKind.Warning ? FileFor(EffectsKey, SoundEffectKind.InvalidLap) : null;
         }
         catch
         {
