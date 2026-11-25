@@ -227,12 +227,13 @@ public sealed partial class RaceControlControl
     }
 
     /// <summary>0 came down (MainForm.Keyboard): a tap starts On Air; while it runs, the start of a hold to skip it. See OnAirKey.</summary>
-    internal void OnAirKeyDown()
+    /// <param name="repeat">Windows' word on whether this is a repeat of a 0 already down, when the form saw it - see KeyHoldGesture.Press.</param>
+    internal void OnAirKeyDown(bool? repeat = null)
     {
         var running = _onAirCts is not null;
 
         // False for Windows repeating a key already down.
-        if (!OnAirKey.KeyDown(hold: running))
+        if (!OnAirKey.KeyDown(hold: running, repeat))
         {
             return;
         }
@@ -1176,7 +1177,10 @@ public sealed partial class RaceControlControl
             }
 
             // A demo with no round has no race to open - see GoOnAirThenAsync.
-            var line = start is not null && round is null ? null : await WriteOpeningAsync(round, cts.Token);
+            // The wait for the writing stops at a skip too (24 Nov 2026) -
+            // inside it, the introductions and the pit lane are awaited
+            // until their own budgets run out, not until the skip.
+            var line = start is not null && round is null ? null : await WriteOpeningAsync(round, cts.Token).WaitAsync(cts.Token);
 
             // THE ANNOUNCER SAYS WHO HE IS (16 Oct 2026), a line into the
             // opening - "Welcome back to the track! I'm Dave Marsh. Heat
@@ -1202,13 +1206,19 @@ public sealed partial class RaceControlControl
                 if (toRender.Text is { } openingToRender)
                 {
                     SetOnAirStep(OnAirStep.VoicingOpening);
-                    audio = await VoiceForOnAirAsync(openingToRender);
+                    // WHY (24 Nov 2026, asked by Asher: "holding 0 to skip to
+                    // stage doesn't reliably work"): the voicing waited for
+                    // the voice service with no way out, so a hold of 0 while
+                    // the opening was voiced filled its bar and then nothing
+                    // happened until the take came back, seconds later. Now
+                    // the skip stops the wait; the take is just not used.
+                    audio = await VoiceForOnAirAsync(openingToRender).WaitAsync(cts.Token);
                 }
 
                 if (toRender.Introductions is { } introductionsToRender)
                 {
                     SetOnAirStep(OnAirStep.VoicingIntros);
-                    introductionsAudio = await VoiceForOnAirAsync(introductionsToRender.Text);
+                    introductionsAudio = await VoiceForOnAirAsync(introductionsToRender.Text).WaitAsync(cts.Token);
                 }
             }
 

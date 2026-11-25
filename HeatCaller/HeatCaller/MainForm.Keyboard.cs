@@ -25,6 +25,8 @@ public partial class MainForm
     /// </summary>
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
+        NoteKeyDown(msg);
+
         // The desk view lets typing through and nothing else (setup plan D8).
         if (_deskOnly && !DeskViewAllowsKey(keyData))
         {
@@ -351,7 +353,7 @@ public partial class MainForm
             // the keypad's. Shift+0 is ")" and does nothing here. The
             // warning menu's own 0 (W, then 0 for another reason) is the
             // menu's: while a menu is open it has the keyboard, not the form.
-            case Keys.D0 or Keys.NumPad0 when !e.Shift: rc.OnAirKeyDown(); break;
+            case Keys.D0 or Keys.NumPad0 when !e.Shift: rc.OnAirKeyDown(KeyDownIsRepeat(e.KeyCode)); break;
 
             default:
                 handled = false;
@@ -362,6 +364,38 @@ public partial class MainForm
         {
             MarkHandled(e);
         }
+    }
+
+    private Keys _lastKeyDownCode;
+    private bool _lastKeyDownRepeat;
+
+    /// <summary>
+    /// The key and Windows' repeat flag of the KeyDown on its way to
+    /// MainForm_KeyDown (24 Nov 2026). KeyEventArgs does not carry the flag,
+    /// but ProcessCmdKey sees the message itself first: bit 30 of its lParam
+    /// is set when the key was already down. Used by 0's hold - see
+    /// KeyHoldGesture.Press for why our own KeyUp could not be trusted.
+    /// </summary>
+    private void NoteKeyDown(Message msg)
+    {
+        const int WM_KEYDOWN = 0x0100;
+
+        if (msg.Msg == WM_KEYDOWN)
+        {
+            _lastKeyDownCode = (Keys)(msg.WParam.ToInt64() & 0xFFFF);
+            _lastKeyDownRepeat = (msg.LParam.ToInt64() & 0x40000000) != 0;
+        }
+    }
+
+    /// <summary>Windows' word on whether this KeyDown repeats a key already down, or null when the message was not seen.</summary>
+    private bool? KeyDownIsRepeat(Keys code)
+    {
+        bool? repeat = code == _lastKeyDownCode ? _lastKeyDownRepeat : null;
+
+        // Read once: a later KeyDown whose message was not seen must not be
+        // judged by this one's flag.
+        _lastKeyDownCode = Keys.None;
+        return repeat;
     }
 
     /// <summary>

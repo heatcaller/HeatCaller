@@ -49,9 +49,22 @@ internal sealed class KeyHoldGesture
     /// does its job at once (a tap); it is still remembered as down, so its
     /// repeats do not start a hold either.
     /// </summary>
-    public bool Press(long nowMs, bool hold)
+    /// <param name="repeat">
+    /// Windows' own word on whether this KeyDown is a repeat (the key was
+    /// already down). Null when it is not known: then a KeyDown while the
+    /// key is thought to be down is taken for a repeat, as before.
+    /// </param>
+    public bool Press(long nowMs, bool hold, bool? repeat = null)
     {
-        if (_down)
+        // WHY (24 Nov 2026, asked by Asher: "holding 0 to skip to stage
+        // doesn't reliably work"): whether the key was down was only ever
+        // known from our own KeyUp. A let-go the form never saw - a dialog
+        // or menu up as 0 came up, the focus somewhere that kept the KeyUp -
+        // left the key "down" for good, so the next real press of 0 was
+        // taken for a repeat and the hold never started. Windows says on
+        // every KeyDown whether it is a repeat; when it says it is not, it
+        // is a new press, whatever we last saw.
+        if (_down && repeat != false)
         {
             return false;
         }
@@ -61,6 +74,11 @@ internal sealed class KeyHoldGesture
         if (hold)
         {
             _gesture.Press(nowMs);
+        }
+        else
+        {
+            // A tap after a let-go that was missed: any hold from before is over.
+            _gesture.Release();
         }
 
         return true;
@@ -74,6 +92,43 @@ internal sealed class KeyHoldGesture
     {
         _down = false;
         return _gesture.Release();
+    }
+
+    /// <summary>What a let-go came to - see <see cref="LetGoAt"/>.</summary>
+    public enum LetGoResult
+    {
+        /// <summary>Nothing was being held (a tap, or a hold already done or dropped).</summary>
+        Nothing,
+
+        /// <summary>Let go too soon: nothing is done.</summary>
+        CalledOff,
+
+        /// <summary>Held for long enough: the hold's job is done now.</summary>
+        Completed,
+    }
+
+    /// <summary>
+    /// The key came up at <paramref name="nowMs"/>. A hold that had already
+    /// lasted long enough COMPLETES rather than being called off.
+    ///
+    /// WHY (24 Nov 2026, asked by Asher: "holding 0 to skip to stage doesn't
+    /// reliably work"): the hold was only completed by a 15 ms timer, and
+    /// Windows hands a timer its tick only when nothing else is waiting. On
+    /// Air keeps the window busy - the strip repainting, the opening being
+    /// written and voiced - so the tick could still be waiting when 0 came
+    /// up, and a key held for a full second and more was called off: "Let
+    /// go too soon" and no skip.
+    /// </summary>
+    public LetGoResult LetGoAt(long nowMs)
+    {
+        if (_gesture.TryComplete(nowMs))
+        {
+            _down = false;
+            _gesture.Release();
+            return LetGoResult.Completed;
+        }
+
+        return Release() ? LetGoResult.CalledOff : LetGoResult.Nothing;
     }
 
     /// <summary>
@@ -134,12 +189,13 @@ internal sealed class KeyHoldToAct : IShownHold, IDisposable
 
     /// <summary>
     /// The key came down. <paramref name="hold"/>: this press is to be held
-    /// (there is something to skip). True when it was a new press, false for
-    /// a repeat of one already down.
+    /// (there is something to skip). <paramref name="repeat"/>: Windows' own
+    /// word on whether it is a repeat, when known - see KeyHoldGesture.Press.
+    /// True when it was a new press, false for a repeat of one already down.
     /// </summary>
-    public bool KeyDown(bool hold)
+    public bool KeyDown(bool hold, bool? repeat = null)
     {
-        if (_disposed || !_gesture.Press(Environment.TickCount64, hold))
+        if (_disposed || !_gesture.Press(Environment.TickCount64, hold, repeat))
         {
             return false;
         }
@@ -149,12 +205,53 @@ internal sealed class KeyHoldToAct : IShownHold, IDisposable
             _timer.Start();
             Moved();
         }
+        else
+        {
+            // A new tap over a hold whose let-go was missed: that hold is over.
+            _timer.Stop();
+        }
 
         return true;
     }
 
-    /// <summary>The key came up - early, it calls the hold off. Safe at any time.</summary>
-    public void KeyUp() => LetGo();
+    /// <summary>
+    /// The key came up. Early, it calls the hold off; held long enough but
+    /// not yet completed by the timer, it completes now (see
+    /// KeyHoldGesture.LetGoAt). Safe at any time.
+    /// </summary>
+    public void KeyUp()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        // Nothing left to skip: dropped quietly, as Tick does.
+        if (_gesture.Holding && !_stillWanted())
+        {
+            LetGo(quietly: true);
+            return;
+        }
+
+        var result = _gesture.LetGoAt(Environment.TickCount64);
+        _timer.Stop();
+
+        if (result == KeyHoldGesture.LetGoResult.Nothing)
+        {
+            return;
+        }
+
+        Moved();
+
+        if (result == KeyHoldGesture.LetGoResult.Completed)
+        {
+            _act();
+        }
+        else
+        {
+            CalledOff?.Invoke(this);
+        }
+    }
 
     private void Tick()
     {

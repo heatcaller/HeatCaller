@@ -107,6 +107,128 @@ public sealed class OnAirZeroKeyTests
         Assert.False(key.TryComplete(2000));
     }
 
+    // --- 24 Nov 2026: "holding 0 to skip to stage doesn't reliably work" ---
+
+    [Fact]
+    public void A_let_go_the_form_never_saw_does_not_swallow_the_next_press()
+    {
+        // 0 came up while a dialog had the keyboard, so no KeyUp reached
+        // the form and the key stayed "down". The next real press - Windows
+        // says it is not a repeat - must start the hold, not be ignored.
+        var key = new KeyHoldGesture(Second);
+
+        Assert.True(key.Press(0, hold: false, repeat: false));
+
+        // (no Release)
+        Assert.True(key.Press(5000, hold: true, repeat: false));
+        Assert.True(key.Holding);
+        Assert.True(key.TryComplete(6000));
+    }
+
+    [Fact]
+    public void Windows_repeats_are_still_ignored_when_it_says_so()
+    {
+        var key = new KeyHoldGesture(Second);
+
+        Assert.True(key.Press(0, hold: false, repeat: false));
+        Assert.False(key.Press(500, hold: true, repeat: true));
+        Assert.False(key.Holding);
+
+        Assert.True(key.Press(1000, hold: true, repeat: false));
+
+        for (var at = 1030L; at < 2000; at += 33)
+        {
+            Assert.False(key.Press(at, hold: true, repeat: true));
+        }
+
+        Assert.True(key.TryComplete(2000));
+    }
+
+    [Fact]
+    public void A_new_tap_ends_a_hold_whose_let_go_was_missed()
+    {
+        var key = new KeyHoldGesture(Second);
+
+        key.Press(0, hold: true, repeat: false);
+        Assert.True(key.Press(300, hold: false, repeat: false));
+
+        Assert.False(key.Holding);
+        Assert.False(key.TryComplete(5000));
+    }
+
+    [Fact]
+    public void Let_go_after_the_full_second_skips_even_if_the_timer_had_not_ticked()
+    {
+        // The timer that completes the hold only ticks when the window is
+        // free. Busy with On Air, the KeyUp could come first: a key held for
+        // a second and a half was called off.
+        var key = new KeyHoldGesture(Second);
+
+        key.Press(0, hold: true);
+
+        Assert.Equal(KeyHoldGesture.LetGoResult.Completed, key.LetGoAt(1500));
+        Assert.False(key.Down);
+        Assert.False(key.Holding);
+        Assert.False(key.TryComplete(3000));
+        Assert.True(key.Press(4000, hold: true));
+    }
+
+    [Fact]
+    public void Let_go_early_is_still_called_off()
+    {
+        var key = new KeyHoldGesture(Second);
+
+        key.Press(0, hold: true);
+
+        Assert.Equal(KeyHoldGesture.LetGoResult.CalledOff, key.LetGoAt(999));
+        Assert.False(key.TryComplete(2000));
+    }
+
+    [Fact]
+    public void Let_go_of_a_tap_or_a_finished_hold_does_nothing()
+    {
+        var tap = new KeyHoldGesture(Second);
+        tap.Press(0, hold: false);
+        Assert.Equal(KeyHoldGesture.LetGoResult.Nothing, tap.LetGoAt(3000));
+
+        var done = new KeyHoldGesture(Second);
+        done.Press(0, hold: true);
+        Assert.True(done.TryComplete(1000));
+        Assert.Equal(KeyHoldGesture.LetGoResult.Nothing, done.LetGoAt(1200));
+    }
+
+    [Fact]
+    public void The_form_passes_Windows_repeat_flag_to_the_hold()
+    {
+        var keyboard = WithoutComments(Source("MainForm.Keyboard.cs"));
+
+        Assert.Contains("NoteKeyDown(msg);", keyboard, StringComparison.Ordinal);
+        Assert.Contains("(msg.LParam.ToInt64() & 0x40000000) != 0", keyboard, StringComparison.Ordinal);
+
+        var down = WithoutComments(MethodBody(Source("RaceControlControl.OnAir.cs"),
+            "internal void OnAirKeyDown(", "internal void OnAirKeyUp()"));
+        Assert.Contains("OnAirKey.KeyDown(hold: running, repeat)", down, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_key_up_completes_a_hold_that_lasted_long_enough()
+    {
+        var up = WithoutComments(MethodBody(Source("KeyHold.cs"), "public void KeyUp()", "private void Tick()"));
+
+        Assert.Contains("_gesture.LetGoAt(Environment.TickCount64)", up, StringComparison.Ordinal);
+        Assert.Contains("_act();", up, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Writing_and_voicing_the_opening_stop_at_a_skip()
+    {
+        var onAir = WithoutComments(Source("RaceControlControl.OnAir.cs"));
+
+        Assert.Contains("await WriteOpeningAsync(round, cts.Token).WaitAsync(cts.Token);", onAir, StringComparison.Ordinal);
+        Assert.Contains("audio = await VoiceForOnAirAsync(openingToRender).WaitAsync(cts.Token);", onAir, StringComparison.Ordinal);
+        Assert.Contains("introductionsAudio = await VoiceForOnAirAsync(introductionsToRender.Text).WaitAsync(cts.Token);", onAir, StringComparison.Ordinal);
+    }
+
     // --- The wiring ----------------------------------------------------------
 
     [Fact]
@@ -114,7 +236,7 @@ public sealed class OnAirZeroKeyTests
     {
         var keyboard = WithoutComments(Source("MainForm.Keyboard.cs"));
 
-        Assert.Contains("case Keys.D0 or Keys.NumPad0 when !e.Shift: rc.OnAirKeyDown(); break;", keyboard, StringComparison.Ordinal);
+        Assert.Contains("case Keys.D0 or Keys.NumPad0 when !e.Shift: rc.OnAirKeyDown(KeyDownIsRepeat(e.KeyCode)); break;", keyboard, StringComparison.Ordinal);
         Assert.DoesNotContain("case Keys.O when", keyboard, StringComparison.Ordinal);
         Assert.DoesNotContain("TriggerOnAir", keyboard, StringComparison.Ordinal);
     }
@@ -138,10 +260,10 @@ public sealed class OnAirZeroKeyTests
     public void A_tap_starts_On_Air_and_a_hold_is_only_timed_while_it_runs()
     {
         var down = WithoutComments(MethodBody(Source("RaceControlControl.OnAir.cs"),
-            "internal void OnAirKeyDown()", "internal void OnAirKeyUp()"));
+            "internal void OnAirKeyDown(", "internal void OnAirKeyUp()"));
 
         Assert.Contains("var running = _onAirCts is not null;", down, StringComparison.Ordinal);
-        Assert.Contains("if (!OnAirKey.KeyDown(hold: running))", down, StringComparison.Ordinal);
+        Assert.Contains("if (!OnAirKey.KeyDown(hold: running, repeat))", down, StringComparison.Ordinal);
         Assert.Contains("if (!running)\n        {\n            PressOnAir();", down, StringComparison.Ordinal);
     }
 
@@ -152,7 +274,7 @@ public sealed class OnAirZeroKeyTests
 
         // The hold is On Air's own key, timed for HoldToAct's second, and
         // dropped once On Air has nothing left to skip.
-        var make = WithoutComments(MethodBody(onAir, "private KeyHoldToAct MakeOnAirKey()", "internal void OnAirKeyDown()"));
+        var make = WithoutComments(MethodBody(onAir, "private KeyHoldToAct MakeOnAirKey()", "internal void OnAirKeyDown("));
         Assert.Contains("new KeyHoldToAct(OnAirHoldDoing, () => _onAirCts is not null", make, StringComparison.Ordinal);
         Assert.Contains("SkipOnAirToStage, Keys.D0, Keys.NumPad0)", make, StringComparison.Ordinal);
         Assert.Contains("_holdStrip.Follow(h)", make, StringComparison.Ordinal);
