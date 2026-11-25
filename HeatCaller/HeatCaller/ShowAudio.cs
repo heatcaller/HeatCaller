@@ -66,6 +66,15 @@ internal sealed class ShowClip
 
     public TimeSpan Length => TimeSpan.FromSeconds((double)Frames / SampleRate);
 
+    private float? _levelGain;
+
+    /// <summary>
+    /// What this piece is multiplied by to sound as loud as the announcer
+    /// (25 Nov 2026 - see ImagingLevel). Measured the first time it's asked
+    /// for and kept, so a piece is measured once however often it plays.
+    /// </summary>
+    public float LevelGain => _levelGain ??= ImagingLevel.GainFor(ImagingLevel.Db(Samples, Channels, SampleRate));
+
     /// <summary>
     /// Loads a piece of audio, or returns null and says why in plain words
     /// - a message fit to put in front of whoever chose the file.

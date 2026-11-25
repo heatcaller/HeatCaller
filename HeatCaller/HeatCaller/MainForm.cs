@@ -1885,6 +1885,10 @@ public partial class MainForm : Form
             return 1f + (Math.Max(1f, settings.VoiceBoostMultiplier) - 1f) * reach;
         };
 
+        // The imaging takes the same lift, so it stays beside the voice when
+        // the crowd is up (25 Nov 2026 - see BroadcastImaging.CrowdBoost).
+        BroadcastImaging.CrowdBoost = _announcer.VoiceBoostProvider;
+
         // The drivers checked in for the current event, for Voice Settings'
         // "Prepare lines", which renders each one's release call ahead of
         // time.

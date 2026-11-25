@@ -41,7 +41,7 @@ The list has a heading over each column: **Race**, **Practice**, **Sound**, **Pa
 | **Leader change** | Yes | 100 |
 | **Race staging** | No | – |
 | **Countdown started** | No | – |
-| **Countdown ticks** (a beep a second for the last five) | No | – |
+| **Countdown ticks** (the last five seconds to the green) | No | – |
 | **Jump start** (crossing before the green) | No | – |
 | **Race started** | Yes | – |
 | **Yellow flag** | No | – |
@@ -62,7 +62,7 @@ The race-moment sounds (such as the **Race started** horn, the **Race time over 
 
 A flag call cuts off any sound effects still playing. Crowd surges (for a fast lap or a lead change, say) aren't cut short when the announcer speaks.
 
-Sound effects can play over each other, so two cars on a good lap are both heard as they cross. Each car's sounds play as they happen, up to 8 at once. When a second copy of the same sound starts at the same moment, it comes a fraction of a second after the first, so you hear two chimes rather than one louder one. Each sound that joins others playing is a little quieter, so a pile-up doesn't drown the mix. The race-moment sounds (**Race staging**, **Countdown started**, **Countdown ticks (a beep a second for the last five)**, **Race started**, the flags, **Race time over (last lap)** and **Race completed**) still play one after another, in order, and a lap chime doesn't wait for them. None of this changes how sounds and the announcer share the speaker.
+Sound effects can play over each other, so two cars on a good lap are both heard as they cross. Each car's sounds play as they happen, up to 8 at once. When a second copy of the same sound starts at the same moment, it comes a fraction of a second after the first, so you hear two chimes rather than one louder one. Each sound that joins others playing is a little quieter, so a pile-up doesn't drown the mix. The race-moment sounds (**Race staging**, **Countdown started**, **Countdown ticks (the last five seconds to the green)**, **Race started**, the flags, **Race time over (last lap)** and **Race completed**) still play one after another, in order, and a lap chime doesn't wait for them. None of this changes how sounds and the announcer share the speaker.
 
 On a busy track, per-lap sounds are kept close to the action: a lap chime that's fallen more than about 3 seconds behind the crossing is skipped, and no more than 3 wait to play at a time.
 
@@ -496,7 +496,7 @@ The **Ducking** card, under the channels, sets how far everything drops while th
 |---|---|---|
 | **Ambience:** **Duck under announcements, down to** | Drops the ambience to this share of its level while a line is spoken. Untick it and the ambience stays at full level. | On, 35% |
 | **Music:** **Duck under announcements, down to** | The same for the music. | On, 25% |
-| **Voice lift:** **Lift the voice when the crowd is loud, up to x** | Raises the announcer's volume when the ambience is loud, scaled by how loud the crowd bed actually is. No lift over a quiet one. | On, x1.3 |
+| **Voice lift:** **Lift the voice when the crowd is loud, up to x** | Raises the announcer's volume when the ambience is loud, scaled by how loud the crowd bed actually is. No lift over a quiet one. The jingles, sweepers, bumpers and stingers get the same lift, so they stay where **Imaging pieces:** puts them beside the voice. | On, x1.3 |
 | **Race recap:** **Duck music and crowd further, down to** | An extra drop under the race recap. Needs the race recaps on **Voice → AI Commentary**. | On, 20% |
 
 These used to be on the **Ambience** and **Music** tabs, and the recap's on the AI commentary settings; they're the same settings.
@@ -507,9 +507,11 @@ The **Imaging levels** card sets how loud the soundscape's [imaging](#imaging) p
 
 | Row | What it does | Default |
 |---|---|---|
-| **Imaging pieces:** | The jingles, sweepers, bumpers and stingers. | 80% |
+| **Imaging pieces:** | The jingles, sweepers, bumpers and stingers, measured against the announcer: at 100% they play as loud as the announcer, at 80% just under. A line under the box says where they sit, for example "The pieces play just under the announcer." | 80% |
 | **Imaging beds:** | The soundscape's music beds, low on purpose. | 22% |
 | **Beds under voice:** | How far the beds drop while the announcer speaks, as a share of their own level. | 55% |
+
+Each piece is brought to the announcer's level before **Imaging pieces:** is applied, the way every spoken line is, by how loud it sounds rather than by its raw signal level, so the same number sounds the same on every soundscape and on pieces you've added yourself. A piece is never raised by more than 12 dB.
 
 The levels for your club's own show music are on the **Show treatment** card on **Sounds → Imaging**.
 

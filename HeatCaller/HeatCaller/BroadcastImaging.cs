@@ -386,6 +386,33 @@ internal static class BroadcastImaging
         }
     }
 
+    /// <summary>
+    /// The lift the announcer gets over a loud crowd (MainForm hands this
+    /// the announcer's own VoiceBoostProvider), or null for none.
+    ///
+    /// WHY (25 Nov 2026, Asher, step 5 of the imaging levels plan): the
+    /// voice is lifted up to ×2 when the crowd is loud - ×1.8 at the finish
+    /// with Asher's settings - and the imaging was not, so the bumper that
+    /// plays out of the flag, with the crowd at its loudest, fell another
+    /// 5 dB behind the announcer. The pieces take the same lift now, so the
+    /// two stay as the Mixer says they are.
+    /// </summary>
+    internal static Func<float>? CrowdBoost { get; set; }
+
+    /// <summary>The crowd lift right now, 1 to 2; 1 when there's none or it can't be read.</summary>
+    internal static float CrowdBoostNow()
+    {
+        try
+        {
+            var boost = CrowdBoost?.Invoke() ?? 1f;
+            return float.IsNaN(boost) ? 1f : Math.Clamp(boost, 1f, 2f);
+        }
+        catch
+        {
+            return 1f;
+        }
+    }
+
     /// <summary>How loud the pieces play, 0 to 100.</summary>
     internal static int Level
     {
@@ -1566,7 +1593,7 @@ internal static class BroadcastImaging
 
     /// <summary>Starts a piece already picked for a point - see <see cref="Start"/>.</summary>
     private static ImagingPlay? StartPiece(ImagingCue cue, (ShowClip Clip, string Path) piece) =>
-        Muted ? null : ImagingPlay.Start(piece.Clip, PlayedOutOf(piece.Path, piece.Clip), Level / 100f, Describe(cue), Status,
+        Muted ? null : ImagingPlay.Start(piece.Clip, PlayedOutOf(piece.Path, piece.Clip), ImagingLevel.Volume(Level, piece.Clip.LevelGain, CrowdBoostNow()), Describe(cue), Status,
             Path.GetFileNameWithoutExtension(piece.Path));
 
     /// <summary>
@@ -1702,7 +1729,8 @@ internal static class BroadcastImaging
             // now fails the task rather than throwing here, so the page's
             // "It couldn't play" no longer shows - the console says it instead.
             var name = Path.GetFileName(path);
-            _ = AudioBus.PlayAsync(new ShowOneShot(clip, from), Level / 100f, stop.Token)
+            var volume = ImagingLevel.Volume(Level, clip.LevelGain, CrowdBoostNow());
+            _ = AudioBus.PlayAsync(new ShowOneShot(clip, from), volume, stop.Token, allowBoost: volume > 1f)
                 .ContinueWith(done =>
                 {
                     if (done.IsFaulted)
@@ -1809,7 +1837,9 @@ internal sealed class ImagingPlay
 
         try
         {
-            play.Played = AudioBus.PlayAsync(heard, level, play._stop.Token);
+            // A quiet piece levelled up to the announcer can need more than
+            // 1 (see ImagingLevel); the bus rounds its peaks off.
+            play.Played = AudioBus.PlayAsync(heard, level, play._stop.Token, allowBoost: level > 1f);
         }
         catch (Exception ex)
         {

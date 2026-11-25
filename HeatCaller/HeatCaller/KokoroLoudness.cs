@@ -86,7 +86,17 @@ internal static class KokoroLoudness
             return pcm;
         }
 
-        var gain = Math.Pow(10, Math.Min(targetDb - level, MostGainDb) / 20);
+        return Raise(pcm, targetDb - level);
+    }
+
+    /// <summary>
+    /// <paramref name="pcm"/> (16-bit) raised by <paramref name="db"/>, at
+    /// most MostGainDb, its peaks soft-limited below full scale. A new array.
+    /// For a caller that has measured the line its own way (VoiceLevel).
+    /// </summary>
+    internal static byte[] Raise(byte[] pcm, double db)
+    {
+        var gain = Math.Pow(10, Math.Clamp(db, 0, MostGainDb) / 20);
         var louder = new byte[pcm.Length];
 
         for (var i = 0; i + 1 < pcm.Length; i += 2)

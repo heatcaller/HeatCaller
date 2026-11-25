@@ -182,4 +182,39 @@ public sealed class ClassicPackSoundsTests
             Assert.True(first.Take(read).Max(Math.Abs) > 0.01f, kind + " is silent for its first 50 ms");
         }
     }
+
+    // WHY (25 Nov 2026, Asher: "replace the crowd sound with this one"):
+    // Classic's crowd roar is the ElevenLabs cheer. As it came it was
+    // -5.7 LUFS with peaks past full scale, 10 dB over the old roar, and
+    // 30 s that the crowd layer loops with a jump where the end meets the
+    // start. It's levelled to the old roar's -16 LUFS and its last three
+    // seconds crossfaded over its first, so the loop has no seam.
+    [Fact]
+    public void The_crowd_roar_is_at_the_old_level_and_loops_without_a_seam()
+    {
+        var path = SoundPacks.CrowdRoarFileFor(SoundPacks.EffectsKey);
+        Assert.NotNull(path);
+        using var reader = new WaveFileReader(path);
+        var channels = reader.WaveFormat.Channels;
+        var all = new float[(int)(reader.SampleCount * channels)];
+        var read = reader.ToSampleProvider().Read(all, 0, all.Length);
+        var half = reader.WaveFormat.SampleRate / 2 * channels;
+
+        static double Rms(IEnumerable<float> samples) => Math.Sqrt(samples.Average(x => (double)x * x));
+
+        var start = Rms(all.Take(half));
+        var end = Rms(all.Skip(read - half).Take(half));
+        var peak = all.Take(read).Max(Math.Abs);
+
+        Assert.InRange(reader.TotalTime.TotalSeconds, 25, 30);
+        Assert.InRange(20 * Math.Log10(end / start), -1.5, 1.5);
+        Assert.InRange(peak, 0.1f, 0.5f);
+    }
+
+    [Fact]
+    public void The_ticks_row_describes_the_sound_it_plays()
+    {
+        // It said "a beep a second for the last five" over the rising tone.
+        Assert.Equal("Countdown ticks (the last five seconds to the green)", SoundEffectsProfile.Describe(SoundEffectKind.CountdownTicks));
+    }
 }
