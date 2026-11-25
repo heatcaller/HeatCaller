@@ -270,7 +270,9 @@ public partial class MainForm
         // single frame - without it the sidebar, the header, the footer and
         // the page beside them each repainted at their own step, and the
         // narrowing flickered through a half-laid-out sidebar on the way.
-        var frozen = holdPainting && IsHandleCreated && Visible;
+        // Under a hold on the whole window (the Focus stage, 25 Nov 2026) that
+        // hold draws once at its end - see ShowWithoutFlash.HoldWhole.
+        var frozen = holdPainting && IsHandleCreated && Visible && !ShowWithoutFlash.IsHeldWhole(this);
 
         if (frozen)
         {

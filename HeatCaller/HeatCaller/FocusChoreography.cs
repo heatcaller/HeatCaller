@@ -1,137 +1,215 @@
 namespace HeatCaller;
 
-/// <summary>Where every moving part of the Focus animation is at one moment. Each value runs 0 (not started) to 1 (done) unless it says otherwise.</summary>
-/// <param name="Curtain">The sidebar: 0 at its width before, 1 at its width after.</param>
-/// <param name="Cross">The page: 0 the picture before, 1 the picture after.</param>
-/// <param name="InboxIn">The inbox: 0 out of sight, 1 in its place. Can run a little over 1 entering - its spring.</param>
-/// <param name="InboxAlpha">The inbox's opacity, 0 to 1.</param>
-/// <param name="Edge">The pink glow down the inbox's left edge, 0 to 1.</param>
-/// <param name="Sweep">The cyan light along the top of the board: 0 at the left, 1 at the right.</param>
-/// <param name="SweepAlpha">The light's opacity, 0 to 1.</param>
-/// <param name="Ring">The ring of light from the button: 0 at the button's edge, 1 grown out.</param>
-/// <param name="RingAlpha">The ring's opacity, 0 to 1.</param>
+/// <summary>
+/// Where every moving part of the Focus animation is at one moment. Each
+/// value runs 0 (as before) to 1 (as after) unless it says otherwise.
+/// </summary>
+/// <param name="Pressed">The Focus button is drawn pressed in.</param>
+/// <param name="Sidebar">The sidebar's width: 0 its width before, 1 its width after.</param>
+/// <param name="NarrowAlpha">The narrow sidebar's picture over the wide one, 0 to 1.</param>
+/// <param name="Glide">The cards: 0 where they were (riding the sidebar's edge), 1 in their places after.</param>
+/// <param name="Cross">Inside a card: 0 its contents before, 1 its contents after.</param>
+/// <param name="InboxIn">The inbox: 0 off the right edge, 1 in its place. Can run a little over 1 entering - its overshoot.</param>
+/// <param name="InboxAlpha">The inbox's opacity (its rows', leaving), 0 to 1.</param>
+/// <param name="Light">The landing light along the board's top: 0 at its left, 1 at its right.</param>
+/// <param name="LightAlpha">The light's opacity, 0 to 1.</param>
 /// <param name="StageAlpha">The stage itself: 1 while it plays, down to 0 as it hands over to the real window.</param>
-internal readonly record struct FocusFrame(
-    double Curtain,
+/// <param name="Done">The stage has nothing left to show.</param>
+internal readonly record struct FocusMoment(
+    bool Pressed,
+    double Sidebar,
+    double NarrowAlpha,
+    double Glide,
     double Cross,
     double InboxIn,
     double InboxAlpha,
-    double Edge,
-    double Sweep,
-    double SweepAlpha,
-    double Ring,
-    double RingAlpha,
-    double StageAlpha);
+    double Light,
+    double LightAlpha,
+    double StageAlpha,
+    bool Done);
 
 /// <summary>
-/// THE FOCUS ANIMATION'S TIMINGS (24 Nov 2026, asked for by Asher: "that
-/// should be animated in a way that looks like it costs $10,000"). Which part
-/// moves when, for how long, on which curve - as numbers, so they are tested
-/// without a window. FocusStage draws them; see plans/race-control-foot-plan.md.
+/// THE FOCUS ANIMATION'S TIMINGS. Which part moves when, for how long, on
+/// which curve - as numbers, so they are tested without a window. FocusStage
+/// draws them; see plans/focus-motion-plan.md and the "Focus Motion" mockup.
 ///
-/// Entering, about 650 ms: the button's ring of light (0-380, done before
-/// the page under it has moved); the sidebar
-/// slides shut and the page turns into the wide board (60-360), a cyan light
-/// running along the board's top (100-860, the last of it under the
-/// hand-over); the inbox springs in from the right with a pink glow on its
-/// edge (180-640), its rows dropping in one after another (300 on, 30 ms
-/// apart); and the stage fades over the real window (560-650).
+/// WHY (25 Nov 2026, Asher: "would you pay $10k for that animation?" - no):
+/// the 24 Nov motion was a cross-fade between two pictures with a ring, a
+/// sweep and a glow over it, and it waited ~360 ms before the page moved.
+/// Now every piece travels. What needs nothing from the window after the
+/// change moves on the first frame: the button presses in, the sidebar
+/// narrows with the page riding its edge, and the column's buttons fold away
+/// one by one. What needs the window after - where each card ends up - moves
+/// from the "arrival", the moment the view has changed underneath and its
+/// picture is taken (measured 25 Nov 2026: about 300-550 ms at 1440x900).
 ///
-/// Leaving (Restore), about 420 ms: the inbox's rows fade and it slides out
-/// (0-220), the sidebar opens and the page turns back (120-400), and the
-/// stage fades (340-420).
+/// Focus: press 0-90; sidebar 0-280; column parts from 40, 30 ms apart, 200
+/// each; cards glide A' to A'+320 (A' = the arrival, no earlier than 120);
+/// inbox A'+60 to A'+400; its rows from A'+180, 35 ms apart; the landing
+/// light A'+340 to A'+480; then 80 ms of hand-over.
+///
+/// Restore: press 0-90; the inbox's rows fade 0-100 and it slides out 0-240;
+/// from A' (no earlier than 80) the sidebar widens over 300 and the cards
+/// glide over 320; the column parts come back from A'+120, 30 ms apart; then
+/// the hand-over. No light: going back is quieter.
 /// </summary>
 internal static class FocusChoreography
 {
-    /// <summary>How long Focus takes, in milliseconds.</summary>
-    public const double EnterMs = 650;
+    public const double PressMs = 90;
+    public const double SidebarMs = 280;
+    public const double RestoreSidebarMs = 300;
+    public const double GlideMs = 320;
+    public const double EnterEarliest = 120;
+    public const double LeaveEarliest = 80;
 
-    /// <summary>How long Restore takes, in milliseconds.</summary>
-    public const double LeaveMs = 420;
+    /// <summary>The column's parts, folding away or coming back: the first's start, the gap between starts, how long each takes.</summary>
+    public const double FoldStart = 40;
+    public const double FoldStagger = 30;
+    public const double FoldMs = 200;
+    public const double RestoreFoldDelay = 120;
 
-    /// <summary>How far the inbox travels as it comes in or goes, in pixels at 100%.</summary>
-    public const int InboxTravel = 48;
+    /// <summary>How far a column part drifts right as it goes (comes back from), in pixels at 100%.</summary>
+    public const int FoldDrift = 24;
 
-    /// <summary>How far each inbox row rises as it drops in, in pixels at 100%.</summary>
+    public const double InboxDelay = 60;
+    public const double InboxMs = 340;
+    public const double LeaveInboxMs = 240;
+    public const double RowsDelay = 180;
+    public const double RowStagger = 35;
+    public const double RowMs = 220;
+
+    /// <summary>How far each inbox row rises as it comes in, in pixels at 100%.</summary>
     public const int RowRise = 6;
 
-    /// <summary>Each inbox row starts this long after the one above it, entering.</summary>
-    public const double RowStagger = 30;
+    public const double LightDelay = 340;
+    public const double LightMs = 140;
+    public const double HandOverMs = 80;
 
-    /// <summary>The frame at <paramref name="ms"/> into Focus.</summary>
-    public static FocusFrame Enter(double ms) => new(
-        Curtain: EaseOutCubic(Phase(ms, 60, 300)),
-        Cross: EaseInOutCubic(Phase(ms, 60, 300)),
-        InboxIn: Spring(Phase(ms, 180, 460)),
-        InboxAlpha: EaseOutCubic(Phase(ms, 180, 260)),
-        Edge: Pulse(Phase(ms, 200, 450)),
-        Sweep: EaseInOutSine(Phase(ms, 100, 760)),
-        SweepAlpha: Pulse(Phase(ms, 100, 760)),
-        Ring: EaseOutCubic(Phase(ms, 0, 380)),
-        RingAlpha: 1 - EaseOutCubic(Phase(ms, 0, 380)),
-        StageAlpha: 1 - Phase(ms, 560, 90));
+    /// <summary>When the cards start: at the arrival, but never before <paramref name="earliest"/>. Null until it has arrived.</summary>
+    public static double? CardsStart(double? arrivedAt, bool entering) =>
+        arrivedAt is { } at ? Math.Max(at, entering ? EnterEarliest : LeaveEarliest) : null;
 
-    /// <summary>The frame at <paramref name="ms"/> into Restore. Curtain and Cross run 0 to 1 as entering does; InboxIn runs back from 1 to 0.</summary>
-    public static FocusFrame Leave(double ms) => new(
-        Curtain: EaseInOutCubic(Phase(ms, 120, 280)),
-        Cross: EaseInOutCubic(Phase(ms, 120, 280)),
-        InboxIn: 1 - EaseInCubic(Phase(ms, 0, 220)),
-        InboxAlpha: 1 - Phase(ms, 0, 160),
-        Edge: 0,
-        Sweep: 0,
-        SweepAlpha: 0,
-        Ring: EaseOutCubic(Phase(ms, 0, 320)),
-        RingAlpha: 1 - EaseOutCubic(Phase(ms, 0, 320)),
-        StageAlpha: 1 - Phase(ms, 340, 80));
-
-    /// <summary>
-    /// One inbox row's way in, 0 to 1: row <paramref name="index"/> from the
-    /// top, entering. Leaving, the rows go together, with the inbox's own
-    /// opacity.
-    /// </summary>
-    public static double RowIn(double ms, int index) => EaseOutCubic(Phase(ms, 300 + index * RowStagger, 260));
-
-    /// <summary>
-    /// The two pages' opacities at <paramref name="cross"/> (0 to 1): the
-    /// page before fading out over the first 60%, the page after fading up
-    /// over the last 60%, so they meet only faintly in the middle - a dip
-    /// through the window's background rather than a cross-fade, which showed
-    /// the same words twice, offset.
-    /// </summary>
-    public static (double From, double To) Dip(double cross) =>
-        (Math.Clamp(1 - cross / 0.6, 0, 1), Math.Clamp((cross - 0.4) / 0.6, 0, 1));
-
-    /// <summary>
-    /// The wide sidebar's opacity over the narrow one at <paramref name="curtain"/>
-    /// (0 to 1): closing, solid until 60% of the way, then fading so it has
-    /// gone as it reaches the narrow one's width; opening, fading up over the
-    /// first 40%. Without it the narrow sidebar's own icons jumped in at the end.
-    /// </summary>
-    public static double CurtainAlpha(double curtain, bool narrowing) =>
-        narrowing ? Math.Clamp((1 - curtain) / 0.4, 0, 1) : Math.Clamp(curtain / 0.4, 0, 1);
-
-    /// <summary>How long one run of the light lasts while Focus waits for the window to change underneath.</summary>
-    public const double WaitingRunMs = 800;
-
-    /// <summary>
-    /// The light along the board while Focus is still waiting for the picture
-    /// after (24 Nov 2026: docking a closed inbox takes about 700 ms, measured):
-    /// from 360 ms - once the sidebar has closed - a run every 800 ms, and
-    /// null before then. Where it is (0 to 1) and how bright.
-    /// </summary>
-    public static (double At, double Alpha)? Waiting(double ms)
+    /// <summary>When the last part has finished, before the hand-over - null until the arrival.</summary>
+    public static double? End(double? arrivedAt, bool entering, int foldParts)
     {
-        if (ms < 360)
+        if (CardsStart(arrivedAt, entering) is not { } a)
         {
             return null;
         }
 
-        var t = (ms - 360) % WaitingRunMs / WaitingRunMs;
-        return (EaseInOutSine(t), Pulse(t) * 0.8);
+        if (entering)
+        {
+            // The column folds on its own clock, from the press.
+            var folded = FoldStart + Math.Max(0, foldParts - 1) * FoldStagger + FoldMs;
+            var rows = a + RowsDelay + (StaggeredRows - 1) * RowStagger + RowMs;
+            return Math.Max(Math.Max(a + LightDelay + LightMs, rows), folded);
+        }
+
+        var back = a + RestoreFoldDelay + Math.Max(0, foldParts - 1) * FoldStagger + FoldMs;
+        return Math.Max(Math.Max(a + GlideMs, a + RestoreSidebarMs), Math.Max(back, LeaveInboxMs));
     }
 
-    /// <summary>Whether the animation is over at <paramref name="ms"/>.</summary>
-    public static bool Done(double ms, bool entering) => ms >= (entering ? EnterMs : LeaveMs);
+    /// <summary>The moment <paramref name="ms"/> after the press.</summary>
+    public static FocusMoment At(double ms, bool entering, double? arrivedAt, int foldParts)
+    {
+        var a = CardsStart(arrivedAt, entering);
+        var end = End(arrivedAt, entering, foldParts);
+        var pressed = ms < PressMs;
+        var stage = end is { } e ? 1 - Phase(ms, e, HandOverMs) : 1;
+        var done = end is { } e2 && ms >= e2 + HandOverMs;
+
+        if (entering)
+        {
+            var sidebar = EaseOutCubic(Phase(ms, 0, SidebarMs));
+
+            // Into the narrow sidebar's own picture once it is there - never
+            // before the wide one has nearly closed.
+            var narrow = a is { } at0 ? EaseOutCubic(Phase(ms, Math.Max(200, at0), 120)) : 0;
+
+            if (a is not { } at)
+            {
+                return new FocusMoment(pressed, sidebar, narrow, 0, 0, 0, 0, 0, 0, stage, done);
+            }
+
+            var glide = EaseOutQuint(Phase(ms, at, GlideMs));
+            var light = Phase(ms, at + LightDelay, LightMs);
+
+            return new FocusMoment(
+                pressed,
+                sidebar,
+                narrow,
+                glide,
+                Cross(glide),
+                Overshoot(Phase(ms, at + InboxDelay, InboxMs)),
+                1,
+                EaseInOutSine(light),
+                light <= 0 || light >= 1 ? 0 : Math.Sin(Math.PI * light),
+                stage,
+                done);
+        }
+
+        // Restore: the inbox leaves on its own clock; the rest waits for the arrival.
+        var inbox = 1 - EaseInCubic(Phase(ms, 0, LeaveInboxMs));
+        var rows = 1 - Phase(ms, 0, 100);
+
+        if (a is not { } back)
+        {
+            return new FocusMoment(pressed, 0, 1, 0, 0, inbox, rows, 0, 0, stage, done);
+        }
+
+        var widen = EaseOutCubic(Phase(ms, back, RestoreSidebarMs));
+        var cards = EaseOutQuint(Phase(ms, back, GlideMs));
+
+        return new FocusMoment(
+            pressed,
+            widen,
+
+            // The narrow sidebar (the picture before) fades out as the wide one opens.
+            1 - Math.Clamp(widen / 0.35, 0, 1),
+            cards,
+            Cross(cards),
+            inbox,
+            rows,
+            0,
+            0,
+            stage,
+            done);
+    }
+
+    /// <summary>
+    /// A column part's way out (Focus) or back (Restore), 0 shown to 1 gone:
+    /// part <paramref name="index"/> from the top, one after another.
+    /// </summary>
+    public static double Fold(double ms, int index, bool entering, double? arrivedAt)
+    {
+        if (entering)
+        {
+            return EaseOutCubic(Phase(ms, FoldStart + index * FoldStagger, FoldMs));
+        }
+
+        return CardsStart(arrivedAt, entering: false) is { } a
+            ? 1 - EaseOutCubic(Phase(ms, a + RestoreFoldDelay + index * FoldStagger, FoldMs))
+            : 1;
+    }
+
+    /// <summary>How many of the inbox's bands come in one after another; the rest come with the last of them.</summary>
+    public const int StaggeredRows = 5;
+
+    /// <summary>
+    /// One inbox band's way in, 0 to 1: band <paramref name="index"/> from the
+    /// top, entering. Only the first few are staggered (25 Nov 2026, found in
+    /// the frame strip): all sixteen 35 ms apart, the inbox's foot had not come
+    /// in by the hand-over, and appeared at once as the stage went.
+    /// </summary>
+    public static double RowIn(double ms, int index, double? arrivedAt) =>
+        CardsStart(arrivedAt, entering: true) is { } a ? EaseOutCubic(Phase(ms, a + RowsDelay + Math.Min(index, StaggeredRows - 1) * RowStagger, RowMs)) : 0;
+
+    /// <summary>
+    /// Inside a card, after-content under before-content: the before fades
+    /// over the middle of the glide, so the two meet where the card is
+    /// moving fastest and a re-flow reads as part of the move.
+    /// </summary>
+    public static double Cross(double glide) => SmoothStep(Math.Clamp((glide - 0.3) / 0.4, 0, 1));
 
     /// <summary>How far through a part that starts at <paramref name="start"/> and lasts <paramref name="length"/>, 0 to 1.</summary>
     internal static double Phase(double ms, double start, double length) => Math.Clamp((ms - start) / length, 0, 1);
@@ -140,20 +218,20 @@ internal static class FocusChoreography
 
     internal static double EaseInCubic(double t) => t * t * t;
 
-    internal static double EaseInOutCubic(double t) => t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
+    internal static double EaseOutQuint(double t) => 1 - Math.Pow(1 - t, 5);
 
     internal static double EaseInOutSine(double t) => -(Math.Cos(Math.PI * t) - 1) / 2;
 
-    /// <summary>Up and back down: 0, 1 at a third of the way, then down to 0.</summary>
-    internal static double Pulse(double t) => t <= 0 || t >= 1 ? 0 : t < 1 / 3d ? t * 3 : 1 - (t - 1 / 3d) * 1.5;
+    internal static double SmoothStep(double t) => t * t * (3 - 2 * t);
 
     /// <summary>
-    /// A soft spring: past 1 by about 3% near the end, then settled at
-    /// exactly 1. Overshoot s = 0.9 on the usual "ease out back".
+    /// Ease out with a small overshoot - about 4 px on the inbox's 400 -
+    /// exactly 0 at the start and 1 at the end (s = 0.55 on "ease out back",
+    /// which peaks 1.03% past the end).
     /// </summary>
-    internal static double Spring(double t)
+    internal static double Overshoot(double t)
     {
-        const double s = 0.9;
+        const double s = 0.55;
         var u = t - 1;
         return t <= 0 ? 0 : t >= 1 ? 1 : 1 + (s + 1) * u * u * u + s * u * u;
     }
