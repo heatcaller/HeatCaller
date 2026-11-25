@@ -508,9 +508,11 @@ The **Imaging levels** card sets how loud the soundscape's [imaging](#imaging) p
 
 | Row | What it does | Default |
 |---|---|---|
-| **Imaging pieces:** | The jingles, sweepers, bumpers and stingers. | 80% |
+| **Imaging pieces:** | The jingles, sweepers, bumpers and stingers, measured against the announcer: at 100% they play as loud as the announcer, at 80% just under. A line under the box says where they sit, for example "The pieces play just under the announcer." | 80% |
 | **Imaging beds:** | The soundscape's music beds, low on purpose. | 22% |
 | **Beds under voice:** | How far the beds drop while the announcer speaks, as a share of their own level. | 55% |
+
+Each piece is brought to the announcer's level before **Imaging pieces:** is applied, the way every spoken line is, so the same number sounds the same on every soundscape and on pieces you've added yourself. A piece is never raised by more than 12 dB.
 
 The levels for your club's own show music are on the **Show treatment** card on **Sounds → Imaging**.
 
