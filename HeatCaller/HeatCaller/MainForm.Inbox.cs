@@ -44,6 +44,30 @@ public partial class MainForm
             return;
         }
 
+        // The spare, already made and laid out in the hidden dock, when there
+        // is one - see FocusView.SpareInboxWanted.
+        if (TakeSpareInbox() is { } spare)
+        {
+            _inboxForm = spare;
+            spare.Resting = false;
+            HostInbox(spare, _settings.InboxDocked);
+
+            // After it is on screen: the spare was shown once already, hidden,
+            // so opening on the vote waits for nothing - SetFilter opens the
+            // vote's card itself once the window is visible.
+            spare.SetFilter(filter);
+            return;
+        }
+
+        var form = BuildInbox();
+        _inboxForm = form;
+        form.SetFilter(filter);
+        HostInbox(form, _settings.InboxDocked);
+    }
+
+    /// <summary>A new inbox, wired to the main window: what happens when it is closed, and its tick asking to be docked or not.</summary>
+    private DeskInboxForm BuildInbox()
+    {
         var form = new DeskInboxForm(
             _driverRequestDesk,
             _profiles,
@@ -68,13 +92,145 @@ public partial class MainForm
             HideInboxDock();
             ShowInboxDockedOnRaceControl();
             form.Dispose();
+
+            // The next one made ready, once things are quiet.
+            WantSpareInbox();
         };
 
         form.DockWanted += docked => HostInbox(form, docked);
+        return form;
+    }
 
-        _inboxForm = form;
-        form.SetFilter(filter);
-        HostInbox(form, _settings.InboxDocked);
+    /// <summary>The spare inbox, made and laid out out of sight in the hidden dock - see FocusView.SpareInboxWanted.</summary>
+    private DeskInboxForm? _spareInbox;
+
+    /// <summary>The spare's own least size, kept from before it went into the dock.</summary>
+    private Size _spareLeast;
+
+    /// <summary>Tries now and then to make the spare, until there is one or none is wanted.</summary>
+    private System.Windows.Forms.Timer? _spareTimer;
+
+    /// <summary>The spare, made ready. For tests.</summary>
+    internal bool SpareInboxReady => _spareInbox is { IsDisposed: false };
+
+    /// <summary>
+    /// Asks for a spare inbox to be made the next time it is quiet - checked
+    /// every two seconds, so a race on the track is waited out.
+    /// </summary>
+    internal void WantSpareInbox()
+    {
+        if (_closingDown || IsDisposed || LayoutCheckMode || SpareInboxReady)
+        {
+            return;
+        }
+
+        _spareTimer ??= new System.Windows.Forms.Timer { Interval = 2000 };
+        _spareTimer.Tick -= OnSpareTimerTick;
+        _spareTimer.Tick += OnSpareTimerTick;
+        _spareTimer.Start();
+    }
+
+    private void OnSpareTimerTick(object? sender, EventArgs e)
+    {
+        var raceOnTrack = _race.IsPracticeMode || _race.State is RaceState.Staging or RaceState.Countdown or RaceState.Racing;
+
+        if (_closingDown || IsDisposed || SpareInboxReady)
+        {
+            _spareTimer?.Stop();
+            return;
+        }
+
+        // An inbox open: the spare is made after it is closed (its FormClosed asks again).
+        if (_inboxForm is { IsDisposed: false })
+        {
+            _spareTimer?.Stop();
+            return;
+        }
+
+        // Not yet - a race on, or somebody at the keyboard: tried again next tick.
+        if (FocusView.SpareInboxWanted(SpareInboxReady, inboxOpen: false, raceOnTrack, _closingDown, AppUsageTracker.IdleFor()))
+        {
+            _spareTimer?.Stop();
+            MakeSpareInbox();
+        }
+    }
+
+    /// <summary>Where the spare waits: off the left of the window's client area, so never drawn, and switched off, so never tabbed into.</summary>
+    private Panel? _spareParking;
+
+    /// <summary>
+    /// The spare made now: built as a docked inbox is, at the dock's size,
+    /// and shown in its parking place - which makes its windows and lays it
+    /// out - with nothing on screen changing. Its refresh then rests until it
+    /// is used.
+    ///
+    /// Not in the hidden dock itself: inside a hidden parent WinForms counts
+    /// every part as hidden too, and made 2 of the inbox's 89 parts and laid
+    /// none of them out - the press was as slow as without a spare. Parked
+    /// in a panel that is shown but placed outside the window's client area,
+    /// all of it is made and laid out, and none of it is drawn.
+    /// </summary>
+    internal void MakeSpareInbox()
+    {
+        if (_closingDown || IsDisposed || !IsHandleCreated || SpareInboxReady || _inboxForm is { IsDisposed: false })
+        {
+            return;
+        }
+
+        var took = System.Diagnostics.Stopwatch.StartNew();
+        var form = BuildInbox();
+
+        try
+        {
+            var least = UiLayout.AtDpi(360);
+            var size = new Size(
+                FocusView.FocusedInboxWidth(_settings.InboxDockWidth, UiLayout.AtDpi(FocusView.FocusedInboxWidest), least),
+                Math.Max(UiLayout.AtDpi(400), ClientSize.Height));
+
+            if (_spareParking is not { IsDisposed: false })
+            {
+                _spareParking = new Panel { Enabled = false, TabStop = false };
+                Controls.Add(_spareParking);
+            }
+
+            _spareParking.Bounds = new Rectangle(new Point(-size.Width - UiLayout.AtDpi(10000), 0), size);
+
+            _spareLeast = form.MinimumSize;
+            form.ShowDocked(true);
+            PutInDock(form, _spareParking);
+            form.Show();
+            form.Resting = true;
+            _spareInbox = form;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException or ArgumentException or System.ComponentModel.Win32Exception)
+        {
+            // No spare, then: the next inbox is made when it is asked for, as before.
+            _spareParking?.Controls.Remove(form);
+            form.Dispose();
+            return;
+        }
+
+        OnClientRawMessage($"{AppTime.LogStampNow()}  [view] A spare inbox made ready out of sight in {took.ElapsedMilliseconds} ms, so the next Focus or Dock Inbox only has to show it.");
+    }
+
+    /// <summary>The spare, handed over and forgotten - null when there is none.</summary>
+    private DeskInboxForm? TakeSpareInbox()
+    {
+        var spare = _spareInbox;
+        _spareInbox = null;
+
+        if (spare is not { IsDisposed: false } || _spareParking is null || spare.Parent != _spareParking)
+        {
+            return null;
+        }
+
+        // Out of its parking place - its windows are kept, as any part's are
+        // when it changes parent - with its own least size back, which
+        // HostInbox keeps for when it is a window of its own.
+        spare.Hide();
+        _spareParking.Controls.Remove(spare);
+        spare.MinimumSize = _spareLeast;
+        return spare;
     }
 
     /// <summary>

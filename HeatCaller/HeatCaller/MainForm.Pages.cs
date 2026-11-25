@@ -183,11 +183,21 @@ public partial class MainForm
             // still have it done in one go before they look.
             if (!LayoutCheckMode)
             {
-                WarmPagesInTurn((busy, slowest, stoppedEarly) => OnClientRawMessage(stoppedEarly is null
-                    ? $"{AppTime.LogStampNow()}  [startup] Every page and tab made ready, a page at a time, in {warming.Elapsed.TotalSeconds:0.0}s "
-                      + $"({busy.TotalSeconds:0.0}s of it the pages' own work; the window answered in between). The slowest steps: {slowest}."
-                    : $"{AppTime.LogStampNow()}  [startup] Pages made ready in {warming.Elapsed.TotalSeconds:0.0}s, but not their tabs: {stoppedEarly}, so this PC is too busy "
-                      + $"to do it in the background without the window freezing. Each tab is made the first time it is opened instead. The slowest steps: {slowest}."));
+                WarmPagesInTurn((busy, slowest, stoppedEarly) =>
+                {
+                    OnClientRawMessage(stoppedEarly is null
+                        ? $"{AppTime.LogStampNow()}  [startup] Every page and tab made ready, a page at a time, in {warming.Elapsed.TotalSeconds:0.0}s "
+                          + $"({busy.TotalSeconds:0.0}s of it the pages' own work; the window answered in between). The slowest steps: {slowest}."
+                        : $"{AppTime.LogStampNow()}  [startup] Pages made ready in {warming.Elapsed.TotalSeconds:0.0}s, but not their tabs: {stoppedEarly}, so this PC is too busy "
+                          + $"to do it in the background without the window freezing. Each tab is made the first time it is opened instead. The slowest steps: {slowest}.");
+
+                    // Then a spare inbox, so the first Focus is quick (25 Nov
+                    // 2026) - not on a PC too busy for the tabs.
+                    if (stoppedEarly is null)
+                    {
+                        WantSpareInbox();
+                    }
+                });
                 return;
             }
 

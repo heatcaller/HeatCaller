@@ -546,6 +546,23 @@ internal sealed partial class DeskInboxForm : Form
         _page.PerformLayout();
     }
 
+    /// <summary>
+    /// Kept as a spare, out of sight in the main window's hidden dock (25 Nov
+    /// 2026 - see FocusView.SpareInboxWanted): its once-a-second refresh is
+    /// stopped while nobody can see it, and started again when it is used.
+    /// </summary>
+    internal bool Resting
+    {
+        get => !_tick.Enabled;
+        set
+        {
+            if (!IsDisposed)
+            {
+                _tick.Enabled = !value;
+            }
+        }
+    }
+
     /// <summary>Opened on the vote before the window was up: its card opens once it is.</summary>
     private bool _voteWhenShown;
 
