@@ -1598,7 +1598,7 @@ internal static class BroadcastImaging
 
     /// <summary>Starts a piece already picked for a point - see <see cref="Start"/>.</summary>
     private static ImagingPlay? StartPiece(ImagingCue cue, (ShowClip Clip, string Path) piece) =>
-        Muted ? null : ImagingPlay.Start(piece.Clip, PlayedOutOf(piece.Path, piece.Clip), Level / 100f, Describe(cue), Status,
+        Muted ? null : ImagingPlay.Start(piece.Clip, PlayedOutOf(piece.Path, piece.Clip), ImagingLevel.Volume(Level, piece.Clip.LevelGain), Describe(cue), Status,
             Path.GetFileNameWithoutExtension(piece.Path));
 
     /// <summary>
@@ -1734,7 +1734,8 @@ internal static class BroadcastImaging
             // now fails the task rather than throwing here, so the page's
             // "It couldn't play" no longer shows - the console says it instead.
             var name = Path.GetFileName(path);
-            _ = AudioBus.PlayAsync(new ShowOneShot(clip, from), Level / 100f, stop.Token)
+            var volume = ImagingLevel.Volume(Level, clip.LevelGain);
+            _ = AudioBus.PlayAsync(new ShowOneShot(clip, from), volume, stop.Token, allowBoost: volume > 1f)
                 .ContinueWith(done =>
                 {
                     if (done.IsFaulted)
@@ -1841,7 +1842,9 @@ internal sealed class ImagingPlay
 
         try
         {
-            play.Played = AudioBus.PlayAsync(heard, level, play._stop.Token);
+            // A quiet piece levelled up to the announcer can need more than
+            // 1 (see ImagingLevel); the bus rounds its peaks off.
+            play.Played = AudioBus.PlayAsync(heard, level, play._stop.Token, allowBoost: level > 1f);
         }
         catch (Exception ex)
         {
