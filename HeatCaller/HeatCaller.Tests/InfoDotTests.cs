@@ -196,6 +196,38 @@ public sealed class InfoDotTests
     }
 
     [Fact]
+    public void At_rest_a_badge_is_a_faint_pink_ring_and_on_Focus_it_is_white()
+    {
+        // WHY (25 Nov 2026, Asher: "make the info circles pink and less
+        // obvious. the one on the focus button should be white").
+        var seen = StaThread.Run(() =>
+        {
+            using var host = new Form { BackColor = AppTheme.Surface };
+            using var pill = new InfoDot { Inside = true, BackColor = Color.Transparent };
+            using var focus = new FocusSplitButton();
+            host.Controls.Add(pill);
+            _ = host.Handle;
+
+            using var bmp = new Bitmap(pill.Width, pill.Height);
+            pill.DrawToBitmap(bmp, new Rectangle(Point.Empty, pill.Size));
+
+            // The middle of the "i" stem, and the strongest colour anywhere on it.
+            var strongest = Enumerable.Range(0, bmp.Width).SelectMany(x => Enumerable.Range(0, bmp.Height).Select(y => bmp.GetPixel(x, y)))
+                .OrderBy(c => c.GetBrightness()).First();
+            return (focus.Info.OnPink, pill.OnPink, strongest);
+        }, TimeSpan.FromSeconds(30), () => "a badge at rest");
+
+        Assert.True(seen.Item1, "Focus's badge is white");
+        Assert.False(seen.Item2, "a pill's badge is pink");
+        Assert.InRange(InfoDot.QuietRingAlpha, 60, 180);
+        Assert.InRange(InfoDot.QuietInkAlpha, 80, 200);
+
+        // Pink, not the dark grey "i" it was: more red than blue, and not near black.
+        Assert.True(seen.Item3.R > seen.Item3.B + 40, $"the badge's ink is pink: {seen.Item3}");
+        Assert.True(seen.Item3.GetBrightness() > 0.35f, $"and faint, not dark: {seen.Item3}");
+    }
+
+    [Fact]
     public void The_foot_of_the_board_has_a_circle_for_each_part_and_the_parts_pop_nothing_up()
     {
         var layout = Source("RaceControlControl.Layout.cs");

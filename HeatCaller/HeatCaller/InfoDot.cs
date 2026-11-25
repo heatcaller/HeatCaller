@@ -48,6 +48,13 @@ internal sealed class InfoDot : Control
     /// <summary>Inside its part (a pill, Focus), not over its edge: no ring cut out in the card's colour.</summary>
     internal bool Inside { get; set; }
 
+    /// <summary>On a pink part (Focus): white, not pink.</summary>
+    internal bool OnPink { get; set; }
+
+    /// <summary>How faint a badge at rest is, out of 255: its ring, and its "i".</summary>
+    internal const int QuietRingAlpha = 120;
+    internal const int QuietInkAlpha = 165;
+
     /// <summary>How long a tip stays up if it is never clicked shut.</summary>
     internal const int OpenMs = 60_000;
 
@@ -270,29 +277,33 @@ internal sealed class InfoDot : Control
             var circle = new RectangleF((Width - side) / 2f, (Height - side) / 2f, side, side);
             var lit = _open || _hot;
 
-            // A badge: filled, so it reads clearly over the part's edge, and
-            // ringed in the card's colour so it stands off the part. Light
-            // while its tip is up or the mouse is on it - not pink, which
-            // would vanish against Focus.
-            var fill = lit ? AppTheme.TextDark : AppTheme.Surface;
-            var ink = lit ? AppTheme.Surface : AppTheme.TextDark;
-
-            using (var brush = new SolidBrush(fill))
-            {
-                g.FillEllipse(brush, circle);
-            }
+            // WHY (25 Nov 2026, Asher: "make the info circles pink and less
+            // obvious. the one on the focus button should be white"): the
+            // badges were a filled light circle with a dark "i" and a grey
+            // edge, which stood out more than help you have to ask for
+            // should. Now, at rest, a badge is only a faint ring and "i" in
+            // pink - in white on Focus, which is pink itself - and it fills
+            // in solid only while the mouse is on it or its tip is up.
+            var tone = OnPink ? Color.White : AppTheme.Primary;
+            var ink = lit ? (OnPink ? AppTheme.Primary : AppTheme.OnPrimary) : Color.FromArgb(QuietInkAlpha, tone);
 
             if (!Inside)
             {
-                var cutout = Parent?.BackColor is { A: 255 } back ? back : AppTheme.Background;
-                using var ring = new Pen(cutout, line);
-                g.DrawEllipse(ring, RectangleF.Inflate(circle, -line / 2f, -line / 2f));
+                // Over the pen's corner: the card's colour behind, so the pen's edge doesn't run through it.
+                var card = Parent?.BackColor is { A: 255 } back ? back : AppTheme.Background;
+                using var under = new SolidBrush(card);
+                g.FillEllipse(under, circle);
             }
 
-            if (!lit)
+            if (lit)
             {
-                using var edge = new Pen(AppTheme.TextMuted, Math.Max(1f, UiLayout.DpiScale));
-                g.DrawEllipse(edge, RectangleF.Inflate(circle, -line - 0.5f, -line - 0.5f));
+                using var brush = new SolidBrush(tone);
+                g.FillEllipse(brush, circle);
+            }
+            else
+            {
+                using var edge = new Pen(Color.FromArgb(QuietRingAlpha, tone), Math.Max(1f, UiLayout.DpiScale));
+                g.DrawEllipse(edge, RectangleF.Inflate(circle, -line / 2f, -line / 2f));
             }
 
             // The "i" drawn, not typed, so it sits in the middle at any font:
