@@ -21,8 +21,16 @@ namespace HeatCaller;
 /// </summary>
 internal static class SoundOverlap
 {
-    /// <summary>Most moment sounds playing at once. A fourth waits for one to end (Asher, 24 Nov 2026: "3 is a good limit for now").</summary>
-    public const int MaxAtOnce = 3;
+    /// <summary>
+    /// Most moment sounds playing at once; the next waits for one to end.
+    /// Was 3 (Asher, 24 Nov 2026: "3 is a good limit for now"), raised to 8
+    /// the same day at his asking, so a full heat crossing together is all
+    /// heard. Each one is a short stream in a mix that already carries the
+    /// voice, music and crowd, with a 300 ms output buffer - eight of them
+    /// cost next to nothing. Loudness is the real limit, which StackGain
+    /// takes care of.
+    /// </summary>
+    public const int MaxAtOnce = 8;
 
     /// <summary>
     /// How far apart two of the SAME sound start. Two Good lap chimes from
@@ -59,13 +67,18 @@ internal static class SoundOverlap
     /// How loud a sound starts when others are already playing. Three
     /// full-level stings summed squash the mix even with AudioBus's soft
     /// limiter, so each one that joins is a little quieter. 1 when it plays
-    /// alone, as every sound always did.
+    /// alone, as every sound always did. With eight allowed at once
+    /// (24 Nov 2026) it keeps going down, to half from the fifth on: eight
+    /// at full level would sum to eight times one, and the limiter would
+    /// flatten them into one loud smear.
     /// </summary>
     public static float StackGain(int othersPlaying) => othersPlaying switch
     {
         <= 0 => 1f,
         1 => 0.8f,
-        _ => 0.7f,
+        2 => 0.7f,
+        3 => 0.6f,
+        _ => 0.5f,
     };
 
     /// <summary>

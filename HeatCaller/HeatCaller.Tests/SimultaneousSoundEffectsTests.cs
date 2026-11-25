@@ -8,7 +8,7 @@ namespace HeatCaller.Tests;
 /// Sound effects that play over each other (24 Nov 2026, asked for by
 /// Asher: "you should be able to hear multiple cars hitting a good lap").
 /// Every effect used to wait for the one before it to end; now a car's
-/// sounds play as they fire, up to three at once, while the start, finish
+/// sounds play as they fire, up to eight at once, while the start, finish
 /// and flag sounds keep their order. A switch on the Sound Effects page
 /// puts back the old one-at-a-time way.
 /// </summary>
@@ -115,21 +115,26 @@ public sealed class SimultaneousSoundEffectsTests : IDisposable
     }
 
     [Fact]
-    public async Task A_fourth_sound_waits_for_one_of_the_three_to_end()
+    public async Task A_full_heat_on_a_good_lap_is_all_heard_and_a_ninth_sound_waits()
     {
         var announcer = Announcer(overlap: true, SoundEffectKind.PersonalBest);
 
-        Play(announcer, SoundEffectKind.GoodLap);
-        Play(announcer, SoundEffectKind.FastLap);
-        Play(announcer, SoundEffectKind.Streak);
+        // Eight cars crossing together (raised from 3 to 8 the same day, at
+        // Asher's asking) - every one heard, a stagger apart.
+        for (var car = 0; car < SoundOverlap.MaxAtOnce; car++)
+        {
+            Play(announcer, SoundEffectKind.GoodLap);
+        }
+
         Play(announcer, SoundEffectKind.PersonalBest);
 
-        await WaitFor(() => _starts.Count == 3, "three sounds to start");
+        await WaitFor(() => _starts.Count == SoundOverlap.MaxAtOnce, "all eight chimes to start");
         await Task.Delay(400);
-        Assert.Equal(3, _starts.Count);
+        Assert.Equal(SoundOverlap.MaxAtOnce, _starts.Count);
+        Assert.All(_starts, start => Assert.Equal(SoundEffectKind.GoodLap, start.Kind));
 
         _release.TrySetResult();
-        await WaitFor(() => _starts.Count == 4, "the fourth to start once there was room");
+        await WaitFor(() => _starts.Count == SoundOverlap.MaxAtOnce + 1, "the ninth to start once there was room");
         Assert.Equal(SoundEffectKind.PersonalBest, _starts.Last().Kind);
     }
 
@@ -281,7 +286,9 @@ public sealed class SimultaneousSoundEffectsTests : IDisposable
         Assert.Equal(1f, SoundOverlap.StackGain(0));
         Assert.Equal(0.8f, SoundOverlap.StackGain(1));
         Assert.Equal(0.7f, SoundOverlap.StackGain(2));
-        Assert.Equal(0.7f, SoundOverlap.StackGain(5));
+        Assert.Equal(0.6f, SoundOverlap.StackGain(3));
+        Assert.Equal(0.5f, SoundOverlap.StackGain(4));
+        Assert.Equal(0.5f, SoundOverlap.StackGain(7));
     }
 
     [Fact]
