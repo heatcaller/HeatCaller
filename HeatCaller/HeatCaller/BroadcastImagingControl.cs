@@ -14,8 +14,9 @@ namespace HeatCaller;
 /// BroadcastImaging.
 ///
 /// THE SOUNDS REGROUP (17 Oct 2026): the pieces' and beds' levels moved to
-/// the Mixer, where every level and duck now lives - Post timing stays
-/// here, beside the marks it nudges. And the club's own show music moved
+/// the Mixer, where every level and duck now lives. (Post timing, a nudge on
+/// every post, stayed here until 25 Nov 2026, when it was removed - each
+/// piece's own POST mark does the same.) And the club's own show music moved
 /// here from the Commentary page as the Show treatment card
 /// (ShowTreatmentCard), since it is what plays where the soundscape has no
 /// imaging. The ON/OFF tick now greys the imaging part of the page, not
@@ -35,7 +36,7 @@ public sealed class BroadcastImagingControl : UserControl
     /// <summary>The club's own show music, the last card on the page - see ShowTreatmentCard.</summary>
     private readonly ShowTreatmentCard _showTreatment;
 
-    /// <summary>The imaging cards the ON/OFF tick greys - the soundscape, its pieces, the run of show and the post timing.</summary>
+    /// <summary>The imaging cards the ON/OFF tick greys - the soundscape, its pieces, and the run of show.</summary>
     private readonly List<Control> _imagingCards = new();
     /// <summary>The selected piece's OUT - the mark the app called its post until 17 Oct 2026. See TalkUp.</summary>
     private readonly NumericUpDown _numPost = new();
@@ -44,9 +45,6 @@ public sealed class BroadcastImagingControl : UserControl
     /// <summary>The selected piece's POST - where its own voice comes in (17 Oct 2026). See TalkUp.</summary>
     private readonly NumericUpDown _numTalkUp = new();
     private readonly Label _lblTalkUpRoom = new();
-
-    /// <summary>The nudge on every post, in seconds - see BroadcastImaging.PostNudge.</summary>
-    private readonly NumericUpDown _numNudge = new();
 
     /// <summary>
     /// Where the preview playing now started in the piece, and when - so
@@ -475,40 +473,10 @@ public sealed class BroadcastImagingControl : UserControl
         run.Add(runGrid);
         run.Add(new ButtonBar().With(btnRestoreRun), gapBelow: 0);
 
-        // THE NUDGE (17 Oct 2026) - one setting for every post, for taste:
-        // some like the piece's voice right on the last word, some a hair
-        // under it.
-        _numNudge.DecimalPlaces = 2;
-        _numNudge.Increment = 0.05m;
-        _numNudge.Minimum = (decimal)-BroadcastImaging.MostNudge;
-        _numNudge.Maximum = (decimal)BroadcastImaging.MostNudge;
-        _numNudge.ValueChanged += (_, _) =>
-        {
-            if (!_filling)
-            {
-                BroadcastImaging.PostNudge = (double)_numNudge.Value;
-            }
-        };
-
-        var lblNudgeSuffix = new Label
-        {
-            Text = "s  - below zero the piece's voice comes in a touch early, above zero a touch late",
-            AutoSize = true,
-            ForeColor = AppTheme.TextMuted,
-        };
-        _textSize.Wear(lblNudgeSuffix, () => AppTheme.SmallFont);
-
-        // THE LEVELS ARE THE MIXER'S (17 Oct 2026): the pieces' level, the
-        // beds' level and how far the beds drop under the voice moved there
-        // with every other level and duck. The timing stays, beside the
-        // marks it nudges.
-        var levelGrid = new FieldGrid();
-        Flush(levelGrid.AddRow("Post timing:", FieldGrid.Inline(_numNudge, lblNudgeSuffix)));
-        levelGrid.AddHint("The pieces' and beds' levels are on the Mixer tab.");
-
-        var levels = new Section("Timing");
-        levels.Add(SoundsPagePieces.Hint(_textSize, "Where a piece's voice lands against the announcer's last word."));
-        levels.Add(levelGrid, gapBelow: 0);
+        // WHY (25 Nov 2026, Asher): the Timing card and its one Post timing
+        // box are gone. It moved every piece's post by the same amount, which
+        // each piece's own POST mark above already does - two controls for
+        // one thing, and the director couldn't tell what it added.
 
         // --- The page ----------------------------------------------------
 
@@ -532,15 +500,14 @@ public sealed class BroadcastImagingControl : UserControl
         page.Add(top);
         page.AddFill(pieces, pieces.LeastHeight);
         page.Add(run);
-        page.Add(levels);
         page.Add(_showTreatment.Card, gapBelow: 0);
 
-        _imagingCards.AddRange(new Control[] { top, pieces, run, levels });
+        _imagingCards.AddRange(new Control[] { top, pieces, run });
 
         Controls.Add(page);
 
         // Every grid on the page, the Show treatment card's too.
-        _textSize.Keep(() => FieldGrid.LineUp(new[] { soundscapeGrid, postGrid, runGrid, levelGrid, _showTreatment.Grid }));
+        _textSize.Keep(() => FieldGrid.LineUp(new[] { soundscapeGrid, postGrid, runGrid, _showTreatment.Grid }));
 
         _textSize.Keep(SizeFields);
     }
@@ -560,7 +527,6 @@ public sealed class BroadcastImagingControl : UserControl
 
         Fit(_numPost, NumberWidth(_numPost));
         Fit(_numTalkUp, NumberWidth(_numTalkUp));
-        Fit(_numNudge, NumberWidth(_numNudge));
 
         static void Fit(Control field, int width)
         {
@@ -590,7 +556,6 @@ public sealed class BroadcastImagingControl : UserControl
         try
         {
             _chkEnabled.Checked = BroadcastImaging.Enabled;
-            _numNudge.Value = Math.Clamp((decimal)BroadcastImaging.PostNudge, _numNudge.Minimum, _numNudge.Maximum);
 
             var keep = (SelectedSoundscape ?? BroadcastImaging.Active)?.Id;
             var activeId = _themes.ActiveThemeId;
