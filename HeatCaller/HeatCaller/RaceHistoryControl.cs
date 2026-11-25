@@ -265,6 +265,9 @@ public sealed class RaceHistoryControl : UserControl
             cardItem.Text = row?.Cells[1].Value is string named && named.Length > 0 ? $"Report Card for {named}..." : "Report Card...";
             e.Cancel = ReportCardFor is null || row?.Tag is not string { Length: > 0 };
         };
+        // WHY (24 Nov 2026, asked for by Asher: "unthemed submenu"): never
+        // styled, so it came up as a stock white Windows menu over the grid.
+        AppTheme.StyleContextMenu(cardMenu);
         _detailGrid.ContextMenuStrip = cardMenu;
         _detailGrid.CellMouseDown += (_, e) =>
         {

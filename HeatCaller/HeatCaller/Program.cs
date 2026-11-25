@@ -165,6 +165,10 @@ internal static class Program
             // set up, before any window is made.
             AppIcon.UseForEveryWindow();
 
+            // Every menu and submenu drawn in the theme, even one nobody
+            // remembered to style - see AppTheme.ThemeEveryMenu.
+            AppTheme.ThemeEveryMenu();
+
             // Before anything reads a file: data saved under the app's
             // earlier names is moved into HeatCaller's folders, once.
             //
