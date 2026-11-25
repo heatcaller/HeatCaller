@@ -390,6 +390,17 @@ internal sealed class ColumnChecklist : ListBox
         InvalidateRow(previous);
         InvalidateRow(index);
 
+        // WHY (25 Nov 2026, Asher's recording of the Race Control columns
+        // list: "it's all flashy"): the rows the mouse crossed went blank and
+        // stayed blank. The description tip is a Windows tooltip, and Windows
+        // keeps a copy of the screen under one to put back when it hides,
+        // instead of asking the list to draw again. The two rows above were
+        // only wiped, not yet drawn, when the tip came down and went up again,
+        // so the copy it put back was of empty rows, and Windows then counted
+        // them as drawn. Drawing them now, before the tip moves, means
+        // whatever it copies or puts back is the finished rows.
+        Update();
+
         ShowTip(index);
     }
 
