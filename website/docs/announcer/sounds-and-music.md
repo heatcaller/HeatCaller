@@ -12,7 +12,7 @@ HeatCaller also records each race as it goes out and saves it as an mp3, with a 
 
 ## Effects
 
-**Sounds → Effects** plays short cues like Next Level Timing's own: a chime per lap plus sounds for race moments. Each sound plays the built-in **Classic** pack (called **Synthwave** before 16 October), or your own file. Until 25 November a sound could also play **Generated tones** or the **Podium**, **Arcade**, **Broadcast** or **Pit Lane** pack; those are gone, and a sound set to one of them plays **Classic**. HeatCaller's generated tones are only used if a **Classic** file is missing. Since 25 November the Classic pack's **Good lap**, **Invalid lap**, **Personal best**, **Fast lap**, **Consistency streak**, **Leader change**, **Jump start** and **Countdown started** sounds are clean, modern ones in place of the old synth tones. Its **Countdown ticks** are the same rising tone as **Countdown started**, in place of five beeps, and the rise ends as the green comes. Its other sounds are unchanged. You can point any sound at your own audio file instead, and your file wins.
+**Sounds → Effects** plays short cues like Next Level Timing's own: a chime per lap plus sounds for race moments. Each sound plays the built-in **Classic** pack (called **Synthwave** before 16 October), or your own file. Until 25 November a sound could also play **Generated tones** or the **Podium**, **Arcade**, **Broadcast** or **Pit Lane** pack; those are gone, and a sound set to one of them plays **Classic**. HeatCaller's generated tones are only used if a **Classic** file is missing. Since 25 November the Classic pack's **Good lap**, **Invalid lap**, **Personal best**, **Fast lap**, **Consistency streak**, **Leader change**, **Jump start** and **Countdown started** sounds are clean, modern ones in place of the old synth tones. Its **Countdown ticks** are the same rising tone as **Countdown started**, in place of five beeps. Its other sounds are unchanged. You can point any sound at your own audio file instead, and your file wins.
 
 ![Sounds, Effects tab: 18 of 18 sounds on for races and for practice, the Every sound at once card, and each sound with its Race and Practice ticks, Pack, Your own file (optional), Browse and Remove](../assets/images/sounds-effects.png)
 
@@ -63,8 +63,6 @@ The race-moment sounds (such as the **Race started** horn, the **Race time over 
 A flag call isn't held up by sound effects. Crowd surges (for a fast lap or a lead change, say) aren't cut short when the announcer speaks.
 
 Sound effects can play over each other, so two cars on a good lap are both heard as they cross. Each car's sounds play as they happen, up to 8 at once. When a second copy of the same sound starts at the same moment, it comes a fraction of a second after the first, so you hear two chimes rather than one louder one. Each sound that joins others playing is a little quieter, so a pile-up doesn't drown the mix. The race-moment sounds (**Race staging**, **Countdown started**, **Countdown ticks (the last five seconds to the green)**, **Race started**, the flags, **Race time over (last lap)** and **Race completed**) still play one after another, in order, and a lap chime doesn't wait for them. None of this changes how sounds and the announcer share the speaker.
-
-On a busy track, per-lap sounds are kept close to the action.
 
 On the **Per lap** card under the list, **Max sounds per lap (good / invalid / fast / streak / leader change):** (1 to 5, default 3) sets how many per-lap sounds can play on one lap.
 

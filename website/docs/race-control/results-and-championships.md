@@ -273,7 +273,7 @@ Beside the standings, **Can they still win?** says, for the season as it stands,
 - A line on top: "2 rounds left, up to 10 points each. 3 drivers can still win it.", "1 round left, and nobody can catch Billy Bob now.", or once the season is over, "The season is over. Billy Bob is champion." (or "The season is over, with 2 level at the top." when it ended in a tie).
 - A row for each driver with their place, their gap to the leader, and **Leading**, **Still in it** or **Out of reach** (**Champion** once it's over). Everyone who can still win is listed, then the first three out of reach, then "and 6 more out of reach".
 
-A driver is **Still in it** while they can still at least draw level with the leader, with **Count each driver's best** applied. The card and the announcer always agree. A driver close on points can be out of reach when their best rounds are already full and a win would only replace their worst.
+A driver is **Still in it** while they can still at least draw level with the leader, with **Count each driver's best** applied. A driver close on points can be out of reach when their best rounds are already full and a win would only replace their worst.
 
 It needs **Rounds in the season** set in the scoring rules, and says so when it isn't. It also says so when it can't be worked out.
 If a race counts toward a championship and the recap is on, the end-of-race recap includes how the championship table moved. See [Commentary](../announcer/commentary.md).

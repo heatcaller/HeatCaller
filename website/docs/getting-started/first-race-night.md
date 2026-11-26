@@ -112,7 +112,7 @@ If no round is picked, the check uses whoever is already on the leaderboard.
 ## Step 8: Run the first heat
 
 1. On **Race Day → Next Steps**, the card for the next race shows it (for example "Stock · Q1 Heat 1") with a **Start** button for it, such as **Start Stock Q1 Heat 1**. Click it, or double-click the race on the run sheet.
-2. HeatCaller switches to **Race Control** and starts the race. With the **On Air** pill lit, as it is on a new install, it goes **On Air** first: the soundscape's jingle or sweeper, the opening and a bumper. Then it runs the start sequence: **Stage**, then **Countdown**, then **Green**. By default each step follows on from the last by itself. See [On Air](../race-control/running-a-race.md#on-air).
+2. HeatCaller switches to **Race Control** and starts the race. With the **On Air** pill lit, as it is on a new install, it goes **On Air** first: the soundscape's jingle or sweeper, the opening and a bumper. Then it runs the start sequence: **Stage**, then **Countdown**, then **Green**, with no further presses needed. See [On Air](../race-control/running-a-race.md#on-air).
 3. Race. Laps appear on the leaderboard as cars cross the line.
 4. Use the flag buttons if you need them: **Yellow**, **Red**, and **Green** to resume. **Red** has to be pressed and held for about a second, so a stray click can't stop the race. You can also use <kbd>F1</kbd> to <kbd>F6</kbd>, which act on a single press (see [Keyboard shortcuts](../reference/keyboard-shortcuts.md)).
 5. The race ends by itself at its lap or time limit. With no limit, press and hold **Checkered** (or press <kbd>F6</kbd>).
@@ -130,7 +130,7 @@ The announcer calls the grid, the start, fast laps, lead changes and the finish 
 
 - **Announcer Screen** on **Race Control** (or <kbd>A</kbd>) opens the Announcer screen, a window with talking points for whoever is on the mic. It can sit beside the main window or on a second monitor, and its **Race Control** button brings the main window forward.
 - **Mute Announcer** at the bottom of the sidebar silences it instantly.
-- If nothing is heard, look at **Sounds → Mixer**, which shows "NO VOICE:" and the reason when the announcer can't speak, and at the Developer Console on the **Connection** page. Lines starting `[voice]` say why an announcement was skipped.
+- If nothing is heard, look at **Sounds → Mixer**, which shows "NO VOICE:" and the reason when the announcer can't speak, and at the Developer Console on the **Connection** page. Lines starting `[voice]` show what the announcer has been doing.
 
 Full detail: [Voice announcements](../announcer/voice.md), [Commentary](../announcer/commentary.md) and [Sounds and music](../announcer/sounds-and-music.md).
 

@@ -493,7 +493,7 @@ The announcer puts a short credit on the end of that call, then the sponsor's ta
 
 - A moment that happens often (fastest laps, lead changes, battles) isn't credited every time. Driver introductions, the qualifying recap and the race result are credited every time.
 - Each moment has one sponsor. Tick the same moment for two sponsors and the card says so in red, for example "Fastest lap is ticked for Joe's Hobby Shop and Quickway Diner - only Joe's Hobby Shop, higher in the list, is named."
-- Every credit the announcer makes goes in tonight's report, under that sponsor's reads.
+- Tonight's report lists each sponsor's credits under their reads.
 
 #### Telling a sponsor what they got
 
@@ -528,7 +528,7 @@ This is the thing that renews a sponsor, and no other timing software in this sp
 The clipboard rather than a file, because pasting into an email is what actually happens to this. The whole report is also shown in the message that confirms it was copied, so you can read it before you send it.
 
 !!! note
-    The counts are **tonight's**, and they come from the announcer's own rotation — the same thing that decides whose turn each read is. They start again with each new race day, and they survive closing the laptop between the heats and the mains.
+    The counts are **tonight's**. They start again with each new race day, and they survive closing the laptop between the heats and the mains.
 
 #### How long a read runs
 
@@ -554,7 +554,7 @@ Having copy doesn't move a sponsor up the queue. Whose turn it is comes first, a
 
 - **A race call always comes first.** A recap or a "coming up next" always goes ahead of an advert.
 - Nothing is read while a race is on track, while the announcer is held, or while a line is being written.
-- An ad break that finishes while a race is running doesn't lose its read: it waits for the next real gap. If reads are switched off, nobody is sold, or no copy would fit, that break's read is dropped instead of saved up.
+- An ad break that finishes while a race is running doesn't lose its read: it waits for the next real gap. If reads are switched off, nobody is sold, or no copy would fit, that break has no read.
 - A read goes on the announcement banner as well as over the PA, like the commentary segments.
 
 !!! note
