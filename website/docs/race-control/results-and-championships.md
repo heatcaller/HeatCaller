@@ -49,7 +49,7 @@ After the checkered flag, **Edit Result** on Race Control's flag row opens the r
 
 Below the results is a notes box, for the weather, the track surface, incidents or anything else worth remembering. Notes are saved when you click away from the box, or when you close HeatCaller.
 
-![Race History with Sunday 15 Nov picked on the calendar and its 5:20 PM demo session selected: the Winner, Fastest lap, Ideal lap and Warnings tiles, and five drivers' results with their fastest laps, best sectors and ideal laps, under the buttons from Replay to Paste a Result and Delete Session](../assets/images/race-history.png)
+![Race History with Sunday 15 Nov picked on the calendar and its 5:20 PM demo session, a 50% Q2 Heat 1, selected: the Winner, Fastest lap, Ideal lap and Warnings tiles, and five drivers' results with their fastest laps, best sectors and ideal laps, under the buttons from Replay to Export Session, Edit Result, Paste a Result and Delete Session](../assets/images/race-history.png)
 
 The buttons, left to right across the top: **Replay**, **Pace**, **Share Results Card**, **Event Report**, **Print Results**, **Export Results**, **Export Session**, **Edit Result** and **Paste a Result**, with **Delete Session** on its own at the right-hand end. In a narrow window the bar wraps onto a second line.
 
@@ -273,7 +273,7 @@ Beside the standings, **Can they still win?** says, for the season as it stands,
 - A line on top: "2 rounds left, up to 10 points each. 3 drivers can still win it.", "1 round left, and nobody can catch Billy Bob now.", or once the season is over, "The season is over. Billy Bob is champion." (or "The season is over, with 2 level at the top." when it ended in a tie).
 - A row for each driver with their place, their gap to the leader, and **Leading**, **Still in it** or **Out of reach** (**Champion** once it's over). Everyone who can still win is listed, then the first three out of reach, then "and 6 more out of reach".
 
-A driver is **Still in it** while they can still at least draw level with the leader, with **Count each driver's best** applied. The card and the announcer always agree. A driver close on points can be out of reach when their best rounds are already full and a win would only replace their worst.
+A driver is **Still in it** while they can still at least draw level with the leader, with **Count each driver's best** applied. A driver close on points can be out of reach when their best rounds are already full and a win would only replace their worst.
 
 It needs **Rounds in the season** set in the scoring rules, and says so when it isn't. It also says so when it can't be worked out.
 If a race counts toward a championship and the recap is on, the end-of-race recap includes how the championship table moved. See [Commentary](../announcer/commentary.md).
@@ -299,8 +299,7 @@ Either way, the sidebar **Undo** button puts the points back as they were.
 
 Every tab works the same way: it opens with a sentence on what the figures add up to, then the chart or table that shows it, and most end with a **Try this** line: one thing to try next time out. The figures are all still there, under the reading.
 
-![Race Analytics → Overview: At a glance tiles for races run, laps counted, drivers seen and the best lap ever, with who set it and where, and the Track records table with each layout's lap record, who holds it, when it was set and how many races it has had](../assets/images/race-analytics-overview.png)
-
+<!-- screenshot: Race Analytics → Overview with the At a glance tiles and Track records filled in, taken on the made-up club (the old picture showed a real club logo, 25 Nov 2026) -->
 <!-- screenshot: Race Analytics → Overview with the headline, the From the last race night news and the Track records card with its Next closest column -->
 
 ### Car lengths
@@ -413,7 +412,7 @@ Hover over a column heading for an explanation.
 
 Drivers earn badges for what they do on track. Badges are worked out once each race is saved, and the announcer calls up to three of them at the end of the race. Any more are still awarded and listed in the console, but not announced. Each badge can be earned once per driver.
 
-![The Achievements page for Al Gorithim: 0 of 84 earned, and the In a race badges such as Metronome, Unshakeable, Quickest of the Day and Wire to Wire, all Not earned yet](../assets/images/achievements.png)
+![The Achievements page for Al Gorithim: 2 of 84 earned, and the In a race badges such as Metronome, Unshakeable, Quickest of the Day and Wire to Wire, with Spotless earned](../assets/images/achievements.png)
 
 On the **Achievements** page:
 

@@ -435,7 +435,9 @@ public sealed class AboutForm : Form
         // address is then wanted on a phone instead - the same pairing the
         // club page gets on Club Website.
         var lnkEmail = Link(AppSupport.EmailSentence, AppSupport.Email, AppSupport.MailTo);
-        var lnkDocs = Link($"Guides and help: {AppSupport.DocsText}", AppSupport.DocsText, AppSupport.DocsUrl);
+        // WHY (25 Nov 2026, Asher: "put the guide online and link the app to it"):
+        // the guide is at heatcaller.com/docs/ now; this went to the home page.
+        var lnkDocs = Link("User guide: heatcaller.com/docs", "heatcaller.com/docs", AppSupport.GuideUrl);
 
         // The terms the club accepted before HeatCaller first opened, to
         // read again - see TermsForm.

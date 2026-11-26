@@ -2,7 +2,7 @@
 
 HeatCaller has one main window with a sidebar of pages on the left and the current page on the right. This page shows you how to move around, find a setting, tidy the sidebar, change the app's look, and read the app's log.
 
-![The HeatCaller window between races: the sidebar on the left with Race Control selected, and the Race Control page with its Session card, the Now and Next bar with Hold and Start Next, the flag row from Warm-up to Reset with Inbox, the empty Leaderboard with Auto on, and the clock column on the right](../assets/images/race-control-idle.png)
+![The HeatCaller window between races: the sidebar on the left with Race Control selected, and the Race Control page with its Session card, the Now and Next bar, the flag row with Inbox, the empty Leaderboard, the On Air, Warm-up and Auto Start pills and Focus along its foot, and the clock on the right with its column folded](../assets/images/race-control-idle.png)
 
 ## The title bar
 
@@ -17,7 +17,7 @@ The sidebar is always dark, whatever look you use. From top to bottom it has:
 1. The **HEATCALLER** header, or your club logo if you've set one. With a look that has Synthwave effects, such as **Synthwave**, it's animated (unless the logo is showing).
 2. The **Search pages...** box, with a chevron beside it that narrows the sidebar to just its icons (see [Just the icons](#just-the-icons)).
 3. The list of pages. Click one to open it.
-4. Icon buttons at the bottom: **Manage Navigation**, the announcer mute, and **Undo**. They have no text on them - hover over one to see its name. They're described below. When your club uses the HeatCaller voice, the AI commentary through the relay or ElevenLabs, a small line above them shows how much of this month's allowance is used, for example "AI 47% · Voice 34%". Click it for the **This Month** window; see [The chip in the sidebar](../announcer/commentary.md#the-chip-in-the-sidebar).
+4. Icon buttons at the bottom: **Manage Navigation**, the announcer mute, **Undo** and **User Guide**. They have no text on them - hover over one to see its name. They're described below. When your club uses the HeatCaller voice, the AI commentary through the relay or ElevenLabs, a small line above them shows how much of this month's allowance is used, for example "AI 47% · Voice 34%". Click it for the **This Month** window; see [The chip in the sidebar](../announcer/commentary.md#the-chip-in-the-sidebar).
 
 HeatCaller opens on the **Race Control** page.
 
@@ -181,13 +181,14 @@ Icon buttons, with no text on them - hover over one to see its name.
 | **Manage Navigation** | Opens the dialog for hiding and reordering pages (see above). |
 | **Mute Announcer** / **Unmute Announcer** | Silences the announcer (anything already queued is dropped), stops the crowd ambience and pauses the music. Unmuting brings back the ambience and music that were playing. The mute is remembered between sessions. The icon turns red while muted. <kbd>M</kbd> does the same (except while you're typing in a box). |
 | **Undo** | Undoes the last change you made (<kbd>Ctrl</kbd>+<kbd>Z</kbd> does the same, except while you're typing in a box). A count badge appears on the icon while there's anything to undo; hover over it to see the whole list, in order. To undo several steps at once, right-click the button (or click the small arrow on it) and pick a step: it's undone along with everything newer. HeatCaller keeps the last 25 undoable changes. With nothing to undo, there's no badge and the tooltip reads "Nothing to undo." |
+| **User Guide** | Opens this guide in your web browser, at the page about the page you're on: on **Race Control** it opens [Running a race](../race-control/running-a-race.md), on **Sounds** [Sounds and music](../announcer/sounds-and-music.md). The icon is an open book. |
 
 !!! tip
     If the announcer has gone quiet, check the sidebar first - the mute icon turns red when it's on.
 
 ## The Developer Console
 
-The **Connection** page has a **Developer console** card at the bottom. Despite the name, it's the app's running log, and it's useful to anyone. Every page writes to it: decoder messages, laps, flags, what the announcer said or skipped and why, backups, sessions saved, and warnings. It keeps logging while you're on other pages, and **Save Support Info** on **Backup & Restore** includes it.
+The **Connection** page has a **Developer console** card at the bottom. Despite the name, it's the app's running log, and it's useful to anyone. Every page writes to it: decoder messages, laps, flags, what the announcer said, backups, sessions saved, and warnings. It keeps logging while you're on other pages, and **Save Support Info** on **Backup & Restore** includes it.
 
 | Control | What it does |
 |---|---|
@@ -200,7 +201,7 @@ The **Connection** page has a **Developer console** card at the bottom. Despite 
 
 The filter only changes what you see. Nothing is thrown away, so you can widen the filter again. The console keeps roughly the last 5,000 lines.
 
-When something doesn't happen the way you expected, such as a race that wasn't saved or an announcement that didn't play, look in the console first. It usually says why.
+When something doesn't happen the way you expected, such as a race that wasn't saved or the announcer going quiet, look in the console first.
 
 <!-- screenshot: Developer Console on the Connection page with the Voice preset selected -->
 

@@ -303,7 +303,7 @@ A club is only ever told a voice's `id`, `name` and `what`. The ElevenLabs voice
 Pick voices that read well over a PA at a noisy track, and write `what` as one short phrase: it is all a race director has to go on when choosing, since the app's **Test** buttons are hidden on this voice.
 
 !!! note
-    Changing a voice's model or settings means every laptop makes that voice's lines again, which costs each club a little of its allowance, so re-tune between seasons rather than mid-season.
+    Re-tune a voice's model or settings between seasons rather than mid-season: it costs each club a little of its allowance.
 
 ### Switching a club on
 

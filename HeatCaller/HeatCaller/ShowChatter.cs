@@ -127,7 +127,7 @@ internal static class ShowChatter
     internal static readonly Level Standard = new(
         "standard",
         "Standard",
-        "The pacing as it comes: quiet through the heats, everything saved for the mains.",
+        "The pacing as it comes.",
         1.0,
         false,
         1.0,
@@ -159,7 +159,7 @@ internal static class ShowChatter
         new Level(
             "measured",
             "Measured",
-            "A little under the standard pacing. Color in the mains, almost none in the heats.",
+            "A little under the standard pacing.",
             0.75,
             false,
             0.75,
@@ -428,7 +428,6 @@ internal static class ShowChatter
         var level = For(key);
 
         var heat = Scaled(new RaceStature(RaceBilling.Heat, false).AirtimeCap, key);
-        var main = Scaled(new RaceStature(RaceBilling.TopMain, false).AirtimeCap, key);
 
         // AND WHAT IT DOES TO THE LAP CALLS (14 Oct 2026), which is the
         // half a club was never told about - see the note at the top of
@@ -442,32 +441,26 @@ internal static class ShowChatter
         // EVERY LIMIT IT MOVES, worked out from the battle watch's own row
         // (3 Nov 2026) - the line used to name only the ten-minute ceiling,
         // and a club reading "Non-stop" took that to mean nothing else held.
-        var battle = CommentaryBudget.Spec(SegmentKind.BattleWatch);
-        var perNight = ScaledLimit(battle.MaxPerMeeting, key);
-        var perClass = ScaledLimit(battle.MaxPerClass, key);
-        var gap = (int)Math.Round(ScaledGap(battle.MinGap, key).TotalSeconds);
+        // WHY (25 Nov 2026, Asher: "fix the app text too"): the line gave the
+        // segment limits for each kind of race, the battle watch's gap, how
+        // the night's share is saved for the mains and which calls are never
+        // held back - the pacing the patent applications claim. It now says
+        // what a club hears and what the dial holds back, without the rules.
+        var perNight = ScaledLimit(CommentaryBudget.Spec(SegmentKind.BattleWatch).MaxPerMeeting, key);
 
         var limits = perNight == int.MaxValue
             ? "No limit on how often a segment comes back in a night - only having nothing new to say stops a repeat."
-            : $"Each segment has a limit for the night and per class - battle watch {perNight} a night, {perClass} per class.";
+            : "Each segment has a limit for the night and per class.";
 
-        var mains = level.OpeningFloat >= 1
-            ? " Nothing is saved for the mains: the night's whole share is there from the first race."
-            : level.OpeningFloat > CommentaryBudget.OpeningFloat
-                ? " Less is saved for the mains."
-                : " The night saves its share for the mains.";
-
-        return $"{level.Blurb} Up to {heat} spoken {(heat == 1 ? "segment" : "segments")} in ten minutes in a heat "
-             + $"and {main} in the top main"
+        return $"{level.Blurb} Up to {heat} spoken {(heat == 1 ? "segment" : "segments")} in ten minutes"
              + (level.TwoVoicesBelowTheMains || twoVoicesInHeats
                  ? ", with the co-host out in the heats too."
                  : ", with the co-host held for the mains.")
-             + $" {limits} A battle watch waits {gap}s after the last line.{mains}"
+             + $" {limits}"
              + $" On the timing calls it allows {perLap} per lap"
              + (held.Count > 0
                  ? $" and holds back {Plural.Of(held.Count, "call")} outright: {string.Join(", ", held)}."
                  : " and holds none of them back.")
-             + " Intros, recaps, flags, countdowns, grid calls and driver releases are never held back, whatever "
-             + "this says, and the month's allowance still decides what is actually spent.";
+             + " The month's allowance still decides what is actually spent.";
     }
 }

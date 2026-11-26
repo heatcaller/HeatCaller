@@ -1457,6 +1457,17 @@ public sealed partial class VoiceSettingsControl
             _chkPositionGaps.AutoSize = true;
             _chkPositionGaps.Checked = config.PositionReportSayGaps;
 
+            // WHY (25 Nov 2026, Asher): gaps take a few seconds to say, and on
+            // a short lap the cars have moved on by the time the last one is
+            // heard. Said under the box so a club with a tight track knows
+            // before it ticks it, not after a night of stale gaps.
+            var lblGapsHint = new Label
+            {
+                Text = "Works best on a longer track. On short laps the gaps can change before they've all been said.",
+                AutoSize = true,
+                ForeColor = AppTheme.TextMuted,
+            };
+
             var lblEvery = new Label { Text = "Read every", AutoSize = true };
             var lblSuffix = new Label { Text = "lap(s) of the LEADER,", AutoSize = true };
             var lblDepth = new Label { Text = "down to P", AutoSize = true };
@@ -1483,6 +1494,7 @@ public sealed partial class VoiceSettingsControl
             rows.Controls.Add(lblDepth);
             rows.Controls.Add(_numPositionDepth);
             rows.Controls.Add(_chkPositionGaps);
+            rows.Controls.Add(lblGapsHint);
             rows.Controls.Add(_lblPositionDepthWait);
 
             lines.Add(Line(
@@ -1495,6 +1507,7 @@ public sealed partial class VoiceSettingsControl
 
             lines.Add(Line(UiLayout.RowGap, (_lblPositionDepthWait, 0)));
             lines.Add(Line(UiLayout.RowGap, (_chkPositionGaps, 0)));
+            lines.Add(Line(UiLayout.HintGap, (lblGapsHint, 0)));
         }
 
         return lines;

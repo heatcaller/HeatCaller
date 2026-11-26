@@ -265,6 +265,15 @@ partial class MainForm
         pnlSidebarFooter.Controls.Add(btnManageNav);
         pnlSidebarFooter.Controls.Add(btnMuteToggle);
 
+        // The User Guide (25 Nov 2026, MainForm.Guide.cs), built with the others
+        // so the theme pass gives it their rounded plate.
+        btnGuide.Size = new Size(UiLayout.AtDpi(43), UiLayout.AtDpi(42));
+        btnGuide.FlatStyle = FlatStyle.Flat;
+        btnGuide.BackColor = AppTheme.SidebarHover;
+        btnGuide.ForeColor = AppTheme.SidebarText;
+        btnGuide.Font = AppTheme.SmallFont;
+        pnlSidebarFooter.Controls.Add(btnGuide);
+
         // Search box sits between the header banner and the nav list. Docked
         // in its own panel so it gets padding without fighting the list's fill.
         pnlNavSearch.Dock = DockStyle.Top;

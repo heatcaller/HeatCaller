@@ -14,7 +14,7 @@ This page also covers choosing which columns each leaderboard shows, and the **S
 
 A small reminder of the keys, "F11: toggle fullscreen     M: track map     O: on air     C: captions     Esc: close", sits in the top-right corner. HeatCaller doesn't remember which monitor you used, so you move it each time you open it. Pressing **Big Screen** (or <kbd>B</kbd>, or **Open Big Screen** on **Local Screens**) while it's already open brings that window to the front rather than opening a second one. The **Practice** page's **Open Big Screen** opens a window of its own each time, so you can run more than one if you have the screens.
 
-![The Big Screen in a window during a demo race: RACING — GREEN FLAG and RACE IN PROGRESS, the race clock at 01:06 with 4 LAPS TO GO, the leaderboard of eight drivers with laps, best laps and gaps, and ON DECK along the bottom](../assets/images/big-screen-racing.png)
+![The Big Screen in a window during a demo race: RACING — GREEN FLAG and RACE IN PROGRESS, the race clock at 01:07 with 3 LAPS TO GO, the leaderboard of eight drivers with laps, best laps and gaps, and ON DECK along the bottom](../assets/images/big-screen-racing.png)
 
 ## What it shows
 
@@ -394,7 +394,7 @@ Each picture is checked before it's added. A file over 50 MB, a picture over 200
 
 Images are scaled to fit the leaderboard area without stretching. Only the leaderboard area is replaced: the banner, clock, countdown and ON DECK bar stay on screen. An animated GIF shows its first frame. A missing or unreadable image is skipped, and so is a slide over the size limits, for example one added by an older version or brought in with a backup: the Big Screen stays on the leaderboard for that turn, and its preview on the **Sponsors** page stays blank. Nothing is deleted.
 
-![The Sponsors page with three slides listed, two videos and a picture, and the first video in the preview, the Add Image, Add Video, Preview Video, Remove and Move buttons under it, and the Rotation timing card below: the leaderboard shows for 10 seconds, each slide for 8, and the leaderboard is never interrupted while a race is running](../assets/images/sponsors.png)
+![The Sponsors page with one picture slide listed and shown in the preview, the Add Image, Add Video, Preview Video, Remove and Move buttons under it, and the Rotation timing card below: the leaderboard shows for 10 seconds, each slide for 8, and the leaderboard is never interrupted while a race is running](../assets/images/sponsors.png)
 
 ### Rotation timing
 
@@ -493,7 +493,7 @@ The announcer puts a short credit on the end of that call, then the sponsor's ta
 
 - A moment that happens often (fastest laps, lead changes, battles) isn't credited every time. Driver introductions, the qualifying recap and the race result are credited every time.
 - Each moment has one sponsor. Tick the same moment for two sponsors and the card says so in red, for example "Fastest lap is ticked for Joe's Hobby Shop and Quickway Diner - only Joe's Hobby Shop, higher in the list, is named."
-- Every credit the announcer makes goes in tonight's report, under that sponsor's reads.
+- Tonight's report lists each sponsor's credits under their reads.
 
 #### Telling a sponsor what they got
 
@@ -528,7 +528,7 @@ This is the thing that renews a sponsor, and no other timing software in this sp
 The clipboard rather than a file, because pasting into an email is what actually happens to this. The whole report is also shown in the message that confirms it was copied, so you can read it before you send it.
 
 !!! note
-    The counts are **tonight's**, and they come from the announcer's own rotation — the same thing that decides whose turn each read is. They start again with each new race day, and they survive closing the laptop between the heats and the mains.
+    The counts are **tonight's**. They start again with each new race day, and they survive closing the laptop between the heats and the mains.
 
 #### How long a read runs
 
@@ -554,7 +554,7 @@ Having copy doesn't move a sponsor up the queue. Whose turn it is comes first, a
 
 - **A race call always comes first.** A recap or a "coming up next" always goes ahead of an advert.
 - Nothing is read while a race is on track, while the announcer is held, or while a line is being written.
-- An ad break that finishes while a race is running doesn't lose its read: it waits for the next real gap. If reads are switched off, nobody is sold, or no copy would fit, that break's read is dropped instead of saved up.
+- An ad break that finishes while a race is running doesn't lose its read: it waits for the next real gap. If reads are switched off, nobody is sold, or no copy would fit, that break has no read.
 - A read goes on the announcement banner as well as over the PA, like the commentary segments.
 
 !!! note

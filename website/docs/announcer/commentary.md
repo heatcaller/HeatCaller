@@ -25,7 +25,7 @@ Settings are on **Voice → AI Commentary**.
 | **Segments** | In the gaps between races, and during one, when the night actually gives one something to say. | Yes - see [Through the night](#through-the-night) |
 | **Continuity** | Between races, in front of and after whatever else is being said. | Yes, and not written by the model - see [Continuity between the parts](#continuity-between-the-parts) |
 
-The model is given facts HeatCaller has already worked out - positions, gaps, lap times, the winning margin, whether the race is a heat or a main, rivalries between drivers in the race, the drivers' records at this club, the layout's lap record, how strong the field is, the car a finisher raced, and championship movement where it applies - and puts them into words.
+The commentary talks about positions, gaps, lap times, the winning margin, whether the race is a heat or a main, rivalries between drivers in the race, the drivers' records at this club, the layout's lap record, how strong the field is, the car a finisher raced, and championship movement where it applies.
 
 Every figure carries the scope it was counted over, and the model is told to keep it: a lap record is the record *on this layout*, the biggest field is the biggest *in this class*, and a driver is quicker *than in their first race tonight*. A true number read out without its scope is a claim a driver can disprove in one sentence.
 
@@ -185,7 +185,7 @@ Each allowance has **Ask for More** and an **Email support@heatcaller.com** link
 The model on this PC is the fallback, and the only one that writes with the internet down. It comes inside the installer, so there's nothing to download, install or set up, and it's ready the first time you tick **Enable AI commentary**.
 
 - **What it is.** A small language model, about 440 MB, installed beside `HeatCaller.exe` as `commentary.gguf`. It runs inside HeatCaller itself, not as a separate program.
-- **Why it's small.** It has to write a line in the gap between races while the same laptop is reading the decoder, speaking and driving the Big Screen. It only rephrases facts HeatCaller has already worked out, so a small model is enough, and it leaves the race PC room to run the race.
+- **Why it's small.** It has to write a line in the gap between races while the same laptop is reading the decoder, speaking and driving the Big Screen. It only has to put the race into words, so a small model is enough, and it leaves the race PC room to run the race.
 - **What it needs.** At least 2 GB of memory. On a PC with less, HeatCaller doesn't try it, and the console says "[llm] The built-in model is not being used: this PC has 1.5 GB of memory, too little to run it beside a race." The relay still writes there when it can.
 - **One line at a time.** It writes one line, then the next, so it never takes the processor away from the race.
 - **It checks itself.** When commentary is switched on, HeatCaller writes one test line in the background and times it. If this PC takes longer than **Give up after:** to write it, the built-in model is switched off for the session and the console says so, rather than making every segment wait and then say nothing. Give it longer on the **Who writes it** card if you'd rather it kept trying.
@@ -205,7 +205,7 @@ The portable copy of HeatCaller has no model beside it. It also looks in `%LOCAL
 
 Changes save as you make them and take effect straight away.
 
-![Voice, AI Commentary tab with Enable AI commentary ticked: the On, Written by, Ready and Enthusiastic tiles across the top, and the Who writes it card with Write through the club relay when it can, the model on this PC as the fallback, and this month's AI commentary at 72% used](../assets/images/voice-ai-commentary.png)
+![Voice, AI Commentary tab with Enable AI commentary ticked: the On, Written by, Ready and Enthusiastic tiles across the top, and the Who writes it card with Write through the club relay when it can, the model on this PC as the fallback, and this month's AI commentary at 82% used](../assets/images/voice-ai-commentary.png)
 
 ### Warm-up
 
@@ -236,7 +236,7 @@ With **Give the lines their tone's delivery when they're spoken** ticked, the **
 
 #### Character tones
 
-Four more tones put the whole night in character: every line, the recap, the segments between races and the pit-lane interviews. Each one is told to keep every name, position and number exactly as given, so the call underneath can still be trusted. Villain is a cartoon villain, not a nasty one. Apart from Sailor-mouth, nothing is crude or gory, nobody really gets hurt, and no driver is ever mocked.
+Four more tones put the whole night in character: every line, the recap, the segments between races and the pit-lane interviews. The names, positions and numbers stay the same whichever tone is on. Villain is a cartoon villain, not a nasty one. Apart from Sailor-mouth, nothing is crude or gory, nobody really gets hurt, and no driver is ever mocked.
 
 In the **Writing tone:** list each one is named with its group first and marked "(Premium)", for example **Silly: Pirate - arr (Premium)**. The mark is only a label for now: every tone works for every club.
 
@@ -247,7 +247,7 @@ In the **Writing tone:** list each one is named with its group first and marked 
 | **Silly: Town crier** | Hear ye, hear ye. "Hear ye! Upon the twelfth lap, Sam doth lead Bill by four tenths of a second!" | Shouted throughout |
 | **Adult: Sailor-mouth** | A foul-mouthed pit crew chief at the end of a long night: swears and is crude, but stays clear about who is where. See [Sailor-mouth](#sailor-mouth). | A laugh to open |
 
-A character tone is the model's to play, so a small local model can drift out of character. Every name, position and number is still meant to be kept exactly as given, whichever tone is on.
+A character tone is the model's to play, so a small local model can drift out of character.
 
 #### Sailor-mouth
 
@@ -293,13 +293,13 @@ Intros and recaps say what kind of race it is: a qualifying heat, a main (the A-
 
 ### Through the night
 
-Intros and recaps are what the announcer says about a race. This card is everything else, and how much of it there is: *"Not written lap by lap - a model takes longer than a lap. Each segment speaks only when the race gives it something to say, and the night saves itself for the mains."* So switching every segment on doesn't mean hearing them all every race.
+Intros and recaps are what the announcer says about a race. This card is everything else, and how much of it there is: *"Each segment speaks only when the race gives it something to say."* So switching every segment on doesn't mean hearing them all every race.
 
-**How chatty:** comes first, with a line under it describing the choice. It's the one dial for the AI commentary: it sets the level the night's shape sits at, and every segment's own limits and gaps - see [How chatty](#how-chatty). The tick boxes below it say which segments run.
+**How chatty:** comes first, with a line under it describing the choice. It's the one dial for the AI commentary: it sets how much the announcer says through the night, and how often each segment can come round - see [How chatty](#how-chatty). The tick boxes below it say which segments run.
 
 The gap between the built-in timing calls ("Top spot to Al Gorithim!") is **Pacing:** on **Voice → Race Calls**, in the **How often** card under **Max spoken announcements per lap:** (see [How often](voice.md#how-often)). It never governed the AI's segments, which is why it moved. The **Segments run** picker that used to sit here is gone: a club that had picked less than everything finds the segments past its choice unticked instead, so nothing it heard changes.
 
-To see why the AI said little in a race, click the lost/held count on Race Control's announcer strip. The **Lines not said this race** window now opens with a line for the AI: what it said, and why the rest wasn't said.
+To see why the AI said little in a race, click the count of lines not said on Race Control's announcer strip. The **Lines not said this race** window opens with a line for the AI.
 
 Under the dials are the talking points:
 
@@ -427,18 +427,15 @@ When the host throws to another member of the cast - the announcer down to the c
 
 #### What race control did
 
-> "Bill takes it - though on the road it was Sam's, until a five second penalty for track cutting dropped him to second."
-
-The recap knows what race control did in the race, and whether it changed the result. All of it is already on the saved result, so there is nothing new to fill in:
+The recap says what race control decided and whether it changed the result. All of it is already on the saved result, so there is nothing new to fill in:
 
 | The recap is told | Where it comes from |
 |---|---|
 | Each warning, its reason and what it cost | The warnings given from the leaderboard during the race. The reason is the one the PA already read out when the warning was given. |
 | A jump start, and the seconds it added (or that none were added) | The jump-start call and the penalty buttons. |
-| A black flag, and the disqualification it led to | The warning ladder. Said once, not again as a correction. |
+| A black flag, and the disqualification it led to | The warning ladder. |
 | A DNF or a DQ, on the driver's own result line | **Edit Result** in Race History. |
 | A correction made after the race, and the reason typed for it | **Edit Result**. It says what the result is now - "5 seconds added as a penalty" - never the before-and-after. |
-| **Who had it on the road**, when a penalty changed the winner, and how many places a penalty cost anybody else | Worked out from the laps and time as raced, less the penalty. A missed lap put back by hand is a correction, not a penalty, so it never counts as one. |
 | **Who won on handicap**, for a class scored on time or lap credits | The **Handicaps** page. Not for a **Staggered - handicap** start, whose credits were already spent as the head start. |
 | A driver who beat the **target lap** race control set them tonight | **Coach → Target lap...** on the leaderboard. Only a beaten target is said. |
 | **The race director's note** on the race - the weather, the track, an incident | The **Notes** box in Race History. |
@@ -447,8 +444,8 @@ The model is told to say a decision plainly - what was given and why - and never
 
 Most corrections are made after the race's own recap has gone out. Those are picked up by [the night in four minutes](#the-night-in-four-minutes) instead, which tells the evening as it finally stood: a result a penalty changed, a disqualification, a correction, and the race director's notes. It says what changed but never the reason typed for it, because this is the piece a club passes on to people who weren't there. None of it goes into the sign-off, so the evening never ends on the worst thing that happened to one driver.
 
-- **Ready when it's wanted.** Each hand-over plays straight on, with no wait for the model or the voice.
-- **Never a pause for it.** HeatCaller's own built-in lines are ready as well, and go out for either half the model's line isn't ready for, or that doesn't fit: too long, or missing the name it had to say. The console says which went out.
+- **No waiting.** Each hand-over follows straight on from the part before it.
+- **Never a pause for it.** HeatCaller's own built-in lines are ready as well, and go out for either half of the model's line that can't be used, or that doesn't fit: too long, or missing the name it had to say. The console says which went out.
 - **Names come from Voice → Cast.** The announcer's name for the pit lane, the recap host's name for the achievements. With no name set, nobody is named and nothing is made up.
 - **Behind the lines that matter more.** On the model on this PC, which answers one request at a time, the interview is always asked for before its hand-over, and the achievements' hand-over is written after the booth interview and the sign-off - so a hand-over never makes those late. On that model the achievements often get the built-in hand-over for that reason.
 - **Only where there's someone to hand to.** No co-host, and the announcer asks the pit lane questions himself; no voice picked for the achievements reader, and the reader doesn't hand back (it would be the host handing back to himself).
@@ -471,7 +468,7 @@ A read is only used after HeatCaller has checked it:
 - **Nobody else from the race is named.**
 - **It doesn't hand back to the host itself.** The hand back is a line of its own.
 
-If the read isn't right or isn't ready in time, HeatCaller's own read goes out instead, so the achievements are never late. The console says which read went out, and why.
+If the read isn't right, or can't be used, HeatCaller's own read goes out instead. The console says which read went out, and why.
 
 The read is written as soon as the recap is, before the booth interview and the sign-off, because the achievements play before them. On the model on this PC, which answers one request at a time, the Team Principal is written after it.
 
@@ -521,7 +518,7 @@ The announcer's line into the break - the teaser - is written by the AI each rac
 
 A name you leave blank is left out, never made up. Your teaser lines are given to the AI as the feel your club likes, not copied.
 
-HeatCaller checks the line before it's spoken. If one of the names is missing, it never says a break is coming, it runs long, or it repeats one of the last few throws, HeatCaller says a line of its own instead - still naming all three, and not the same one twice running. It does the same if the AI's line isn't ready in time. The console says which was used.
+HeatCaller checks the line before it's spoken. If one of the names is missing, it never says a break is coming, it runs long, or it repeats one of the last few throws, HeatCaller says a line of its own instead - still naming all three, and not the same one twice running. It does the same if there's no AI line to use. The console says which was used.
 
 Each throw is one AI line, so it counts toward your monthly AI commentary lines.
 
@@ -624,9 +621,9 @@ This changes nothing about **segments during a race or before one**. A battle ca
 
 #### When each part plays
 
-The booth interview, the sign-off, the unofficial result, the hand-overs and every color segment are made ready so they run straight on. Each part only starts once the one before it has finished:
+The booth interview, the sign-off, the unofficial result, the hand-overs and every color segment play one after another:
 
-- If a part isn't ready in time, it's skipped rather than leaving a long silence, and the console says so.
+- If a part can't go out, the show moves on to the next, and the console says so.
 - If the next race is called to the grid, the show stops there.
 - If the model's interview can't be split into its two voices' lines, it isn't used.
 
@@ -849,7 +846,7 @@ If the next race is called to the grid partway through, the music is wound up wi
 **Race intros** are on the list too, and they work a little differently. The opener plays over staging, *while the model is still writing the intro* — a good use of a wait nobody enjoys. But what follows an intro is the countdown, immediately if auto-advance is on, so the bed is **cut short** rather than ended: it fades out over about a second the moment the race leaves staging, with no lift and without playing its own fade over the beeps and the horn. With auto-advance off, or when you're not ready to start yet, the intro's show ends the ordinary way instead — the lift, then the piece's own fade, into the gap before the start.
 
 !!! note
-    The music can never hold a start up. The staging chain waits on the announcer's voice, and the bed isn't that — so a bed still fading never delays a countdown.
+    The music can never hold a start up: a bed still fading never delays a countdown.
 
 If you leave intros on for every race, the shortened opener is what keeps that from wearing thin: the first race of the night gets the whole piece and the rest come in on its tail. **Only for a main, or a race with a known rivalry on the grid** (under **Race intros**, on the **Before the start** card) is still worth a look if you'd rather heats started with nothing at all.
 
@@ -941,7 +938,7 @@ After the last race it writes the whole evening as a short piece — a driver's 
 
 It is the one thing HeatCaller makes that somebody outside the building would choose to sit through. Until this, a club had a results table to post and nothing else.
 
-**It is not the sign-off, and the difference is the whole point.** The sign-off is twenty seconds said to a room that was there, so it refers to things. This explains them: the model is told who it is for, told to move through the evening roughly in order rather than listing the highlights, and told that "the A-main" means nothing to somebody who was not watching, so it has to say what it was. It is also allowed to repeat what the room already heard — the result the sign-off mentioned in passing is exactly what somebody at home wants — so its facts are gathered with the "already said" filter switched off entirely. Without that, a club that had a good sign-off would get an empty recap.
+**It is not the sign-off, and the difference is the whole point.** The sign-off is twenty seconds said to a room that was there, so it refers to things. This explains them: the model is told who it is for, told to move through the evening roughly in order rather than listing the highlights, and told that "the A-main" means nothing to somebody who was not watching, so it has to say what it was. It's allowed to repeat what the room already heard - the result the sign-off mentioned in passing is exactly what somebody at home wants.
 
 It is **four hundred words**, and the same four hundred whatever you have set **Max length:** to under *How it's written*. That setting is about one spoken line; somebody who wanted terse race calls did not thereby ask for a one-paragraph summary of their evening. If you have set a limit *longer* than the piece, you keep it.
 
@@ -949,7 +946,7 @@ It is **four hundred words**, and the same four hundred whatever you have set **
 
 **Read in pieces.** Four minutes handed to a voice engine as one request is a request that times out or comes back truncated. It is split into pieces a voice can take, **only ever at the end of a sentence**, so the pauses inside it are the pauses inside a paragraph rather than a stop in the middle of a clause. A single sentence longer than a piece goes out whole rather than being cut.
 
-Each piece queues like any other spoken line, which means **a flag call still jumps in front of whatever of it is unspoken**. On a night that turns out not to be quite over, the race wins.
+A flag call still comes first, so on a night that turns out not to be quite over, the race wins.
 
 **The pieces run straight on** (26 Oct 2026), for this and for a driver's own night alike, with no gap at the joins. Calling the next race, pressing **Reset** or muting the announcer stops the read.
 
@@ -1028,7 +1025,7 @@ A club that doesn't run its practice through HeatCaller hears nothing about prac
 
 The form guide reads a driver's recent placings out in order — *"fourth, second, first, sixth"*. That's a results sheet read aloud. This is the other half, and the difference isn't detail, it's the **unit**: a club member's memory is organized by nights, not races. *"He's been on the podium three weeks running"* is a thing a regular says to another regular in the pits.
 
-One line per driver, and it's the best thing that's true of them — a driver on a podium run who also hasn't missed a night gets the run, because two sentences about one person in one segment is repetition. At most **two** of these go into a form guide, and the strongest claims win the places rather than whoever was first on the grid.
+One line per driver, and it's the best thing that's true of them — a driver on a podium run who also hasn't missed a night gets the run, because two sentences about one person in one segment is repetition. At most **two** of these go into a form guide.
 
 What each one needs:
 
@@ -1119,22 +1116,15 @@ The model is told to refer to the thread **once, in passing**, as something the 
 
 Before a race that counts towards a championship, the intro can say what that race could decide - as one named finishing order, with its condition said out loud:
 
-> "If Carl wins this race and Bill finishes second, Carl takes the lead of the Winter Series from Alex by 3 points - worked out for that finishing order and no other."
+> "If Carl wins this race and Bill finishes second, Carl takes the lead of the Winter Series from Alex by 3 points."
 
-**The condition is part of the claim.** What a result does to a table depends on where *everyone else* finishes. HeatCaller only says this when it is certain the sentence is true, and says nothing otherwise, which is the usual answer.
+**The condition is part of the claim.** The intro says the condition along with the result, or leaves the line out. Most of the time it says nothing.
 
-**A margin is only given when it is certain too.** Where it isn't, the line says the lead changes hands and gives no figure.
+Sometimes the line gives the points margin, and sometimes it only says the lead changes hands.
 
-What it needs:
-
-- A race that counts towards a championship by that championship's own rule - its class, **Mains only** and race days, on the **Championship** page. A freeform race counts towards nothing.
-- At least **3** rounds already counted in that championship. Below that the table is more or less the last race's result, the drop rule can't have bitten yet, and the arithmetic is something anybody in the room can do in their head while the cars go on the grid - which is the whole justification for saying it at all.
-- At least **2** of that table's drivers on this grid, and a grid of no more than **24**.
-- The named winner is the higher-placed challenger and the named second is the driver above them in the table, so this only ever reports a lead **changing hands** - never a leader extending one.
+It needs a race that counts towards a championship by that championship's own rule (its class, **Mains only** and race days, on the **Championship** page), and a season with a few rounds already counted. A freeform race counts towards nothing. It only ever talks about the lead changing hands.
 
 It's said once, not once per race.
-
-The model is told to keep both halves of the condition, and never to say that a driver *can*, *could*, *might*, *needs only* or *is on for* the lead - and to drop the fact entirely rather than trim it if it won't fit the line being written.
 
 ## The top and tail of the night
 
@@ -1293,7 +1283,7 @@ Most of the care in this feature is in the silence, because a claim about what "
 
 ### What the model is told
 
-The figures go across exactly as counted, with instructions not to round a percentage, soften a count, or describe the vote as close, unanimous or overwhelming beyond what the numbers say. These are forty people standing in the room who know what they voted, and a percentage nudged to a rounder-sounding one is this app misreporting its own audience back to itself.
+The announcer says the room's figures as they were counted, and never calls the vote close, unanimous or overwhelming.
 
 And nobody is made a fool of. The room being wrong is funny about the **room**; the same line aimed at the driver nobody backed would be the app sneering at a club member over their own PA. The model is told to be warm about whoever won, whether the room backed them or not — and never to say who anybody should have picked, or why it thinks the room voted as it did.
 
@@ -1325,7 +1315,7 @@ After the flag it stays quiet on a night with another race still to run that the
 
 ### What is behind a total
 
-The standings the race intro and the recap are handed also say what is behind a driver's total, when there is something: rounds the best-rounds rule dropped and what they were worth, points carried in from before HeatCaller, and rounds entered without completing a lap. These are the figures the **Championship** page shows. They explain why a driver who raced didn't move, and the model is told never to do sums with them.
+The standings the race intro and the recap are handed also say what is behind a driver's total, when there is something: rounds the best-rounds rule dropped and what they were worth, points carried in from before HeatCaller, and rounds entered without completing a lap. These are the figures the **Championship** page shows. They explain why a driver who raced didn't move.
 
 ### It needs one thing from you
 
@@ -1335,9 +1325,9 @@ Nothing else in HeatCaller knows how long a season is, and it can't be worked ou
 
 **Leave it at none and the announcer says nothing about any of this.** That's deliberate. A false *"nobody can catch him now"* said over a PA, in front of the drivers it's about, is the timing system telling your club something untrue about its own championship — and it would be found out three weeks later. The box changes no points and no standings; only the announcer reads it.
 
-### The claim is proved, not calculated
+### It counts the best-rounds rule
 
-HeatCaller takes the best-rounds rule into account, so it never says a title is settled, or still open, unless that is certain.
+The announcer's championship lines follow the season's best-rounds rule.
 
 ### When it says nothing
 
@@ -1350,7 +1340,6 @@ Most of the time, and on purpose:
 | Fewer than three rounds have counted | A championship nobody has raced three rounds of is a scoreboard, not a season |
 | The season is already past its planned length | This race counts towards a title that's over |
 | Nothing in the points table scores | No round can change anything |
-| The table has more than forty drivers in it | It keeps the race night's work light |
 
 Four rounds into a nine-round season, everyone is usually still in it — so the ordinary answer is silence. The console says which of these it was after every intro, so a quiet night reads as a decision rather than a fault.
 
@@ -1373,7 +1362,7 @@ How it's counted, and why each rule is there:
 
 **It needs four meetings filed on the layout and a run of at least three** before it says anything. A run as long as the layout's whole history isn't a run, it's the layout being new.
 
-The model is told to work the line in and told, in as many words, not to round the number, not to add a date, and not to turn it into a claim about a championship or a record. It's the line a club repeats to somebody afterwards, so a sentence of embroidery would be the whole claim gone.
+The line is said with the number as counted, with no date added, and never turned into a claim about a championship or a record. It's the line a club repeats to somebody afterwards, so a sentence of embroidery would be the whole claim gone.
 
 The console says what it found either way, so a silent main reads as a decision rather than a fault:
 
@@ -1386,29 +1375,27 @@ This sits alongside what the race *intro* already says about a layout — the ou
 
 ## How the night is paced
 
-A broadcast that talks at the same rate all evening teaches a room to stop listening, because nothing it says is ever more important than anything else it said — and then the one moment that mattered arrives with the same shrug as heat three.
-
-So the announcer is quiet early and loud late, and it works that out from **your program**. It is quieter in practice and the heats and saves itself for the mains, and the last race of the night gets the most. The co-host is kept for the mains too. **How chatty** sets how much it says overall - see [How chatty](#how-chatty) below.
+**How chatty** sets how much the announcer says through the night, and the co-host is kept for the mains - see [How chatty](#how-chatty) below.
 
 Two things are worth being plain about.
 
-**A club with no program loses nothing.** A freeform race, or a club that has never opened the **Program** tab, gets the same pacing all evening, with the second voice, exactly as before. Nothing here quietly takes the announcer away from a club that hasn't set a program up.
+**A club with no program loses nothing.** A freeform race, or a club that has never opened the **Program** tab, still gets the second voice, exactly as before. Nothing here quietly takes the announcer away from a club that hasn't set a program up.
 
-**These are limits, not targets.** A quiet club with a small allowance won't reach them. Nothing here makes anything be said.
+**How chatty sets limits, not targets.** A quiet club with a small allowance won't reach them. Nothing here makes anything be said.
 
-The console says which kind of race it's pacing for as the round changes, and says when a segment was held back, so a quiet heat reads as a decision rather than a fault.
+The console says when a segment was held back, so a quiet heat reads as a decision rather than a fault.
 
-The money side was already paced this way: the night's share of the month is released against how much of the program has run, so the mains always arrived with the most to spend. A night with no rounds on its program (freeform races only) has its whole share of lines available from the start, so the battle watch and the other segments keep going all evening instead of going quiet after the first few races. Build the heats later in the night and what is left is still saved for the mains.
+The month's lines are shared out across the night too. A night with no rounds on its program (freeform races only) has its whole share of lines available from the start, so the battle watch and the other segments keep going all evening instead of going quiet after the first few races.
 
 ### How chatty
 
-The shape above is right for every club — it's what stops a room tuning the announcer out. The *level* it sits at is taste. Forty drivers, a good PA and a crowd that came to watch wants more; eight mates on a Tuesday wants the result and then quiet.
+How much commentary a night wants is taste. Forty drivers, a good PA and a crowd that came to watch wants more; eight mates on a Tuesday wants the result and then quiet.
 
-So **How chatty**, at the top of the **Through the night** card, is the volume that shape sits at. It has five stops: **Sparing**, **Measured**, **Standard**, **Lively** and **Non-stop**. At every one of them the heats stay quieter than the mains.
+So **How chatty**, at the top of the **Through the night** card, sets it. It has five stops: **Sparing**, **Measured**, **Standard**, **Lively** and **Non-stop**.
 
-**Lively and Non-stop also let the co-host out in the heats.** By default the second voice is held for the mains, because a signal spent on everything isn't a signal — but a club asking for a chatty evening means the two voices as much as it means the count.
+**Lively and Non-stop also let the co-host out in the heats.** By default the second voice is kept for the mains, but a club asking for a chatty evening means the two voices as much as it means the count.
 
-**It moves every segment too.** **How chatty** also sets how often each segment can come round in a night, and how much of the night's share is saved for the mains.
+**It moves every segment too.** **How chatty** also sets how often each segment can come round in a night.
 
 A segment that is once a night (the Tonight Open, the sign-off numbers) stays once a night at every stop, and no quiet stop takes a ticked segment to nothing.
 
@@ -1427,9 +1414,9 @@ The console says when **How chatty** held a segment back, so a quiet night reads
 
 Two rules keep a night from repeating itself, and they're worth knowing because they're the answer to "why didn't it mention that?"
 
-**A fact is used once.** Once the announcer has said something, it isn't offered again that night.
+**A fact isn't repeated.** Something the announcer has mentioned isn't brought up again that night.
 
-**A subject cools down.** The announcer spreads its attention around the field rather than talking about the same driver segment after segment. It's a variety rule rather than a ban.
+**The field is shared around.** The announcer talks about the whole field, not one driver all night.
 
 ## What it will never say
 
@@ -1439,9 +1426,9 @@ Some of these have been asked for. Each is left out on purpose, and knowing whic
 
 **No championship sentence it wrote itself at either bookend.** "Two rounds left and four points covering the top three" is only ever said as your club typed it, in a championship's **Announcer's note**. It isn't worked out: it would be a second opinion against the **Championship check** segment, which has figures of its own.
 
-**No "nobody can catch him now" without the season's length.** Whether a title is settled needs the rounds left, and HeatCaller only knows that when **Rounds in the season** is filled in. With it, the race intro and the **Championship check** after the flag only say it when it is certain, as described in [What the championship still has riding on it](#what-the-championship-still-has-riding-on-it). Without it, nothing is ever claimed about a title being decided, and no driver is written off.
+**No "nobody can catch him now" without the season's length.** Whether a title is settled needs the rounds left, and HeatCaller only knows that when **Rounds in the season** is filled in. With it filled in, the race intro and the **Championship check** after the flag can talk about the title, as described in [What the championship still has riding on it](#what-the-championship-still-has-riding-on-it); without it, nothing is ever said about a title being decided, and no driver is written off.
 
-**No flat conditional.** "A win here and he leads the championship" is deliberately never said. It isn't a shorter way of saying the conditional above, it's a different claim: it's true for one finishing order out of many, and the room has no way of telling which one it's been given. Said over the PA and falsified forty minutes later, that's the timing system telling forty people something untrue - and the timing is the one thing a club trusts HeatCaller with, so it doesn't say things that might be wrong.
+**No flat conditional.** "A win here and he leads the championship" is never said. The announcer only says what one named finishing order would do.
 
 ## Continuity between the parts
 
@@ -1497,7 +1484,7 @@ Under that, the **Controls** card has the buttons in the table below, and the **
 | **Announcer** | Ready, writing a line, speaking, muted on the Mixer, or held until you press **Release**. |
 | **Last segment** | The last part of the program that went out, and whether it was two voices. |
 | **Tonight** | How many lines the announcer has written tonight, and what the budget is letting through. |
-| **This race** | How many of its timing calls the announcer made this race, and how many it lost or held back. |
+| **This race** | How many of its timing calls the announcer made this race, and how many weren't said. |
 | **Club notes** | How many notes are waiting for you to approve. |
 | **Drivers' notes** | Drivers' own notes in the segment being written - see [Drivers' own crew](#drivers-own-crew). |
 | **Room vote** | How many votes are in so far. |
@@ -1520,7 +1507,7 @@ Under that, the **Controls** card has the buttons in the table below, and the **
 
 The buttons drop focus the moment they're clicked, for the same reason the flag buttons do: a button that keeps focus keeps answering to Space and Enter, and on this row a stray keypress would put the last segment out over a live PA. Both report what they did to the console on a line starting `[show]`.
 
-**The count at the end of the buttons** says how many timing calls weren't said this race: "17 lost" (in the warning color), or "6 held" when the pacing dial held them back on purpose. **Click it** to open **Lines not said this race**: every one of those calls stacked up, newest first, each card showing when it was, what kind of call it was, who it was about, the words it would have said, and a short reason it wasn't said. Lost cards have a red edge; untick **Show lines held back by the pacing dial too** to see only those. The window stays open beside Race Control and updates as the race runs, and starts empty again with each new race. It keeps the last 300.
+**The count at the end of the buttons** says how many timing calls weren't said this race. **Click it** to open **Lines not said this race**: every one of those calls stacked up, newest first, each card showing when it was, what kind of call it was, who it was about and the words it would have said. Untick **Show lines held back by the pacing dial too** to leave out the ones the pacing dial held back. The window stays open beside Race Control and updates as the race runs, and starts empty again with each new race. It keeps the last 300.
 
 ## The gap when the voice changes hands
 
@@ -1559,7 +1546,7 @@ The last race summary is shown under **LAST RACE SUMMARY** on the Announcer scre
 
 Where the writing happens decides this. With **Write through the club relay when it can** ticked - how it comes - the facts below go to your club's relay and on to the model it writes with. Untick it and the model built into HeatCaller writes everything, entirely on your laptop: nothing is sent over the internet.
 
-The continuity lines are not part of this: they're built on the laptop from the program and the results, and never go to the model at all. What the model is given: driver names, teams and sponsors from profiles, results and lap times, rivalries, round and class names, the drivers' records at this club, the layout's lap record and its holder, how many cars are out, how a driver's pace has moved tonight, the car they raced, tonight's class and driver counts and the venue typed on the race day, the night's totals, the night's storyline, championship positions and the one conditional worked out from them, the show name, and, for the Technical Lead, the setup changes logged for the winning car in the **Garage**. Names and other typed text are cleaned before they go to the model (one line, no brackets, kept short), so something typed into a profile can't turn into instructions to the model.
+The continuity lines are not part of this: they're built on the laptop from the program and the results, and never go to the model at all. What the model is given: driver names, teams and sponsors from profiles, results and lap times, rivalries, round and class names, the drivers' records at this club, the layout's lap record and its holder, how many cars are out, how a driver's pace has moved tonight, the car they raced, tonight's class and driver counts and the venue typed on the race day, the night's totals, the night's storyline, championship positions, the show name, and, for the Technical Lead, the setup changes logged for the winning car in the **Garage**. Names and other typed text are cleaned before they go to the model (one line, no brackets, kept short), so something typed into a profile can't turn into instructions to the model.
 
 **Juniors.** With **Offline voices for juniors** ticked on **Voice → Voice** (the **Juniors** card), a line about a junior - their interview or intro, or facts that include one - is written by the model on this PC and never sent to the relay, even with the relay box ticked. It's said by the Kokoro voice on this PC too. See [Offline voices for juniors](voice.md#offline-voices-for-juniors).
 
@@ -1595,7 +1582,7 @@ See [Security and privacy](../admin/security-and-privacy.md).
 | A show says less than you expected | It ran out of room. A block stops at a minute and a half, and the first part that doesn't fit closes it. | Normal. The console line starting `[show]` says how many parts were dropped. |
 | A show stops partway through | A race staged, counted down, went green or took a flag. | Normal, and deliberate. The show stops when the race moves on. |
 | The club's playlist doesn't come back after a show | Shouldn't happen; the music is always released. | Check the console for lines starting `[show]`, and tell us what it says. |
-| A segment is ticked and never says anything | It has nothing true to say yet. Most of them have a bar to clear: a lap record needs 3 races on the layout, a field needs 4 cars and 4 races on file, a thread needs 4 race nights and 4 other drivers, a conditional needs 3 counted rounds, "this day at the club" needs a race day on the same date in an earlier year. | Normal at a new club or a small one. See [Through the night](#through-the-night) and [What the announcer draws on](#what-the-announcer-draws-on). |
+| A segment is ticked and never says anything | It has nothing true to say yet. Most of them have a bar to clear: a lap record needs 3 races on the layout, a field needs 4 cars and 4 races on file, a thread needs 4 race nights and 4 other drivers, what a race could decide needs a few counted rounds, "this day at the club" needs a race day on the same date in an earlier year. | Normal at a new club or a small one. See [Through the night](#through-the-night) and [What the announcer draws on](#what-the-announcer-draws-on). |
 | No commercial break after a race | No Big Screen is open, **Show sponsor slides on the Big Screen** is off, or there are no slides. | Open the Big Screen and turn the slides on, on the **Sponsors** page. The console says "No commercial break - no Big Screen is up with the club's sponsor slides switched on." |
 | The commercial break ends before the recap arrives | It hit its 90-second ceiling, or the rotation has been round every slide the club has. | Normal. The standings go back up and the recap still goes out when it's ready. Add more slides if you want the break to fill a longer wait. |
 | The sponsors flick on and straight back off | The recap arrived almost at once, so the break ran its 8-second floor. | Normal. |

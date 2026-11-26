@@ -89,7 +89,7 @@ internal static class AnnouncerDensity
     internal static readonly Level Balanced = new(
         "balanced",
         "Balanced",
-        "A beat between calls, so each one lands. Wider in practice, tighter in the top main.",
+        "A beat between calls, so each one lands.",
         1.0);
 
     /// <summary>
@@ -336,15 +336,13 @@ internal static class AnnouncerDensity
                  + "the dropped-call count on Race Control was added to make visible.";
         }
 
-        var practice = GapSeconds(new RaceStature(RaceBilling.Practice, false), key);
+        // WHY (25 Nov 2026, Asher: "fix the app text too"): the line gave the gap for
+        // each kind of race and listed the calls that skip the gap, which is
+        // how the patent applications' pacing claim reads. It now gives the
+        // gap a club hears in a heat, and says flags are always called.
         var heat = GapSeconds(new RaceStature(RaceBilling.Heat, false), key);
-        var main = GapSeconds(new RaceStature(RaceBilling.TopMain, false), key);
 
-        return $"{level.Blurb} About {Gap(practice)} between calls in practice, {Gap(heat)} in a heat and "
-             + $"{Gap(main)} in the top main."
-             + " A change of lead, a flag, a countdown, a grid call, a driver's release, the finish, an "
-             + "achievement, the last lap, the final minute and a track record are never held back, whatever this "
-             + "says - nor is any call that clearly outweighs the one before it.";
+        return $"{level.Blurb} About {Gap(heat)} between calls. Flag calls are always said.";
     }
 
     /// <summary>

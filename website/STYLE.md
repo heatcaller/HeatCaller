@@ -7,8 +7,8 @@ results, championships, a laptop Wi-Fi server for phones, and an optional online
 Node/TypeScript server hosted on Fly.io) that publishes the club's pages and online check-in.
 The app is in BETA. Its version number is not repeated here: it lives in
 `../HeatCaller/HeatCaller/HeatCaller.csproj` (`<Version>`) and nowhere else, so a bump is remembered in one
-place — read it there when a page needs it. The docs will be published on the product website with MkDocs
-(Material theme). Two audiences:
+place — read it there when a page needs it. The docs are published at https://heatcaller.com/docs/ with MkDocs
+(Material theme) - see README.md - and the app's User Guide button opens them. Two audiences:
 - **Race directors** — the person running the laptop at the track. Most pages.
 - **Club admins / IT** — relay hosting on Fly.io, tokens, security, backups, troubleshooting.
 
@@ -30,8 +30,8 @@ Race Analytics (Overview, Personal Bests, Lap Times, Head to Head, Trends, Pace)
 Practice, Ghost Cars, Demo Mode, Venues, Themes (no tabs: Looks, Crowd screens, Club logo and Appearance cards), Sponsors, Local Screens,
 Club Website (Website, Recording), Voice (Voice, Cast, Race Calls with Rivalries at its end, AI Commentary),
 Sounds (Mixer, Soundscapes, Imaging, Effects, Ambience, Music, Lap Beeps), Connection, Backup & Restore.
-There's a "Search pages..." box, and at the foot of the sidebar three icon buttons (Manage Navigation, Mute, Undo;
-their names show as tooltips). Manage Navigation reorders/hides pages.
+There's a "Search pages..." box, and at the foot of the sidebar four icon buttons (Manage Navigation, Mute, Undo,
+User Guide; their names show as tooltips). Manage Navigation reorders/hides pages.
 The sidebar shows the pages in groups: ESSENTIALS, then CLUB TOOLS (Race Day, Championship, Rentals, Handicaps, Venues,
 Sponsors, Local Screens, Club Website), each in the order above; while a race day is open, TONIGHT (Race Day, Race Control,
 Championship, in that order) sits on top. Every page and tab shows: Simple and Advanced mode were taken out on

@@ -12,7 +12,7 @@ HeatCaller also records each race as it goes out and saves it as an mp3, with a 
 
 ## Effects
 
-**Sounds → Effects** plays short cues like Next Level Timing's own: a chime per lap plus sounds for race moments. Each sound plays the built-in **Classic** pack (called **Synthwave** before 16 October), or your own file. Until 25 November a sound could also play **Generated tones** or the **Podium**, **Arcade**, **Broadcast** or **Pit Lane** pack; those are gone, and a sound set to one of them plays **Classic**. HeatCaller's generated tones are only used if a **Classic** file is missing. Since 25 November the Classic pack's **Good lap**, **Invalid lap**, **Personal best**, **Fast lap**, **Consistency streak**, **Leader change**, **Jump start** and **Countdown started** sounds are clean, modern ones in place of the old synth tones. Its **Countdown ticks** are the same rising tone as **Countdown started**, in place of five beeps, and the rise ends as the green comes. Its other sounds are unchanged. You can point any sound at your own audio file instead, and your file wins.
+**Sounds → Effects** plays short cues like Next Level Timing's own: a chime per lap plus sounds for race moments. Each sound plays the built-in **Classic** pack (called **Synthwave** before 16 October), or your own file. Until 25 November a sound could also play **Generated tones** or the **Podium**, **Arcade**, **Broadcast** or **Pit Lane** pack; those are gone, and a sound set to one of them plays **Classic**. HeatCaller's generated tones are only used if a **Classic** file is missing. Since 25 November the Classic pack's **Good lap**, **Invalid lap**, **Personal best**, **Fast lap**, **Consistency streak**, **Leader change**, **Jump start** and **Countdown started** sounds are clean, modern ones in place of the old synth tones. Its **Countdown ticks** are the same rising tone as **Countdown started**, in place of five beeps. Its other sounds are unchanged. You can point any sound at your own audio file instead, and your file wins.
 
 ![Sounds, Effects tab: 18 of 18 sounds on for races and for practice, the Every sound at once card, and each sound with its Race and Practice ticks, Pack, Your own file (optional), Browse and Remove](../assets/images/sounds-effects.png)
 
@@ -63,8 +63,6 @@ The race-moment sounds (such as the **Race started** horn, the **Race time over 
 A flag call isn't held up by sound effects. Crowd surges (for a fast lap or a lead change, say) aren't cut short when the announcer speaks.
 
 Sound effects can play over each other, so two cars on a good lap are both heard as they cross. Each car's sounds play as they happen, up to 8 at once. When a second copy of the same sound starts at the same moment, it comes a fraction of a second after the first, so you hear two chimes rather than one louder one. Each sound that joins others playing is a little quieter, so a pile-up doesn't drown the mix. The race-moment sounds (**Race staging**, **Countdown started**, **Countdown ticks (the last five seconds to the green)**, **Race started**, the flags, **Race time over (last lap)** and **Race completed**) still play one after another, in order, and a lap chime doesn't wait for them. None of this changes how sounds and the announcer share the speaker.
-
-On a busy track, per-lap sounds are kept close to the action.
 
 On the **Per lap** card under the list, **Max sounds per lap (good / invalid / fast / streak / leader change):** (1 to 5, default 3) sets how many per-lap sounds can play on one lap.
 
@@ -454,7 +452,7 @@ How loud the pieces and beds play is set on the Mixer's [Imaging levels](#imagin
 
 The **Ambience** fader changes how loud the ambience is, not what mood it's in: moving it doesn't change the crowd's race state.
 
-![Sounds, Mixer tab: the Announcements, Sound effects, Ambience and Music faders at 100, 100, 83 and 30%, with Imaging levels and Ducking below](../assets/images/sounds-mixer.png)
+![Sounds, Mixer tab: the Announcements, Sound effects, Ambience and Music faders at 100, 100, 83 and 49%, with Imaging levels and Ducking below](../assets/images/sounds-mixer.png)
 
 ### Channels
 
@@ -547,7 +545,7 @@ If a session that brings the music up starts while the last one's **Fade out** i
 
 **Sounds → Lap Beeps** gives each driver their own short cue when they cross the line, so they can hear their lap without watching the screen. Cues differ in shape as well as pitch, because pitch alone is hard to pick out over track noise. It's off by default: a cue per lap per driver is a lot of noise if you didn't ask for it.
 
-![Sounds, Lap Beeps tab: Per-driver lap cues OFF, 0 of 13 drivers with a cue, and the drivers list with each transponder, class and cue, with Test Cue, Change Cue and Turn On / Off below](../assets/images/sounds-lap-beeps.png)
+![Sounds, Lap Beeps tab: Per-driver lap cues OFF, 0 of 9 drivers with a cue, and the drivers list with each transponder, class and cue, with Test Cue, Change Cue and Turn On / Off below](../assets/images/sounds-lap-beeps.png)
 
 The tiles at the top are **Lap cues** (On or Off), **Drivers**, **With a cue** (for example "6 of 8") and **Sharing a cue** (amber when any drivers share one). Under them are three cards: **Lap cues**, with the switch; **Drivers**, with the list; and **Everyone at once**, with **Auto-Assign All** and **Clear All**.
 
@@ -565,7 +563,7 @@ Lap beeps play the instant the car crosses, ahead of any spoken line, at the **S
 
 HeatCaller records every race as it goes out and, once the broadcast has finished, saves the whole thing as an mp3 - with a short clip for each driver beside it, covering just the moments they were named. You don't set anything up: it's on, and the race log says where each file went. A club can keep the broadcast of a title race, or hand a driver the part of the night where they were called - as an mp3, or as a [highlight video](#highlight-videos) for their phone.
 
-![Club Website, Recording tab: recording, driver clips and highlight videos all Off, the Recording the night card with Record each race unticked and its clip, highlight video and club handle options, and Where recordings are kept with 6 nights on disk](../assets/images/club-website-recording.png)
+![Club Website, Recording tab: recording, driver clips and highlight videos all Off, the Recording the night card with Record each race unticked and its clip, highlight video and club handle options, and Where recordings are kept, with nothing recorded yet](../assets/images/club-website-recording.png)
 
 The settings are on **Club Website → Recording**, on the **Recording the night** card, with the folder and how many nights are kept on the **Where recordings are kept** card under it - the **Club Website** page has two tabs, **Website** and **Recording**. Searching the sidebar for "recording", "clips" or "highlights" goes straight there. See [Turning it off](#turning-it-off) if you don't want it.
 

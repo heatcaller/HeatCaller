@@ -25,6 +25,21 @@ internal static class AppSupport
     internal const string DocsText = "heatcaller.com";
 
     /// <summary>
+    /// The user guide itself.
+    ///
+    /// WHY (25 Nov 2026, Asher: "put the guide online and link the app to
+    /// it"): the guide is up at heatcaller.com/docs/, built from website/docs
+    /// by website/build-site.ps1. Every way into it from the app opens this
+    /// address, or a page under it (GuidePages). DocsUrl and DocsText stay as
+    /// they were: DocsText is also the mark on emails and results
+    /// (HeatCallerMark), where the plain web address is right.
+    /// </summary>
+    internal const string GuideUrl = "https://heatcaller.com/docs/";
+
+    /// <summary>Opens a guide address - swapped by the tests, so pressing a button in one opens no browser.</summary>
+    internal static Action<string> OpenGuide { get; set; } = Open;
+
+    /// <summary>
     /// What the Getting Help card says under the Save Support Info button,
     /// and what the About box says: one sentence, the address in it.
     /// </summary>

@@ -29,7 +29,7 @@ Each class also needs drivers: a driver is in a class when their profile says so
 - **Beside it**, the **Get back on time** card, while the night would finish past its out-by time (see [Get back on time](#get-back-on-time)), and the **Go / no-go** list (see [Go / no-go](#go-no-go)).
 - **Along the foot**, the buttons for the day. See [The buttons along the foot](#the-buttons-along-the-foot).
 
-![Race Day, Next Steps tab: tonight's run sheet at 0 of 12 run, with the card for the next race, 50% · Q1 Heat 1, warning that the timer isn't connected, the Go / no-go list beside it with Timer red, and the buttons along the foot](../assets/images/race-day-next-steps.png)
+![Race Day, Next Steps tab: tonight's run sheet at 3 of 8 run, with the card for the next race, Mod · Q2 Heat 1, warning that only demo laps are coming in, the Go / no-go list beside it with Timer red and Phones amber, and the buttons along the foot](../assets/images/race-day-next-steps.png)
 
 While **Next Steps** is showing, the clock and the day's line sit in the Race Day tab row, to the right of the tabs. The line gives the date, "club night" on a club night, the venue, the track layout, and "closed" if the day is closed. With no race day open it says "No race day is open".
 
