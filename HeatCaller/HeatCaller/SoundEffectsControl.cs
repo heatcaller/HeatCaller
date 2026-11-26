@@ -1446,7 +1446,7 @@ public sealed class SoundEffectsControl : UserControl
             };
             numWeight.ValueChanged += (_, _) => QueueSave();
             numWeight.SizeChanged += (_, _) => FieldResized(numWeight, row);
-            _tips.SetToolTip(numWeight, "When several per-lap sounds fire on the same lap, the higher weights win - see \"Max sounds per lap\" below.");
+            _tips.SetToolTip(numWeight, "Higher means more likely to be heard on a busy lap - see \"Max sounds per lap\" below.");
             parent.Controls.Add(numWeight);
             _weights[kind] = numWeight;
 
