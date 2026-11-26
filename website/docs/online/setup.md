@@ -6,7 +6,7 @@ You can also reach this page from **Local Screens**, which shows a one-line rela
 
 The page has two tabs. Everything below is on the first, **Website**. The second, **Recording**, holds the race recordings, the drivers' clips and their highlight videos on the **Recording the night** card, and the pieces the commentary writes from the evening on the **Written from the night** card. It moved here from **Sounds** on 26 October 2026; see [Race recordings](../announcer/sounds-and-music.md#race-recordings) and [Written from the night](../announcer/commentary.md#written-from-the-night).
 
-![Club Website page, Website tab: Online, the club, last published 9 seconds ago and Phone check-in On across the top, the Relay card with Publish to the relay ticked, the address, Club id and a hidden Publish token, and the Share card with the club's link below](../assets/images/club-website.png)
+![Club Website page, Website tab: Online, the club, last published 8 seconds ago and Phone check-in On across the top, the Relay card with Publish to the relay ticked, the address, Club id and a hidden Publish token, and the Share card with the club's link below](../assets/images/club-website.png)
 
 At the top of the **Website** tab, four tiles give the state of things at a glance, updated every second:
 
@@ -185,7 +185,7 @@ The **Look** card ("How the club's pages greet people: the welcome line, the new
 
 **Short address:** an easier address for posters, up to 32 characters, for example `acme`. `https://your-relay.fly.dev/c/acme` then sends phones on to your club's own pages, with the rest of the link kept. Lowercase letters, digits and single hyphens, at least 3 characters. It can never be another club's id, and if two clubs on the relay choose the same short address, the first one listed in the relay's settings keeps it. Leave it empty for none. It needs the relay redeployed since 14 Nov 2026 (see [Updating the relay](../admin/relay-hosting.md#updating-the-relay)).
 
-**Name under the icon:** the name a phone shows under the club's icon once the pages are added to its home screen, up to 12 characters, for example "Upstate MZ". Every club's icon is the same HeatCaller sun, so this is what tells them apart. Left empty, it's your club's name, cut to 12 characters (see [Add to Home Screen](index.md#add-to-home-screen)).
+**Name under the icon:** the name a phone shows under the club's icon once the pages are added to its home screen, up to 12 characters, for example "Thunder RC". Every club's icon is the same HeatCaller sun, so this is what tells them apart. Left empty, it's your club's name, cut to 12 characters (see [Add to Home Screen](index.md#add-to-home-screen)).
 
 **New here? card:** three lines for somebody who has found the club but never raced there, shown as a card on the club's home page to any phone that doesn't remember a driver. **Where we race:** and **When we race:** take up to 160 characters each, **How to join:** up to 300. **When we race** also shows under "No racing right now" between nights. Leave all three empty for no card.
 

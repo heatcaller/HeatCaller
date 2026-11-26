@@ -12,7 +12,13 @@ mkdocs serve          # live preview at http://127.0.0.1:8000
 mkdocs build          # static site in ./site, ready to upload anywhere
 ```
 
-`mkdocs gh-deploy` publishes to GitHub Pages; the `site` folder can also go to Netlify, Cloudflare Pages or any web host. Set `site_url` in `mkdocs.yml` once the website has an address.
+The guide is online at **https://heatcaller.com/docs/** (since 25 Nov 2026), and the app's **User Guide** button opens it at the page you're on. Nothing on heatcaller.com's own pages links to it. To put it up again after a change:
+
+1. Install Python 3.13 and the builder once: `python -m pip install --user "mkdocs-material==9.6.*"`.
+2. Build it into the website's repo: `.uild-site.ps1 -Out C:Usersasherheatcaller-sitedocs`. It stops on a broken link or a missing page, and strips the `<!-- TODO -->` and `<!-- screenshot: -->` notes out of the pages' source.
+3. Commit `docs/` in heatcaller-site on a branch, check `<branch>.heatcaller.pages.dev/docs/`, and merge. Cloudflare Pages puts `main` up.
+
+Pictures in `docs/assets/images/` are taken on a made-up club's data (Thunder Valley RC), never on a real club's: no real logo, sponsor, photo of a person, email or crew words.
 
 The pages are plain Markdown, so they also move to other builders. The only MkDocs-specific syntax is admonitions (`!!! tip`) and `<kbd>` keys; in Docusaurus these become `:::tip` blocks.
 

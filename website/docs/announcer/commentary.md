@@ -205,7 +205,7 @@ The portable copy of HeatCaller has no model beside it. It also looks in `%LOCAL
 
 Changes save as you make them and take effect straight away.
 
-![Voice, AI Commentary tab with Enable AI commentary ticked: the On, Written by, Ready and Enthusiastic tiles across the top, and the Who writes it card with Write through the club relay when it can, the model on this PC as the fallback, and this month's AI commentary at 72% used](../assets/images/voice-ai-commentary.png)
+![Voice, AI Commentary tab with Enable AI commentary ticked: the On, Written by, Ready and Enthusiastic tiles across the top, and the Who writes it card with Write through the club relay when it can, the model on this PC as the fallback, and this month's AI commentary at 82% used](../assets/images/voice-ai-commentary.png)
 
 ### Warm-up
 

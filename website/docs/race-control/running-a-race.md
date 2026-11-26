@@ -5,7 +5,7 @@ The **Race Control** page is where you run every race: you pick what's about to 
 !!! note
     HeatCaller runs its own race control, reading the decoder (EasyLap or I-Lap) directly. See [Decoders](../timing/decoders.md).
 
-![The Race Control page during a demo race: the Green flag lit, Race Running in the Now and Next bar, the clock at 01:03 with 4 LAPS TO GO under GREEN FLAG, and seven drivers on the leaderboard with their laps, gaps, last and best laps and streaks, with Auto on below](../assets/images/race-control-racing.png)
+![The Race Control page during a demo race: the Green flag lit, Race Running in the Now and Next bar, the clock at 01:04 with 3 LAPS TO GO under GREEN FLAG, and the drivers on the leaderboard with their laps, gaps, last and best laps and streaks, with the On Air, Warm-up and Auto Start pills below](../assets/images/race-control-racing.png)
 
 ## The page at a glance
 
@@ -552,7 +552,7 @@ Mission Control puts every check that matters before a green flag in one window,
 
 Open it with the **Mission Control** button at the bottom of the clock column, from **Connection → Mission Control**, or from **Mission Control** in the **Pre-race check** window. It isn't a dialog: it can stay open beside Race Control, or on a second screen, all night. It checks everything again once a second. Opening it again brings the open one to the front.
 
-![Mission Control reading "2 problems to fix before the green, and 1 to keep an eye on.": the Decoder tile red for a MyLaps P3 that is not connected, Cloud Backup red with Copy failed, Next race amber at 3 of 8 heard, Split Loop dimmed at Off, and the Cars heard, Timing, Transponders, Website, Sound and Allowances tiles green](../assets/images/mission-control.png)
+![Mission Control reading "2 problems to fix before the green, and 2 to keep an eye on.": the Decoder tile red for a MyLaps P3 that is not connected, Cloud Backup red with Copy failed, Next race amber at 0 of 1 heard, Allowances amber at AI 82%, Split Loop dimmed at Off, and the Timing, Transponders, Website and Sound tiles green](../assets/images/mission-control.png)
 
 The headline over the tiles sums it up: "All clear. Ready to race.", "Ready to race - 2 to keep an eye on." or "1 problem to fix before the green."
 

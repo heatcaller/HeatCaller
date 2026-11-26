@@ -152,7 +152,7 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The footer's row of three, as the designer builds it: 12 + 60 + 8 +
+    /// The footer's row, as the designer built it for three: 12 + 60 + 8 +
     /// 60 + 8 + 60 + 12 across, which is 220 - the sidebar's width at the
     /// normal text size - and kept in the middle when it is wider than that.
     /// Hands back the height the row needs.
@@ -160,7 +160,13 @@ public partial class MainForm
     private int PlaceWideFooter(int width)
     {
         var shift = (width - UiLayout.AtDpi(220)) / 2;
-        var size = new Size(UiLayout.AtDpi(60), UiLayout.AtDpi(42));
+        var buttons = FooterButtons();
+
+        // WHY (25 Nov 2026): four buttons since the User Guide joined the row
+        // (MainForm.Guide.cs) - at 60 apiece they came to 264 of the row's
+        // 196. Each is as wide as the row has room for, 60 at most, so three
+        // were 60 and four are 43.
+        var size = new Size(WideFooterButtonWidth(buttons.Count), UiLayout.AtDpi(42));
 
         // The chip - the month's allowances - takes a line of its own above
         // the row, and the footer grows by just that line; the row keeps its
@@ -177,7 +183,6 @@ public partial class MainForm
         var top = UiLayout.AtDpi(14) + chip;
 
         // The footer's buttons (FooterButtons), kept in the middle together.
-        var buttons = FooterButtons();
         var row = buttons.Count * size.Width + (buttons.Count - 1) * UiLayout.AtDpi(8);
         var left = UiLayout.AtDpi(12) + shift + (UiLayout.AtDpi(196) - row) / 2;
 
@@ -192,16 +197,20 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The footer's buttons, left to right: Manage Navigation, Mute and Undo.
-    /// Manage Navigation always shows - without it a club has no way to
-    /// re-order or hide a page (6 Nov 2026).
+    /// The footer's buttons, left to right: Manage Navigation, Mute, Undo and
+    /// the User Guide (25 Nov 2026). Manage Navigation always shows - without
+    /// it a club has no way to re-order or hide a page (6 Nov 2026).
     /// </summary>
-    private List<Button> FooterButtons() => new() { btnManageNav, btnMuteToggle, btnUndo };
+    private List<Button> FooterButtons() => new() { btnManageNav, btnMuteToggle, btnUndo, btnGuide };
+
+    /// <summary>A button's width across the open sidebar's 196 px row with 8 px between: as wide as fits, 60 at most. Pure, for the tests.</summary>
+    internal static int WideFooterButtonWidth(int count) =>
+        Math.Min(UiLayout.AtDpi(60), (UiLayout.AtDpi(196) - Math.Max(0, count - 1) * UiLayout.AtDpi(8)) / Math.Max(1, count));
 
     /// <summary>
-    /// The same three buttons stacked down the rail, centred in it, in the
+    /// The same buttons stacked down the rail, centred in it, in the
     /// order they are in across the open sidebar. Hands back the height the
-    /// column needs, which is the footer's - about 130 against the row's 70,
+    /// column needs, which is the footer's - about 170 against the row's 70,
     /// and the list above it scrolls as it already does when the pages
     /// outgrow it.
     /// </summary>
@@ -698,6 +707,8 @@ public partial class MainForm
         SetUpFooterButton(btnMuteToggle, DrawMuteIcon);
 
         SetUpFooterButton(btnUndo, DrawUndoIcon, () => _undo.Count);
+
+        SetUpGuideButton();
 
         SetUpCollapseButton();
     }

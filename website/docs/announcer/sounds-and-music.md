@@ -454,7 +454,7 @@ How loud the pieces and beds play is set on the Mixer's [Imaging levels](#imagin
 
 The **Ambience** fader changes how loud the ambience is, not what mood it's in: moving it doesn't change the crowd's race state.
 
-![Sounds, Mixer tab: the Announcements, Sound effects, Ambience and Music faders at 100, 100, 83 and 30%, with Imaging levels and Ducking below](../assets/images/sounds-mixer.png)
+![Sounds, Mixer tab: the Announcements, Sound effects, Ambience and Music faders at 100, 100, 83 and 49%, with Imaging levels and Ducking below](../assets/images/sounds-mixer.png)
 
 ### Channels
 
@@ -547,7 +547,7 @@ If a session that brings the music up starts while the last one's **Fade out** i
 
 **Sounds → Lap Beeps** gives each driver their own short cue when they cross the line, so they can hear their lap without watching the screen. Cues differ in shape as well as pitch, because pitch alone is hard to pick out over track noise. It's off by default: a cue per lap per driver is a lot of noise if you didn't ask for it.
 
-![Sounds, Lap Beeps tab: Per-driver lap cues OFF, 0 of 13 drivers with a cue, and the drivers list with each transponder, class and cue, with Test Cue, Change Cue and Turn On / Off below](../assets/images/sounds-lap-beeps.png)
+![Sounds, Lap Beeps tab: Per-driver lap cues OFF, 0 of 9 drivers with a cue, and the drivers list with each transponder, class and cue, with Test Cue, Change Cue and Turn On / Off below](../assets/images/sounds-lap-beeps.png)
 
 The tiles at the top are **Lap cues** (On or Off), **Drivers**, **With a cue** (for example "6 of 8") and **Sharing a cue** (amber when any drivers share one). Under them are three cards: **Lap cues**, with the switch; **Drivers**, with the list; and **Everyone at once**, with **Auto-Assign All** and **Clear All**.
 
@@ -565,7 +565,7 @@ Lap beeps play the instant the car crosses, ahead of any spoken line, at the **S
 
 HeatCaller records every race as it goes out and, once the broadcast has finished, saves the whole thing as an mp3 - with a short clip for each driver beside it, covering just the moments they were named. You don't set anything up: it's on, and the race log says where each file went. A club can keep the broadcast of a title race, or hand a driver the part of the night where they were called - as an mp3, or as a [highlight video](#highlight-videos) for their phone.
 
-![Club Website, Recording tab: recording, driver clips and highlight videos all Off, the Recording the night card with Record each race unticked and its clip, highlight video and club handle options, and Where recordings are kept with 6 nights on disk](../assets/images/club-website-recording.png)
+![Club Website, Recording tab: recording, driver clips and highlight videos all Off, the Recording the night card with Record each race unticked and its clip, highlight video and club handle options, and Where recordings are kept, with nothing recorded yet](../assets/images/club-website-recording.png)
 
 The settings are on **Club Website → Recording**, on the **Recording the night** card, with the folder and how many nights are kept on the **Where recordings are kept** card under it - the **Club Website** page has two tabs, **Website** and **Recording**. Searching the sidebar for "recording", "clips" or "highlights" goes straight there. See [Turning it off](#turning-it-off) if you don't want it.
 
