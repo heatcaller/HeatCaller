@@ -143,6 +143,32 @@ public sealed class TermsTests : IDisposable
     }
 
     [Fact]
+    public void The_terms_keep_the_beta_confidential_while_the_patent_is_pending()
+    {
+        // WHY (25 Nov 2026, Asher: "update the beta policy in the app,
+        // production"): revision 4 protects against copycats while the
+        // provisional is prepared. Revision 3 let a club post how HeatCaller
+        // works, hand it on openly, benchmark it for a rival and keep the
+        // ideas it sent. These are the promises that close those gaps, and
+        // the LGPL carve-out must survive beside them.
+        Assert.Contains("The beta is a private test of unreleased software", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("## 2A. Confidential beta", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("You will not post, publish or describe how HeatCaller works", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("what your drivers, spectators and stream audience see and hear on a race night", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("patent rights whether or not yet applied for", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("It gives you no license under any patent", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("You may not give HeatCaller, a copy of it or any of its files to anyone outside your club or track", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("a product or service that competes with HeatCaller", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("You give us all rights in your feedback", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("If you break section 2 or 2A, we may end this agreement straight away", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("courts in the State of New York", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("reverse engineer it to debug those modifications", Terms.Text, StringComparison.Ordinal);
+        Assert.Contains("except where the law gives you that right whatever this agreement says", Terms.Text, StringComparison.Ordinal);
+        // Nothing is filed yet, so saying "patent pending" would be false marking.
+        Assert.DoesNotContain("atent pending", Terms.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Line_endings_are_not_new_terms()
     {
         const string text = "# Terms\n\nOne line.\nAnother.\n";

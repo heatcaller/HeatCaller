@@ -4,6 +4,7 @@ HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whol
 
 ## Unreleased
 
+- **The beta terms keep the beta confidential (25 November).** Revision 4 of the beta terms says the beta is a private test, and that a club keeps how HeatCaller works to itself, doesn't pass it on or use it to build or compare a rival product, and gives us the ideas it sends. We can end the agreement straight away if those rules are broken, and disputes go to the courts in New York State. HeatCaller asks everyone to accept the new terms the next time it opens. Update HeatCaller on the race PC; nothing changes on the relay.
 - **A new good-lap sound for Classic (25 November).** **Good lap** is a short, friendly rising tone, at the same level as the other Classic sounds and over in about half a second. Any row set to the **Classic** pack plays it; a row with your own file still plays your file. Update HeatCaller on the race PC; nothing changes on the relay.
 - **Every voice sounds as loud as the others, and the imaging keeps up with the announcer over a loud crowd (25 November).**
   - Spoken lines are levelled by how loud they sound, not by their raw signal level. The ear hears the middle and top of a voice more than its low end, so a bright voice used to sound up to a dB louder than a deep one at the same setting. Finley was about half a dB over Charlie. They now come out sounding alike, and the overall announcer level is where it was. Jingles, sweepers, bumpers and stingers are measured the same way, so they and the voice are on one scale.
