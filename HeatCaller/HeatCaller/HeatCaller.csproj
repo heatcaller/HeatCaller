@@ -18,7 +18,7 @@
          assembly at runtime, and the installer (Velopack) reads the same
          assembly, so the package, the updater and the title bar cannot
          drift apart. Bump it here and nowhere else. -->
-    <Version>0.63.0</Version>
+    <Version>0.64.0</Version>
 
     <!-- The name Windows shows for the exe (Task Manager, file properties). -->
     <Product>HeatCaller</Product>
@@ -495,6 +495,18 @@
          worse, but not broken. Publish-only, so an ordinary build and
          check.cmd never see it. -->
     <Warning Condition="'@(_LocalModelFile)' == ''" Text="Assets\LocalModel\commentary.gguf is not there, so this publish has NO offline commentary - a club with the internet down will get no colour from the Core segments at all. Run fetch-llm.cmd and publish again." />
+  </Target>
+
+  <!-- WHY (25 Nov 2026, Asher: "fix any build warnings before velo packing"):
+       the WebView2 package adds its WPF control for every .NET 5+ project,
+       and that dll is built against an older WindowsBase than .NET 10 has,
+       which gave MSB3277 on every build. HeatCaller is WinForms and only
+       uses Microsoft.Web.WebView2.WinForms, so the WPF one is left out (it
+       also stops shipping in the publish folder). -->
+  <Target Name="LeaveOutWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
   </Target>
 
 </Project>

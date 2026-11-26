@@ -577,6 +577,10 @@ public sealed partial class BigScreenForm
         /// inside a layout - changing a docked label's face while its panel
         /// is laying it out left the band's labels at their first size.
         /// </remarks>
+        // WHY (25 Nov 2026, Asher: "fix any build warnings"): Control.Font
+        // takes null to mean "the parent's face", and _wanted already
+        // allows it; without [AllowNull] the override disagreed (CS8765).
+        [System.Diagnostics.CodeAnalysis.AllowNull]
         public override Font Font
         {
             get => base.Font;

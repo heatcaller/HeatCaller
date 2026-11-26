@@ -51,4 +51,16 @@
     <None Update="Captures\**\*.log" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- WHY (25 Nov 2026, Asher: "fix any build warnings before velo packing"):
+       the WebView2 package adds its WPF control for every .NET 5+ project,
+       and that dll is built against an older WindowsBase than .NET 10 has,
+       which gave MSB3277 on every build. HeatCaller is WinForms and only
+       uses Microsoft.Web.WebView2.WinForms, so the WPF one is left out (it
+       also stops shipping in the publish folder). -->
+  <Target Name="LeaveOutWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+
 </Project>

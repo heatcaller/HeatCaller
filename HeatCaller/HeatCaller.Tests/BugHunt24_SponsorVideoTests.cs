@@ -43,7 +43,7 @@ public sealed class BugHunt24_SponsorVideoTests
     }
 
     [Fact]
-    public void A_second_ask_does_not_wait_for_the_load_that_is_running()
+    public async Task A_second_ask_does_not_wait_for_the_load_that_is_running()
     {
         const BindingFlags Hidden = BindingFlags.NonPublic | BindingFlags.Static;
 
@@ -89,7 +89,7 @@ public sealed class BugHunt24_SponsorVideoTests
             var second = Task.Run(() => SponsorVideoEngine.WarmUp());
 
             Assert.True(
-                second.Wait(TimeSpan.FromSeconds(5)),
+                await Task.WhenAny(second, Task.Delay(TimeSpan.FromSeconds(5))) == second,
                 "WarmUp waited on the lock the load is holding - on the UI thread that is the whole window frozen.");
         }
         finally

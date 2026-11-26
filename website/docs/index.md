@@ -5,7 +5,7 @@ HeatCaller runs RC race nights from one Windows laptop. It times the laps from y
 ![The Race Control page during a demo race: the Green flag lit, Race Running in the Now and Next bar, the clock at 01:04 with 3 LAPS TO GO under GREEN FLAG, and the drivers on the leaderboard with their laps, gaps, last and best laps and streaks, with the On Air, Warm-up and Auto Start pills below](assets/images/race-control-racing.png)
 
 !!! note "Beta"
-    HeatCaller is in beta (version 0.63.0). Expect rough edges, and keep backups turned on.
+    HeatCaller is in beta (version 0.64.0). Expect rough edges, and keep backups turned on.
 
 ## Where to start
 

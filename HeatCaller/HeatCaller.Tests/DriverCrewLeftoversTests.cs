@@ -442,7 +442,7 @@ public sealed class DriverCrewLeftoversTests : IDisposable
     }
 
     [Fact]
-    public void A_sample_is_made_once_and_kept_on_this_pc()
+    public async Task A_sample_is_made_once_and_kept_on_this_pc()
     {
         var hc = Pick(VoiceEngine.HeatCaller, "hc-1", "Max");
         var asked = 0;
@@ -457,8 +457,8 @@ public sealed class DriverCrewLeftoversTests : IDisposable
 
         Task<byte[]> NoKokoro(string id, string line, CancellationToken _) => throw new InvalidOperationException("not Kokoro");
 
-        Assert.Equal(mp3, CrewSamples.SampleOfAsync(hc, Fetch, NoKokoro).GetAwaiter().GetResult());
-        Assert.Equal(mp3, CrewSamples.SampleOfAsync(hc, Fetch, NoKokoro).GetAwaiter().GetResult());
+        Assert.Equal(mp3, await CrewSamples.SampleOfAsync(hc, Fetch, NoKokoro));
+        Assert.Equal(mp3, await CrewSamples.SampleOfAsync(hc, Fetch, NoKokoro));
         Assert.Equal(1, asked);
         Assert.Equal(mp3, CrewSamples.Kept(DriverCrew.KeyOf(hc)));
     }

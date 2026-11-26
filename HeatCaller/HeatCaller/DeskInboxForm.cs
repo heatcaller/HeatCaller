@@ -769,7 +769,7 @@ internal sealed partial class DeskInboxForm : Form
         var position = picked.Count switch
         {
             0 => string.Empty,
-            1 => _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Tag == picked[0]) is { } row ? $"{row.Index + 1} of {_grid.Rows.Count}" : string.Empty,
+            1 => _grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => ReferenceEquals(r.Tag, picked[0])) is { } row ? $"{row.Index + 1} of {_grid.Rows.Count}" : string.Empty,
             _ => $"{picked.Count} of {_grid.Rows.Count} picked",
         };
 

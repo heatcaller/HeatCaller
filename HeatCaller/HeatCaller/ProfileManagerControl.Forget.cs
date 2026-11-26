@@ -17,6 +17,7 @@ public sealed partial class ProfileManagerControl
     /// <summary>A driver's data as one HTML page - set by the host. Null hides "Export".</summary>
     internal Func<DriverProfile, string>? ExportDriverWith { get; set; }
 
+    [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(_miExport), nameof(_miForget))]
     private void BuildPrivacyMenuItems()
     {
         _miExport = new ToolStripMenuItem("Export Driver's Data...", null, (_, _) => ExportShownDriver());

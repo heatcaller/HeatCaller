@@ -97,7 +97,7 @@ internal sealed class InfoDot : Control
             // Up already: the new words straight away (Focus becoming Restore).
             if (IsOpen)
             {
-                Show();
+                ShowTip();
             }
         }
     }
@@ -164,11 +164,11 @@ internal sealed class InfoDot : Control
         _current = this;
         _open = true;
         _openFor.Restart();
-        Show();
+        ShowTip();
         Invalidate();
     }
 
-    private void Show()
+    private void ShowTip()
     {
         if (_text.Length > 0 && IsHandleCreated)
         {
