@@ -120,7 +120,7 @@ If the file isn't there, a **Download (about 310 MB)** button appears under the 
 
 **Prepare Lines** isn't needed with Kokoro: it speaks each line on the laptop as it's wanted, so the button is grayed out and the line beside it reads "Not needed with the Kokoro voice - it speaks each line on this PC as it's wanted." A line it has said once plays straight away for the rest of the session.
 
-Kokoro gets 30 seconds to make a line as it's spoken. A line made ahead of time, such as the recap while the teaser plays, gets longer, in step with its length (up to five minutes), so a long recap is still said when Kokoro is speaking it or standing in.
+Kokoro gets 30 seconds to make a line. A long line, such as the recap, gets longer, in step with its length (up to five minutes), so a long recap is still said when Kokoro is speaking it or standing in.
 
 The downloaded copy is kept in `%LocalAppData%\HeatCaller\Kokoro`, on that PC only, and isn't part of a backup. Nothing Kokoro says is kept with the [saved voice lines](#saved-voice-lines).
 
@@ -455,7 +455,7 @@ Saved lines belong to those two voices only. With the Kokoro voice chosen they a
 !!! note
     A soundscape's **voice lines** are something else: its fixed race calls, recorded on purpose with **Voice Lines** on **Sounds → Soundscapes**. Those play from the laptop whichever voice is chosen, Kokoro included, and they're kept with the rest of your data, so they're in backups. The one exception is while your own ElevenLabs allowance is used up and Kokoro is standing in: they're held back then, like saved lines. See [Voice lines](sounds-and-music.md#voice-lines).
 
-If you change the voice or its settings, the lines it affects are made again the next time they're spoken. There's nothing to update by hand. The HeatCaller voice's lines and your own ElevenLabs lines are kept apart, so a club that tries the HeatCaller voice and goes back to its own key still has every line it has already paid for.
+If you change the voice or its settings, the announcer speaks in the new voice from the next line, and new lines are paid for as they're made. There's nothing to update by hand. The HeatCaller voice's lines and your own ElevenLabs lines are kept apart, so a club that tries the HeatCaller voice and goes back to its own key still has every line it has already paid for.
 
 <!-- screenshot: Saved voice lines card with the count, Prepare Lines, Stop and the Recently played list -->
 
@@ -680,7 +680,7 @@ The **How often** card, under the rows, holds the settings that decide how much 
 | Setting | What it does | Default |
 |---|---|---|
 | **Max spoken announcements per lap:** | 1 to 5. How many routine announcements one lap can bring. **How chatty** on the **AI Commentary** tab scales it up or down, even with AI commentary off. | 2 |
-| **Pacing:** | The gap between these calls: **Room to breathe**, **Spacious**, **Balanced**, **Busy** or **Wall to wall**. The line under it describes each choice. It doesn't space the AI commentary, whose gaps follow **How chatty**. The "held" and "lost" counts on **Race Control** show how busy the announcer was. | **Balanced** |
+| **Pacing:** | The gap between these calls: **Room to breathe**, **Spacious**, **Balanced**, **Busy** or **Wall to wall**. The line under it describes each choice. It doesn't space the AI commentary, whose gaps follow **How chatty**. The counts on **Race Control** show how busy the announcer was. | **Balanced** |
 | **Streak threshold - races:** and **Streak threshold - practice:** | 2 to 50. How many valid laps in a row count as a streak, for the **Consistency streak** announcement and the streak sound on **Sounds → Effects** alike, and to color the Streak column on leaderboards. | 3 |
 
 The streak thresholds were on **Sounds → Effects** before 17 October, and **Max spoken announcements per lap:** on the **Voice parameters** card. They're the same settings, and a soundscape still sets them. **Pacing:** was on the **AI Commentary** tab until 3 November; it's the same setting, and a soundscape doesn't change it.
@@ -703,16 +703,16 @@ Because a test uses what's on screen, it can sound different from what races use
 
 ## How the announcer behaves during a race
 
-The announcer is built so that important calls are never late and routine chatter never piles up.
+The announcer keeps up with the racing, and the important calls always get through.
 
 - **Flag and race-control calls come first.** **Race started**, **Green flag (resumed)**, **Yellow flag**, **Red flag**, **Race time over** and **Race completed** are spoken straight away.
 - **Other priority calls are always spoken.** **Race staging**, **Countdown started**, **Staggered start release**, **Last lap**, **Final minute**, **Track record**, **Achievement unlocked** and Timetable reminders wait their turn but are always spoken.
 - **Time calls wait their turn.** **Minutes left** and **Last minute countdown** wait their turn behind other calls.
 - **The grid call is always spoken**, before the staging line, with the marshals if your lines include them. It's spoken even straight after a race: it ends the post-race quiet.
-- **Routine lines give way when the announcer is busy**, so the calls you hear stay with the racing.
+- **Routine lines give way when the announcer is busy.**
 - **Under a yellow or red, routine lines are skipped** so the announcer doesn't talk over instructions to drivers. Tick **Caution** on its row on the **Race Calls** tab to let it through anyway. Rivalry lines are also held under caution. Flag calls are never held.
 - **After the checkered flag, only the wrap-up speaks.** Cars still crossing the line don't trigger lap times, personal bests or streak calls. The finish call, badges, and the recap teaser and summary from [Commentary](commentary.md) still play. Badge calls always come after the checkered-flag call. The hold lifts when the next race stages or starts.
-- **Flag lines are prepared ahead of time.** When a race stages, HeatCaller prepares one line each for **Race started**, **Green flag (resumed)**, **Yellow flag**, **Red flag** and **Race completed** (those that are switched on) in the background, in whichever voice will speak them, so pressing a flag button plays audio already on the laptop instead of waiting. Only lines without placeholders can be prepared ahead. After a line is used, another is picked for next time. Lines already saved are read from the laptop rather than rendered again (see [Saved voice lines](#saved-voice-lines)). If you change the voice, its tuning or the lines, the prepared audio is made again. The release calls of a staggered start are prepared the same way at the green.
+- **Flag calls play without a wait.** Pressing a flag button plays the call straight away, in whichever voice will speak it. The release calls of a staggered start work the same way.
 - **Release calls follow the voice you chose.** With your own ElevenLabs key, a grid's worth of release calls is rendered as one request and cut into clips, which saves round trips rather than characters. With the HeatCaller voice they go through the relay one line at a time: an old ElevenLabs key still saved on the laptop is never used for them, so nothing on that voice is ever billed to your club.
 
 ### When ElevenLabs can't speak a line
@@ -722,7 +722,7 @@ With ElevenLabs chosen and **If ElevenLabs can't speak a line - no key, no inter
 | What's wrong | What happens |
 |---|---|
 | No API key, no voice selected, or a key locked to the PC it was saved on | The Kokoro voice speaks every line. The console says so once, for example "[voice] No ElevenLabs API key is set - the free Kokoro voice is speaking instead." |
-| The ElevenLabs meter (see [Your own key's month](#your-own-keys-month)) is at 100% | ElevenLabs isn't asked at all. Kokoro speaks every line, and no saved ElevenLabs line, recorded [voice line](sounds-and-music.md#voice-lines) or prepared take plays, so the night is in one set of voices. The console says "[voice] The ElevenLabs allowance is at 100% on the usage chip - the free Kokoro voice is speaking from here, ..." once, and "[voice] The ElevenLabs allowance is under 100% again - ElevenLabs and its saved lines speak from the next line." when the meter drops back, after your plan starts again or you move to a bigger one. |
+| The ElevenLabs meter (see [Your own key's month](#your-own-keys-month)) is at 100% | ElevenLabs isn't asked at all. Kokoro speaks every line, and no saved ElevenLabs line or recorded [voice line](sounds-and-music.md#voice-lines) plays, so the night is in one set of voices. The console says "[voice] The ElevenLabs allowance is at 100% on the usage chip - the free Kokoro voice is speaking from here, ..." once, and "[voice] The ElevenLabs allowance is under 100% again - ElevenLabs and its saved lines speak from the next line." when the meter drops back, after your plan starts again or you move to a bigger one. |
 | ElevenLabs refuses a line because the quota is used up | ElevenLabs is still asked first for each line (the refusal is quick), Kokoro says the line, and saved ElevenLabs lines are held back as above. This covers a meter that's a few minutes behind, or a key that can't read its plan. The console says "[voice] ElevenLabs quota exceeded - the free Kokoro voice is standing in until it's back, each of the cast in their own Kokoro voice. ..." ElevenLabs, and its saved lines, take over again by themselves the moment a request succeeds, for example after you top up or your monthly allowance resets. |
 | No internet, or a request that times out | ElevenLabs "rests": lines go straight to Kokoro with no wait, and ElevenLabs is tried again in the background about once a minute until it answers. The console then says "[voice] ElevenLabs is reachable again - it speaks from the next line, and the Kokoro voice stands down." |
 | ElevenLabs turns the API key down, for example a wrong or revoked key | ElevenLabs rests in the same way, and the console says "[voice] ElevenLabs turned the API key down (...) - the free Kokoro voice is standing in. ..." It's tried again in the background about once a minute, and straight away once you change the key on **Voice → Voice**. |
@@ -732,7 +732,7 @@ With ElevenLabs chosen and **If ElevenLabs can't speak a line - no key, no inter
 
 **Sounds → Mixer** shows a notice while Kokoro is standing in, for example "The free Kokoro voice is standing in - the ElevenLabs quota is used up." See [Mixer](sounds-and-music.md#mixer).
 
-Flag lines are prepared at staging even with no key or no internet, in the Kokoro voice if need be. The console then says, for example, "[voice] RaceStarted line ready to fire instantly, in the Kokoro voice (standing in for ElevenLabs)." Once ElevenLabs can speak again, the flags are in your ElevenLabs voice again. Release calls work the same way.
+Flag calls still play straight away with no key or no internet, in the Kokoro voice if need be. Once ElevenLabs can speak again, the flags are in your ElevenLabs voice again. Release calls work the same way.
 
 With the box unticked, a line ElevenLabs can't speak is skipped, and the console says why. On a PC that hasn't got Kokoro's voice file the box can't help either, so those lines are skipped too — and the **Mixer** says so. See [When nothing can speak](#when-nothing-can-speak).
 

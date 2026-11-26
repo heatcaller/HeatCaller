@@ -21,7 +21,7 @@ After qualifying, the top qualifiers each run alone, one car at a time. The slow
 ### How it runs
 
 - Each run is its own round on the program, **Pole Shootout Run 1**, **Pole Shootout Run 2** and so on, before the class's mains. The **Kind** column says **Pole Shootout**.
-- A run has one driver. Race Control runs it like any race: the clock starts when the car first crosses the line (so the out lap is free), and the run ends after the timed laps. A run also stops after a few minutes, for a car that never comes round.
+- A run has one driver. Race Control runs it like any race, with the out lap free, and the run ends after the timed laps. A run also stops after a few minutes, for a car that never comes round.
 - A run's time is the best of its timed laps, plus any time penalty the driver was given. A disqualified run, or one with no timed lap, has no time.
 - If a qualifying result is corrected, or a late heat is recorded, before any run has gone out, the runs follow the new qualifying order. Once a run has been raced, the shootout is left as it is.
 

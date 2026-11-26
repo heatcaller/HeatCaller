@@ -29,7 +29,7 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 | <kbd>R</kbd> | **Pre-race check** |
 | <kbd>A</kbd> | **Announcer Screen** |
 
-Each key does what clicking its button does (except <kbd>F1</kbd>, described above, and <kbd>F7</kbd>, which asks first while a race is under way; the button doesn't), including Stage following on to Countdown and Green by itself when the race format has that turned on. See [Running a race](../race-control/running-a-race.md).
+Each key does what clicking its button does (except <kbd>F1</kbd>, described above, and <kbd>F7</kbd>, which asks first while a race is under way; the button doesn't). See [Running a race](../race-control/running-a-race.md).
 
 The **Red**, **Checkered** and **Reset** buttons have to be pressed and held for about a second, so a stray click can't stop or end a race. Their keys, <kbd>F5</kbd>, <kbd>F6</kbd> and <kbd>F7</kbd>, act on a single press. See [Press and hold](../race-control/running-a-race.md#press-and-hold).
 

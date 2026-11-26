@@ -36,7 +36,7 @@ Beside the cards, under the clock and **Open Big Screen**, four tiles sum up the
 | Setting | What it does | Default |
 |---|---|---|
 | **Save automatically on stop** | Saves the session to **Race History** when you press **Stop**. The status line confirms how many drivers were saved. A session with no laps is skipped without a message. | Off |
-| **Start automatically when a car crosses the gate** | Starts practice when a car crosses the line and nothing else is running. It never interrupts a race, a countdown or a practice session that's already going. The crossing that starts it counts as that car's first pass, so that car doesn't lose a lap. When HeatCaller opens with an unfinished race to offer back, it waits until you've answered that question. It also waits while the split loop's **Line Up** window is open. | Off |
+| **Start automatically when a car crosses the gate** | Starts practice when a car crosses the line and nothing else is running. It never interrupts a race, a countdown or a practice session that's already going. When HeatCaller opens with an unfinished race to offer back, it waits until you've answered that question. It also waits while the split loop's **Line Up** window is open. | Off |
 | **Race ghost cars** | In the **Ghost cars** card, beside **Setup**. Adds the ticked ghosts to the session. This is the same switch as **Enable ghost cars** on the **Ghost Cars** page. **Manage** opens that page. | Off |
 | **Track:** | The track layout the session is saved against. It's remembered between sessions. | (none) |
 | **Practice length:** | A lap target (based on the driver with the most laps) and a time target. Practice stops by itself when either is reached. **0** means no limit. | 0 / 0 |

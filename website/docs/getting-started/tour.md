@@ -188,7 +188,7 @@ Icon buttons, with no text on them - hover over one to see its name.
 
 ## The Developer Console
 
-The **Connection** page has a **Developer console** card at the bottom. Despite the name, it's the app's running log, and it's useful to anyone. Every page writes to it: decoder messages, laps, flags, what the announcer said or skipped and why, backups, sessions saved, and warnings. It keeps logging while you're on other pages, and **Save Support Info** on **Backup & Restore** includes it.
+The **Connection** page has a **Developer console** card at the bottom. Despite the name, it's the app's running log, and it's useful to anyone. Every page writes to it: decoder messages, laps, flags, what the announcer said, backups, sessions saved, and warnings. It keeps logging while you're on other pages, and **Save Support Info** on **Backup & Restore** includes it.
 
 | Control | What it does |
 |---|---|
@@ -201,7 +201,7 @@ The **Connection** page has a **Developer console** card at the bottom. Despite 
 
 The filter only changes what you see. Nothing is thrown away, so you can widen the filter again. The console keeps roughly the last 5,000 lines.
 
-When something doesn't happen the way you expected, such as a race that wasn't saved or an announcement that didn't play, look in the console first. It usually says why.
+When something doesn't happen the way you expected, such as a race that wasn't saved or the announcer going quiet, look in the console first.
 
 <!-- screenshot: Developer Console on the Connection page with the Voice preset selected -->
 

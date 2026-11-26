@@ -28,7 +28,7 @@ These are the RC racing terms and HeatCaller terms used in the app and in these 
 | Term | Meaning |
 |---|---|
 | **On Air** | The normal start on **Race Control**: the soundscape's jingle, the race intro, the pit lane throw and the driver introductions, a bumper, and then **Stage**. It has no button: <kbd>F1</kbd> and **Start Next** start races through it, and <kbd>0</kbd> starts it by hand or, held for a second while it runs, skips to **Stage**. |
-| **Stage / Countdown / Green** | The start sequence on **Race Control**. **Stage** calls the grid, **Countdown** counts down, and **Green** starts the race. By default each step follows on from the last by itself. |
+| **Stage / Countdown / Green** | The start sequence on **Race Control**. **Stage** calls the grid, **Countdown** counts down, and **Green** starts the race. By default HeatCaller runs all three for you. |
 | **Yellow flag** | A caution. The race carries on and laps still count. |
 | **Red flag** | The race is stopped. The race clock pauses and laps aren't counted until **Green** resumes it. |
 | **Checkered flag** | The end of the race. It's thrown automatically at the lap or time limit, or by hand by pressing and holding **Checkered** (or <kbd>F6</kbd>). |
