@@ -1,6 +1,6 @@
 # HeatCaller beta terms
 
-**Beta version of 19 November 2026 (revision 3).** These terms cover the HeatCaller beta. This revision replaces revision 2 of 15 November 2026. It adds **anonymous usage totals**: once a day, through your club's relay, HeatCaller tells us which of its pages were used and for how long, so we know what to improve. No driver information goes with them. They are on to begin with in the United States and off elsewhere, and you can change that on **Backup & Restore** (see **Usage totals** in Part 2). Revision 2 added rules for juniors, your content and music, a licence for the open-source video player, and how long information is kept. They will be revised again before HeatCaller is generally released, and HeatCaller will ask you to accept the revised version before it opens again.
+**Beta version of 25 November 2026 (revision 4).** These terms cover the HeatCaller beta. This revision replaces revision 3 of 19 November 2026. It makes clear that the beta is a private, confidential test: you keep how HeatCaller works to yourselves, you don't pass it on or use it to build or compare a rival product, the ideas you send us become ours, and we can end the agreement straight away if these rules are broken (sections 1, 2, 2A, 9, 10 and 11). Revision 3 added **anonymous usage totals**: once a day, through your club's relay, HeatCaller tells us which of its pages were used and for how long, so we know what to improve. No driver information goes with them. They are on to begin with in the United States and off elsewhere, and you can change that on **Backup & Restore** (see **Usage totals** in Part 2). Revision 2 added rules for juniors, your content and music, a licence for the open-source video player, and how long information is kept. They will be revised again before HeatCaller is generally released, and HeatCaller will ask you to accept the revised version before it opens again.
 
 There are three parts. **Part 1** is the license agreement for the software. **Part 2** is the privacy notice: what HeatCaller does with information about drivers, and where it sends it. **Part 3** covers the cookies on your club's online pages: where the cookie policy for your drivers is, and your part in it. You must accept all three to install and use HeatCaller.
 
@@ -12,15 +12,35 @@ This agreement is between HeatCaller LLC, a New York limited liability company t
 
 HeatCaller is race timing, scoring and announcing software, provided to you as a beta before it is generally released. It has been tested, but not yet at many club nights, and it will have faults.
 
+The beta is a private test of unreleased software, run by us. We give HeatCaller only to clubs and tracks we accept into the beta, so they can try it at their own race nights and tell us how it went. Taking part does not make HeatCaller, or how it works, public.
+
 The announcer is least accurate on short tracks. Where laps average under 8 seconds, spoken calls and commentary can come late, be skipped, or give a lap time, gap or place that is wrong or out of date. This does not affect lap timing or scoring.
 
 ## 2. Your license
 
 We give you a free, personal, non-exclusive, non-transferable license to install HeatCaller on computers your club or track uses, and to use it to run your own race nights, for as long as the beta lasts or until this agreement ends.
 
-You may not sell, rent or sublicense HeatCaller, or pass it on to anyone else as your own. You may not copy, change, decompile or reverse engineer it, except where the law gives you that right whatever this agreement says. HeatCaller stays ours.
+You may not sell, rent or sublicense HeatCaller, or pass it on to anyone else as your own. You may not copy, change, decompile or reverse engineer it, except where the law gives you that right whatever this agreement says. HeatCaller, and all the rights in it, including copyright, trade secrets, and patent rights whether or not yet applied for, stay ours. This agreement lets you use the software as it describes. It gives you no license under any patent or patent application except as needed to do that.
+
+You may not give HeatCaller, a copy of it or any of its files to anyone outside your club or track. You may not use HeatCaller, what it produces, its files or anything you learn from it to build, improve, train, test or compare a product or service that competes with HeatCaller, or help anyone else to. If you make, sell or work for race timing or announcing software, tell us before you install HeatCaller.
 
 Parts of HeatCaller written by others are licensed under their own terms, listed under **About HeatCaller**. Nothing here limits your rights under those licenses. Some of those parts, including the video player (LibVLC and LibVLCSharp), are under the GNU Lesser General Public License (LGPL). As far as the LGPL requires, you may modify HeatCaller for your own use, reverse engineer it to debug those modifications, and replace those parts with your own versions. **About HeatCaller** says where to get their source code.
+
+## 2A. Confidential beta
+
+HeatCaller is unreleased, and how it works is confidential. "Confidential information" means anything about HeatCaller that we have not made public ourselves, including:
+
+- the software and its files;
+- how it decides what to say and when, and what it holds back, stops, cuts off or corrects, and why;
+- what your desk sees and the public doesn't, such as the list of lines not said, the reasons a line was dropped, logs and **Save Support Info** files;
+- features we have not announced; and
+- what we tell you or send you about HeatCaller.
+
+You will keep it confidential. You will use it only to run your own race nights and to give us feedback. You will share it only with people at your club or track who need it to run HeatCaller, after telling them these rules, and you are responsible for them as if they were you. You will not post, publish or describe how HeatCaller works, or show its desk screens, in reviews, forums, videos or social media, without our written permission.
+
+These are not confidential: what your drivers, spectators and stream audience see and hear on a race night (the calls, the big screen, your published pages and your stream); anything that is already public through no fault of yours; and anything you knew before we told you. If a law or a court requires you to disclose confidential information, you may, but tell us first where you can.
+
+This section lasts for three years after this agreement ends and, for anything that is a trade secret, for as long as it stays one.
 
 ## 3. No warranty
 
@@ -71,15 +91,17 @@ HeatCaller looks for updates and asks before it installs one. When these terms c
 
 ## 9. Feedback
 
-If you send us feedback, notes or a **Save Support Info** file, we may use it to improve HeatCaller. Save Support Info tries to remove driver names and email addresses before the file is saved, but it can miss some (for example, a name typed into a note), so look through it before you send it.
+"Feedback" means suggestions, ideas, bug reports and notes about HeatCaller that you or your club send us. We ask you to send notes after each night you use HeatCaller during the beta. You give us all rights in your feedback, so we may use it, change it, build it into HeatCaller or anything else, and include it in patent applications, without paying or crediting you. Where the law doesn't let you give us those rights, you give us a permanent, worldwide, royalty-free license to do the same. Don't send us anything you don't have the right to give. Save Support Info tries to remove driver names and email addresses before the file is saved, but it can miss some (for example, a name typed into a note), so look through it before you send it.
 
 ## 10. Ending this agreement
 
 You can end this agreement at any time by uninstalling HeatCaller. We can end it by telling you, or by ending the beta. When it ends, stop using HeatCaller. Your data stays on your own computer, and you can remove everything you published with **Delete Everything Published**.
 
+If you break section 2 or 2A, we may end this agreement straight away by telling you. When this agreement ends for any reason, stop using HeatCaller, uninstall it, and delete any of our confidential information you hold, except what the law requires you to keep. A breach of section 2 or 2A could harm us in ways money can't put right, so we may also ask a court to stop it. Sections 2A, 4, 5, 7.4, 9 and 11 still apply after this agreement ends.
+
 ## 11. Law
 
-This agreement is governed by the laws of the State of New York, USA.
+This agreement is governed by the laws of the State of New York, USA. Any dispute about this agreement will be decided in the state or federal courts in the State of New York, and you agree to those courts hearing it.
 
 ## 12. Contact
 
