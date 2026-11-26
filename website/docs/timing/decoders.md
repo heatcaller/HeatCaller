@@ -57,9 +57,9 @@ The decoder you choose here is the start/finish line, where laps are counted. If
 
 **Run timing on its own thread**, on the **Start-up options** card of the **Connection** page, keeps lap counting going even when the HeatCaller window is busy or stops responding for a few seconds. It's off to begin with. Changing it takes effect the next time HeatCaller starts.
 
-With it ticked, every pass from the line decoder and the split loop goes straight to timing instead of waiting for the window, whether or not a race is running, so a freeze doesn't lose sector times either. Practice still starts by itself when a car crosses the gate (with **Start automatically when a car crosses the gate** ticked on the Practice page); the Practice page catches up when the window does, and starting a race at that same moment wins over the practice. The race clock, the time limit, the checkered flag and the crash-recovery file keep up on their own. The automatic start keeps working while the window is busy, and the race clock starts on time. Phones on the club's Wi-Fi pages and the club's live page keep the board, flag, countdown and standings live; parts the window works out (the track map, call-ups, championship and race in hand) catch up when it does. When the window catches up, the board shows the race as it is now. The results still get every lap.
+With it ticked, timing carries on while the window is busy, whether or not a race is running, so a freeze doesn't lose laps or sector times. Practice still starts by itself when a car crosses the gate (with **Start automatically when a car crosses the gate** ticked on the Practice page); the Practice page catches up when the window does. The race clock, the time limit, the checkered flag and the crash-recovery file keep up on their own. Phones on the club's Wi-Fi pages and the club's live page keep the board, flag, countdown and standings live; parts the window works out (the track map, call-ups, championship and race in hand) catch up when it does. When the window catches up, the board shows the race as it is now. The results still get every lap.
 
-With it off, everything works as it always has, except that practice no longer starts by itself at the gate while On Air is running (a car warming up during the opening used to start practice and call On Air off). Either way, a busy window never puts a driver's crossing on the wrong side of the flag.
+With it off, everything works as it always has, except that practice no longer starts by itself at the gate while On Air is running (a car warming up during the opening used to start practice and call On Air off).
 
 !!! tip "Try it at a rehearsal first"
     Tick it in a **HeatCaller Rehearsal** first (the Start menu shortcut that runs on a copy of your club's data, see [What the installer adds](../getting-started/install.md)) and run a few races before you use it on a race night.
@@ -197,7 +197,7 @@ Each decoder remembers its own source, port, address and baud rate, so switching
 | OpenStint | Network | Port 5556. |
 | EasyLap / Robitronic Serial | Serial | 38400 baud. |
 
-When you connect a ZRound decoder, HeatCaller sends the handshake and the race start (`%C&%I&`). The race start sets the decoder's clock to zero, which is harmless: HeatCaller keeps its own clock.
+When you connect a ZRound decoder, HeatCaller sends the handshake and the race start (`%C&%I&`). The race start sets the decoder's clock to zero, which is harmless.
 
 ### Confirm it's working
 
@@ -235,7 +235,7 @@ With both an EasyLap and an I-Lap, the one in **Connect via:** is the start/fini
 
 - **Connect** connects both. **Connect Split** connects the split loop on its own, for example after it was unplugged. **Disconnect** disconnects both.
 - When the line connects by itself (with **Connect when HeatCaller starts**, or the EasyLap's auto-connect), an I-Lap split loop uses the COM port it was last connected on. If that port isn't there yet, **Split status:** says "Waiting for the I-Lap on COM*n*" and it connects as soon as the port appears.
-- **Split status:** has its own light. Once connected, it says how closely the two decoders' clocks are tied together, for example "Clocks tied together to within about 4 ms". HeatCaller works this out from the EasyLap's once-a-second clock reading; nothing needs setting.
+- **Split status:** has its own light. Once connected, it says how closely the two decoders' clocks are tied together, for example "Clocks tied together to within about 4 ms". Nothing needs setting.
 - **The split loop never counts a lap.** Laps, the minimum lap time, jump starts and the finish all come from the line, exactly as with one decoder. If the split loop unplugs or misreads, the race carries on as it would without it.
 - **Each car needs a transponder for each decoder:** one the line reads and one the split loop reads. Add the split loop's on the driver's **Transponders** tab with **Add Split Transponder**. See [A driver's transponders](../race-day/drivers-and-classes.md#a-drivers-transponders).
 - During a race, the TIMING line on the Next Up bar says "Split loop quiet" if the split loop stops reading cars. If it isn't connected, the bar says "Split loop not connected" for 15 seconds, then leaves it to the console and Mission Control. Laps are still timed either way.
@@ -303,7 +303,7 @@ The race on the **Race Control** page keeps running. Its clock and time limit ca
 - With **Auto-connect** ticked, EasyLap reconnects by itself as soon as the decoder is back. A Beta decoder always does, trying every 3 seconds. Otherwise, click **Connect**.
 - Crossings made while disconnected are lost. Each driver's first counted lap after the reconnect runs from their last counted crossing, so it will be long. Check the laps and correct them if needed. See [Corrections and recovery](../race-control/corrections-and-recovery.md).
 - If the decoder's own clock restarted (for example, it lost power), HeatCaller can't work out a real lap time for the first crossing afterward. It rejects that one crossing, logs "Lap rejected: the decoder clock went backwards for ... The decoder was most likely reconnected during the race.", and times the following laps normally.
-- I-Lap lap times come from the laptop's clock, which doesn't restart when you reconnect. A Beta decoder's clock is learned again after a reconnect or a restart, with its first passes timed as they arrive (see [The Beta decoders](#the-beta-decoders)).
+- I-Lap lap times come from the laptop's clock, which doesn't restart when you reconnect. A Beta decoder times laps normally again after a reconnect or a restart (see [The Beta decoders](#the-beta-decoders)).
 
 You won't miss it: the Next Up bar on **Race Control** turns into a pulsing red alarm while the decoder is unplugged, from the moment a race is staged. [Mission Control](../race-control/running-a-race.md#mission-control) shows the decoder and its heartbeat as tiles you can keep on a second screen. See [Timing warnings](../race-control/running-a-race.md#timing-warnings).
 

@@ -370,7 +370,7 @@ Drivers can also check in from their phones, with their own personal PIN, and th
 - On the club Wi-Fi, from the laptop's own check-in page. See [Local Screens](../screens/phone-and-web.md) and the [self check-in poster](#self-check-in-poster) below.
 - Over the internet, from your club's online check-in page. See [Online check-in](../online/check-in.md).
 
-Online taps reach the laptop a few seconds late. If the desk changes a driver's check-in, an online tap that was made *before* the desk's change but arrives after it won't undo what the desk did. This holds even if the laptop's clock is wrong, because HeatCaller allows for the difference between its clock and the relay's.
+Online taps reach the laptop a few seconds late. If the desk changes a driver's check-in, an online tap that was made *before* the desk's change but arrives after it won't undo what the desk did. This holds even if the laptop's clock is wrong.
 
 ### Scan QR check-ins
 

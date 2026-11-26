@@ -10,7 +10,7 @@ All corrections apply to one driver on the **Race Control** leaderboard. There a
 - **Right-click** a driver's row: **Add a lap (+1)**, **Remove a lap (-1)**, **Penalty +5s**, **Penalty +10s**, **Penalty...**, **Clear penalty** and **Warn** *name* (see [Driver warnings](#driver-warnings)). The menu always applies to the row you right-clicked, not the row that was selected before.
 - **The keyboard**, with a driver selected: <kbd>+</kbd> and <kbd>-</kbd> for laps, <kbd>P</kbd> and <kbd>Shift</kbd>+<kbd>P</kbd> for 5 and 10-second penalties, <kbd>C</kbd> to clear penalties, <kbd>W</kbd> to give a warning and <kbd>Shift</kbd>+<kbd>W</kbd> to take the last one back. See [Keyboard shortcuts](../reference/keyboard-shortcuts.md#the-selected-driver).
 
-A correction shows on the board straight away. There's no lap call or buzzer for it.
+A correction shows on the board straight away.
 
 <!-- screenshot: a driver's drawer open under their row on the leaderboard -->
 
@@ -25,7 +25,7 @@ If the lap you add brings the driver to the race's lap limit, the checkered flag
 Use **−1 Lap** when a car was counted twice, for example a double read on the line.
 
 - Laps you added by hand are removed first.
-- After that, the extra lap comes off and the driver's total time is kept.
+- After that, one lap comes off the driver's count.
 - Best laps and the fastest lap of the race are updated to match.
 
 If a phantom lap brought the checkered flag out early in a lap race, for example a car carried back across the loop after a crash, use **−1 Lap** on that driver straight away, before they come round again. Their real last lap then counts: the next time they cross, they take the flag. The checkered flag stays out for everyone else. A crossing they make while they're marked as finished isn't counted, even once the lap comes off, so if they've already come round, leave their count alone: the phantom lap stands in for the one they just finished. A driver who took the flag after it came out has finished, so taking a lap off them doesn't give them another lap to run.
@@ -232,7 +232,7 @@ If the race was on its last lap when the app stopped, the checkered flag is stil
 
 HeatCaller only offers a race back when nothing else is running. If **Start automatically when a car crosses the gate** is ticked on the **Practice** page, a car crossing the line doesn't start practice until you've answered the question.
 
-For a qualifying start, HeatCaller also corrects each driver's start reference by itself if the decoder was switched off and on while the app was closed.
+A qualifying start comes back with each driver's times as they were, even if the decoder was switched off and on while the app was closed.
 
 ## Closing the window during a race
 

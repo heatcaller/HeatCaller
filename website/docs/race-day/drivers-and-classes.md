@@ -489,7 +489,7 @@ The **Start:** choices are:
 
 - **Standard - all away together, one clock** — a simultaneous grid start on one shared clock. The run from the grid to the timing loop counts toward everyone's time.
 - **Staggered - grid order**, **Staggered - reverse grid** and **Staggered - handicap** — cars are released one at a time.
-- **Qualifying - own clock from 1st crossing** — each driver's clock starts at their own first crossing of the line, so the run to the loop doesn't count (the IFMAR convention).
+- **Qualifying - own clock from 1st crossing** — the run to the loop doesn't count (the IFMAR convention).
 
 A format that was set to hand-released starts in an older version shows **Hand released (no longer offered)**. It still works, but you can't choose it for anything new.
 
