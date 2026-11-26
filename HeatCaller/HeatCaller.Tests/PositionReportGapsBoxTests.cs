@@ -76,6 +76,18 @@ public sealed class PositionReportGapsBoxTests : IDisposable
         Assert.Contains("WordRunningOrder(again, template, sayGaps, placesOnly)", source, StringComparison.Ordinal);
     }
 
+    // 25 Nov 2026 (Asher): the box says under it that gaps suit a longer
+    // track, so a club with short laps hears it before ticking it.
+    [Fact]
+    public void Under_the_box_it_says_gaps_work_best_on_a_longer_track()
+    {
+        var source = SourceFile("VoiceSettingsControl.Announcements.cs");
+
+        Assert.Contains("Works best on a longer track.", source, StringComparison.Ordinal);
+        Assert.Contains("rows.Controls.Add(lblGapsHint);", source, StringComparison.Ordinal);
+        Assert.Contains("(lblGapsHint, 0)", source, StringComparison.Ordinal);
+    }
+
     private static string SourceFile(string name)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

@@ -670,7 +670,7 @@ Reminders from the race day's **Timetable** ("5 minutes to Stock Buggy A-Main") 
 | **Consistency streak** | **Only the longest streak in the field** | Only the driver on the longest clean run is called. |
 | **Consistency streak** | **Mention the runner-up** | Adds the next-best streak to the line. |
 | **Position report** | **Read every** _n_ **lap(s) of the LEADER, down to P** _n_ | Every 1 to 50 leader laps (default 5), reading from 2 to 10 places deep (default 3). Each car's gap to the leader is said exactly, to the thousandth, the same as the board's **Gap to P1**: "Bill one point two three four back". The line under the setting says when it's read, and turns into a warning past P3, since a deeper report takes longer to say. |
-| **Position report** | **Say each car's gap to the leader (put {gaps} in the line to say them after the order)** | Reads the order as places and says the gaps where you put `{gaps}` in the line, so no gap is said twice. Off by default. Gaps make the report longer to say. |
+| **Position report** | **Say each car's gap to the leader (put {gaps} in the line to say them after the order)** | Reads the order as places and says the gaps where you put `{gaps}` in the line, so no gap is said twice. Off by default. Gaps make the report longer to say, so it works best on a longer track: on short laps a gap can change before it is said. |
 | **Minutes left** | **Only the last** _n_ **minutes (untick to call every minute)** | 2 to 60 (default 5): with 5, a ten-minute race hears five, four, three and two minutes to go. Untick it to hear every minute. One minute to go is always **Final minute**'s, so it's never said twice. |
 
 ### How often
