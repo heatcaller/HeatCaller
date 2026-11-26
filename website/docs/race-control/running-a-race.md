@@ -61,7 +61,7 @@ Once a race is finished, the row is for the gap before the next one: what the an
 |---|---|---|
 | **Skip** | A click stops the line on air and moves the show on to its next part (the On Air bar names it at its right, for example "Skip: Race Recap"): a recap goes on to the honors, the gap to its next line. Press and hold for a second to end the whole recap show, as the **Broadcast** window's **Skip** does. While On Air is opening the next race, holding it skips On Air and stages the race instead, the same as holding <kbd>0</kbd>: the strip under the row says "Keep holding to skip On Air and stage now". Grayed out when nothing is on air. | <kbd>F9</kbd> (a click) |
 | **Hold Talk** | Stops everything between races: the commentary's lines, sponsor reads, the hand-over, call-ups and the automatic countdown. It turns amber and reads **Resume Talk** until you press it again, and the On Air bar says "Between-race talk held - press Resume Talk or F10." Let go, talk picks up after the **Space between lines**, not the instant it comes off. The race itself is never held: flags, the countdown to green and the finish calls still play. With commentary on, it's the same hold as the **Broadcast** window's **Hold**, so either shows on both. | <kbd>F10</kbd> |
-| **Call Up** | Calls up the next race now, and the marshals with it when **Marshals to their posts** is ticked. Grayed out when the program has nothing next. A second press while the last call-up is still waiting to be said, or within 30 seconds of it, says nothing: the console answers, for example, "Already called up A-Main 7s ago." Right-click it for **Push the next race back 1 minute** (its run-sheet time, the countdown and the next call-up move with it), **Call up two races out**, **Marshals only** and **Not checked in**. | <kbd>F12</kbd> |
+| **Call Up** | Calls up the next race now, and the marshals with it when **Marshals to their posts** is ticked. Grayed out when the program has nothing next. A second press straight after the first says nothing: the console answers, for example, "Already called up A-Main 7s ago." Right-click it for **Push the next race back 1 minute** (its run-sheet time, the countdown and the next call-up move with it), **Call up two races out**, **Marshals only** and **Not checked in**. | <kbd>F12</kbd> |
 | **Edit Result** | Opens the race just run in **Race History** with **Edit Result** open. | |
 | **Reset** | Press and hold, as always. Takes the row back to the set before the green. | <kbd>F7</kbd> |
 
@@ -108,7 +108,7 @@ What one press plays follows the race. The button says which:
 |---|---|---|
 | Between races | **Play call-up** | The last call-up. |
 | Staging and the countdown | **Play again**, grayed out ("after the start") | Nothing, so nothing is played over the start. |
-| During a race, and in practice | **Play again** | The newest line from this race that's still true. |
+| During a race, and in practice | **Play again** | The newest line from this race. |
 | After the checkered flag | **Play winner** | The winner, then the class winners. Once the next race's call-up has been said, it's **Play call-up** instead. |
 | Muted | **Muted**, grayed out ("M to unmute") | Nothing. |
 
@@ -116,9 +116,9 @@ The small line under the words says what it plays and how long it lasts, for exa
 
 The arrow beside it opens **Said tonight**: the last 20 lines heard tonight, newest first, each with what kind of line it was, when, who said it and the words. The line or lines one press would play are marked **S**. Click any line to play it again. A line from the commentary that two voices said together plays whole.
 
-Some lines can't be played again. A gap, a position, a lap time or the minutes left is about the race as it stood, so once the leader has done another lap, or the race is over, the list grays it out with "Out of date - the race has moved on". Call-ups, flags, the finish, the winner and records stay playable all night. The list starts again at 6am, with the race night.
+Some lines can't be played again once the race has moved on; the list grays them out with "Out of date - the race has moved on". Call-ups, flags, the finish, the winner and records stay playable all night. The list starts again at 6am, with the race night.
 
-A replay waits its turn like any line: it waits for what's being said, the music and crowd duck under it, and a flag call goes first. It plays in the room and to anyone listening from home. It isn't kept again, and the race video and the Big Screen captions don't show it twice. When nothing has been said yet, the On Air bar shows the hint about which buttons to hold; after that, at rest, it shows **LAST SAID** with the kind of line, when, and the words.
+A replay waits its turn like any line, and the music and crowd duck under it. It plays in the room and to anyone listening from home. It isn't kept again, and the race video and the Big Screen captions don't show it twice. When nothing has been said yet, the On Air bar shows the hint about which buttons to hold; after that, at rest, it shows **LAST SAID** with the kind of line, when, and the words.
 
 Inside the bar, after the segment, a small speaker and **Now playing** in cyan name the imaging element the room is hearing: a jingle, sweeper, bumper or stinger (with the point it was played for, for example "Top of the race · Classic station ID"), a music bed, the recap show's opener, bed or sting, a replay, a sponsor video with its sound, the music, or the crowd. When more than one is going out, a piece is named over a sponsor video, a sponsor video over a bed, a bed over the music, and the music over the crowd. When nothing is playing, it's left out.
 
@@ -188,16 +188,16 @@ On Air is the normal start. With the **On Air** pill lit at the foot of the lead
 
 While On Air gets the opening ready, the strip under the flag row shows it the way it shows a press and hold: the step it's on ("On Air: writing the opening…", "On Air: voicing the opening…", "On Air: voicing the driver intros…"), a red bar filling from left to right, and the seconds it expects to need, learned from your last few openings, for example "about 12s · hold 0 to skip to Stage". The first few times there's no countdown yet, just the step. Once the show is live the strip turns cyan and reads "On air - the show is going out".
 
-- **Hold <kbd>0</kbd> for a second** while it runs to skip the rest and stage straight away. The strip fills as you hold, the same as holding **Red** or **Reset**. Let go early and nothing happens. A tap only shows "Let go too soon - nothing was done." on the strip, and <kbd>F1</kbd> only puts a reminder to hold <kbd>0</kbd> in the log, so a stray press can't cut the show short. The press that started On Air never counts as the skip, however long you hold it: let go and hold <kbd>0</kbd> again. When you skip, the announcer stops at once, even mid-word, and the staging call is the next thing heard. The opening, the driver introductions and pit lane are all dropped, and so is anything the announcer was still finishing when On Air started, such as the last line of the recap.
+- **Hold <kbd>0</kbd> for a second** while it runs to skip the rest and stage straight away. The strip fills as you hold, the same as holding **Red** or **Reset**. Let go early and nothing happens. A tap only shows "Let go too soon - nothing was done." on the strip, and <kbd>F1</kbd> only puts a reminder to hold <kbd>0</kbd> in the log, so a stray press can't cut the show short. The press that started On Air never counts as the skip, however long you hold it: let go and hold <kbd>0</kbd> again. When you skip, the announcer stops at once and the staging call is the next thing heard.
 - **Anything else that moves the race on** (Stage, Countdown, Green or Reset) calls On Air off, and your press wins. The announcer stops at once here too.
 - **Yellow or Red between races** doesn't call On Air off; it only stops the automatic start.
 - **During a demo's On Air**, a flag press skips the rest of the opening and starts the demo, which stages and goes green by itself. The opening stops at once.
 
 **The Tonight Open** plays at the first On Air of the night, before the jingle, when **Tonight Open** is ticked on **Voice → AI Commentary**. It sets out the evening (the drivers, the classes, the races to run), and the show open follows straight on when it finishes. Holding <kbd>0</kbd> skips it along with the rest. It isn't said again that night. One skipped before a word of it went out is tried again at the next On Air.
 
-Between races, HeatCaller writes the next opening and voices it ahead, so On Air usually starts the jingle at once. If you change the voice in between, the lines voiced ahead are dropped and voiced again.
+Between races, HeatCaller gets the next opening ready, so On Air usually starts the jingle at once.
 
-With **Run the start sequence automatically (Stage → Countdown → Green)** ticked (the default), you only need to press **Stage**. HeatCaller moves on to the countdown when the staging announcement finishes, and drops the green when the countdown announcement finishes. It follows the audio rather than a fixed timer, so the start never talks over itself or leaves a silence. With the announcer muted there's no audio to follow, so staging lasts **Stage (s):** and the countdown **Countdown (s):** from the race format instead.
+With **Run the start sequence automatically (Stage → Countdown → Green)** ticked (the default), you only need to press **Stage**. HeatCaller then moves on to the countdown and the green by itself, so the start never talks over itself or leaves a silence. With the announcer muted, staging lasts **Stage (s):** and the countdown **Countdown (s):** from the race format instead.
 
 The chain stops if anything else happens first. Pressing **Stage**, **Countdown**, **Green**, **Yellow**, **Red** or **Reset** stops the automatic sequence, and your button press wins. **Checkered** doesn't: before the green it's refused and changes nothing, so the start carries on, automatic green included (see [Flags](#flags)).
 
@@ -206,7 +206,7 @@ A yellow or red thrown during staging or the countdown also stops the automatic 
 !!! warning
     **Green** starts a race straight away even if you haven't staged. A green with no countdown gives the jump-start check nothing to watch. Use **Stage** for a proper start.
 
-The green always waits for the countdown announcement to finish, however the start was triggered. If you press **Reset**, **Stage** or **Red** during that wait (or a demo is stopped), the green is canceled and your later decision stands. The log says "Green flag not dropped - " and what happened. **Checkered** pressed during the wait is refused and leaves the green alone.
+Once the countdown is under way, the green follows on its own. If you press **Reset**, **Stage** or **Red** before it drops, your press wins and the race doesn't start. The log says "Green flag not dropped - " and why.
 
 ### Other ways to start
 
@@ -216,7 +216,7 @@ The green always waits for the countdown announcement to finish, however the sta
 
 **Quick Race** and **Start Next** do nothing while a session is already under way. Finish or reset the current session first.
 
-**Stage** and **Countdown** pressed while a race is running ask first, because they would abandon the running race without saving it. Starting a round from **Race Day → Next Steps** asks too, before anything is announced. To end a race and keep its result, use **Checkered**. Once you confirm, the abandoned race's flag goes with it, so a new start made over a race under yellow or red runs on to its automatic green like any other. See [Staging over a running race](corrections-and-recovery.md#staging-over-a-running-race).
+**Stage** and **Countdown** pressed while a race is running ask first, because they would abandon the running race without saving it. Starting a round from **Race Day → Next Steps** asks too, before anything is announced. To end a race and keep its result, use **Checkered**. See [Staging over a running race](corrections-and-recovery.md#staging-over-a-running-race).
 
 While practice is running, **Stage**, **Countdown**, **Green**, **Yellow**, **Red**, **Checkered**, **Reset** and starting a round from the program or the Next Up bar are refused with "Stop practice first on the Practice page". See [Practice](practice-and-ghosts.md#practice).
 
@@ -316,7 +316,7 @@ You set the jump-start rules on the class:
 | **Red** | <kbd>F5</kbd> | Press and hold the button (see [Press and hold](#press-and-hold)). Stops the race. The clock pauses and shows **PAUSED**, laps are not counted, and cars waiting to be released stay held. A timed race can't run out while the red flag is out. |
 | **Green** | <kbd>F3</kbd> | During a race, this resumes racing after a yellow or red. Laps and times are kept. If a lap added by hand under the red brought a driver to the lap limit, the checkered flag comes out instead. |
 | **Checkered** | <kbd>F6</kbd> | Press and hold the button. Ends the race now, for everyone, and saves the result. Only works while a race is running. |
-| **Reset** | <kbd>F7</kbd> | Press and hold the button. Clears the race, and the round and name on the **Session** row. Everything going out stops at once: the announcer mid-sentence, everything queued to be said, the recap show, a replayed moment, every jingle and bed, the sponsor spot on the Big Screen (a video with its sound), the music and the crowd. The next race brings the music and the crowd back up as usual. The key asks first if a race is under way. See [Corrections and recovery](corrections-and-recovery.md#reset-and-undo). |
+| **Reset** | <kbd>F7</kbd> | Press and hold the button. Clears the race, and the round and name on the **Session** row. Everything going out stops at once: the announcer, the recap show, a replayed moment, every jingle and bed, the sponsor spot on the Big Screen (a video with its sound), the music and the crowd. The next race brings the music and the crowd back up as usual. The key asks first if a race is under way. See [Corrections and recovery](corrections-and-recovery.md#reset-and-undo). |
 
 Going from red to yellow also restarts the race clock, because laps count under yellow.
 
@@ -342,7 +342,7 @@ The function keys work only while the **Race Control** page is showing, and only
 - **Both:** The race ends at whichever limit is reached first, and the clock shows the laps remaining. The announcer's time calls (final minute, minutes left, last minute countdown) are only made while the clock is set to end the race first. Once the leader's pace shows the lap limit will come first, they stay quiet rather than call "two minutes to go" in a race that's three laps from the flag.
 - **Neither:** The race runs until you press **Checkered**.
 
-Everything the announcer says about how much of a race is left follows what ends it. A timed race is talked about in time ("about a minute and a half left"), never as a number of laps, and a race run to a lap count is talked about in laps. The AI commentary is told which kind of race is on track before it writes each line.
+Everything the announcer says about how much of a race is left follows what ends it. A timed race is talked about in time ("about a minute and a half left"), never as a number of laps, and a race run to a lap count is talked about in laps.
 
 The clock always shows elapsed racing time. Time under a red flag isn't counted.
 
@@ -501,7 +501,7 @@ A car that's broken, or a driver who's gone home: right-click the Next Up bar (b
 After each race, HeatCaller counts down a gap and starts the next race by itself, so nobody has to press **Start Next**. It's on by default. Its pill at the foot of the leaderboard, **Auto Start**, is lit while it's on; click it to turn it off for tonight.
 
 - **When it counts.** From the checkered flag of a race on the program. It doesn't count after a demo, a Quick Race or a race kept on its own, and it doesn't start the first race of the night. The gap is 2:30 unless you choose another: right-click the **Auto Start** pill and pick a **Gap between races:** from 1:30 to 5:00.
-- **The count runs to the green.** When the start opens a warm-up, or runs staging and the countdown by itself, **NEXT**, the Big Screen and the phones count to the moment the race goes green, not to the moment it starts: the warm-up's length is added, and so are the format's **Stage (s):** and **Countdown (s):** for the steps that move on by themselves. With the announcer speaking, those steps follow the calls, so the time is the format's best estimate.
+- **The count runs to the green.** When the start opens a warm-up, or runs staging and the countdown by itself, **NEXT**, the Big Screen and the phones count to the moment the race goes green, not to the moment it starts: the warm-up's length is added, and so are the format's **Stage (s):** and **Countdown (s):** for the steps that move on by themselves. With the announcer speaking, the time is an estimate.
 - **The call-ups follow it.** The call-ups are timed to the real start, whether or not the timetable has times, and so is the spoken countdown ("one minute") when it's ticked on the **Between races** card. Phones show the start time too.
 - **A rest for back-to-back drivers.** When a driver in the next race raced too recently (two classes, or a bump-up), that race waits an extra 2 minutes, and **NEXT** says who the rest is for. "Too recently" is closer than **Races off between a driver's races:** on **Setup** allows: with 1 (the default), the race just run; with 2 or 3, any of the last 2 or 3. With 0 there's no rest.
 - **Planned breaks.** A break planned on **Setup**, such as watering the track after Q2, is added to the gap before the race that follows, and the announcer says it as it begins: "Time for a 10-minute break - water the track. Racing starts again about 20:40." See [Planned breaks](../race-day/program-and-mains.md#planned-breaks).

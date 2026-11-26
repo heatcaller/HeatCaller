@@ -127,8 +127,8 @@ The roll call doesn't run in practice or Demo Mode, or on a Big Screen opened fr
 
 While the announcer introduces the drivers on the grid, the Big Screen shows each one as they're named: their photo, their name, where they start ("POLE", "STARTING 2ND"), and their number and home club. The card slides in as the voice reaches that driver and stays until the next one, so the room sees the face that goes with the name.
 
-- **It follows the voice.** Each card goes up at its driver's place in the spoken line, timed from the real length of the audio, so it keeps pace with the announcer even on a long grid. A driver the announcer doesn't name gets no card.
-- **It leaves when the line does.** When the introductions end, the last driver stays up for two seconds and then the [grid roll call](#grid-roll-call) comes back. A flag, the countdown or **Reset** that cuts the announcer off takes the card down at once.
+- **It follows the voice.** Each driver's card goes up as the announcer names them. A driver the announcer doesn't name gets no card.
+- **It leaves when the line does.** When the introductions end, the last driver stays up for two seconds and then the [grid roll call](#grid-roll-call) comes back.
 - **It covers the roll call, not the race.** The card takes the leaderboard area for the length of the introductions, the roll call and track map included. A sponsor video that's playing isn't covered: the card waits.
 - **No photo, or a photo kept off.** A driver with no photo, or whose profile has **Keep their photo off it (a young driver, say)** ticked (see [Keeping a photo off the Big Screen](../race-day/drivers-and-classes.md#keeping-a-photo-off-the-big-screen)), gets the initials disc in their usual color. Their name shows either way.
 - **Turning it off.** Untick **Show each driver's name and photo on the Big Screen as they're introduced** under the driver introductions on **Voice → AI Commentary** (see [Before the start](../announcer/commentary.md#before-the-start)). It's on by default, and works the same whether the introductions come from **Stage** or from On Air.
@@ -209,7 +209,7 @@ Beside the caption, on a plate in the look's accent, the band names **the driver
 
 This is what the band was missing. "ON AIR │ BATTLE WATCH" told the room that something was happening; "ON AIR │ BATTLE WATCH │ Hargrove · Bellamy" tells them what to look at, while the leaderboard underneath is still showing all twelve cars.
 
-It's worked out from **the line itself**, not from what the segment was handed. The facts go to the model and what comes back is the model's sentence, so a segment given three drivers may well have named one of them — the band has to agree with what the room is hearing, and the only thing that knows that is the sentence.
+It's worked out from **the line itself**, so the band always agrees with what the room is hearing.
 
 What it won't do is guess:
 
@@ -243,7 +243,7 @@ Press <kbd>C</kbd> on the Big Screen to turn captions on, and <kbd>C</kbd> again
 
 - The strip shows the line the announcer is saying now, in large type on a plate in the crowd-screen look's colors.
 - Each line stays up for at least eight seconds, longer for a long line so there's time to read it, then fades out over two seconds. The next line replaces it straight away.
-- A long line, such as the race recap or the driver introductions, is shown a sentence or two at a time, each part as the announcer reaches it, so the strip keeps up with the voice for the whole line. If the line is cut off (by a flag, say), the parts the announcer didn't get to are never shown.
+- A long line, such as the race recap or the driver introductions, is shown a sentence or two at a time, keeping pace with the voice.
 - A part too long for the width ends in "...".
 - While captions are on, the strip keeps its place at the bottom even when nothing is being said, so the leaderboard doesn't jump up and down.
 
@@ -491,7 +491,7 @@ A sponsor can also present moments of the race, the way a broadcaster sells "the
 
 The announcer puts a short credit on the end of that call, then the sponsor's tagline if they have one: "That fastest lap is brought to you by Joe's Hobby Shop!" On the recap show the credit comes at the top of the sponsor's segment instead. The stream's graphic for the moment carries their name too.
 
-- A moment that happens often (fastest laps, lead changes, battles) is credited at most once every three minutes. Driver introductions, the qualifying recap and the race result are credited every time.
+- A moment that happens often (fastest laps, lead changes, battles) isn't credited every time. Driver introductions, the qualifying recap and the race result are credited every time.
 - Each moment has one sponsor. Tick the same moment for two sponsors and the card says so in red, for example "Fastest lap is ticked for Joe's Hobby Shop and Quickway Diner - only Joe's Hobby Shop, higher in the list, is named."
 - Every credit the announcer makes goes in tonight's report, under that sponsor's reads.
 
@@ -542,7 +542,7 @@ The clipboard rather than a file, because pasting into an email is what actually
 
 Copy too long for one read is split **at the end of a sentence**, never mid-sentence: as much as fits goes out now, and the rest is read the next time that sponsor's turn comes round, with "More from" and their name in front of it. A long read is delivered whole over the evening rather than cut short in it. If you edit the copy between one gap and the next, the next read starts again from the top, since where it had got to no longer means anything.
 
-The 25 seconds is the limit that matters. A read is handed to the announcer as one line, and a flag call can jump in front of whatever of it hasn't been spoken yet but not into the middle of it, so keeping any one read short is what keeps an advert from sitting across a race call.
+The 25 seconds is the limit that matters: keeping each read short keeps an advert from sitting across a race call.
 
 #### Whose turn it is
 
@@ -552,7 +552,7 @@ Having copy doesn't move a sponsor up the queue. Whose turn it is comes first, a
 
 #### What a read waits for
 
-- **A race call always comes first.** A read is only asked for once the commentary has nothing to say, so a recap or a "coming up next" always goes ahead of an advert.
+- **A race call always comes first.** A recap or a "coming up next" always goes ahead of an advert.
 - Nothing is read while a race is on track, while the announcer is held, or while a line is being written.
 - An ad break that finishes while a race is running doesn't lose its read: it waits for the next real gap. If reads are switched off, nobody is sold, or no copy would fit, that break's read is dropped instead of saved up.
 - A read goes on the announcement banner as well as over the PA, like the commentary segments.
