@@ -94,7 +94,7 @@ Because ghosts are stored like drivers, they appear on the leaderboard and in ra
 
 - They aren't listed for check-in, tech inspection, batteries or the **Garage**.
 - They never count as evidence that a transponder is working, so they don't appear in the pre-race check.
-- Their laps run on their own clock and never affect how real decoder passes are timed.
+- They never affect how real cars are timed.
 
 ## The pre-race check
 

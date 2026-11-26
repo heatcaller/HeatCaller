@@ -24,12 +24,12 @@ These work while the **Race Control** page is showing, and throughout Race Mode.
 | <kbd>F12</kbd> | **Call Up**: calls up the next race now. |
 | <kbd>H</kbd> | **Hold** / **Resume** on the Next Up bar: holds Auto start's count to the next race, and carries it on again. See [Auto start between races](../race-control/running-a-race.md#auto-start-between-races). |
 | <kbd>N</kbd> | **Start now**, from the **Hold** button's right-click menu: starts the next race without waiting for the count. |
-| <kbd>S</kbd> | **Play again** on the On Air bar: the winner after the flag, the call-up between races, the newest line still true during a race. See [Play a line again](../race-control/running-a-race.md#play-a-line-again). |
+| <kbd>S</kbd> | **Play again** on the On Air bar: plays a recent line again. See [Play a line again](../race-control/running-a-race.md#play-a-line-again). |
 | <kbd>B</kbd> | **Big Screen** |
 | <kbd>R</kbd> | **Pre-race check** |
 | <kbd>A</kbd> | **Announcer Screen** |
 
-Each key does what clicking its button does (except <kbd>F1</kbd>, described above, and <kbd>F7</kbd>, which asks first while a race is under way; the button doesn't), including the automatic follow-on from Stage to Countdown to Green when the race format has that turned on. See [Running a race](../race-control/running-a-race.md).
+Each key does what clicking its button does (except <kbd>F1</kbd>, described above, and <kbd>F7</kbd>, which asks first while a race is under way; the button doesn't), including Stage following on to Countdown and Green by itself when the race format has that turned on. See [Running a race](../race-control/running-a-race.md).
 
 The **Red**, **Checkered** and **Reset** buttons have to be pressed and held for about a second, so a stray click can't stop or end a race. Their keys, <kbd>F5</kbd>, <kbd>F6</kbd> and <kbd>F7</kbd>, act on a single press. See [Press and hold](../race-control/running-a-race.md#press-and-hold).
 

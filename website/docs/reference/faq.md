@@ -56,7 +56,7 @@ The free Kokoro voice speaks every line until the allowance starts again next mo
 
 You get a warning first. At nine tenths spent the console says, once a month, how much is left and when it starts again, so the first sign isn't a whole race in the Kokoro voice.
 
-Most fixed lines cost nothing in the first place: a line with no driver's name in it is rendered once for every club, so your allowance mostly goes on lap times, positions and names.
+Most fixed lines cost nothing, so your allowance mostly goes on lap times, positions and names.
 
 ### Can I write my own announcer lines on the HeatCaller voice?
 

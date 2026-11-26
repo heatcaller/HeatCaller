@@ -94,7 +94,7 @@ A voice the relay has since dropped from its catalog stays in the list, chosen, 
 
 Two buttons at the top of **Voice → Cast**, on the **Announcer** card, let you listen to a HeatCaller voice before you commit to it. Neither one spends your race-night allowance.
 
-- **Hear It**, beside **HeatCaller voice:**, plays a short sample of the voice you've highlighted. It's free, and it works before your club has signed up for anything at all: the sample needs no token, so a laptop with nothing but a relay address on the **Club Website** page can still listen to every voice. The first person anywhere to ask for a given voice has it rendered once; everyone after that hears the saved copy, for nothing. The sample is the same fixed line for every voice, so you're comparing like with like.
+- **Hear It**, beside **HeatCaller voice:**, plays a short sample of the voice you've highlighted. It's free, and it works before your club has signed up for anything at all: the sample needs no token, so a laptop with nothing but a relay address on the **Club Website** page can still listen to every voice. The sample is the same fixed line for every voice, so you're comparing like with like.
 - **Preview**, beside **Your own words:**, has the voice say whatever is in that box. This is the one that settles it: a stock sample can't tell you whether a voice gets "Stock Buggy A-Main" right, or your drivers' names. A starting line is filled in for you, so the button does something the first time you press it; replace it with your own class names and driver names. Keep it to a sentence — a preview can be up to 200 characters, and a longer one is refused straight away with a message saying so.
 
 Previews come out of **a small daily allowance of their own, kept completely separate from the race-night voice allowance**. An afternoon of auditioning can't leave you short on Saturday. When the day's previews are used up the relay says so in words, for example "That is this club's previews for today - 3,000 characters a day of trying voices out. Its race-night voice allowance has not been touched, and previews start again tomorrow." Nothing falls through to the race-night budget. **Hear It** still works, because it costs nothing.
@@ -207,8 +207,8 @@ Each club gets a number of characters a month on the HeatCaller voice — 100,00
 Far less of it is spent than that number suggests:
 
 - **A line already saved on this laptop costs nothing.** As with your own key, the first render is kept and played from the laptop after that. See [Saved voice lines](#saved-voice-lines).
-- **A line with nothing filled into it is rendered once for every club, not once for yours.** "Green flag!" is the same words at every club in the country, so the first club to ask pays for it and everyone else gets it free. With the standard lines that covers **Race started**, **Green flag (resumed)**, **Yellow flag**, **Red flag**, **Race staging**, **Countdown started**, **Race time over**, **Final minute** and **Race completed** — the calls a race night leans on most.
-- **What's left is the lines that get something filled in** — lap times, positions, streak counts, a driver's name, a class or the marshals. Those are your club's alone, so **Last lap**, **Grid call**, **Staggered start release** and every per-lap call are on your allowance.
+- **Most fixed lines cost nothing.** A line with nothing filled into it, such as "Green flag!", usually doesn't touch your allowance. With the standard lines that covers **Race started**, **Green flag (resumed)**, **Yellow flag**, **Red flag**, **Race staging**, **Countdown started**, **Race time over**, **Final minute** and **Race completed** — the calls a race night leans on most.
+- **What's left is the lines that get something filled in** — lap times, positions, streak counts, a driver's name, a class or the marshals. So **Last lap**, **Grid call**, **Staggered start release** and every per-lap call are on your allowance.
 
 So the cheapest thing you can do before a race night is press **Prepare Lines**, which works on this voice just as it does on a key of your own. See [Prepare lines in advance](#prepare-lines-in-advance).
 
@@ -415,7 +415,7 @@ The v4 models play a tag much harder than v3 did, so the built-in lines keep the
 
 - `[shouting]`: the start, time up and the checkered flag, a new leader, records (track record, fastest lap of the race, provisional pole, record pace), and the yellow, red and green flags and jump starts.
 - `[excited]`: passes and battles, ghost passes, getting lapped, the last lap and the final minute and seconds.
-- A driver's own bests (personal bests, a best ever here, several personal bests said together, streaks, qualifying improvements and achievements) are never `[excited]` or `[shouting]`. Their `[cheerful]` and `[awe]` stay.
+- A driver's own bests (personal bests, a best ever here, streaks, qualifying improvements and achievements) are never `[excited]` or `[shouting]`. Their `[cheerful]` and `[awe]` stay.
 - Everything else (staging, the countdown, lap times, the position report, minutes left, sector and split pace) is read with no tag.
 
 On any other model, a tag would be read out word for word, so HeatCaller strips anything in square brackets before the line is spoken. That means you can leave tags in your lines and switch models without the announcer saying "bracket excited". The built-in lines already use tags, so switching to `eleven_v3` makes them more lively.
@@ -444,23 +444,18 @@ To hear them, press **Test Voice** beside **ElevenLabs voice:** at the top of **
 | **Speaker boost** | ElevenLabs speaker boost. | On |
 | **Livelier in the big races, steadier in the heats** | Steps **Stability:** and **Style:** a tenth from your own settings with the size of the race: steadier in practice and heats, your settings as they are for the lesser mains, livelier for the top main, and one step up for the last race of the night. A line already saved or prepared is played as it is and never bought again. Shown for your own ElevenLabs voice on models other than v3. | On |
 
-Lap times are always spoken as words, the way a race caller says them, so the voice doesn't misread the digits: 6.935 is "six nine thirty-five", 5.060 is "five oh six" and 5.000 is "five flat". The voice says the same time the screens show, down to the thousandth, with nothing rounded. Screens show the numbers as digits. In lines written by the commentary model and in the reminders from the race day's Timetable, only a number with a unit ("6.9s", "6.9 seconds") is read as a time; other numbers are left as they are.
+Lap times are always spoken as words, the way a race caller says them, so the voice doesn't misread the digits: 6.935 is "six nine thirty-five", 5.060 is "five oh six" and 5.000 is "five flat". The voice says the same time the screens show, down to the thousandth, with nothing rounded. Screens show the numbers as digits.
 
 ## Saved voice lines
 
-Every line the HeatCaller voice or your own ElevenLabs account speaks is saved on the laptop the first time it's rendered. The next time the same words are wanted in the same voice and settings, HeatCaller plays the saved copy instead of asking again, so each line is paid for once. Saved lines survive restarts.
+Every line the HeatCaller voice or your own ElevenLabs account speaks is saved on the laptop the first time it's rendered. The next time that line is wanted, HeatCaller plays the saved copy instead of asking again, so each line is paid for once. Saved lines survive restarts.
 
 Saved lines belong to those two voices only. With the Kokoro voice chosen they aren't used at all: it speaks each line on the laptop as it's wanted, costs nothing, and nothing it says is kept here, not even when it's standing in. Kokoro does keep what it has said in memory for the rest of the session, so a line it has spoken once plays straight away — but that's forgotten when HeatCaller closes.
 
 !!! note
     A soundscape's **voice lines** are something else: its fixed race calls, recorded on purpose with **Voice Lines** on **Sounds → Soundscapes**. Those play from the laptop whichever voice is chosen, Kokoro included, and they're kept with the rest of your data, so they're in backups. The one exception is while your own ElevenLabs allowance is used up and Kokoro is standing in: they're held back then, like saved lines. See [Voice lines](sounds-and-music.md#voice-lines).
 
-What a saved line is matched on depends on the voice:
-
-- **Your own ElevenLabs account:** the words, the voice, the model, **Stability:**, **Similarity boost:**, **Style:**, **Speed:** (with the row's own **Speed**), **Speaker boost**, **Text normalize:**, **Language:** and **Output format:**. Change any of them and only the lines it affects are rendered again, the next time they're spoken. The API key isn't part of the match: a saved line plays whichever ElevenLabs account paid for it.
-- **The HeatCaller voice:** the words and the announcer voice you picked — nothing else, because nothing else is yours to change. The relay also gives each voice a fingerprint covering its model and settings, so if a voice is re-tuned on the relay, every laptop renders its lines again rather than playing takes that no longer match.
-
-Either way there's nothing to update by hand. The two sets are kept apart, so a club that tries the HeatCaller voice and goes back to its own key still has every line it has already paid for.
+If you change the voice or its settings, the lines it affects are made again the next time they're spoken. There's nothing to update by hand. The HeatCaller voice's lines and your own ElevenLabs lines are kept apart, so a club that tries the HeatCaller voice and goes back to its own key still has every line it has already paid for.
 
 <!-- screenshot: Saved voice lines card with the count, Prepare Lines, Stop and the Recently played list -->
 
@@ -481,7 +476,7 @@ Lines built from something that happens during the race, such as a lap time, the
 2. Click **Prepare Lines**.
 3. HeatCaller tells you how many lines it will render, how many are already saved and will be skipped, and roughly how many characters it will use. Click **Yes** to go ahead.
 
-What step 3 says depends on the voice. With your own account: "That's about 4,100 characters of your ElevenLabs quota, used once - each line is then played from this PC." With the HeatCaller voice: "That's about 4,100 characters of this club's monthly HeatCaller allowance at most - each line is then played from this PC, and the lines with no driver's name in them are rendered once for every club, so most of them cost nothing at all." **At most** is the word that matters — on this voice, most of what it prepares has already been rendered for some other club and costs your allowance nothing.
+What step 3 says depends on the voice. With your own account: "That's about 4,100 characters of your ElevenLabs quota, used once - each line is then played from this PC." With the HeatCaller voice it gives the most it could take from your club's monthly allowance, and says most of the lines usually cost nothing at all.
 
 It renders one line at a time and waits whenever the announcer is speaking, so it's safe to leave running while you race. The line beside the buttons shows how far it has got ("Preparing 12 of 80..."), then a summary such as "Done: 80 lines rendered and saved." Click **Stop** at any point; everything rendered by then is kept, and stopping isn't counted as a line that failed. It also stops by itself if your quota or your monthly allowance runs out, or if three lines in a row fail. The console says why each failed line failed.
 
@@ -500,7 +495,7 @@ Now and then a take comes out odd: a strange pause, or a word stressed wrongly. 
 - **For any saved line, on either paid voice:** choose it in **Recently played:** (the lines played or saved most recently, newest first) and click **Re-roll Line**. It says what the new take will cost and asks first; press **Yes** and it makes a new take, plays it, and keeps it as the one the race plays: "New take kept - 84 characters. The race plays this one now." If it fails, the old take is kept. Each entry in the list shows what the line costs to make again, in characters, beside when it was last used.
 - **Forget Line** throws the saved take away instead, and the line is rendered afresh the next time it's spoken.
 
-On the HeatCaller voice the **Test** buttons are hidden, so **Re-roll Line** is the way to get a new take. The new take is your club's own: the relay keeps it for your club only, other clubs keep hearing the shared take, and it costs your allowance like any line that wasn't saved. (**Forget Line** on its own usually brings back the relay's shared copy, which costs nothing but sounds the same.) The relay must be up to date for this — on an older relay a re-roll hands back the same take; see [Relay hosting](../admin/relay-hosting.md).
+On the HeatCaller voice the **Test** buttons are hidden, so **Re-roll Line** is the way to get a new take. The new take costs your allowance like any line that wasn't saved. (**Forget Line** on its own usually brings back the same take, at no cost.) The relay must be up to date for this — on an older relay a re-roll hands back the same take; see [Relay hosting](../admin/relay-hosting.md).
 
 **Re-roll Line** refuses, with the reason, for a Kokoro line (Kokoro makes every line fresh on this laptop anyway), for a line whose words weren't recorded with it, for a line spoken in pieces, for a line saved with a different voice or different settings — an event's own speed, say — and for a line saved with drivers' full names before **Shorten published names** was ticked, which the race no longer plays (re-rolling it would send the full names to the online voice again). **Forget Line** is the answer for those.
 
@@ -523,7 +518,7 @@ In `%LocalAppData%\HeatCaller\VoiceLibrary` on the laptop, up to about 500 MB. P
 - **Race** and **Practice** tick boxes: whether the announcement speaks in races, and in practice. See [Race and practice](#race-and-practice).
 - **Announcement**: its name.
 - **Phrasing**: the lines the announcer picks from. Type one per line. A random line is picked each time, so the same sentence doesn't repeat back to back. Under the box, a hint says when the announcement fires and which placeholders it takes. A few rows have extra settings under it too; see [Extra settings on some rows](#extra-settings-on-some-rows).
-- **Weight** (only on the per-lap announcements): 0 to 100. When several announcements fire on the same lap, the higher weights win the slots allowed by **Max spoken announcements per lap:** on the [How often](#how-often) card.
+- **Weight** (only on the per-lap announcements): 0 to 100. Higher means more likely to be heard on a busy lap.
 - **Speed**: 0.50 to 1.50. A multiplier on the main **Speed:** setting, just for this announcement. Lower it for long lines, such as the position report. The result is still kept between 0.70 and 1.20.
 - **Caution**: lets this announcement speak while a yellow or red flag is out. Off for everything by default (see [How the announcer behaves during a race](#how-the-announcer-behaves-during-a-race)).
 - **Test**: speaks one random line from this box, at this row's speed, using the settings currently on screen and the voice chosen under **Speak with**. With ElevenLabs it always renders a fresh take; see [Fix a line that came out wrong](#fix-a-line-that-came-out-wrong).
@@ -614,7 +609,7 @@ Defaults are for a new install. The **Practice** tick starts the same as the **R
 | **Personal best lap** | A driver beats their own best this race. Fires often with a full grid. | `{driver}` `{car}` `{team}` `{sponsors}` `{time}` | No | 45 |
 | **Jump start** | A car crosses the line before the green flag. | `{driver}` `{car}` `{team}` `{sponsors}` | Yes | 95 |
 | **Track record** | The all-time fastest lap on the track layout selected in Race Control is broken. | `{driver}` `{car}` `{team}` `{sponsors}` `{time}` | Yes | – |
-| **Leader change** | P1 changes hands. If the driver who lost the lead takes it straight back before the line is said, the line is stopped and the new lead change is called instead. Unless the line says `{leadchanges}`, the count is added ("the fourth lead change, among three drivers"); see [Extra settings on some rows](#extra-settings-on-some-rows). | `{driver}` `{car}` `{team}` `{sponsors}` (new leader), `{previous}` `{previouslaps}` `{leadchanges}` `{leaders}` `{backinfront}` | Yes | 100 |
+| **Leader change** | P1 changes hands. Unless the line says `{leadchanges}`, the count is added ("the fourth lead change, among three drivers"); see [Extra settings on some rows](#extra-settings-on-some-rows). | `{driver}` `{car}` `{team}` `{sponsors}` (new leader), `{previous}` `{previouslaps}` `{leadchanges}` `{leaders}` `{backinfront}` | Yes | 100 |
 | **Every lap completed** | Every finish-line pass. | `{driver}` `{car}` `{team}` `{sponsors}` `{lap}` `{time}` `{laptime}` | No | 40 |
 | **Lap time only** | A quieter alternative: just the lap time after each lap. | fixed wording (see below) | No | 30 |
 | **Consistency streak** | A driver's clean-lap streak reaches the streak threshold, and again as it continues. | `{driver}` `{car}` `{team}` `{sponsors}` `{streak}` | Yes | 70 |
@@ -624,7 +619,7 @@ Defaults are for a new install. The **Practice** tick starts the same as the **R
 | **Red flag** | A red flag stops the race. | none | No | – |
 | **Green flag (resumed)** | Racing resumes after a yellow or red. Separate from **Race started** so the restart can be worded differently. | none | No | – |
 | **Position report** | Reads the running order during a race. | `{positions}` | No | – |
-| **Close battle** | Two drivers on the same lap within a second of each other. Once per pair per race. If the chaser gets past before the line is finished, it stops and the pass is called instead ("And Sam is through, up into third!"). A fight for the lead that the line doesn't mention starts "Battle for the lead!". | `{driver}` `{car}` `{team}` `{sponsors}` (car in front), `{rival}` (chaser), `{battle}` | Yes | – |
+| **Close battle** | Two drivers on the same lap within a second of each other. Once per pair per race. A fight for the lead that the line doesn't mention starts "Battle for the lead!". | `{driver}` `{car}` `{team}` `{sponsors}` (car in front), `{rival}` (chaser), `{battle}` | Yes | – |
 | **Car gets lapped** | The leader puts a full lap on another driver. | `{driver}` `{car}` `{team}` `{sponsors}` (leader), `{rival}` (lapped car) | No | – |
 | **Passed a ghost** | You get past a ghost car. | `{driver}`, `{rival}` (the ghost) | Yes | – |
 | **Passed by a ghost** | A ghost car gets past you. | `{driver}`, `{rival}` (the ghost) | Yes | – |
@@ -674,8 +669,8 @@ Reminders from the race day's **Timetable** ("5 minutes to Stock Buggy A-Main") 
 | **Consistency streak** | **Announce every** _n_ **lap(s) in races,** _n_ **in practice** | 1 to 20 each. Counted from the streak threshold on the [How often](#how-often) card: with a threshold of 3 and every 3, a driver is called at 3, 6, 9 and so on. |
 | **Consistency streak** | **Only the longest streak in the field** | Only the driver on the longest clean run is called. |
 | **Consistency streak** | **Mention the runner-up** | Adds the next-best streak to the line. |
-| **Position report** | **Read every** _n_ **lap(s) of the LEADER, down to P** _n_ | Every 1 to 50 leader laps (default 5), reading from 2 to 10 places deep (default 3). The report waits until the last car it names has crossed the line on the leader's lap (a car a lap or more down doesn't hold it up), then gives each car its gap to the leader exactly, to the thousandth, the same as the board's **Gap to P1**: "Bill one point two three four back". A car that never comes round holds it up for half a lap longer than the leader's last lap at most; it's then read without that car and anyone behind it. The line under the setting says when it's read, and turns into a warning past P3, since a deeper report is heard well after the leader crosses. If it has to wait behind other lines, it waits its turn: just before it's spoken the board is read again, and if anything in it has changed, it's said from the order as it stands then. A newer report replaces one still waiting. |
-| **Position report** | **Say each car's gap to the leader (put {gaps} in the line to say them after the order)** | Reads the order as places and says the gaps where you put `{gaps}` in the line, so no gap is said twice. Off by default. Gaps make the report longer to say, and a gap can change while it's being said, so the gaps you hear are the gaps when the report started. |
+| **Position report** | **Read every** _n_ **lap(s) of the LEADER, down to P** _n_ | Every 1 to 50 leader laps (default 5), reading from 2 to 10 places deep (default 3). Each car's gap to the leader is said exactly, to the thousandth, the same as the board's **Gap to P1**: "Bill one point two three four back". The line under the setting says when it's read, and turns into a warning past P3, since a deeper report takes longer to say. |
+| **Position report** | **Say each car's gap to the leader (put {gaps} in the line to say them after the order)** | Reads the order as places and says the gaps where you put `{gaps}` in the line, so no gap is said twice. Off by default. Gaps make the report longer to say. |
 | **Minutes left** | **Only the last** _n_ **minutes (untick to call every minute)** | 2 to 60 (default 5): with 5, a ten-minute race hears five, four, three and two minutes to go. Untick it to hear every minute. One minute to go is always **Final minute**'s, so it's never said twice. |
 
 ### How often
@@ -684,8 +679,8 @@ The **How often** card, under the rows, holds the settings that decide how much 
 
 | Setting | What it does | Default |
 |---|---|---|
-| **Max spoken announcements per lap:** | 1 to 5. When one lap triggers several routine announcements (say a fast lap, a streak and a lead change), only this many are spoken. The ones with the highest **Weight** win. **How chatty** on the **AI Commentary** tab scales it up or down, even with AI commentary off. | 2 |
-| **Pacing:** | The gap between these calls: **Room to breathe**, **Spacious**, **Balanced**, **Busy** or **Wall to wall**. The line under it says the gap each choice leaves in practice, a heat and the top main. A change of lead, a flag, a countdown, a grid call, a driver's release, the finish, an achievement, the last lap, the final minute and a track record are never held back, nor is a call that clearly outweighs the one before it. It doesn't space the AI commentary, whose gaps follow **How chatty**. On **Race Control**, "held" calls are this leaving a gap; "lost" ones are the announcer running out of room. | **Balanced** |
+| **Max spoken announcements per lap:** | 1 to 5. How many routine announcements one lap can bring. **How chatty** on the **AI Commentary** tab scales it up or down, even with AI commentary off. | 2 |
+| **Pacing:** | The gap between these calls: **Room to breathe**, **Spacious**, **Balanced**, **Busy** or **Wall to wall**. The line under it describes each choice. It doesn't space the AI commentary, whose gaps follow **How chatty**. The "held" and "lost" counts on **Race Control** show how busy the announcer was. | **Balanced** |
 | **Streak threshold - races:** and **Streak threshold - practice:** | 2 to 50. How many valid laps in a row count as a streak, for the **Consistency streak** announcement and the streak sound on **Sounds → Effects** alike, and to color the Streak column on leaderboards. | 3 |
 
 The streak thresholds were on **Sounds → Effects** before 17 October, and **Max spoken announcements per lap:** on the **Voice parameters** card. They're the same settings, and a soundscape still sets them. **Pacing:** was on the **AI Commentary** tab until 3 November; it's the same setting, and a soundscape doesn't change it.
@@ -710,14 +705,14 @@ Because a test uses what's on screen, it can sound different from what races use
 
 The announcer is built so that important calls are never late and routine chatter never piles up.
 
-- **Flag and race-control calls cut in.** **Race started**, **Green flag (resumed)**, **Yellow flag**, **Red flag**, **Race time over** and **Race completed** stop whatever is being said mid-word and play straight away. Anything routine waiting in the queue is thrown away. If two flag calls are pressed close together, only the newer one is spoken.
-- **Other priority calls are never dropped.** **Race staging**, **Countdown started**, **Staggered start release**, **Last lap**, **Final minute**, **Track record**, **Achievement unlocked** and Timetable reminders wait their turn but are always spoken. A release call or reminder queued behind **Last lap** or **Final minute** doesn't push it out; only a flag call clears them.
-- **The time left is said while it's true.** **Minutes left** and **Last minute countdown** wait their turn like **Final minute**, but a newer time call replaces one still waiting, and one that waited too long isn't said: "thirty seconds" is dropped rather than spoken with twenty left.
+- **Flag and race-control calls come first.** **Race started**, **Green flag (resumed)**, **Yellow flag**, **Red flag**, **Race time over** and **Race completed** are spoken straight away.
+- **Other priority calls are always spoken.** **Race staging**, **Countdown started**, **Staggered start release**, **Last lap**, **Final minute**, **Track record**, **Achievement unlocked** and Timetable reminders wait their turn but are always spoken.
+- **Time calls wait their turn.** **Minutes left** and **Last minute countdown** wait their turn behind other calls.
 - **The grid call is always spoken**, before the staging line, with the marshals if your lines include them. It's spoken even straight after a race: it ends the post-race quiet.
-- **Routine lines are dropped when the announcer is busy.** If the announcer is already talking when a lap-time, streak or similar line comes up, that line is skipped rather than queued. On a fast track, a late line would describe a lap that's long gone. A newer line about the same driver also replaces an older one still waiting.
+- **Routine lines give way when the announcer is busy**, so the calls you hear stay with the racing.
 - **Under a yellow or red, routine lines are skipped** so the announcer doesn't talk over instructions to drivers. Tick **Caution** on its row on the **Race Calls** tab to let it through anyway. Rivalry lines are also held under caution. Flag calls are never held.
 - **After the checkered flag, only the wrap-up speaks.** Cars still crossing the line don't trigger lap times, personal bests or streak calls. The finish call, badges, and the recap teaser and summary from [Commentary](commentary.md) still play. Badge calls always come after the checkered-flag call. The hold lifts when the next race stages or starts.
-- **Flag lines are prepared ahead of time.** When a race stages, HeatCaller prepares one line each for **Race started**, **Green flag (resumed)**, **Yellow flag**, **Red flag** and **Race completed** (those that are switched on) in the background, in whichever voice will speak them, so pressing a flag button plays audio already on the laptop instead of waiting. Only lines without placeholders can be prepared ahead. After a line is used, another is picked for next time. Lines already saved are read from the laptop rather than rendered again (see [Saved voice lines](#saved-voice-lines)). If you change the voice (switching between the HeatCaller voice, ElevenLabs and Kokoro, or picking another voice within any of them, included), the model, the tuning or the lines, the prepared audio is thrown away, and whatever changed is prepared again. The release calls of a staggered start are prepared the same way at the green.
+- **Flag lines are prepared ahead of time.** When a race stages, HeatCaller prepares one line each for **Race started**, **Green flag (resumed)**, **Yellow flag**, **Red flag** and **Race completed** (those that are switched on) in the background, in whichever voice will speak them, so pressing a flag button plays audio already on the laptop instead of waiting. Only lines without placeholders can be prepared ahead. After a line is used, another is picked for next time. Lines already saved are read from the laptop rather than rendered again (see [Saved voice lines](#saved-voice-lines)). If you change the voice, its tuning or the lines, the prepared audio is made again. The release calls of a staggered start are prepared the same way at the green.
 - **Release calls follow the voice you chose.** With your own ElevenLabs key, a grid's worth of release calls is rendered as one request and cut into clips, which saves round trips rather than characters. With the HeatCaller voice they go through the relay one line at a time: an old ElevenLabs key still saved on the laptop is never used for them, so nothing on that voice is ever billed to your club.
 
 ### When ElevenLabs can't speak a line
@@ -737,7 +732,7 @@ With ElevenLabs chosen and **If ElevenLabs can't speak a line - no key, no inter
 
 **Sounds → Mixer** shows a notice while Kokoro is standing in, for example "The free Kokoro voice is standing in - the ElevenLabs quota is used up." See [Mixer](sounds-and-music.md#mixer).
 
-Flag lines are prepared at staging even with no key or no internet, in the Kokoro voice if need be. The console then says, for example, "[voice] RaceStarted line ready to fire instantly, in the Kokoro voice (standing in for ElevenLabs)." Once ElevenLabs can speak again, a flag line Kokoro prepared is no longer used: that flag is spoken live in ElevenLabs and prepared again at the next staging. Release calls work the same way.
+Flag lines are prepared at staging even with no key or no internet, in the Kokoro voice if need be. The console then says, for example, "[voice] RaceStarted line ready to fire instantly, in the Kokoro voice (standing in for ElevenLabs)." Once ElevenLabs can speak again, the flags are in your ElevenLabs voice again. Release calls work the same way.
 
 With the box unticked, a line ElevenLabs can't speak is skipped, and the console says why. On a PC that hasn't got Kokoro's voice file the box can't help either, so those lines are skipped too — and the **Mixer** says so. See [When nothing can speak](#when-nothing-can-speak).
 
@@ -764,7 +759,7 @@ HeatCaller never sends more than two requests to ElevenLabs at once, and it give
 
 ### Keeping the HeatCaller voice's allowance down
 
-The same advice applies, with one difference in your favor: on the HeatCaller voice, a line with no driver's name in it is rendered once for every club, so most fixed lines never touch your allowance at all. What costs you is the lines with live values — lap times, positions, streak counts, names.
+The same advice applies, with one difference in your favor: on the HeatCaller voice, most fixed lines never touch your allowance at all. What costs you is the lines with live values — lap times, positions, streak counts, names.
 
 - Press **Prepare Lines** before the night. It's the cheapest thing you can do.
 - Leave **Every lap completed**, **Lap time only** and **Personal best lap** off, or use **Announce every** _n_ **lap(s)** to space them out. These are far and away the biggest spenders, because each one is a new sentence.
@@ -787,7 +782,7 @@ The page shows:
 - **Talking points**: things worth saying, newest first:
     - A suggested line in quotes at the top, written by the commentary model (the relay's, or the one built into HeatCaller) when [Commentary](commentary.md) talking points are on.
     - Lines starting with `*`, worked out from the live standings: a close fight for the lead (under 2 seconds), anyone laps down, who holds the fastest lap, and battles under a second further down the order.
-    - A time-stamped record of every announcement the announcer has made (the same lines it spoke), plus jump starts. Up to 40 are kept.
+    - A time-stamped record of the announcer's lines, plus jump starts. Up to 40 are kept.
 - **Spotlight**: pick any driver to follow a story. It shows their position, laps and best this race, their last three laps, their all-time personal best from saved sessions and how far off it they are today, their car and class, and any notes on their profile.
 - **LAST RACE SUMMARY**: the recap of the race that just finished, from [Commentary](commentary.md). It's cleared as soon as the next race finishes, so it's empty while that race's recap is being written, and stays empty if that race doesn't get one.
 
@@ -808,7 +803,7 @@ By default the announcer is unmuted automatically when a session starts, so a mu
 
 ## Rivalries
 
-**Voice → Race Calls** lets you give two particular drivers their own lines. Whenever those two swap places in the standings, in either direction, the announcer speaks one of the pair's lines. If the other driver gets straight back past before the line is finished, it stops, and the line for that swap is said instead.
+**Voice → Race Calls** lets you give two particular drivers their own lines. Whenever those two swap places in the standings, in either direction, the announcer speaks one of the pair's lines.
 
 1. Make sure both drivers have profiles with a driver name. You need at least two named driver profiles before you can add a rivalry.
 2. Press **Add Rivalry**.
@@ -823,7 +818,7 @@ Things to know:
 
 - With the HeatCaller voice chosen, the phrasing box is read-only and **Use Default Lines** is switched off, the same as the lines on the **Race Calls** tab. An amber line under the phrasing box says so: "Fixed while the HeatCaller voice is speaking - use your own ElevenLabs key or the free Kokoro voice to write your own." Adding, enabling and deleting rivalries all still work; it's only the wording that's fixed.
 - A rivalry only fires when both drivers are on track and have each posted a lap this session.
-- The first time HeatCaller sees the pair, it just notes who's ahead. The line fires on the next swap.
+- A rivalry's first line comes the first time the two swap places.
 - Rivalry lines speak the names exactly as picked from the driver names, not the **Announcer name:**.
 - Rivalry lines count as routine lines: they're skipped under a yellow or red, and when the announcer is busy.
 - If you rename a driver on their profile, re-pick them in the rivalry.

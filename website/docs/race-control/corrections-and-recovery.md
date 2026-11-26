@@ -10,7 +10,7 @@ All corrections apply to one driver on the **Race Control** leaderboard. There a
 - **Right-click** a driver's row: **Add a lap (+1)**, **Remove a lap (-1)**, **Penalty +5s**, **Penalty +10s**, **Penalty...**, **Clear penalty** and **Warn** *name* (see [Driver warnings](#driver-warnings)). The menu always applies to the row you right-clicked, not the row that was selected before.
 - **The keyboard**, with a driver selected: <kbd>+</kbd> and <kbd>-</kbd> for laps, <kbd>P</kbd> and <kbd>Shift</kbd>+<kbd>P</kbd> for 5 and 10-second penalties, <kbd>C</kbd> to clear penalties, <kbd>W</kbd> to give a warning and <kbd>Shift</kbd>+<kbd>W</kbd> to take the last one back. See [Keyboard shortcuts](../reference/keyboard-shortcuts.md#the-selected-driver).
 
-A correction updates the board and the announcer's running order straight away. The announcer doesn't treat it as a car crossing the line, so there's no lap call or buzzer.
+A correction shows on the board straight away. There's no lap call or buzzer for it.
 
 <!-- screenshot: a driver's drawer open under their row on the leaderboard -->
 
@@ -25,8 +25,8 @@ If the lap you add brings the driver to the race's lap limit, the checkered flag
 Use **−1 Lap** when a car was counted twice, for example a double read on the line.
 
 - Laps you added by hand are removed first.
-- After that, the driver's last lap is merged into the lap before it rather than thrown away. Two crossings a moment apart were really one lap, and adding their times together gives that lap back. The laps still add up to the driver's total time.
-- The driver's best lap, their clean run and the fastest lap of the race are then worked out again. If the phantom short "lap" had set the driver's best, or the race's fastest lap, it no longer counts.
+- After that, the extra lap comes off and the driver's total time is kept.
+- Best laps and the fastest lap of the race are updated to match.
 
 If a phantom lap brought the checkered flag out early in a lap race, for example a car carried back across the loop after a crash, use **−1 Lap** on that driver straight away, before they come round again. Their real last lap then counts: the next time they cross, they take the flag. The checkered flag stays out for everyone else. A crossing they make while they're marked as finished isn't counted, even once the lap comes off, so if they've already come round, leave their count alone: the phantom lap stands in for the one they just finished. A driver who took the flag after it came out has finished, so taking a lap off them doesn't give them another lap to run.
 
@@ -167,7 +167,7 @@ Undoing a reset puts everything back as it was:
 - jump-start flags
 - the round and the name on the **Session** row.
 
-The flag calls aren't made again, and neither are "last lap" and "one minute to go" if they had already been called. Ghost cars in the race carry on mid-lap, as though they had kept lapping; see [Ghost Cars](practice-and-ghosts.md#ghost-cars).
+Calls already made aren't repeated. Ghost cars in the race carry on mid-lap, as though they had kept lapping; see [Ghost Cars](practice-and-ghosts.md#ghost-cars).
 
 **Reset** during a demo ends the demo instead, and that can't be undone. Once **Countdown** or a first **Green** has taken over from a demo, the start on the board is a real race's, so a **Reset** pressed straight after can be undone as usual. While practice is running, **Reset** and **Checkered** are refused: use **Stop** or **Clear Stats** on the **Practice** page. See [Practice](practice-and-ghosts.md#practice).
 
@@ -192,7 +192,7 @@ If the race finishes, is reset or changes in some other way while the question i
 
 Over a demo, the question is **Demo in progress** instead: "A demo is running. ..." Ending a demo this way doesn't save it to **Race History** (even with the save box ticked), and **Undo** doesn't bring it back. See [Demo Mode](practice-and-ghosts.md#demo-mode).
 
-A **Countdown** confirmed over a running race clears that race's flag, the same as **Stage** does. So if the running race was under a yellow or red flag, the new countdown still runs on to its automatic green (when the start sequence runs automatically), and that green is called as the new race's start. A yellow or red thrown during the new countdown still stops the automatic start, as it does for any start.
+A **Countdown** confirmed over a running race begins a fresh start, as **Stage** does.
 
 ## Crash recovery
 
@@ -226,7 +226,7 @@ A restored race comes back **stopped, under a red flag**, so nothing counts whil
 !!! note
     Each car's first lap after the green is timed from its last crossing before the app closed, so it includes the stoppage and looks long. It counts as a lap, but never as a best lap, never toward a clean run or streak pace, and never in the average or consistency columns, even if you later remove laps. You don't need to remove it.
 
-"Last lap" and "one minute to go" aren't called a second time after a restore if they were already called before the app closed. Nor are the minutes or seconds left that went by while the app was closed: the next one due is called as normal.
+Calls already made before the app closed aren't repeated after a restore, and the time calls carry on as normal.
 
 If the race was on its last lap when the app stopped, the checkered flag is still out after the restore, and drivers who had already taken it stay finished. The 60-second wait for stragglers starts again when you go green.
 

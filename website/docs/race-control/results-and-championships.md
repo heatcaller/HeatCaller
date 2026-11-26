@@ -227,7 +227,7 @@ The **Championship** page has two tabs, **Standings** and **Calendar**. The **St
 | **Only count mains - leave qualifying heats out** | Leaves qualifying heats out. | On |
 | **Count every race day** | Untick it to choose which race days count, by ticking them in the list of race days. A race day whose **Championship:** on **Race Day → Setup** names this championship counts either way, and is marked ✓ in the list. | On |
 | **Count each driver's best:** | "Best N rounds": only each driver's N highest-scoring rounds count. **0** counts every round. | 0 |
-| **Rounds in the season:** | How many rounds the championship is *scheduled* to run. It changes no points and no standings. It's the one figure that lets the announcer, and the **Can they still win?** card, say what's still possible: "nobody can catch him now", "three rounds left and these two are level", "a win today and it's his". **0** means you haven't said, and then the announcer says nothing about any of that rather than guessing. | 0 |
+| **Rounds in the season:** | How many rounds the championship is *scheduled* to run. It changes no points and no standings. It's the one figure that lets the announcer, and the **Can they still win?** card, say what's still possible: "nobody can catch him now", "three rounds left and these two are level", "a win today and it's his". **0** means you haven't said. | 0 |
 | **Announcer's note:** | One sentence about the season in your own words, up to 60 characters, for example "two rounds left and four points covering the top three". **Only the announcer uses this.** It's read out as typed at the Tonight Open and in the sign-off numbers, on a night with a race this championship counts. Leave it empty to say nothing. See [The top and tail of the night](../announcer/commentary.md#the-top-and-tail-of-the-night). | Empty |
 
 With **Count every race day** unticked, at least one race day has to be ticked. Pressing **Save** with none ticked says "No race days ticked" and asks you to tick the days, or tick **Count every race day**.
@@ -237,7 +237,7 @@ The rules read each race's round to find its class and whether it was a main. A 
 Championships created before the rules existed stay hand-picked until you turn the rule on.
 
 !!! note
-    **Rounds in the season** isn't something HeatCaller can work out, which is why it has to be typed. A championship here is a set of races that have *happened*, plus a rule that takes more in as they're recorded — there's no calendar in it. And **Count each driver's best** looks like a season length but isn't: it's a drop cap, a rule about each driver's own rounds. See [what the championship still has riding on it](../announcer/commentary.md#what-the-championship-still-has-riding-on-it) for what the announcer does with it, including why it proves its claims instead of calculating them.
+    **Rounds in the season** isn't something HeatCaller can work out, which is why it has to be typed. A championship here is a set of races that have *happened*, plus a rule that takes more in as they're recorded — there's no calendar in it. And **Count each driver's best** looks like a season length but isn't: it's a drop cap, a rule about each driver's own rounds. See [what the championship still has riding on it](../announcer/commentary.md#what-the-championship-still-has-riding-on-it) for what the announcer does with it.
 
 ### Ticking races in and out
 
@@ -273,9 +273,9 @@ Beside the standings, **Can they still win?** says, for the season as it stands,
 - A line on top: "2 rounds left, up to 10 points each. 3 drivers can still win it.", "1 round left, and nobody can catch Billy Bob now.", or once the season is over, "The season is over. Billy Bob is champion." (or "The season is over, with 2 level at the top." when it ended in a tie).
 - A row for each driver with their place, their gap to the leader, and **Leading**, **Still in it** or **Out of reach** (**Champion** once it's over). Everyone who can still win is listed, then the first three out of reach, then "and 6 more out of reach".
 
-It works it out the way the announcer does before a race (see [what the championship still has riding on it](../announcer/commentary.md#what-the-championship-still-has-riding-on-it)): each driver's best case, taking the place that pays most in every round left, against the leader scoring nothing in any of them, with **Count each driver's best** applied. A driver who can draw level is still in it. So the card and the announcer always agree, and a driver close on points can be out of reach when their best rounds are already full and a win would only replace their worst.
+A driver is **Still in it** while they can still at least draw level with the leader, with **Count each driver's best** applied. The card and the announcer always agree. A driver close on points can be out of reach when their best rounds are already full and a win would only replace their worst.
 
-It needs **Rounds in the season** set in the scoring rules, and says so when it isn't. It also says why when it can't be worked out: races that aren't one per race day, a points table where nothing scores or a place takes points away, or a table too big.
+It needs **Rounds in the season** set in the scoring rules, and says so when it isn't. It also says so when it can't be worked out.
 If a race counts toward a championship and the recap is on, the end-of-race recap includes how the championship table moved. See [Commentary](../announcer/commentary.md).
 
 ### Points carried in
