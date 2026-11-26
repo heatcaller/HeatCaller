@@ -203,13 +203,15 @@ public sealed class ShowChatterTests
         var said = ShowChatter.Describe("lively");
 
         Assert.Contains($"{Cap(RaceBilling.Heat, "lively")} spoken segments", said, StringComparison.Ordinal);
-        Assert.Contains($"and {Cap(RaceBilling.TopMain, "lively")} in the top main", said, StringComparison.Ordinal);
-
-        // And the two things a club would otherwise conclude the setting
-        // was broken over.
-        Assert.Contains("Intros, recaps", said, StringComparison.Ordinal);
-        Assert.Contains("are never held back", said, StringComparison.Ordinal);
         Assert.Contains("allowance", said, StringComparison.OrdinalIgnoreCase);
+
+        // WHY (25 Nov 2026, Asher: "fix the app text too"): the line no
+        // longer sets out the pacing rules the patent applications claim -
+        // no top-main figure, nothing saved for the mains, no list of calls
+        // that are never held back.
+        Assert.DoesNotContain("top main", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("never held back", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("saves its share", ShowChatter.Describe("standard"), StringComparison.Ordinal);
 
         Assert.Contains("co-host out in the heats", ShowChatter.Describe("nonstop"), StringComparison.Ordinal);
         Assert.Contains("co-host held for the mains", ShowChatter.Describe("sparing"), StringComparison.Ordinal);

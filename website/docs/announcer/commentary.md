@@ -293,7 +293,7 @@ Intros and recaps say what kind of race it is: a qualifying heat, a main (the A-
 
 ### Through the night
 
-Intros and recaps are what the announcer says about a race. This card is everything else, and how much of it there is: *"Not written lap by lap - a model takes longer than a lap. Each segment speaks only when the race gives it something to say."* So switching every segment on doesn't mean hearing them all every race.
+Intros and recaps are what the announcer says about a race. This card is everything else, and how much of it there is: *"Each segment speaks only when the race gives it something to say."* So switching every segment on doesn't mean hearing them all every race.
 
 **How chatty:** comes first, with a line under it describing the choice. It's the one dial for the AI commentary: it sets how much the announcer says through the night, and how often each segment can come round - see [How chatty](#how-chatty). The tick boxes below it say which segments run.
 

@@ -65,12 +65,13 @@ public sealed class ChattyDialTests : IDisposable
         var said = ShowChatter.Describe("nonstop");
 
         Assert.Contains("No limit on how often a segment comes back", said, StringComparison.Ordinal);
-        Assert.Contains("Nothing is saved for the mains", said, StringComparison.Ordinal);
 
+        // WHY (25 Nov 2026, Asher: "fix the app text too"): the per-segment
+        // figures and the battle watch's gap are no longer spelled out.
         var standard = ShowChatter.Describe("standard");
 
-        Assert.Contains("battle watch 8 a night, 4 per class", standard, StringComparison.Ordinal);
-        Assert.Contains("waits 40s", standard, StringComparison.Ordinal);
+        Assert.Contains("Each segment has a limit for the night and per class.", standard, StringComparison.Ordinal);
+        Assert.DoesNotContain("waits 40s", standard, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------------

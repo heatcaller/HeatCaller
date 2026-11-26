@@ -1183,9 +1183,10 @@ public sealed class CommentaryControl : UserControl
         // --- Through the night: how much is said, and the segments.
         var segments = new Section("Through the night");
 
-        segments.Add(Hint(
-            "Not written lap by lap - a model takes longer than a lap. Each segment speaks only when the race gives it "
-            + "something to say, and the night saves itself for the mains."));
+        // WHY (25 Nov 2026, Asher: "fix the app text too"): the hint said how the
+        // night's commentary is rationed (lateness, saving it for the mains),
+        // which the patent applications claim. It now says what a club gets.
+        segments.Add(Hint("Each segment speaks only when the race gives it something to say."));
         segments.Add(chatterGrid, gapBelow: UiLayout.SectionGap);
 
         segments.Add(_chkTalkingPoints, stretch: false, gapBelow: 0);
