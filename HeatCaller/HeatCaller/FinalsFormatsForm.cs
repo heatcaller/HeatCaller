@@ -373,11 +373,11 @@ public sealed class FinalsFormatsForm : Form
             };
 
             var btnTop = new Button { Text = "To the Top" };
-            btnTop.Click += (_, _) => Move(-_list.SelectedIndex);
+            btnTop.Click += (_, _) => MoveRow(-_list.SelectedIndex);
             var btnUp = new Button { Text = "Move Up" };
-            btnUp.Click += (_, _) => Move(-1);
+            btnUp.Click += (_, _) => MoveRow(-1);
             var btnDown = new Button { Text = "Move Down" };
-            btnDown.Click += (_, _) => Move(1);
+            btnDown.Click += (_, _) => MoveRow(1);
             var btnClear = new Button { Text = "Roster Order" };
             btnClear.Click += (_, _) =>
             {
@@ -444,7 +444,7 @@ public sealed class FinalsFormatsForm : Form
         /// <summary>The order, by transponder - empty after Roster Order. Only meaningful after DialogResult.OK.</summary>
         public IReadOnlyList<string> Order => Cleared ? Array.Empty<string>() : _transponders;
 
-        private void Move(int by)
+        private void MoveRow(int by)
         {
             var index = _list.SelectedIndex;
             var target = index + by;
@@ -478,9 +478,9 @@ public sealed class FinalsFormatsForm : Form
         private string Numbered(int index) => $"{index + 1}. {_names[index]}";
 
         /// <summary>The rows as the list shows them, for tests.</summary>
-        internal IReadOnlyList<string> RowsShown => _list.Items.Cast<object>().Select(item => _list.GetItemText(item)).ToList();
+        internal IReadOnlyList<string> RowsShown => _list.Items.Cast<object>().Select(item => _list.GetItemText(item) ?? string.Empty).ToList();
 
         /// <summary>Moves the selected row, for tests: -1 up, 1 down, minus its index to the top.</summary>
-        internal void MoveForTests(int by) => Move(by);
+        internal void MoveForTests(int by) => MoveRow(by);
     }
 }

@@ -29,6 +29,9 @@ internal sealed partial class DeskInboxForm
     /// </summary>
     private bool _justAdded;
 
+    /// <summary>The flag above, for tests; also what keeps it from reading as unused (CS0414).</summary>
+    internal bool JustAddedForTests => _justAdded;
+
     private void BuildNoteBox()
     {
         var caption = _noteCaption;

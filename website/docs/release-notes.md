@@ -2,8 +2,11 @@
 
 HeatCaller is in beta. Version numbers follow **a.b.c**: *b* goes up when a whole feature lands, *c* for fixes and smaller additions.
 
-## Unreleased
+## 0.64.0
 
+Released 25 Nov 2026. Everything since 0.63.0, newest first.
+
+- **No build warnings (25 November).** The app and its tests now build with no warnings. One of them pointed at the Inbox matching a picked row by reference, which is now said outright; the rest were names, null checks and a WebView2 part for WPF that HeatCaller never used, which no longer ships in the install folder. Nothing you use changes.
 - **The beta terms keep the beta confidential (25 November).** Revision 4 of the beta terms says the beta is a private test, and that a club keeps how HeatCaller works to itself, doesn't pass it on or use it to build or compare a rival product, and gives us the ideas it sends. We can end the agreement straight away if those rules are broken, and disputes go to the courts in New York State. HeatCaller asks everyone to accept the new terms the next time it opens. Update HeatCaller on the race PC; nothing changes on the relay.
 - **A new good-lap sound for Classic (25 November).** **Good lap** is a short, friendly rising tone, at the same level as the other Classic sounds and over in about half a second. Any row set to the **Classic** pack plays it; a row with your own file still plays your file. Update HeatCaller on the race PC; nothing changes on the relay.
 - **Every voice sounds as loud as the others, and the imaging keeps up with the announcer over a loud crowd (25 November).**

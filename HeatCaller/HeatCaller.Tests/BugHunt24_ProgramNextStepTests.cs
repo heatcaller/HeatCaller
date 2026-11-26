@@ -30,7 +30,7 @@ public sealed class BugHunt24_ProgramNextStepTests : IDisposable
         LinkedSessionId = run ? Guid.NewGuid().ToString("N") : null,
     };
 
-    private static RoundDefinition Main(string className) => new()
+    private static RoundDefinition AMain(string className) => new()
     {
         ClassName = className,
         RoundLabel = "A-Main",
@@ -53,7 +53,7 @@ public sealed class BugHunt24_ProgramNextStepTests : IDisposable
     {
         var step = Step(
             Heat("Mod", run: true), Heat("Stock", run: true),
-            ShootoutRun("Mod", 1, run: false), ShootoutRun("Mod", 2, run: false), Main("Mod"));
+            ShootoutRun("Mod", 1, run: false), ShootoutRun("Mod", 2, run: false), AMain("Mod"));
 
         Assert.Equal(ProgramStage.SeedMains, step.Stage);
         Assert.Equal("Stock", step.ClassName);
@@ -65,7 +65,7 @@ public sealed class BugHunt24_ProgramNextStepTests : IDisposable
         // The director has gone on: a class that can't be seeded must not hold the banner.
         var step = Step(
             Heat("Mod", run: true), Heat("Stock", run: true),
-            ShootoutRun("Mod", 1, run: true), ShootoutRun("Mod", 2, run: false), Main("Mod"));
+            ShootoutRun("Mod", 1, run: true), ShootoutRun("Mod", 2, run: false), AMain("Mod"));
 
         Assert.Equal(ProgramStage.RunNext, step.Stage);
         Assert.Equal("Pole Shootout Run 2", step.Round!.RoundLabel);
@@ -76,7 +76,7 @@ public sealed class BugHunt24_ProgramNextStepTests : IDisposable
     {
         var step = Step(
             Heat("Mod", run: true), Heat("Stock", run: true),
-            ShootoutRun("Mod", 1, run: false), Main("Mod"), Main("Stock"));
+            ShootoutRun("Mod", 1, run: false), AMain("Mod"), AMain("Stock"));
 
         Assert.Equal(ProgramStage.RunNext, step.Stage);
         Assert.Equal("Pole Shootout Run 1", step.Round!.RoundLabel);

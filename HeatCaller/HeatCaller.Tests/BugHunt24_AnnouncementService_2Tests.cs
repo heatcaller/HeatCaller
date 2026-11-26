@@ -158,7 +158,7 @@ public sealed class BugHunt24_AnnouncementService_2Tests : IDisposable
     }
 
     [Fact]
-    public void The_winners_call_reaches_the_screens_as_it_is_said()
+    public async Task The_winners_call_reaches_the_screens_as_it_is_said()
     {
         var (announcer, shown) = AtTheFlag(sharedHeat: false);
         var work = Assert.Single(QueuedWork(announcer));
@@ -168,13 +168,13 @@ public sealed class BugHunt24_AnnouncementService_2Tests : IDisposable
 
         // Muted so nothing is rendered - the words go up as the line is taken.
         announcer.Muted = true;
-        Assert.True(work().Wait(TimeSpan.FromSeconds(10)));
+        await work().WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal(new[] { "Victory for Mo!" }, shown.ToList());
     }
 
     [Fact]
-    public void The_class_winners_call_reaches_the_screens_after_the_winners()
+    public async Task The_class_winners_call_reaches_the_screens_after_the_winners()
     {
         var (announcer, shown) = AtTheFlag(sharedHeat: true);
         var work = QueuedWork(announcer);
@@ -186,7 +186,7 @@ public sealed class BugHunt24_AnnouncementService_2Tests : IDisposable
 
         foreach (var line in work)
         {
-            Assert.True(line().Wait(TimeSpan.FromSeconds(10)));
+            await line().WaitAsync(TimeSpan.FromSeconds(10));
         }
 
         Assert.Equal(new[] { "Victory for Mo!", "Mo wins Stock, Sam wins Mod." }, shown.ToList());

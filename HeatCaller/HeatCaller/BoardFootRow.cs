@@ -153,7 +153,7 @@ internal sealed class BoardFootRow : Panel
     }
 
     private static void PlaceBadge(InfoDot dot, Control part) =>
-        Move(dot, part is IBadgeHost host ? BadgeIn(part.Location, host.BadgeSpot(dot.Size)) : BadgeAt(part.Bounds, dot.Size));
+        MoveTo(dot, part is IBadgeHost host ? BadgeIn(part.Location, host.BadgeSpot(dot.Size)) : BadgeAt(part.Bounds, dot.Size));
 
     /// <summary>A badge inside its part, at <paramref name="spot"/> in the part's own coordinates. Pure, for the tests.</summary>
     internal static Point BadgeIn(Point part, Point spot) => new(part.X + spot.X, part.Y + spot.Y);
@@ -196,7 +196,7 @@ internal sealed class BoardFootRow : Panel
 
         for (var i = 0; i < _lefts.Length; i++)
         {
-            Move(_lefts[i], new Point(places.Lefts[i], Middle(_lefts[i])));
+            MoveTo(_lefts[i], new Point(places.Lefts[i], Middle(_lefts[i])));
         }
 
         var line = UiLayout.AtDpi(1);
@@ -210,8 +210,8 @@ internal sealed class BoardFootRow : Panel
 
         _label.Visible = places.LabelWidth > 0;
         SetBounds(_label, new Rectangle(places.LabelX, top + under, Math.Max(0, places.LabelWidth), row));
-        Move(_pen, new Point(places.PenX, under + Middle(_pen)));
-        Move(_right, new Point(places.RightX, under + Middle(_right)));
+        MoveTo(_pen, new Point(places.PenX, under + Middle(_pen)));
+        MoveTo(_right, new Point(places.RightX, under + Middle(_right)));
 
         // Each badge on its part's corner - here as well as when the part
         // moves, for a part that did not move but whose badge is new.
@@ -241,7 +241,7 @@ internal sealed class BoardFootRow : Panel
         }
     }
 
-    private static void Move(Control c, Point at)
+    private static void MoveTo(Control c, Point at)
     {
         if (c.Location != at)
         {
