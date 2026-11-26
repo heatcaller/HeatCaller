@@ -27,7 +27,7 @@ The list has a heading over each column: **Race**, **Practice**, **Sound**, **Pa
 - **Browse** picks a `.wav` or `.mp3` file for the row.
 - **Remove** stops using your own file, so the row goes back to its pack sound. It's saved straight away, and the page says, for example: Fast lap is back to the Classic sound. "horn.wav" is no longer used - the file itself is untouched. Only the setting is cleared; your file isn't deleted. **Remove** is grayed out while the row has no file of its own.
 - **Test** plays the row as a race would (your own file if it's set, otherwise the pack sound) at the **Sound effects** level on the **Mixer**.
-- **Weight** (per-lap sounds only): which sounds win when several fire on the same lap.
+- **Weight** (per-lap sounds only): higher means more likely to be heard on a busy lap.
 - **Caution** (per-lap sounds only): lets the sound play while a yellow or red flag is out. Otherwise per-lap sounds are held during a caution. Race-moment sounds always play.
 
 | Sound | On by default | Weight |
@@ -58,15 +58,15 @@ The rows with a weight are the per-lap sounds; only they have **Weight** and **C
 
 **Warning or black flag** plays when Race Control calls a warning or a black flag, just before the announcer says it. It used to play the **Invalid lap** buzzer, so after updating it starts the way that sound was set: on if **Invalid lap** was on, with the same sound, and off if it wasn't. If you'd never changed your sounds, it starts on. Your own soundscapes get it the same way; the built-in ones have it on.
 
-The race-moment sounds (such as the **Race started** horn, the **Race time over (last lap)** buzzer and the **Race completed** fanfare) play as well as the announcer's spoken call for that moment, not instead of it. The sound plays first and the call follows. The start and time-up calls wait at most about 3 seconds; if the sound is longer, it's cut off so the call isn't late. The finish call waits up to 8 seconds and never cuts the fanfare short.
+The race-moment sounds (such as the **Race started** horn, the **Race time over (last lap)** buzzer and the **Race completed** fanfare) play as well as the announcer's spoken call for that moment, not instead of it. The sound plays first and the call follows.
 
-A flag call cuts off any sound effects still playing. Crowd surges (for a fast lap or a lead change, say) aren't cut short when the announcer speaks.
+A flag call isn't held up by sound effects. Crowd surges (for a fast lap or a lead change, say) aren't cut short when the announcer speaks.
 
 Sound effects can play over each other, so two cars on a good lap are both heard as they cross. Each car's sounds play as they happen, up to 8 at once. When a second copy of the same sound starts at the same moment, it comes a fraction of a second after the first, so you hear two chimes rather than one louder one. Each sound that joins others playing is a little quieter, so a pile-up doesn't drown the mix. The race-moment sounds (**Race staging**, **Countdown started**, **Countdown ticks (the last five seconds to the green)**, **Race started**, the flags, **Race time over (last lap)** and **Race completed**) still play one after another, in order, and a lap chime doesn't wait for them. None of this changes how sounds and the announcer share the speaker.
 
-On a busy track, per-lap sounds are kept close to the action: a lap chime that's fallen more than about 3 seconds behind the crossing is skipped, and no more than 3 wait to play at a time.
+On a busy track, per-lap sounds are kept close to the action.
 
-On the **Per lap** card under the list, **Max sounds per lap (good / invalid / fast / streak / leader change):** (1 to 5, default 3) sets how many per-lap sounds can play on one lap; when more fire, only the highest-weight ones play.
+On the **Per lap** card under the list, **Max sounds per lap (good / invalid / fast / streak / leader change):** (1 to 5, default 3) sets how many per-lap sounds can play on one lap.
 
 Below it, **Let sound effects play over each other** (on by default) turns this on. Untick it to have every effect wait for the one before to end, the way HeatCaller always used to. The page says why: "On: when several cars earn a sound at once, each one plays as it happens. Off: they play one after another. The start, finish and flag sounds always play in order."
 
@@ -356,7 +356,7 @@ Voice lines are a soundscape's fixed race calls (staging, the countdown, the sta
 | Menu item | What it does |
 |---|---|
 | **Record *n* voice lines (about *x* characters)...** | Records every line. When some are already recorded, it reads **Record the *n* missing voice lines (about *x* characters)...** instead. |
-| **Re-record all *n*...** | Records a new take of every line, replacing the takes you have. Only there once some are recorded. The HeatCaller voice keeps one take of each line, so re-recording with it brings back the same takes; record with your own ElevenLabs key for new ones. |
+| **Re-record all *n*...** | Records a new take of every line, replacing the takes you have. Only there once some are recorded. Re-recording with the HeatCaller voice brings back the same takes; record with your own ElevenLabs key for new ones. |
 | **Delete the *n* recorded lines** | Deletes the recordings, after asking. Those lines go back to being spoken live. Only there once some are recorded. |
 | **What are voice lines?** | Explains them. |
 
@@ -370,7 +370,7 @@ With the HeatCaller voice chosen, the question adds that the announcer says the 
 
 Deleting and re-recording can be undone with **Undo** in the sidebar, which puts the old takes back. The characters a re-record used aren't given back.
 
-Recordings are matched by their words alone (audio tags, spacing and capitals are ignored), and kept in the `VoiceLines` folder in HeatCaller's data folder, so they're part of backups. See [Where HeatCaller keeps your data](../admin/data-files.md). They're separate from the [saved voice lines](voice.md#saved-voice-lines) the announcer keeps on its own.
+Recordings are kept in the `VoiceLines` folder in HeatCaller's data folder, so they're part of backups. See [Where HeatCaller keeps your data](../admin/data-files.md). They're separate from the [saved voice lines](voice.md#saved-voice-lines) the announcer keeps on its own.
 
 The club logo isn't part of a soundscape, and applying one only ever puts on the look that goes with its sounds. Looks and the logo are on the **Themes** page; see [Looks and the club logo](../screens/looks-and-logo.md).
 

@@ -2,6 +2,11 @@ site_name: HeatCaller Documentation
 site_description: Run RC race nights from one laptop - timing, race control, an AI announcer, results, championships and online check-in.
 # site_url: https://docs.example.com/   # set when the website has an address
 docs_dir: docs
+# WHY (25 Nov 2026, Asher: "take it down"): the release notes describe how the
+# patent-pending announcer features work, so they stay in the repo but are never
+# published, until the patent applications are filed.
+exclude_docs: |
+  release-notes.md
 copyright: >-
   &copy; 2026 HeatCaller LLC. LiveTime, LiveRC, MYLAPS, AMB, RC4, EasyLap, Robitronic,
   I-Lap and other product names are trademarks of their owners, used here only to say
@@ -94,4 +99,3 @@ nav:
       - Keyboard shortcuts: reference/keyboard-shortcuts.md
       - Glossary: reference/glossary.md
       - FAQ: reference/faq.md
-  - Release notes: release-notes.md
