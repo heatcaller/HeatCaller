@@ -10741,9 +10741,129 @@ const LISTEN_JS = `
     }
   };
 
+  // THE SOUND IS CHECKED, NOT TRUSTED (27 Nov 2026, Asher: "the listen live
+  // button is sketch. you can't rely on it to load the first touch"). The
+  // press asked the phone to start the sound and then never looked again:
+  // a phone that held the sound back - an iPhone leaves its audio
+  // "interrupted" when the media element below switches it over to
+  // playback, or a resume that never took - left the page saying Listening
+  // over silence, with nothing but Stop and Listen again to get it going.
+  // Now every second while listening the player asks once more, and when
+  // the sound still has not started after STALL_TICKS of them the button
+  // says so; the next tap starts the sound, inside that tap, rather than
+  // turning Listen off. Once it runs, the player joins the room afresh,
+  // since what it lined up meanwhile is stale.
+  const STALL_TICKS = 2;
+  let quietTicks = 0;
+  let stalled = false;
+
+  function soundRunning() {
+    return ctx !== null && (!ctx.state || ctx.state === 'running');
+  }
+
+  // Inside a press: the media element first, so a phone's switch to
+  // playback is over before the sound itself is asked to start.
+  function startSound() {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.audioSession) {
+        navigator.audioSession.type = 'playback';
+      }
+    } catch (err) {
+      // Not this browser.
+    }
+
+    if (keepAlive === null) {
+      keepAlive = new Audio();
+      keepAlive.loop = true;
+      keepAlive.src = SILENCE;
+    }
+
+    const unlocked = keepAlive.play();
+
+    if (unlocked && typeof unlocked.catch === 'function') {
+      unlocked.catch(() => {});
+    }
+
+    if (ctx !== null && typeof ctx.resume === 'function') {
+      const resumed = ctx.resume();
+
+      if (resumed && typeof resumed.catch === 'function') {
+        resumed.catch(() => {});
+      }
+    }
+  }
+
+  function checkSound() {
+    if (!on || ctx === null) {
+      return;
+    }
+
+    if (soundRunning()) {
+      quietTicks = 0;
+
+      if (stalled) {
+        stalled = false;
+        btn.textContent = 'Stop listening';
+        rejoin();
+      }
+
+      return;
+    }
+
+    // Many phones let a page start its sound again without a tap.
+    if (typeof ctx.resume === 'function') {
+      try {
+        const resumed = ctx.resume();
+
+        if (resumed && typeof resumed.catch === 'function') {
+          resumed.catch(() => {});
+        }
+      } catch (err) {
+        // The next tap, then.
+      }
+    }
+
+    if (document.hidden || stalled) {
+      return;
+    }
+
+    quietTicks += 1;
+
+    if (quietTicks >= STALL_TICKS) {
+      stalled = true;
+      btn.textContent = 'Start the sound';
+      say('Your phone has not started the sound yet. Tap Start the sound.');
+    }
+  }
+
+  function tick() {
+    checkSound();
+    sweep();
+  }
+
   btn.addEventListener('click', () => {
+    // Listening, but the phone held the sound back: this tap starts it.
+    if (on && stalled) {
+      startSound();
+      quietTicks = 0;
+
+      if (soundRunning()) {
+        stalled = false;
+        btn.textContent = 'Stop listening';
+        say('Listening...');
+        rejoin();
+      } else {
+        // The phone answers in a moment; checkSound picks it up.
+        say('Starting the sound...');
+      }
+
+      return;
+    }
+
     on = !on;
     turn += 1;
+    quietTicks = 0;
+    stalled = false;
 
     if (on) {
       btn.textContent = 'Stop listening';
@@ -10751,14 +10871,6 @@ const LISTEN_JS = `
 
       // All of this inside the press, which is the only place a phone lets
       // sound start.
-      try {
-        if (typeof navigator !== 'undefined' && navigator.audioSession) {
-          navigator.audioSession.type = 'playback';
-        }
-      } catch (err) {
-        // Not this browser.
-      }
-
       if (ctx === null) {
         const Context = window.AudioContext || window.webkitAudioContext;
 
@@ -10778,30 +10890,12 @@ const LISTEN_JS = `
         }
       }
 
-      if (typeof ctx.resume === 'function') {
-        const resumed = ctx.resume();
-
-        if (resumed && typeof resumed.catch === 'function') {
-          resumed.catch(() => {});
-        }
-      }
-
-      if (keepAlive === null) {
-        keepAlive = new Audio();
-        keepAlive.loop = true;
-        keepAlive.src = SILENCE;
-      }
-
-      const unlocked = keepAlive.play();
-
-      if (unlocked && typeof unlocked.catch === 'function') {
-        unlocked.catch(() => {});
-      }
+      startSound();
 
       started = false;
       streamAhead = STREAM_AHEAD_S;
       sweep();
-      timer = window.setInterval(sweep, SWEEP_EVERY_MS);
+      timer = window.setInterval(tick, SWEEP_EVERY_MS);
       return;
     }
 

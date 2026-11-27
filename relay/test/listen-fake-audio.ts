@@ -45,6 +45,16 @@ export class FakeAudioWorld {
   /** Every decode, and where it happened: on the player's context, or an offline one at this rate. */
   readonly decodedOn: { tag: string; on: "context" | number }[] = [];
 
+  /**
+   * Whether the phone refuses a resume (27 Nov 2026): an iPhone can leave the
+   * sound "interrupted" after the press, and outside a press it may refuse
+   * to start it again. Told whether the resume came from inside a press.
+   */
+  refuseResume: (inPress: boolean) => boolean = () => false;
+
+  /** The order the press started things in: "element" plays, "resume"s. */
+  readonly order: string[] = [];
+
   readonly starts: Start[] = [];
   readonly contexts: { inPress: boolean; resumedInPress: boolean; state: string }[] = [];
   readonly elements: { src: string; loop: boolean; paused: boolean; playedInPress: boolean }[] = [];
@@ -83,6 +93,13 @@ export class FakeAudioWorld {
       }
 
       resume(): Promise<void> {
+        world.order.push("resume");
+
+        if (world.refuseResume(world.inPress)) {
+          this.record.state = "interrupted";
+          return Promise.resolve();
+        }
+
         this.record.resumedInPress ||= world.inPress;
         this.record.state = "running";
         return Promise.resolve();
@@ -143,6 +160,7 @@ export class FakeAudioWorld {
       }
 
       play(): Promise<void> {
+        world.order.push("element");
         this.record.paused = false;
         this.record.playedInPress ||= world.inPress;
         return Promise.resolve();
