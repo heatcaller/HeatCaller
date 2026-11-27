@@ -58,6 +58,24 @@ describe("the board made for a phone (item 4)", () => {
     assert.match(page.get("board").innerHTML, /<div class="card all">/);
     assert.match(page.get("board").innerHTML, /Fewer columns/);
   });
+
+  // WHY (27 Nov 2026, Asher asked): All columns opened a second window (a
+  // sheet over the board). A tap on it now shows every column on the board's
+  // own card, which scrolls sideways, and a second tap folds it back.
+  it("shows every column on the board's own card when All columns is tapped, with no window over it", async () => {
+    const page = await openLive();
+    const tap = () => page.eval("board.listeners.get('click').forEach((l) => l({ target: { closest: (q) => q === '[data-all]' ? {} : null } }))");
+    tap();
+    const html = page.get("board").innerHTML;
+    assert.match(html, /<div class="card all"><table>/);
+    assert.match(html, />Best Lap<\/th>/);
+    assert.match(html, /Scroll the board sideways for the rest\./);
+    assert.match(html, /Fewer columns/);
+    assert.equal(page.eval("document.getElementById('hcallcols') ? 'sheet' : 'none'"), "none");
+    tap();
+    assert.match(page.get("board").innerHTML, /<div class="card"><table>/);
+    assert.doesNotMatch(page.get("board").innerHTML, /Scroll the board sideways/);
+  });
 });
 
 describe("your card on Live (item 4)", () => {

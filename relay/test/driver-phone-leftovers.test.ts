@@ -165,13 +165,12 @@ describe("Listen fetches the next clip ahead (item 19 step 5)", () => {
   });
 });
 
-describe("Live: All columns in a sheet, and a followed driver elsewhere (item 4)", () => {
+describe("Live: All columns on the card, and a followed driver elsewhere (item 4)", () => {
   const live = withSharedInline(livePage("acme-rc", "Acme RC"));
 
-  it("opens All columns in a sheet that Back or Done closes", () => {
-    assert.match(live, /if \(boardAllSheet\(\)\) return;/);
-    assert.match(live, /<h2 id="hcallcols-h">All columns<\/h2>/);
-    assert.match(live, /hcSheetOpened\(\(\) => \{ const s = document\.getElementById\('hcallcols'\)/);
+  // 27 Nov 2026: All columns no longer opens a sheet over the board.
+  it("opens no sheet for All columns", () => {
+    assert.doesNotMatch(live, /boardAllSheet|hcallcols/);
   });
 
   it("gives a followed driver who isn't in this race their next race from the running order", () => {
