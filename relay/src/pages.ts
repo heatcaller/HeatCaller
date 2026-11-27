@@ -1828,10 +1828,8 @@ html.hc .stale, html.hc.hcoffline .wrap > :not(header):not(.hcoff):not(footer) {
 #board .bm b { font-variant-numeric: tabular-nums; }
 #board .bm i { font-style: normal; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 @media (min-width: 481px) { .ballc, #board tr.bmore { display: none; } #board tr[data-row] { cursor: default; } }
-/* All columns in a sheet (item 4 step 4): the whole table scrolls sideways inside it. */
-.hcallcols .card { overflow-x: auto; margin: 0; }
-.hcallcols table { min-width: 100%; }
-.hcallcols tr.me td { background: var(--tonal); }
+/* All columns on the board's own card (27 Nov 2026): the whole table scrolls sideways inside it. */
+.ballc .bswipe { margin: 0 0 4px; font-size: 0.8rem; color: var(--muted); }
 @media (max-width: 480px) {
   #board .card:not(.all) th:not(.k), #board .card:not(.all) td:not(.k):not(.bmc) { display: none; }
   #board .card:not(.all) { overflow: visible; }
@@ -2634,7 +2632,7 @@ try {
 } catch (e) { /* no Back to listen for */ }
 
 // BACK CLOSES A SHEET (19 Nov 2026, driver phone plan item 18 step 3): Me's
-// sheets and Live's All columns. Opening one adds a history step at the same
+// sheets. Opening one adds a history step at the same
 // address (the address bar still says the page); Back closes the sheet
 // rather than leaving the tab, and a sheet closed by its own button takes
 // its step back off. A sheet opened as another closes keeps the one step.
@@ -8530,7 +8528,8 @@ function drawBoard(state) {
         + cells(r, columns, roles) + '</tr>' + (open && hiding ? more(r) : '');
     }).join('') +
     '</tbody></table></div>' +
-    (hiding ? '<p class="ballc"><button type="button" class="linkish" data-all>' + (boardAll ? 'Fewer columns' : 'All columns') + '</button></p>' : '') +
+    (hiding ? '<div class="ballc">' + (boardAll ? '<p class="bswipe">Scroll the board sideways for the rest.</p>' : '')
+      + '<button type="button" class="linkish" data-all>' + (boardAll ? 'Fewer columns' : 'All columns') + '</button></div>' : '') +
     // WHAT THE * MEANS (7 Nov 2026, known issues): the laptop marks a lap
     // count that includes laps race control counted by hand ("12*"), and
     // says so with handCounted, so the board carries the same legend the
@@ -8550,8 +8549,6 @@ function drawBoard(state) {
   boardHtml = html;
   const card = left && board.querySelector ? board.querySelector('.card') : null;
   if (card) card.scrollLeft = left;
-  // The All columns sheet, when open, follows the race too.
-  boardAllFill(state);
 }
 
 // YOUR CARD ON LIVE (14 Nov 2026, driver phone plan item 4). Above the
@@ -8749,64 +8746,8 @@ function ordinalWord(n) {
   return words[n - 1] || ('P' + n);
 }
 
-// ALL COLUMNS, IN A SHEET (item 4 step 4). The club's whole table, every
-// column, drawn from the board's own last frame and kept up to date while
-// open (drawBoard calls boardAllFill). True when a sheet opened.
-function boardAllTable(state) {
-  const columns = Array.isArray(state.columns) ? state.columns : [];
-  const rows = Array.isArray(state.standings) ? state.standings : [];
-  const roles = boardRoles(columns);
-  const mine = typeof youName === 'function' ? youName(rows, roles) : '';
-  return '<div class="card all"><table><thead><tr>'
-    + columns.map((c, i) => '<th class="' + (i === 0 ? 'pos' : '') + (i === 0 || WORDY.test(c) ? '' : ' n') + '">' + esc(c) + '</th>').join('')
-    + '</tr></thead><tbody>'
-    + rows.map((r) => { const name = rowName(r, roles); return '<tr' + (name !== '' && name === mine ? ' class="me"' : '') + '>' + cells(r, columns, null) + '</tr>'; }).join('')
-    + '</tbody></table></div>';
-}
-function boardAllFill(state) {
-  const box = document.getElementById('hcallcols-t');
-  if (!box || !state) return;
-  const html = boardAllTable(state);
-  if (box.getAttribute('data-html') === html) return;
-  const left = box.firstChild ? box.firstChild.scrollLeft : 0;
-  box.innerHTML = html;
-  box.setAttribute('data-html', html);
-  if (left && box.firstChild) box.firstChild.scrollLeft = left;
-}
-function boardAllClose() {
-  const s = document.getElementById('hcallcols');
-  if (!s) return;
-  s.remove();
-  if (typeof hcSheetClosed === 'function') hcSheetClosed();
-  const back = board.querySelector ? board.querySelector('[data-all]') : null;
-  if (back && back.focus) back.focus();
-}
-function boardAllSheet() {
-  if (!boardState || typeof document.createElement !== 'function' || !document.body || typeof document.body.appendChild !== 'function') return false;
-  const old = document.getElementById('hcallcols');
-  if (old) old.remove();
-  const wrap = document.createElement('div');
-  wrap.id = 'hcallcols';
-  wrap.className = 'hcthemes hcallcols';
-  wrap.setAttribute('role', 'dialog');
-  wrap.setAttribute('aria-modal', 'true');
-  wrap.setAttribute('aria-labelledby', 'hcallcols-h');
-  wrap.innerHTML = '<div class="sheet"><h2 id="hcallcols-h">All columns</h2><p class="thnote">Scroll sideways for the rest.</p>'
-    + '<div id="hcallcols-t"></div><button type="button" class="go" data-all-done>Done</button></div>';
-  wrap.addEventListener('click', (e) => {
-    if (e.target === wrap || (e.target && e.target.closest && e.target.closest('[data-all-done]'))) boardAllClose();
-  });
-  wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape') boardAllClose(); });
-  document.body.appendChild(wrap);
-  boardAllFill(boardState);
-  if (typeof hcSheetOpened === 'function') hcSheetOpened(() => { const s = document.getElementById('hcallcols'); if (s) s.remove(); });
-  const done = wrap.querySelector('[data-all-done]');
-  if (done && done.focus) done.focus();
-  return true;
-}
-
 // A tap on a row opens the rest of it (a name tapped follows, as everywhere);
-// All columns shows the club's whole table.
+// All columns shows the club's whole table on the same card.
 // WHY (15 Nov 2026, bug hunt 21 #24): a tap inside "See the last race" drew
 // the plain board, so the next read found no folded box open and folded it
 // shut. A folded board is drawn folded again, still open.
@@ -8820,11 +8761,12 @@ if (board && typeof board.addEventListener === 'function') {
     const t = e.target;
     if (!t || typeof t.closest !== 'function' || t.closest('.nm')) return;
     if (t.closest('[data-all]')) {
-      // IN A SHEET (19 Nov 2026, driver phone plan item 4 step 4): the whole
-      // table over the board, sideways-scrolling, Back or Done to close -
-      // rather than the board itself growing past the phone's edge. In place,
-      // as before, where there is no sheet to open.
-      if (boardAllSheet()) return;
+      // ON THE CARD ITSELF (27 Nov 2026, Asher asked): All columns opened
+      // a second window (a sheet over the board, 19 Nov) holding a copy of
+      // the table - a step away from the race to see one more column. Now
+      // the board's own card shows every column and scrolls sideways inside
+      // itself (.card's overflow-x), its scroll kept across redraws, and
+      // Fewer columns folds it back to four.
       boardAll = !boardAll;
       boardHtml = '';
       boardRedraw();
