@@ -18,7 +18,15 @@ primary_region = 'ewr'
 [http_service]
   internal_port = 8787
   force_https = true
-  auto_stop_machines = 'stop'
+  # WHY (27 Nov 2026, Asher: "when loading the web app on phone it usually
+  # loads a white screen. I have to switch screens or force close"): 'stop'
+  # shut the machine down a few minutes after the last request, so most
+  # times a phone opened the app the relay was off and took about 6 seconds
+  # to boot (stopped 14:11 to 17:59 that day, answering at 17:59:46 for a
+  # wake at 17:59:40). The home-screen app sat white meanwhile, and by the
+  # time the driver switched away and back it was up. 'suspend' freezes the
+  # machine instead and wakes it in well under a second, at the same cost.
+  auto_stop_machines = 'suspend'
   auto_start_machines = true
   min_machines_running = 0
 
