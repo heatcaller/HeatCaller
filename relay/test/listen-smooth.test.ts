@@ -132,6 +132,8 @@ function listenPage(script: string, held: Held[], options: { offline?: boolean; 
     sound,
     intervals,
     boxes,
+    btn,
+    note,
     async press(): Promise<void> {
       sound.inPress = true;
 
@@ -316,5 +318,80 @@ describe("Listen Now counts what it does, for ?listendebug=1 (11 Nov 2026)", () 
     assert.match(text, /played 3, late 1, skipped numbers 2/);
     assert.match(text, /cushion 1\.5 s/);
     assert.match(text, /failed fetches 0/);
+  });
+});
+
+/**
+ * LISTEN LIVE STARTS ON THE FIRST TAP, OR SAYS IT HAS NOT (27 Nov 2026,
+ * Asher: "the listen live button is sketch. you can't rely on it to load the
+ * first touch"). The press asked the phone to start the sound and never
+ * looked again, so a phone that held it back - an iPhone leaving its audio
+ * "interrupted" - left the page saying Listening over silence. Now the
+ * player asks again every second, says so when the sound still has not
+ * started, and the next tap starts it rather than turning Listen off.
+ */
+describe("Listen live on the first tap (27 Nov 2026)", () => {
+  it("plays the media element before it asks the sound to start, inside the press", async () => {
+    const page = listenPage(await liveScript(), [mix(1)]);
+
+    await page.press();
+
+    assert.deepEqual(page.sound.order.slice(0, 2), ["element", "resume"]);
+    assert.equal(page.sound.contexts[0]?.resumedInPress, true);
+  });
+
+  it("starts the sound by itself once the phone lets it, and joins the room afresh", async () => {
+    const held: Held[] = [mix(1)];
+    const page = listenPage(await liveScript(), held);
+    let refused = 1;
+    page.sound.refuseResume = () => refused-- > 0;
+
+    await page.press();
+    assert.equal(page.sound.contexts[0]?.state, "interrupted");
+
+    held.push(mix(2));
+    await page.poll();
+
+    assert.equal(page.sound.contexts[0]?.state, "running");
+    assert.equal(page.btn.textContent, "Stop listening");
+    // Played again from the newest, not from what was lined up in silence.
+    assert.equal(page.sound.played().at(-1), "mix-2");
+  });
+
+  it("says the sound has not started when the phone keeps refusing, and the next tap starts it rather than stopping", async () => {
+    const held: Held[] = [mix(1)];
+    const page = listenPage(await liveScript(), held);
+    let tapsRefused = 1;
+    page.sound.refuseResume = (inPress) => !inPress || tapsRefused-- > 0;
+
+    await page.press();
+    await page.poll();
+    assert.equal(page.btn.textContent, "Stop listening", "one quiet second is not yet a stall");
+    await page.poll();
+
+    assert.equal(page.btn.textContent, "Start the sound");
+    assert.match(page.note.textContent, /has not started the sound/);
+    assert.equal(page.sound.contexts[0]?.state, "interrupted");
+
+    held.push(mix(2));
+    await page.press();
+
+    assert.equal(page.sound.contexts[0]?.state, "running");
+    assert.equal(page.btn.textContent, "Stop listening");
+    // Still listening: the tap started the sound, it did not turn Listen off.
+    assert.equal(page.intervals.length, 1);
+    assert.equal(page.sound.played().at(-1), "mix-2");
+  });
+
+  it("a tap on Stop listening while the sound plays still stops", async () => {
+    const page = listenPage(await liveScript(), [mix(1)]);
+
+    await page.press();
+    await page.poll();
+    await page.poll();
+    await page.press();
+
+    assert.equal(page.btn.textContent, "Listen live");
+    assert.equal(page.intervals.length, 0);
   });
 });
