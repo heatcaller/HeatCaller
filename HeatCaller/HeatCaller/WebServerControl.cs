@@ -1149,8 +1149,8 @@ public sealed partial class WebServerControl : UserControl
             return string.Empty;
         }
 
-        var host = (_settings.VideoObsHost ?? string.Empty).Trim();
-        var elsewhere = host.Length > 0 && !string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) && host != "127.0.0.1";
+        // Any loopback address, the laptop's name or its own address is this PC (ObsHost, 28 Nov 2026).
+        var elsewhere = !ObsHost.IsThisPc(_settings.VideoObsHost);
         return (elsewhere ? _server.LocalUrl() : $"http://localhost:{_server.Port}/") + "overlay/" + id;
     }
 
