@@ -190,7 +190,7 @@ These are WebSocket requests. Each asks first ("Set up OBS for HeatCaller? This 
 3. **Tonight's broadcast.** **Go live** on the Stream page, or Race Control's stream button, does this:
    - `liveBroadcasts.insert` with the title ("Upstate Mini Z race night, Thu 13 Nov"), Unlisted (the club's choice, kept), embedding on, auto-start, the latency the club picked (decision 9: Low or Ultra-low), and made for kids if the club says so;
    - `bind` to the club's stream;
-   - `StartStream` in OBS.
+   - `StartStream` in OBS, when **Start and stop OBS's stream with Go live** is on (decision 3); otherwise the page says "Now press Start Streaming in OBS".
 4. **Knows when it's really live.** HeatCaller asks `liveBroadcasts.list` every 10 s until `lifeCycleStatus` is `live`. The piece then starts at YouTube's **`actualStartTime`**, not when OBS started sending, so races open in the right place without a nudge (S0.4 decides how exact this is). The video id goes into the piece by itself, so nothing is pasted.
 5. **Knows when YouTube isn't getting the picture.** `liveStreams.list` gives `healthStatus`. `noData` turns the YouTube light red ("YouTube isn't getting anything from OBS"), and `bad` turns it amber ("YouTube is getting a poor picture; lower the quality").
 6. **Drops:** within the time S0.5 finds, OBS's own reconnect keeps the same video. After it, HeatCaller makes a new broadcast and a new piece when OBS comes back, as the pieces do today.
@@ -296,16 +296,100 @@ Tier 1 (steps 1 to 7, with 6a to 6c from section 10) is about 18 days and needs 
 
 ## 5. Decisions for Asher
 
-1. **Sign in with YouTube, or not?** It's the only way to remove the pasted link and the wrong-start problem completely. It costs Google's OAuth verification, a published privacy policy that covers YouTube data, and following the YouTube API Services terms. **Recommended: yes, as Tier 2, with Tier 1 kept.**
-2. **Whose Google Cloud project?** One project, HeatCaller's, serves every club and shares one daily quota. It needs an owner account, a verified domain (heatcaller.com), a demo video for Google, and a yearly quota audit once clubs grow. The other way is that each club makes its own project, which is too hard for a director. **Recommended: HeatCaller's own project.**
-3. **May HeatCaller press Start and Stop in OBS?** It's needed for one-click Go live. Some directors will want to keep their hands on OBS. **Recommended: yes, with a setting "Start and stop OBS's stream with Go live", on by default.**
-4. **Same PC:** keep warning against streaming from the timing laptop, or support it properly? Asher tested on one laptop, and small clubs will. **Recommended: support it, with S3.6's live warning and S6's Show mode check instead of a blanket "don't".**
-5. **When embedding is refused:** is "Open in YouTube at this race" (S4.3, Tier 2 only, and only when the video is known to play on YouTube) all right, or should the button stay hidden?
-6. **The 28 Nov afternoon:** OBS's log shows the stream reached YouTube both times, so what stopped the link going in? No link was pasted into either piece. Knowing whether it was "couldn't find the link" or "Studio had no picture again" tells us whether S4 or S5 matters more.
+*Answered by Asher on 28 Nov 2026: "1 yes, 2 I need more info. make a swat analysis, 3 yes but create a option to toggle, 4 support it but let the user know we recommend two, 7 off, 8 yes, 9 in need more info. make a swat analysis". 5 and 6 are still open. The SWOTs for 2 and 9 are in 5a and 5b; Asher picked C and Ultra-low the same day.*
 
-7. **Live chat** on HeatCaller-made broadcasts: off by default, held for review, or on (P14)? **Recommended: off.** Junior drivers are on the stream, and a moderator is one more job on race night.
-8. **Music on the stream:** leave out every music file not marked **Safe to stream** (P5)? **Recommended: yes**, with HeatCaller's own beds marked safe. A copyright takedown can take away the channel's live streaming (for how long is S0.6f).
-9. **Latency (P1):** Low (smoother, with YouTube's captions) or Ultra-low (a few seconds behind the live board, which the docked Live video wants)? **Recommended: decide after S0.6c measures the buffering.** Either way, HeatCaller's burned-in captions cover the announcer.
+| # | Decision | Answer | What it changes in the plan |
+|---|---|---|---|
+| 1 | Sign in with YouTube, or not? | **Yes** (28 Nov), as Tier 2, with Tier 1 kept | S5 goes ahead. Google's verification can start as soon as 2 is settled (step 8a). |
+| 2 | Whose Google Cloud project? | **C** (28 Nov, after the SWOT in 5a): HeatCaller's own project, with a club's own client id as an escape hatch under **Advanced** | Step 8a can start. Asher names the owning Google account, confirms heatcaller.com in Google Search Console, approves the privacy policy wording for YouTube data, and records or approves the demo video. S5.1 gets the Advanced client id box. |
+| 3 | May HeatCaller press Start and Stop in OBS? | **Yes, with a toggle** (28 Nov) | A setting on the Stream page, **Start and stop OBS's stream with Go live**, on by default. Off: **Go live** makes the broadcast and waits for the director to press Start Streaming in OBS, and **Stop** ends the broadcast but leaves OBS streaming. `StreamChain` says which, and S6 tests both. |
+| 4 | Same PC: warn, or support it? | **Support it, and say two PCs are recommended** (28 Nov) | When OBS is on this PC (`ObsHost.IsThisPc`), the Stream page shows one calm line, not a warning: "OBS is on this laptop. That works; for the steadiest timing we recommend a second PC for streaming." It includes a **Why?** link to the guide. S3.6's load warning and S6's Show mode check still apply, and the guide says the same. |
+| 5 | When embedding is refused, show "Open in YouTube at this race"? | **Open** | S4.3 waits on it; until then the button stays hidden. |
+| 6 | What stopped the link going in on 28 Nov? | **Open.** On the evening of 28 Nov the stream did reach the phones once the link was pasted into Piece 2 (video z1VDKrXxHw8 answered 200), which suggests the afternoon's problem was finding or pasting the link, not YouTube. | Points at S4.4 (the "no link yet" reminder) and S5 (no link to paste at all) |
+| 7 | Live chat on HeatCaller-made broadcasts? | **Off** (28 Nov) | S5.18 sets chat off if the API allows it (S0.6f). Otherwise the Stream page says to turn it off in YouTube Studio, once. |
+| 8 | Leave music not marked Safe to stream off the stream? | **Yes** (28 Nov) | S9.4 as written, before any club streams with music. HeatCaller's own beds are marked safe. |
+| 9 | Low or Ultra-low latency? | **Ultra-low** (28 Nov, after the SWOT in 5b), unless S0.6c finds bad buffering on a typical phone | S5.3 makes broadcasts at Ultra-low, and the Stream page offers Low for clubs with a poor upload. The guide keeps recommending Ultra-low. Captions come from HeatCaller's own overlay. |
+
+### 5a. SWOT: whose Google Cloud project (decision 2)
+
+**What the choice is.** "Sign in with YouTube" needs a Google Cloud project: the thing Google knows the app as. It holds the sign-in screen's name and logo, the daily quota, and the verification. There are three ways to do it:
+- **A. HeatCaller's own project**, one for every club. The director just signs in.
+- **B. Each club's own project.** The director makes a Google Cloud project, a consent screen and a desktop client, then pastes its id into HeatCaller.
+- **C. A, with B as an escape hatch.** Clubs use HeatCaller's project, and an advanced box takes a club's own client id if HeatCaller's is ever unavailable.
+
+#### A. HeatCaller's own project
+
+| Strengths | Weaknesses |
+|---|---|
+| One click for the director: "Sign in with YouTube", Google's screen with HeatCaller's name and logo, done. | **Google verification is HeatCaller's job:** a verified domain (heatcaller.com), a privacy policy covering YouTube data, a demo video of the sign-in, and a reason for the scope. Allow about 10 days (Google's figure) and possible rounds of changes. |
+| No "unverified app" warning once verified, so it looks trustworthy to a club. | **YouTube API Services rules apply to HeatCaller:** links to YouTube's terms and Google's privacy policy, a way to revoke access, and limits on how long YouTube data is kept. Some of this needs counsel, alongside `plans/children-privacy-and-ip-plan.md`. |
+| HeatCaller controls the experience: scope, error words, retries, quota use. | **One shared daily quota.** About 90 clubs on the same night at the S5.10 estimate, and fewer if calls cost 50 units (S0.1). Growth needs Google's quota audit, which is yearly and has no fixed timetable. |
+| It works the same for every club, so support and the guide are simple. | **Before verification passes**, only 100 test users, a warning screen, and sign-ins that expire every 7 days: fine for Asher's tries, not for clubs. |
+
+| Opportunities | Threats |
+|---|---|
+| **No RC rival found does this** (section 2). "Sign in once, and every race has its video" is a selling point for Premium. | **One point of failure.** If Google suspends the project (a policy complaint, a failed audit), Tier 2 stops for **every club at once**. Tier 1 must keep working. |
+| It unlocks the rest of S5 for every club with no extra setup: chapters, scheduling, viewer counts. | **Quota abuse.** A desktop app's client id can be pulled out of it, and anyone, or a bug in a loop, can use up the day for everyone (S5.11's per-user limit and backoff reduce this). |
+| A verified project can later add more Google features (YouTube uploads, Drive backups) under the same name. | **The rules can change.** YouTube changed its upload limits in 2020, which moved LiveRC off YouTube (section 2). |
+| Usage shows which clubs stream and how often, with no extra tracking. | **Liability.** HeatCaller holds tokens for clubs' channels on its users' laptops. Tokens stay on the laptop (S5.1), but a breach or a bug that streams to the wrong channel is HeatCaller's problem. |
+
+#### B. Each club's own project
+
+| Strengths | Weaknesses |
+|---|---|
+| Each club gets its own 10,000-a-day quota, far more than a night needs. | **Too hard for a director:** a Google Cloud account, a project, enabling the YouTube Data API, a consent screen and a desktop client, then copying an id and secret. That's about 15 steps in a developer console, which is the kind of setup this plan exists to remove. |
+| No verification for HeatCaller, and one club's mistake can't affect another. | The club's own app is **unverified**, so its director clicks past Google's "Google hasn't verified this app" warning on every sign-in. If left in "Testing", the sign-in also expires every 7 days. |
+
+| Opportunities | Threats |
+|---|---|
+| Large clubs or national bodies with an IT person can run it their own way. | **Support load.** Every club's project is set up slightly differently, and HeatCaller can't see any of them. |
+| | Google can change the console at any time, and the guide's screenshots go out of date. |
+
+#### C. HeatCaller's project, with a club's own as an escape hatch
+
+It has A's strengths, and covers A's biggest threat: if HeatCaller's project is suspended or out of quota on a big night, a club with someone technical can paste its own client id under **Advanced** and keep going. It costs a small box and a guide page, and nothing for clubs that never use it.
+
+**Recommendation: C.** Start Google's verification for HeatCaller's own project as soon as Asher agrees, since it's the longest wait in the plan. Build the Advanced box with S5. Keep Tier 1 working, as the plan already does. What Asher would need to do:
+- name the Google account that owns the project (a HeatCaller one, not a personal one);
+- confirm heatcaller.com can be verified in Google Search Console;
+- approve the privacy policy wording for YouTube data;
+- record, or approve, the demo video.
+
+### 5b. SWOT: Low or Ultra-low latency (decision 9)
+
+**What the choice is.** YouTube Studio's **Stream latency** setting decides how far the live video runs behind the track for viewers:
+- **Normal:** the most delay;
+- **Low:** less;
+- **Ultra-low:** a few seconds.
+
+YouTube's exact figures aren't fixed, and S0.6c measures them on this channel. **It changes only the live viewing; the archive and every "Watch my race" link afterwards look the same either way.** The phone board and Listen Live run 1–2 s behind the track and are never held back to match (the race video plan's rule, V4.3).
+
+#### Ultra-low latency
+
+| Strengths | Weaknesses |
+|---|---|
+| **The video and the phone board agree.** A few seconds apart, so the docked **Watch live** player on Live (V4, already built) shows the pass about when the board shows the position change. | **More buffering** for viewers on weak connections (phones on cellular, rural home internet), because YouTube keeps a smaller buffer. |
+| It feels live: parents at home see a pass close to when the PA calls it on Listen Live. | **No YouTube captions** on Ultra-low (to be confirmed, S0.6c). HeatCaller's burned-in captions (`captions=1`) cover the announcer, so this mostly doesn't matter. |
+| It matches what the docked player's note already says ("a few seconds behind") when the club ticks Ultra-low. | YouTube limits Ultra-low to lower top resolutions (1440p and 4K aren't offered). At 1080p60 this doesn't matter. |
+
+| Opportunities | Threats |
+|---|---|
+| "Watch live with the timing beside it" is something no RC rival offers (LiveRC's video is behind a paywall, the others embed only). | If the venue's upload is borderline, viewers see the stream stall more often, and they'll blame HeatCaller. |
+| With chat off (decision 7), Ultra-low's usual advantage for talking to viewers doesn't matter, but it costs nothing either. | YouTube could change what Ultra-low allows. |
+
+#### Low latency
+
+| Strengths | Weaknesses |
+|---|---|
+| **Smoother for most viewers**, with a bigger buffer for bad connections. | **The board gives the result away.** The video runs well behind the phone board and Listen Live, so a viewer on the docked player sees the board, and hears the call, before seeing the pass. |
+| YouTube's captions are available. | The docked player's note has to say "about 10–20 s behind", which makes **Watch live** beside the board less appealing. |
+| More forgiving of a borderline upload. | |
+
+| Opportunities | Threats |
+|---|---|
+| An opt-in **Match the video** switch on the docked player could hold that viewer's board back by the measured delay. It's only for someone who chose to watch the video, so the rule that the board never waits still holds for everyone else. That's a feature of its own, not in this plan. | Viewers who use the docked player are exactly the ones who'll notice the spoilers. |
+
+**Recommendation: Ultra-low**, provided S0.6c doesn't show bad buffering on a typical phone. HeatCaller's whole video design is the video **beside** live timing, which only Ultra-low makes work. HeatCaller's own captions cover Ultra-low's one real loss. Clubs with a poor upload, or whose viewers mostly watch at home with no board open, can pick Low on the Stream page; the docked player's note follows the setting (it already does, through the latency tick). **Until S0 measures it, keep the guide's current advice (Ultra-low).**
 
 ---
 
@@ -405,7 +489,7 @@ The plan makes the setup reliable, but not the **show**. It never mentions sound
 
 | # | Finding | Plan change |
 |---|---|---|
-| P1 | **Ultra-low latency may be the wrong default for most viewers.** It buys a few seconds of delay at the cost of more buffering on weak phone connections, and YouTube doesn't offer captions on Ultra-low latency streams (check in S0). That **contradicts `race-video-access-plan.md` V8.4**, which promises YouTube's automatic captions for the announcer. Only a viewer watching the phone board and the video side by side needs Ultra-low; parents at home, and everyone watching later, want a smooth picture. | **Not settled: decision 9**, after S0.6c measures it. Low latency gives a smoother picture and YouTube's captions, but the docked live video beside the phone board (race video plan V4, already built) works best with Ultra-low. Either way, captions come from HeatCaller's own **Captions** overlay graphic (it exists: `captions=1`), burned into the picture, so they work at any latency and in the archive. |
+| P1 | **Ultra-low latency may be the wrong default for most viewers.** It buys a few seconds of delay at the cost of more buffering on weak phone connections, and YouTube doesn't offer captions on Ultra-low latency streams (check in S0). That **contradicts `race-video-access-plan.md` V8.4**, which promises YouTube's automatic captions for the announcer. Only a viewer watching the phone board and the video side by side needs Ultra-low; parents at home, and everyone watching later, want a smooth picture. | **Decision 9: Ultra-low** (28 Nov), unless S0.6c measures bad buffering. Low latency gives a smoother picture and YouTube's captions, but the docked live video beside the phone board (race video plan V4, already built) works best with Ultra-low. Either way, captions come from HeatCaller's own **Captions** overlay graphic (it exists: `captions=1`), burned into the picture, so they work at any latency and in the archive. |
 | P2 | **"Same PC is fine with a warning" (decision 4) underrates what else a race-night laptop does.** On battery the power plan throttles the encoder. Windows Update can restart in the middle of the night. A notification sound gets captured if OBS takes the desktop audio. Sleep and the screen saver are on. | A **Show mode** check in S6 (Test the stream), each line with a fix button where Windows allows one: plugged in, power mode Best performance, no sleep or screen saver while live, Windows Update paused for the night (Active hours), Do not disturb on, and OBS not taking desktop audio (P3). |
 | P3 | **Bitrate as the only quality lever.** At a tight upload, H.264 at 9 Mbps looks worse than HEVC or AV1 at 6. OBS 30+ sends HEVC and AV1 to YouTube over RTMPS, on GPUs that can encode them. | S3.4 picks the codec too: AV1 or HEVC when the GPU has a hardware encoder for it (OBS lists them), otherwise H.264. Test in S0 that YouTube accepts it from this OBS. |
 
